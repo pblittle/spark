@@ -40,6 +40,7 @@ import (
 	sparkerrors "github.com/lightsparkdev/spark/so/errors"
 	sparkgrpc "github.com/lightsparkdev/spark/so/grpc"
 	"github.com/lightsparkdev/spark/so/helper"
+	"github.com/lightsparkdev/spark/so/knobs"
 	"github.com/lightsparkdev/spark/so/middleware"
 	"github.com/lightsparkdev/spark/so/task"
 	_ "github.com/mattn/go-sqlite3"
@@ -309,6 +310,14 @@ func main() {
 				slog.Info("Tracer provider shut down")
 			}
 		}()
+	}
+
+	if config.Knobs.IsEnabled() {
+		knobsService := knobs.New(slog.Default().With("component", "knobs"))
+		if err := knobsService.FetchAndUpdate(errCtx); err != nil {
+			// Knobs has failed to fetch the config, so the controllers will rely on the default values.
+			slog.Error("Failed to fetch and update knobs", "error", err)
+		}
 	}
 
 	dbDriver := config.DatabaseDriver()

@@ -28,6 +28,7 @@ import (
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so/authz"
+	"github.com/lightsparkdev/spark/so/knobs"
 	"github.com/lightsparkdev/spark/so/middleware"
 	"github.com/lightsparkdev/spark/so/utils"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -100,6 +101,8 @@ type Config struct {
 	// X-Forwarded-For header. This configuration specifies the position from
 	// the end of the header to use.
 	XffClientIpPosition int
+	// Knobs is the configuration for the knobs
+	Knobs knobs.Config
 }
 
 // DatabaseDriver returns the database driver based on the database path.
@@ -153,6 +156,8 @@ type OperatorConfig struct {
 	ServiceAuthz ServiceAuthzConfig `yaml:"service_authz"`
 	// XffClientIPPosition specifies the position from the end of the X-Forwarded-For header to use for the client IP.
 	XffClientIpPosition int `yaml:"xff_client_ip_position"`
+	// Knobs is the configuration for the knobs
+	Knobs knobs.Config `yaml:"knobs"`
 }
 
 type DkgConfig struct {
@@ -332,6 +337,7 @@ func NewConfig(
 		Token:                     operatorConfig.Token,
 		ServiceAuthz:              operatorConfig.ServiceAuthz,
 		XffClientIpPosition:       operatorConfig.XffClientIpPosition,
+		Knobs:                     operatorConfig.Knobs,
 	}
 
 	conf.buildIdentityPubkeyMap()
