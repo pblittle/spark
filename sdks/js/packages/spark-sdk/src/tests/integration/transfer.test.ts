@@ -22,6 +22,8 @@ import { createNewTree } from "../../tests/test-util.js";
 import { NetworkType } from "../../utils/network.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
+import { RPCError } from "../../errors/types.js";
+
 describe("Transfer", () => {
   jest.setTimeout(15_000);
   it("test transfer", async () => {
@@ -120,22 +122,8 @@ describe("Transfer", () => {
       claimingNode,
     ]);
 
-    const { wallet: newReceiverWallet } = await SparkWalletTesting.initialize({
-      options: {
-        network: "LOCAL",
-      },
-    });
-    const newReceiverPubkey = await newReceiverWallet.getSparkAddress();
-
-    await receiverWallet.transfer({
-      amountSats: 1000,
-      receiverSparkAddress: newReceiverPubkey,
-    });
-
-    const newPendingTransfer = await newReceiverWallet.queryPendingTransfers();
-
-    expect(newPendingTransfer.transfers.length).toBe(1);
-    await newReceiverWallet.getBalance();
+    const balance = await receiverWallet.getBalance();
+    expect(balance.balance).toBe(1000n);
   }, 30000);
 
   it("test transfer with separate", async () => {
@@ -589,25 +577,11 @@ describe("Transfer", () => {
       options,
     });
 
-    const senderConfigService = new WalletConfigService(
-      options,
-      senderWallet.getSigner(),
-    );
-    const senderConnectionManager = new ConnectionManager(senderConfigService);
-    const signingService = new SigningService(senderConfigService);
-    const senderTransferService = new TransferService(
-      senderConfigService,
-      senderConnectionManager,
-      signingService,
-    );
+    const depositAddress = await senderWallet.getSingleUseDepositAddress();
 
-    const leafPubKey = await senderWallet.getSigner().generatePublicKey();
-    const rootNode = await createNewTree(
-      senderWallet,
-      leafPubKey,
-      faucet,
-      1000n,
-    );
+    const signedTx = await faucet.sendToAddress(depositAddress, 1_000n);
+
+    await senderWallet.claimDeposit(signedTx.id);
 
     const { wallet: receiverWallet } = await SparkWalletTesting.initialize(
       {
@@ -620,20 +594,10 @@ describe("Transfer", () => {
       await senderWallet.getSparkAddress(),
     );
 
-    const newLeafPubKey = await senderWallet.getSigner().generatePublicKey();
-
-    const transferNode: LeafKeyTweak = {
-      leaf: rootNode,
-      signingPubKey: leafPubKey,
-      newSigningPubKey: newLeafPubKey,
-    };
-
-    const leavesToTransfer = [transferNode];
-
-    const transfer = await senderTransferService.sendTransfer(
-      leavesToTransfer,
-      hexToBytes(await receiverWallet.getIdentityPublicKey()),
-    );
+    const transfer = await senderWallet.transfer({
+      amountSats: 1000,
+      receiverSparkAddress: await receiverWallet.getSparkAddress(),
+    });
 
     async function waitForTransferClaim(
       transferId: string,
@@ -761,201 +725,209 @@ describe("Transfer", () => {
     //   },
     // );
   });
+});
 
-  describe("transfer v2", () => {
-    jest.setTimeout(15_000);
-    it("test transfer with pretweaked package", async () => {
-      const faucet = BitcoinFaucet.getInstance();
+describe("transfer v2", () => {
+  jest.setTimeout(15_000);
+  it("test transfer with pretweaked package", async () => {
+    const faucet = BitcoinFaucet.getInstance();
 
-      const options: ConfigOptions = {
+    const options: ConfigOptions = {
+      network: "LOCAL",
+    };
+
+    const { wallet: senderWallet } = await SparkWalletTesting.initialize({
+      options,
+    });
+
+    const senderConfigService = new WalletConfigService(
+      options,
+      senderWallet.getSigner(),
+    );
+    const senderConnectionManager = new ConnectionManager(senderConfigService);
+    const signingService = new SigningService(senderConfigService);
+    const senderTransferService = new TransferService(
+      senderConfigService,
+      senderConnectionManager,
+      signingService,
+    );
+
+    const leafPubKey = await senderWallet.getSigner().generatePublicKey();
+    const rootNode = await createNewTree(
+      senderWallet,
+      leafPubKey,
+      faucet,
+      1000n,
+    );
+
+    const newLeafPubKey = await senderWallet.getSigner().generatePublicKey();
+
+    const { wallet: receiverWallet } = await SparkWalletTesting.initialize({
+      options,
+    });
+    const receiverPubkey = await receiverWallet.getIdentityPublicKey();
+
+    const receiverConfigService = new WalletConfigService(
+      options,
+      receiverWallet.getSigner(),
+    );
+    const receiverConnectionManager = new ConnectionManager(
+      receiverConfigService,
+    );
+    const receiverSigningService = new SigningService(receiverConfigService);
+
+    const receiverTransferService = new TransferService(
+      receiverConfigService,
+      receiverConnectionManager,
+      receiverSigningService,
+    );
+
+    const transferNode = {
+      leaf: rootNode,
+      signingPubKey: leafPubKey,
+      newSigningPubKey: newLeafPubKey,
+    };
+
+    const senderTransfer =
+      await senderTransferService.sendTransferWithKeyTweaks(
+        [transferNode],
+        hexToBytes(receiverPubkey),
+      );
+
+    const pendingTransfer = await receiverWallet.queryPendingTransfers();
+
+    expect(pendingTransfer.transfers.length).toBe(1);
+
+    const receiverTransfer = pendingTransfer.transfers[0];
+
+    expect(receiverTransfer!.id).toBe(senderTransfer.id);
+    expect(receiverTransfer!.expiryTime?.getTime() ?? 0).toBeLessThan(
+      Date.now(),
+    );
+
+    const leafPrivKeyMap = await receiverWallet.verifyPendingTransfer(
+      receiverTransfer!,
+    );
+
+    expect(leafPrivKeyMap.size).toBe(1);
+
+    const leafPrivKeyMapBytes = leafPrivKeyMap.get(rootNode.id);
+    expect(leafPrivKeyMapBytes).toBeDefined();
+    expect(bytesToHex(leafPrivKeyMapBytes!)).toBe(bytesToHex(newLeafPubKey));
+
+    const finalLeafPubKey = await receiverWallet
+      .getSigner()
+      .generatePublicKey(sha256(rootNode.id));
+
+    const claimingNode = {
+      leaf: rootNode,
+      signingPubKey: newLeafPubKey,
+      newSigningPubKey: finalLeafPubKey,
+    };
+
+    await receiverTransferService.claimTransfer(receiverTransfer!, [
+      claimingNode,
+    ]);
+
+    const balance = await receiverWallet.getBalance();
+    expect(balance.balance).toBe(1000n);
+  }, 30000);
+
+  it("test self transfer with pretweaked package", async () => {
+    const faucet = BitcoinFaucet.getInstance();
+    const options: ConfigOptions = {
+      network: "LOCAL",
+    };
+    const { wallet: senderWallet } = await SparkWalletTesting.initialize({
+      options,
+    });
+    const senderConfigService = new WalletConfigService(
+      options,
+      senderWallet.getSigner(),
+    );
+    const senderConnectionManager = new ConnectionManager(senderConfigService);
+    const senderSigningService = new SigningService(senderConfigService);
+    const senderTransferService = new TransferService(
+      senderConfigService,
+      senderConnectionManager,
+      senderSigningService,
+    );
+    const leafPubKey = await senderWallet.getSigner().generatePublicKey();
+    const rootNode = await createNewTree(
+      senderWallet,
+      leafPubKey,
+      faucet,
+      1000n,
+    );
+    const newLeafPubKey = await senderWallet.getSigner().generatePublicKey();
+    const receiverPubkey = await senderWallet.getIdentityPublicKey();
+    const transferNode = {
+      leaf: rootNode,
+      signingPubKey: leafPubKey,
+      newSigningPubKey: newLeafPubKey,
+    };
+    const senderTransfer =
+      await senderTransferService.sendTransferWithKeyTweaks(
+        [transferNode],
+        hexToBytes(receiverPubkey),
+      );
+    const receiverTransfer = await senderTransferService.queryTransfer(
+      senderTransfer.id,
+    );
+    expect(receiverTransfer!.id).toBe(senderTransfer.id);
+    expect(receiverTransfer!.expiryTime?.getTime() ?? 0).toBeLessThan(
+      Date.now(),
+    );
+
+    const finalLeafPubKey = await senderWallet
+      .getSigner()
+      .generatePublicKey(sha256(rootNode.id));
+    const claimingNode = {
+      leaf: rootNode,
+      signingPubKey: newLeafPubKey,
+      newSigningPubKey: finalLeafPubKey,
+    };
+    await senderTransferService.claimTransfer(receiverTransfer!, [
+      claimingNode,
+    ]);
+
+    const balance = await senderWallet.getBalance();
+    expect(balance.balance).toBe(1000n);
+  }, 30000);
+
+  it("test transfer with wallet", async () => {
+    const faucet = BitcoinFaucet.getInstance();
+
+    const { wallet: sdk } = await SparkWalletTesting.initialize({
+      options: {
         network: "LOCAL",
-      };
+      },
+    });
 
-      const { wallet: senderWallet } = await SparkWalletTesting.initialize({
-        options,
+    const depositResp = await sdk.getSingleUseDepositAddress();
+    if (!depositResp) {
+      throw new RPCError("Deposit address not found", {
+        method: "getDepositAddress",
       });
+    }
 
-      const senderConfigService = new WalletConfigService(
-        options,
-        senderWallet.getSigner(),
-      );
-      const senderConnectionManager = new ConnectionManager(
-        senderConfigService,
-      );
-      const signingService = new SigningService(senderConfigService);
-      const senderTransferService = new TransferService(
-        senderConfigService,
-        senderConnectionManager,
-        signingService,
-      );
+    const signedTx = await faucet.sendToAddress(depositResp, 1_000n);
 
-      const leafPubKey = await senderWallet.getSigner().generatePublicKey();
-      const rootNode = await createNewTree(
-        senderWallet,
-        leafPubKey,
-        faucet,
-        1000n,
-      );
+    await sdk.claimDeposit(signedTx.id);
 
-      const newLeafPubKey = await senderWallet.getSigner().generatePublicKey();
+    const balance = await sdk.getBalance();
+    expect(balance.balance).toBe(1_000n);
 
-      const { wallet: receiverWallet } = await SparkWalletTesting.initialize({
-        options,
-      });
-      const receiverPubkey = await receiverWallet.getIdentityPublicKey();
+    const sparkAddress = await sdk.getSparkAddress();
 
-      const receiverConfigService = new WalletConfigService(
-        options,
-        receiverWallet.getSigner(),
-      );
-      const receiverConnectionManager = new ConnectionManager(
-        receiverConfigService,
-      );
-      const receiverSigningService = new SigningService(receiverConfigService);
+    await sdk.transfer({
+      amountSats: 1000,
+      receiverSparkAddress: sparkAddress,
+    });
 
-      const receiverTransferService = new TransferService(
-        receiverConfigService,
-        receiverConnectionManager,
-        receiverSigningService,
-      );
-
-      const transferNode = {
-        leaf: rootNode,
-        signingPubKey: leafPubKey,
-        newSigningPubKey: newLeafPubKey,
-      };
-
-      const senderTransfer =
-        await senderTransferService.sendTransferWithKeyTweaks(
-          [transferNode],
-          hexToBytes(receiverPubkey),
-        );
-
-      const pendingTransfer = await receiverWallet.queryPendingTransfers();
-
-      expect(pendingTransfer.transfers.length).toBe(1);
-
-      const receiverTransfer = pendingTransfer.transfers[0];
-
-      expect(receiverTransfer!.id).toBe(senderTransfer.id);
-      expect(receiverTransfer!.expiryTime?.getTime() ?? 0).toBeLessThan(
-        Date.now(),
-      );
-
-      const leafPrivKeyMap = await receiverWallet.verifyPendingTransfer(
-        receiverTransfer!,
-      );
-
-      expect(leafPrivKeyMap.size).toBe(1);
-
-      const leafPrivKeyMapBytes = leafPrivKeyMap.get(rootNode.id);
-      expect(leafPrivKeyMapBytes).toBeDefined();
-      expect(bytesToHex(leafPrivKeyMapBytes!)).toBe(bytesToHex(newLeafPubKey));
-
-      const finalLeafPubKey = await receiverWallet
-        .getSigner()
-        .generatePublicKey(sha256(rootNode.id));
-
-      const claimingNode = {
-        leaf: rootNode,
-        signingPubKey: newLeafPubKey,
-        newSigningPubKey: finalLeafPubKey,
-      };
-
-      await receiverTransferService.claimTransfer(receiverTransfer!, [
-        claimingNode,
-      ]);
-
-      const { wallet: newReceiverWallet } = await SparkWalletTesting.initialize(
-        {
-          options: {
-            network: "LOCAL",
-          },
-        },
-      );
-      const newReceiverPubkey = await newReceiverWallet.getSparkAddress();
-
-      await receiverWallet.transfer({
-        amountSats: 1000,
-        receiverSparkAddress: newReceiverPubkey,
-      });
-
-      const newPendingTransfer =
-        await newReceiverWallet.queryPendingTransfers();
-
-      expect(newPendingTransfer.transfers.length).toBe(1);
-      await newReceiverWallet.getBalance();
-    }, 30000);
-
-    it("test self transfer with pretweaked package", async () => {
-      const faucet = BitcoinFaucet.getInstance();
-      const options: ConfigOptions = {
-        network: "LOCAL",
-      };
-      const { wallet: senderWallet } = await SparkWalletTesting.initialize({
-        options,
-      });
-      const senderConfigService = new WalletConfigService(
-        options,
-        senderWallet.getSigner(),
-      );
-      const senderConnectionManager = new ConnectionManager(
-        senderConfigService,
-      );
-      const senderSigningService = new SigningService(senderConfigService);
-      const senderTransferService = new TransferService(
-        senderConfigService,
-        senderConnectionManager,
-        senderSigningService,
-      );
-      const leafPubKey = await senderWallet.getSigner().generatePublicKey();
-      const rootNode = await createNewTree(
-        senderWallet,
-        leafPubKey,
-        faucet,
-        1000n,
-      );
-      const newLeafPubKey = await senderWallet.getSigner().generatePublicKey();
-      const receiverPubkey = await senderWallet.getIdentityPublicKey();
-      const transferNode = {
-        leaf: rootNode,
-        signingPubKey: leafPubKey,
-        newSigningPubKey: newLeafPubKey,
-      };
-      const senderTransfer =
-        await senderTransferService.sendTransferWithKeyTweaks(
-          [transferNode],
-          hexToBytes(receiverPubkey),
-        );
-      const receiverTransfer = await senderTransferService.queryTransfer(
-        senderTransfer.id,
-      );
-      expect(receiverTransfer!.id).toBe(senderTransfer.id);
-      expect(receiverTransfer!.expiryTime?.getTime() ?? 0).toBeLessThan(
-        Date.now(),
-      );
-
-      const finalLeafPubKey = await senderWallet
-        .getSigner()
-        .generatePublicKey(sha256(rootNode.id));
-      const claimingNode = {
-        leaf: rootNode,
-        signingPubKey: newLeafPubKey,
-        newSigningPubKey: finalLeafPubKey,
-      };
-      await senderTransferService.claimTransfer(receiverTransfer!, [
-        claimingNode,
-      ]);
-
-      // Test self transfer with wallet v2 flow
-      const selfPubKey = await senderWallet.getSparkAddress();
-      await senderWallet.transfer({
-        amountSats: 1000,
-        receiverSparkAddress: selfPubKey,
-      });
-      const newPendingTransfer = await senderWallet.queryPendingTransfers();
-      expect(newPendingTransfer.transfers.length).toBe(0);
-      await senderWallet.getBalance();
-    }, 30000);
+    const newPendingTransfer = await sdk.queryPendingTransfers();
+    expect(newPendingTransfer.transfers.length).toBe(0);
+    const newBalance = await sdk.getBalance();
+    expect(newBalance.balance).toBe(1000n);
   });
 });
