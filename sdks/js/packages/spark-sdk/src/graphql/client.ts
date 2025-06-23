@@ -40,6 +40,7 @@ import type {
   RequestLeavesSwapInput,
   RequestLightningReceiveInput,
   RequestLightningSendInput,
+  Transfer,
 } from "./objects/index.js";
 import { LeavesSwapFeeEstimateOutputFromJson } from "./objects/LeavesSwapFeeEstimateOutput.js";
 import LeavesSwapRequest, {
@@ -56,6 +57,7 @@ import StaticDepositQuoteInput from "./objects/StaticDepositQuoteInput.js";
 import StaticDepositQuoteOutput, {
   StaticDepositQuoteOutputFromJson,
 } from "./objects/StaticDepositQuoteOutput.js";
+import { TransferFromJson } from "./objects/Transfer.js";
 import VerifyChallengeOutput, {
   VerifyChallengeOutputFromJson,
 } from "./objects/VerifyChallengeOutput.js";
@@ -63,6 +65,7 @@ import { CoopExitFeeEstimate } from "./queries/CoopExitFeeEstimate.js";
 import { GetClaimDepositQuote } from "./queries/GetClaimDepositQuote.js";
 import { LeavesSwapFeeEstimate } from "./queries/LeavesSwapFeeEstimate.js";
 import { LightningSendFeeEstimate } from "./queries/LightningSendFeeEstimate.js";
+import { GetTransfer } from "./queries/Transfer.js";
 import { UserRequest } from "./queries/UserRequest.js";
 
 export interface SspClientOptions {
@@ -452,6 +455,18 @@ export default class SspClient {
       },
       constructObject: (response: { claim_static_deposit: any }) => {
         return ClaimStaticDepositOutputFromJson(response.claim_static_deposit);
+      },
+    });
+  }
+
+  async getTransfer(id: string): Promise<Transfer | null> {
+    return await this.executeRawQuery({
+      queryPayload: GetTransfer,
+      variables: {
+        transfer_spark_id: id,
+      },
+      constructObject: (response: { transfer: any }) => {
+        return TransferFromJson(response.transfer);
       },
     });
   }

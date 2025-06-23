@@ -17,6 +17,8 @@ class Transfer {
     /** The id of the transfer known at signing operators. If not set, the transfer hasn't been
      * initialized. **/
     public readonly sparkId?: string | undefined,
+    /** The user request this transfer belongs to, if there is any **/
+    public readonly userRequestId?: string | undefined,
   ) {
     autoBind(this);
   }
@@ -70,6 +72,7 @@ query FetchSparkTransferToLeavesConnection($entity_id: ID!, $first: Int, $after:
     return {
       transfer_total_amount: CurrencyAmountToJson(this.totalAmount),
       transfer_spark_id: this.sparkId,
+      transfer_user_request: { id: this.userRequestId },
     };
   }
 }
@@ -78,6 +81,7 @@ export const TransferFromJson = (obj: any): Transfer => {
   return new Transfer(
     CurrencyAmountFromJson(obj["transfer_total_amount"]),
     obj["transfer_spark_id"],
+    obj["transfer_user_request"]?.id ?? undefined,
   );
 };
 
@@ -93,6 +97,9 @@ fragment TransferFragment on Transfer {
         currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
     }
     transfer_spark_id: spark_id
+    transfer_user_request: user_request {
+        id
+    }
 }`;
 
 export default Transfer;

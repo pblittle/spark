@@ -324,6 +324,7 @@ const commands = [
   "announcetoken",
   "nontrustydeposit",
   "querytokentransactions",
+  "gettransfer",
 
   "generatefeebumppackagetobroadcast",
   "testonly_generateexternalwallet",
@@ -439,7 +440,7 @@ async function runCLI() {
   testonly_expiretimelockrefundtx <leafId>                                    - Refresh only the refund transaction timelock for a given leaf
   leafidtohex <leafId1> [leafId2] [leafId3] ...                              - Convert leaf ID to hex string for unilateral exit
   getleaves                                                           - Get all leaves owned by the wallet
-
+   
   💡 Simplified Unilateral Exit Flow:
   'generatefeebumppackagetobroadcast <feeRate> <utxos>' for fee bumping.
   The advanced commands below are for specific use cases.
@@ -645,6 +646,22 @@ async function runCLI() {
         case "getlatesttx":
           const latestTx = await getLatestDepositTxId(args[0]);
           console.log(latestTx);
+          break;
+        case "gettransferfromssp":
+          if (!wallet) {
+            console.log("Please initialize a wallet first");
+            break;
+          }
+          const transfer1 = await wallet.getTransferFromSsp(args[0]);
+          console.log(transfer1);
+          break;
+        case "gettransfer":
+          if (!wallet) {
+            console.log("Please initialize a wallet first");
+            break;
+          }
+          const transfer2 = await wallet.getTransfer(args[0]);
+          console.log(transfer2);
           break;
         case "claimdeposit":
           if (!wallet) {

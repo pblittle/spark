@@ -12,7 +12,7 @@ import { wordlist } from "@scure/bip39/wordlists/english";
 import { Address, OutScript, Transaction } from "@scure/btc-signer";
 import { TransactionInput } from "@scure/btc-signer/psbt";
 import { Mutex } from "async-mutex";
-import { uuidv7obj, uuidv7 } from "uuidv7";
+import { uuidv7, uuidv7obj } from "uuidv7";
 import {
   ConfigurationError,
   NetworkError,
@@ -35,6 +35,7 @@ import {
   SwapLeaf,
   UserLeafInput,
 } from "../graphql/objects/index.js";
+import GraphQLTransferObj from "../graphql/objects/Transfer.js";
 import {
   DepositAddressQueryResult,
   OutputWithPreviousTransactionData,
@@ -2945,6 +2946,31 @@ export class SparkWallet extends EventEmitter {
     });
 
     return feeEstimate;
+  }
+
+  /**
+   * Gets a transfer that has been sent by the SSP to the wallet.
+   *
+   * @param {string} id - The ID of the transfer
+   * @returns {Promise<GraphQLTransferObj | null>} The transfer
+   */
+  public async getTransferFromSsp(
+    id: string,
+  ): Promise<GraphQLTransferObj | null> {
+    const sspClient = this.getSspClient();
+    return await sspClient.getTransfer(id);
+  }
+
+  /**
+   * Gets a transfer, that the wallet is a participant of, in the Spark network.
+   * Only contains data about the spark->spark transfer, use getTransferFromSsp if you're
+   * looking for information related to a lightning transfer.
+   *
+   * @param {string} id - The ID of the transfer
+   * @returns {Promise<Transfer | undefined>} The transfer
+   */
+  public async getTransfer(id: string): Promise<Transfer | undefined> {
+    return await this.transferService.queryTransfer(id);
   }
 
   // ***** Token Flow *****
