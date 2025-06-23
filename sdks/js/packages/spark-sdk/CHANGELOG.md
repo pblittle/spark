@@ -1,5 +1,13 @@
 # @buildonspark/spark-sdk
 
+## 0.1.41
+
+### Patch Changes
+
+- Add a method to fetch a single transfer
+- Add a method to fetch transfers from the SSP
+- Add TaprootOutputKeysGenerator in signer
+
 ## 0.1.40
 
 ### Patch Changes
