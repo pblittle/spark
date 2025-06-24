@@ -26,7 +26,6 @@ service SparkService {
     rpc query_all_transfers(TransferFilter) returns (QueryTransfersResponse) {}
     rpc claim_transfer_tweak_keys(ClaimTransferTweakKeysRequest) returns (google.protobuf.Empty) {}
     rpc claim_transfer_sign_refunds(ClaimTransferSignRefundsRequest) returns (ClaimTransferSignRefundsResponse) {}
-    rpc aggregate_nodes(AggregateNodesRequest) returns (AggregateNodesResponse) {}
     rpc store_preimage_share(StorePreimageShareRequest) returns (google.protobuf.Empty) {}
     rpc get_signing_commitments(GetSigningCommitmentsRequest) returns (GetSigningCommitmentsResponse) {}
     rpc cooperative_exit(CooperativeExitRequest) returns (CooperativeExitResponse) {}
@@ -780,20 +779,6 @@ message ClaimTransferSignRefundsRequest {
 
 message ClaimTransferSignRefundsResponse {
     repeated LeafRefundTxSigningResult signing_results = 1;
-}
-
-message AggregateNodesRequest {
-    repeated string node_ids = 1;
-    SigningJob signing_job = 2;
-    // Serves as a temporary identity public key, this should be get from auth process.
-    bytes owner_identity_public_key = 3;
-}
-
-message AggregateNodesResponse {
-    SigningResult aggregate_signature = 1;
-    bytes verifying_key = 2;
-    bytes parent_node_tx = 3;
-    uint32 parent_node_vout = 4;
 }
 
 message StorePreimageShareRequest {
