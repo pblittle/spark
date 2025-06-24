@@ -2,11 +2,8 @@ FROM --platform=$BUILDPLATFORM golang:1.23-bookworm AS builder-go
 
 ARG TARGETOS TARGETARCH
 ARG DEBUG=0
-ARG GOFLAGS
-
 ENV GOOS=$TARGETOS
 ENV GOARCH=$TARGETARCH
-ENV GOFLAGS=$GOFLAGS
 
 RUN apt-get update && apt-get install -y libzmq3-dev wget && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -23,9 +20,9 @@ COPY spark spark
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     if [ "$DEBUG" = "1" ]; then \
-      cd spark && go build -gcflags="all=-N -l" -o /go/bin/spark-operator ./bin/operator ; \
+      cd spark && go build -gcflags="all=-N -l" -o /go/bin/spark-operator bin/operator/main.go ; \
     else \
-      cd spark && go build -o /go/bin/spark-operator ./bin/operator ; \
+      cd spark && go build -o /go/bin/spark-operator bin/operator/main.go ; \
     fi
 
 RUN if [ -e /go/bin/${TARGETOS}_${TARGETARCH} ]; then mv /go/bin/${TARGETOS}_${TARGETARCH}/* /go/bin/; fi
