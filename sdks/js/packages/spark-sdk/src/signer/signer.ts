@@ -48,6 +48,9 @@ import { Transaction } from "@scure/btc-signer";
 import { taprootTweakPrivKey } from "@scure/btc-signer/utils";
 import type { Psbt } from "bitcoinjs-lib";
 
+export { Receipt, PARITY, fromPrivateKey } from "@buildonspark/lrc20-sdk";
+export { MultisigReceiptInput } from "@buildonspark/lrc20-sdk/lrc/types";
+
 export type SigningNonce = {
   binding: Uint8Array;
   hiding: Uint8Array;
@@ -934,4 +937,4 @@ class TaprootSparkSigner extends DefaultSparkSigner {
 }
 
 export { DefaultSparkSigner, TaprootSparkSigner, TaprootOutputKeysGenerator };
-export type { SparkSigner };
+export type { SparkSigner, TokenSigner };
