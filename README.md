@@ -251,3 +251,34 @@ From within `iterm2`, you can run:
 3. The first time you run `run-everything.sh` it will take a while to start up. You might actually need to run it a couple of times for everything to work properly. Attach to the `operator` session and check out the logs.
 
 4. Having trouble with mise? You can always run `mise implode` and it will remove mise entirely so you can start over.
+
+## Testing against local SSP changes
+
+To run the server with local changes go to your sparkcore folder in the lightspark webdev project:
+
+```
+export QUART_APP=sparkcore.server
+export QUART_ENV=development
+export GRPC_DNS_RESOLVER=native
+export QUART_CONFIG=core-dev.py
+
+# run this line if accessed AWS PROD earlier, since PROD credentials supersede dev credentials.
+unset AWS_SESSION_TOKEN AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_TOKEN_EXPIRATION
+
+aws sso login
+QUART_CONFIG=core-dev.py uv run quart -A sparkcore.server -E development run
+```
+
+Follow commented direction here: https://github.com/lightsparkdev/webdev/blob/150dd1ceecf85e122ec3ebd608d3c9f7c44f1969/sparkcore/sparkcore/spark/handlers/__tests__/test_transfer_v2.py#L35
+
+Update the sspClientOptions for dev-regtest-config.json
+
+```
+"sspClientOptions": {
+  "baseUrl": "http://127.0.0.1:5000",
+  "schemaEndpoint": "graphql/spark/rc",
+  "identityPublicKey": "028c094a432d46a0ac95349d792c2e3730bd60c29188db716f56a99e39b95338b4"
+}
+```
+
+Running yarn cli:dev will now point to you local SSP server and will be connected to dev SOs and dev dbs.
