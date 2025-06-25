@@ -3,8 +3,8 @@
 
 
 import {ProviderFromJson} from './Provider.js';
-import {ProviderToJson} from './Provider.js';
 import Provider from './Provider.js';
+import {ProviderToJson} from './Provider.js';
 
 
 interface VerifyChallengeInput {

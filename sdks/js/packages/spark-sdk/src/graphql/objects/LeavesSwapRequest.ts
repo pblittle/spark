@@ -1,113 +1,108 @@
+
 // Copyright ©, 2023-present, Lightspark Group, Inc. - All Rights Reserved
 
-import { Query, isObject } from "@lightsparkdev/core";
-import BitcoinNetwork from "./BitcoinNetwork.js";
-import CurrencyAmount, {
-  CurrencyAmountFromJson,
-  CurrencyAmountToJson,
-} from "./CurrencyAmount.js";
-import SparkLeavesSwapRequestStatus from "./SparkLeavesSwapRequestStatus.js";
-import SwapLeaf, { SwapLeafFromJson, SwapLeafToJson } from "./SwapLeaf.js";
-import Transfer, { TransferFromJson } from "./Transfer.js";
+import {SwapLeafFromJson} from './SwapLeaf.js';
+import { Query, isObject } from '@lightsparkdev/core';
+import SparkLeavesSwapRequestStatus from './SparkLeavesSwapRequestStatus.js';
+import Transfer from './Transfer.js';
+import {SwapLeafToJson} from './SwapLeaf.js';
+import {CurrencyAmountFromJson} from './CurrencyAmount.js';
+import {TransferFromJson} from './Transfer.js';
+import SwapLeaf from './SwapLeaf.js';
+import CurrencyAmount from './CurrencyAmount.js';
+import BitcoinNetwork from './BitcoinNetwork.js';
+import {CurrencyAmountToJson} from './CurrencyAmount.js';
+
 
 interface LeavesSwapRequest {
-  /**
-   * The unique identifier of this entity across all Lightspark systems. Should be treated as an opaque
-   * string.
-   **/
-  id: string;
 
-  /** The date and time when the entity was first created. **/
-  createdAt: string;
 
-  /** The date and time when the entity was last updated. **/
-  updatedAt: string;
+    /**
+ * The unique identifier of this entity across all Lightspark systems. Should be treated as an opaque
+ * string.
+**/
+id: string;
 
-  /** The network the lightning send request is on. **/
-  network: BitcoinNetwork;
+    /** The date and time when the entity was first created. **/
+createdAt: string;
 
-  /** The status of the request. **/
-  status: SparkLeavesSwapRequestStatus;
+    /** The date and time when the entity was last updated. **/
+updatedAt: string;
 
-  /** The total amount of leaves user sent for swap. **/
-  totalAmount: CurrencyAmount;
+    /** The network the lightning send request is on. **/
+network: BitcoinNetwork;
 
-  /** The target amount of leaves user wanted to get from the swap. **/
-  targetAmount: CurrencyAmount;
+    /** The status of the request. **/
+status: SparkLeavesSwapRequestStatus;
 
-  /** The fee user needs to pay for swap. **/
-  fee: CurrencyAmount;
+    /** The total amount of leaves user sent for swap. **/
+totalAmount: CurrencyAmount;
 
-  /** The leaves transfer to user. **/
-  inboundTransfer: Transfer;
+    /** The target amount of leaves user wanted to get from the swap. **/
+targetAmount: CurrencyAmount;
 
-  /** The swap leaves returned to the user **/
-  swapLeaves: SwapLeaf[];
+    /** The fee user needs to pay for swap. **/
+fee: CurrencyAmount;
 
-  /** The typename of the object **/
-  typename: string;
+    /** The leaves transfer to user. **/
+inboundTransfer: Transfer;
 
-  /** The leaves transfer out from user. **/
-  outboundTransfer?: Transfer | undefined;
+    /** The swap leaves returned to the user **/
+swapLeaves: SwapLeaf[];
 
-  /** The time when the leaves swap request expires. **/
-  expiresAt?: string | undefined;
+    /** The typename of the object **/
+typename: string;
+
+    /** The leaves transfer out from user. **/
+outboundTransfer?: Transfer | undefined;
+
+    /** The time when the leaves swap request expires. **/
+expiresAt?: string | undefined;
+
+
+
+
 }
 
 export const LeavesSwapRequestFromJson = (obj: any): LeavesSwapRequest => {
-  return {
-    id: obj["leaves_swap_request_id"],
-    createdAt: obj["leaves_swap_request_created_at"],
-    updatedAt: obj["leaves_swap_request_updated_at"],
-    network:
-      BitcoinNetwork[obj["leaves_swap_request_network"]] ??
-      BitcoinNetwork.FUTURE_VALUE,
-    status:
-      SparkLeavesSwapRequestStatus[obj["leaves_swap_request_status"]] ??
-      SparkLeavesSwapRequestStatus.FUTURE_VALUE,
-    totalAmount: CurrencyAmountFromJson(
-      obj["leaves_swap_request_total_amount"],
-    ),
-    targetAmount: CurrencyAmountFromJson(
-      obj["leaves_swap_request_target_amount"],
-    ),
-    fee: CurrencyAmountFromJson(obj["leaves_swap_request_fee"]),
-    inboundTransfer: TransferFromJson(
-      obj["leaves_swap_request_inbound_transfer"],
-    ),
-    swapLeaves: obj["leaves_swap_request_swap_leaves"].map((e) =>
-      SwapLeafFromJson(e),
-    ),
-    typename: "LeavesSwapRequest",
-    outboundTransfer: !!obj["leaves_swap_request_outbound_transfer"]
-      ? TransferFromJson(obj["leaves_swap_request_outbound_transfer"])
-      : undefined,
-    expiresAt: obj["leaves_swap_request_expires_at"],
-  } as LeavesSwapRequest;
-};
-export const LeavesSwapRequestToJson = (obj: LeavesSwapRequest): any => {
-  return {
-    __typename: "LeavesSwapRequest",
-    leaves_swap_request_id: obj.id,
-    leaves_swap_request_created_at: obj.createdAt,
-    leaves_swap_request_updated_at: obj.updatedAt,
-    leaves_swap_request_network: obj.network,
-    leaves_swap_request_status: obj.status,
-    leaves_swap_request_total_amount: CurrencyAmountToJson(obj.totalAmount),
-    leaves_swap_request_target_amount: CurrencyAmountToJson(obj.targetAmount),
-    leaves_swap_request_fee: CurrencyAmountToJson(obj.fee),
-    leaves_swap_request_inbound_transfer: obj.inboundTransfer.toJson(),
-    leaves_swap_request_outbound_transfer: obj.outboundTransfer
-      ? obj.outboundTransfer.toJson()
-      : undefined,
-    leaves_swap_request_expires_at: obj.expiresAt,
-    leaves_swap_request_swap_leaves: obj.swapLeaves.map((e) =>
-      SwapLeafToJson(e),
-    ),
-  };
-};
+    return {
+        id: obj["leaves_swap_request_id"],
+        createdAt: obj["leaves_swap_request_created_at"],
+        updatedAt: obj["leaves_swap_request_updated_at"],
+        network: BitcoinNetwork[obj["leaves_swap_request_network"]] ?? BitcoinNetwork.FUTURE_VALUE,
+        status: SparkLeavesSwapRequestStatus[obj["leaves_swap_request_status"]] ?? SparkLeavesSwapRequestStatus.FUTURE_VALUE,
+        totalAmount: CurrencyAmountFromJson(obj["leaves_swap_request_total_amount"]),
+        targetAmount: CurrencyAmountFromJson(obj["leaves_swap_request_target_amount"]),
+        fee: CurrencyAmountFromJson(obj["leaves_swap_request_fee"]),
+        inboundTransfer: TransferFromJson(obj["leaves_swap_request_inbound_transfer"]),
+        swapLeaves: obj["leaves_swap_request_swap_leaves"].map((e) => SwapLeafFromJson(e)),
+typename: "LeavesSwapRequest",        outboundTransfer: (!!obj["leaves_swap_request_outbound_transfer"] ? TransferFromJson(obj["leaves_swap_request_outbound_transfer"]) : undefined),
+        expiresAt: obj["leaves_swap_request_expires_at"],
 
-export const FRAGMENT = `
+        } as LeavesSwapRequest;
+
+}
+export const LeavesSwapRequestToJson = (obj: LeavesSwapRequest): any => {
+return {
+__typename: "LeavesSwapRequest",leaves_swap_request_id: obj.id,
+leaves_swap_request_created_at: obj.createdAt,
+leaves_swap_request_updated_at: obj.updatedAt,
+leaves_swap_request_network: obj.network,
+leaves_swap_request_status: obj.status,
+leaves_swap_request_total_amount: CurrencyAmountToJson(obj.totalAmount),
+leaves_swap_request_target_amount: CurrencyAmountToJson(obj.targetAmount),
+leaves_swap_request_fee: CurrencyAmountToJson(obj.fee),
+leaves_swap_request_inbound_transfer: obj.inboundTransfer.toJson(),
+leaves_swap_request_outbound_transfer: (obj.outboundTransfer ? obj.outboundTransfer.toJson() : undefined),
+leaves_swap_request_expires_at: obj.expiresAt,
+leaves_swap_request_swap_leaves: obj.swapLeaves.map((e) => SwapLeafToJson(e)),
+
+        }
+
+}
+
+
+    export const FRAGMENT = `
 fragment LeavesSwapRequestFragment on LeavesSwapRequest {
     __typename
     leaves_swap_request_id: id
@@ -150,6 +145,9 @@ fragment LeavesSwapRequestFragment on LeavesSwapRequest {
             currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
         }
         transfer_spark_id: spark_id
+        transfer_user_request: user_request {
+            id
+        }
     }
     leaves_swap_request_outbound_transfer: outbound_transfer {
         __typename
@@ -162,6 +160,9 @@ fragment LeavesSwapRequestFragment on LeavesSwapRequest {
             currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
         }
         transfer_spark_id: spark_id
+        transfer_user_request: user_request {
+            id
+        }
     }
     leaves_swap_request_expires_at: expires_at
     leaves_swap_request_swap_leaves: swap_leaves {
@@ -172,11 +173,11 @@ fragment LeavesSwapRequestFragment on LeavesSwapRequest {
     }
 }`;
 
-export const getLeavesSwapRequestQuery = (
-  id: string,
-): Query<LeavesSwapRequest> => {
-  return {
-    queryPayload: `
+
+
+    export const getLeavesSwapRequestQuery = (id: string): Query<LeavesSwapRequest> => {
+        return {
+            queryPayload: `
 query GetLeavesSwapRequest($id: ID!) {
     entity(id: $id) {
         ... on LeavesSwapRequest {
@@ -187,12 +188,10 @@ query GetLeavesSwapRequest($id: ID!) {
 
 ${FRAGMENT}    
 `,
-    variables: { id },
-    constructObject: (data: unknown) =>
-      isObject(data) && "entity" in data && isObject(data.entity)
-        ? LeavesSwapRequestFromJson(data.entity)
-        : null,
-  };
-};
+            variables: {id},
+            constructObject: (data: unknown) => isObject(data) && "entity" in data && isObject(data.entity) ? LeavesSwapRequestFromJson(data.entity) : null,
+        }
+    }
+
 
 export default LeavesSwapRequest;

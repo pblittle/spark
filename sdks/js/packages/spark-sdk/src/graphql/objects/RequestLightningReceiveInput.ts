@@ -27,7 +27,10 @@ includeSparkAddress: boolean;
     /** The expiry of the lightning invoice in seconds. Default value is 86400 (1 day). **/
 expirySecs?: number | undefined;
 
-    /** The memo to include in the lightning invoice. **/
+    /**
+ * The memo to include in the lightning invoice. Should not be provided if the description_hash is
+ * provided.
+**/
 memo?: string | undefined;
 
     /**
@@ -38,9 +41,12 @@ receiverIdentityPubkey?: string | undefined;
 
     /**
  * The h tag of the invoice. This is the hash of a longer description to include in the lightning
- * invoice. It is used in LNURL and UMA as the hash of the metadata.
+ * invoice. It is used in LNURL and UMA as the hash of the metadata. This field is mutually exclusive
+ * with the memo field. Only one or the other should be provided.
 **/
 descriptionHash?: string | undefined;
+
+
 
 
 }
@@ -69,6 +75,7 @@ request_lightning_receive_input_memo: obj.memo,
 request_lightning_receive_input_receiver_identity_pubkey: obj.receiverIdentityPubkey,
 request_lightning_receive_input_include_spark_address: obj.includeSparkAddress,
 request_lightning_receive_input_description_hash: obj.descriptionHash,
+
         }
 
 }

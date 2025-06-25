@@ -101,6 +101,9 @@ fragment EntityFragment on Entity {
                 currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
             }
             transfer_spark_id: spark_id
+            transfer_user_request: user_request {
+                id
+            }
         }
     }
     ... on LeavesSwapRequest {
@@ -145,6 +148,9 @@ fragment EntityFragment on Entity {
                 currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
             }
             transfer_spark_id: spark_id
+            transfer_user_request: user_request {
+                id
+            }
         }
         leaves_swap_request_outbound_transfer: outbound_transfer {
             __typename
@@ -157,6 +163,9 @@ fragment EntityFragment on Entity {
                 currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
             }
             transfer_spark_id: spark_id
+            transfer_user_request: user_request {
+                id
+            }
         }
         leaves_swap_request_expires_at: expires_at
         leaves_swap_request_swap_leaves: swap_leaves {
@@ -201,6 +210,9 @@ fragment EntityFragment on Entity {
                 currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
             }
             transfer_spark_id: spark_id
+            transfer_user_request: user_request {
+                id
+            }
         }
         lightning_receive_request_payment_preimage: payment_preimage
     }
@@ -232,6 +244,9 @@ fragment EntityFragment on Entity {
                 currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
             }
             transfer_spark_id: spark_id
+            transfer_user_request: user_request {
+                id
+            }
         }
         lightning_send_request_payment_preimage: payment_preimage
     }

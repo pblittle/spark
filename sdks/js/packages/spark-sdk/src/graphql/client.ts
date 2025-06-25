@@ -169,11 +169,13 @@ export default class SspClient {
 
   async getLightningSendFeeEstimate(
     encodedInvoice: string,
+    amountSats?: number,
   ): Promise<LightningSendFeeEstimateOutput | null> {
     return await this.executeRawQuery({
       queryPayload: LightningSendFeeEstimate,
       variables: {
         encoded_invoice: encodedInvoice,
+        amount_sats: amountSats,
       },
       constructObject: (response: { lightning_send_fee_estimate: any }) => {
         return LightningSendFeeEstimateOutputFromJson(
@@ -276,12 +278,14 @@ export default class SspClient {
   async requestLightningSend({
     encodedInvoice,
     idempotencyKey,
+    amountSats,
   }: RequestLightningSendInput): Promise<LightningSendRequest | null> {
     return await this.executeRawQuery({
       queryPayload: RequestLightningSend,
       variables: {
         encoded_invoice: encodedInvoice,
         idempotency_key: idempotencyKey,
+        amount_sats: amountSats,
       },
       constructObject: (response: { request_lightning_send: any }) => {
         return LightningSendRequestFromJson(

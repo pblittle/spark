@@ -150,7 +150,7 @@
     "@bitcoinerlab/secp256k1": "^1.1.1",
     "@bufbuild/protobuf": "^2.2.5",
     "@buildonspark/lrc20-sdk": "0.0.57",
-    "@lightsparkdev/core": "^1.4.1",
+    "@lightsparkdev/core": "^1.4.2",
     "@noble/curves": "^1.8.0",
     "@noble/hashes": "^1.7.1",
     "@opentelemetry/api": "^1.9.0",

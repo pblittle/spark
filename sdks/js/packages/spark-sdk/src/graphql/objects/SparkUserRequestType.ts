@@ -17,6 +17,8 @@ COOP_EXIT = "COOP_EXIT",
 
 LEAVES_SWAP = "LEAVES_SWAP",
 
+CLAIM_STATIC_DEPOSIT = "CLAIM_STATIC_DEPOSIT",
+
 }
 
 export default SparkUserRequestType;

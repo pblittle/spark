@@ -2,8 +2,8 @@
 // Copyright ©, 2023-present, Lightspark Group, Inc. - All Rights Reserved
 
 
-import {UserLeafInputFromJson} from './UserLeafInput.js';
 import UserLeafInput from './UserLeafInput.js';
+import {UserLeafInputFromJson} from './UserLeafInput.js';
 import {UserLeafInputToJson} from './UserLeafInput.js';
 
 
@@ -22,6 +22,8 @@ interface RequestLeavesSwapInput {
 
     idempotencyKey: string;
 
+    targetAmountSatsList?: number[] | undefined;
+
 
 
 
@@ -35,6 +37,7 @@ export const RequestLeavesSwapInputFromJson = (obj: any): RequestLeavesSwapInput
         feeSats: obj["request_leaves_swap_input_fee_sats"],
         userLeaves: obj["request_leaves_swap_input_user_leaves"].map((e) => UserLeafInputFromJson(e)),
         idempotencyKey: obj["request_leaves_swap_input_idempotency_key"],
+        targetAmountSatsList: obj["request_leaves_swap_input_target_amount_sats_list"],
 
         } as RequestLeavesSwapInput;
 
@@ -47,6 +50,7 @@ request_leaves_swap_input_target_amount_sats: obj.targetAmountSats,
 request_leaves_swap_input_fee_sats: obj.feeSats,
 request_leaves_swap_input_user_leaves: obj.userLeaves.map((e) => UserLeafInputToJson(e)),
 request_leaves_swap_input_idempotency_key: obj.idempotencyKey,
+request_leaves_swap_input_target_amount_sats_list: obj.targetAmountSatsList,
 
         }
 

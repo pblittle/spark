@@ -2,16 +2,16 @@
 // Copyright ©, 2023-present, Lightspark Group, Inc. - All Rights Reserved
 
 
-import SparkWalletUserToUserRequestsConnection from './SparkWalletUserToUserRequestsConnection.js';
-import { LightsparkException } from '@lightsparkdev/core';
-import {PageInfoToJson} from './PageInfo.js';
-import {PageInfoFromJson} from './PageInfo.js';
+import {UserRequestFromJson} from './UserRequest.js';
+import {UserRequestToJson} from './UserRequest.js';
 import {LeafFromJson} from './Leaf.js';
+import SparkWalletUserToUserRequestsConnection from './SparkWalletUserToUserRequestsConnection.js';
+import SparkTransferToLeavesConnection from './SparkTransferToLeavesConnection.js';
 import PageInfo from './PageInfo.js';
 import {LeafToJson} from './Leaf.js';
-import SparkTransferToLeavesConnection from './SparkTransferToLeavesConnection.js';
-import {UserRequestToJson} from './UserRequest.js';
-import {UserRequestFromJson} from './UserRequest.js';
+import {PageInfoFromJson} from './PageInfo.js';
+import { LightsparkException } from '@lightsparkdev/core';
+import {PageInfoToJson} from './PageInfo.js';
 
 
 interface Connection {
