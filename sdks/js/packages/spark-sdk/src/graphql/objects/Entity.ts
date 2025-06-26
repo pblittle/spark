@@ -63,6 +63,70 @@ fragment EntityFragment on Entity {
         claim_static_deposit_bitcoin_network: bitcoin_network
         claim_static_deposit_transfer_spark_id: transfer_spark_id
     }
+    ... on CoopExitFeeQuote {
+        __typename
+        coop_exit_fee_quote_id: id
+        coop_exit_fee_quote_created_at: created_at
+        coop_exit_fee_quote_updated_at: updated_at
+        coop_exit_fee_quote_network: network
+        coop_exit_fee_quote_total_amount: total_amount {
+            __typename
+            currency_amount_original_value: original_value
+            currency_amount_original_unit: original_unit
+            currency_amount_preferred_currency_unit: preferred_currency_unit
+            currency_amount_preferred_currency_value_rounded: preferred_currency_value_rounded
+            currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
+        }
+        coop_exit_fee_quote_user_fee_fast: user_fee_fast {
+            __typename
+            currency_amount_original_value: original_value
+            currency_amount_original_unit: original_unit
+            currency_amount_preferred_currency_unit: preferred_currency_unit
+            currency_amount_preferred_currency_value_rounded: preferred_currency_value_rounded
+            currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
+        }
+        coop_exit_fee_quote_user_fee_medium: user_fee_medium {
+            __typename
+            currency_amount_original_value: original_value
+            currency_amount_original_unit: original_unit
+            currency_amount_preferred_currency_unit: preferred_currency_unit
+            currency_amount_preferred_currency_value_rounded: preferred_currency_value_rounded
+            currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
+        }
+        coop_exit_fee_quote_user_fee_slow: user_fee_slow {
+            __typename
+            currency_amount_original_value: original_value
+            currency_amount_original_unit: original_unit
+            currency_amount_preferred_currency_unit: preferred_currency_unit
+            currency_amount_preferred_currency_value_rounded: preferred_currency_value_rounded
+            currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
+        }
+        coop_exit_fee_quote_l1_broadcast_fee_fast: l1_broadcast_fee_fast {
+            __typename
+            currency_amount_original_value: original_value
+            currency_amount_original_unit: original_unit
+            currency_amount_preferred_currency_unit: preferred_currency_unit
+            currency_amount_preferred_currency_value_rounded: preferred_currency_value_rounded
+            currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
+        }
+        coop_exit_fee_quote_l1_broadcast_fee_medium: l1_broadcast_fee_medium {
+            __typename
+            currency_amount_original_value: original_value
+            currency_amount_original_unit: original_unit
+            currency_amount_preferred_currency_unit: preferred_currency_unit
+            currency_amount_preferred_currency_value_rounded: preferred_currency_value_rounded
+            currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
+        }
+        coop_exit_fee_quote_l1_broadcast_fee_slow: l1_broadcast_fee_slow {
+            __typename
+            currency_amount_original_value: original_value
+            currency_amount_original_unit: original_unit
+            currency_amount_preferred_currency_unit: preferred_currency_unit
+            currency_amount_preferred_currency_value_rounded: preferred_currency_value_rounded
+            currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
+        }
+        coop_exit_fee_quote_expires_at: expires_at
+    }
     ... on CoopExitRequest {
         __typename
         coop_exit_request_id: id
@@ -85,6 +149,10 @@ fragment EntityFragment on Entity {
             currency_amount_preferred_currency_value_rounded: preferred_currency_value_rounded
             currency_amount_preferred_currency_value_approx: preferred_currency_value_approx
         }
+        coop_exit_request_fee_quote: fee_quote {
+            id
+        }
+        coop_exit_request_exit_speed: exit_speed
         coop_exit_request_status: status
         coop_exit_request_expires_at: expires_at
         coop_exit_request_raw_connector_transaction: raw_connector_transaction
@@ -215,6 +283,7 @@ fragment EntityFragment on Entity {
             }
         }
         lightning_receive_request_payment_preimage: payment_preimage
+        lightning_receive_request_receiver_identity_public_key: receiver_identity_public_key
     }
     ... on LightningSendRequest {
         __typename

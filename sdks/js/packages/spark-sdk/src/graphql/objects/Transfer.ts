@@ -1,36 +1,35 @@
-
 // Copyright ©, 2023-present, Lightspark Group, Inc. - All Rights Reserved
 
-
-import {SparkTransferToLeavesConnectionFromJson} from './SparkTransferToLeavesConnection.js';
-import SparkTransferToLeavesConnection from './SparkTransferToLeavesConnection.js';
-import {CurrencyAmountFromJson} from './CurrencyAmount.js';
-import autoBind from '../../auto-bind.js';
-import {CurrencyAmountToJson} from './CurrencyAmount.js';
+import autoBind from "../../auto-bind.js";
 import type LightsparkClient from "../client.js";
-import CurrencyAmount from './CurrencyAmount.js';
-
+import CurrencyAmount, {
+  CurrencyAmountFromJson,
+  CurrencyAmountToJson,
+} from "./CurrencyAmount.js";
+import SparkTransferToLeavesConnection, {
+  SparkTransferToLeavesConnectionFromJson,
+} from "./SparkTransferToLeavesConnection.js";
 
 class Transfer {
-
-    constructor(
-        
+  constructor(
     /** The total amount of the transfer. **/
-public readonly totalAmount: CurrencyAmount,
+    public readonly totalAmount: CurrencyAmount,
     /** The id of the transfer known at signing operators. If not set, the transfer hasn't been
- * initialized. **/
-public readonly sparkId?: string | undefined,
+     * initialized. **/
+    public readonly sparkId?: string | undefined,
     /** The user request this transfer belongs to, if there is any **/
-public readonly userRequestId?: string | undefined,
-    ) {
-        autoBind(this);
-    }
+    public readonly userRequestId?: string | undefined,
+  ) {
+    autoBind(this);
+  }
 
-
-
-    public async getLeaves(client: LightsparkClient, first: number|undefined= undefined, after: string|undefined= undefined): Promise<SparkTransferToLeavesConnection> {
-        return (await client.executeRawQuery({
-            queryPayload: ` 
+  public async getLeaves(
+    client: LightsparkClient,
+    first: number | undefined = undefined,
+    after: string | undefined = undefined,
+  ): Promise<SparkTransferToLeavesConnection> {
+    return (await client.executeRawQuery({
+      queryPayload: ` 
 query FetchSparkTransferToLeavesConnection($entity_id: ID!, $first: Int, $after: String) {
     entity(id: $entity_id) {
         ... on Transfer {
@@ -61,39 +60,32 @@ query FetchSparkTransferToLeavesConnection($entity_id: ID!, $first: Int, $after:
     }
 }
 `,
-            variables: {entity_id: this.sparkId, "first": first, "after": after},
-            constructObject: (json) => {
-                const connection = json["entity"]["leaves"];
-                return SparkTransferToLeavesConnectionFromJson(connection);
-            }
-        }))!;
-    }
+      variables: { entity_id: this.sparkId, first: first, after: after },
+      constructObject: (json) => {
+        const connection = json["entity"]["leaves"];
+        return SparkTransferToLeavesConnectionFromJson(connection);
+      },
+    }))!;
+  }
 
-
-public toJson() {
-return {
-transfer_total_amount: CurrencyAmountToJson(this.totalAmount),
-transfer_spark_id: this.sparkId,
-transfer_user_request: { id: this.userRequestId },
-
-        }
-
-}
+  public toJson() {
+    return {
+      transfer_total_amount: CurrencyAmountToJson(this.totalAmount),
+      transfer_spark_id: this.sparkId,
+      transfer_user_request: { id: this.userRequestId },
+    };
+  }
 }
 
 export const TransferFromJson = (obj: any): Transfer => {
-    return new Transfer(
-        CurrencyAmountFromJson(obj["transfer_total_amount"]),
-        obj["transfer_spark_id"],
-        obj["transfer_user_request"]?.id ?? undefined,
+  return new Transfer(
+    CurrencyAmountFromJson(obj["transfer_total_amount"]),
+    obj["transfer_spark_id"],
+    obj["transfer_user_request"]?.id ?? undefined,
+  );
+};
 
-        );
-
-}
-
-
-
-    export const FRAGMENT = `
+export const FRAGMENT = `
 fragment TransferFragment on Transfer {
     __typename
     transfer_total_amount: total_amount {
@@ -109,8 +101,5 @@ fragment TransferFragment on Transfer {
         id
     }
 }`;
-
-
-
 
 export default Transfer;

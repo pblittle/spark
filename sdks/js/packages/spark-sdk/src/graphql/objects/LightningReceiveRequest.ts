@@ -1,85 +1,90 @@
-
 // Copyright ©, 2023-present, Lightspark Group, Inc. - All Rights Reserved
 
-import { Query, isObject } from '@lightsparkdev/core';
-import Transfer from './Transfer.js';
-import {InvoiceFromJson} from './Invoice.js';
-import {InvoiceToJson} from './Invoice.js';
-import Invoice from './Invoice.js';
-import LightningReceiveRequestStatus from './LightningReceiveRequestStatus.js';
-import {TransferFromJson} from './Transfer.js';
-import BitcoinNetwork from './BitcoinNetwork.js';
-
+import { Query, isObject } from "@lightsparkdev/core";
+import BitcoinNetwork from "./BitcoinNetwork.js";
+import Invoice, { InvoiceFromJson, InvoiceToJson } from "./Invoice.js";
+import LightningReceiveRequestStatus from "./LightningReceiveRequestStatus.js";
+import Transfer, { TransferFromJson } from "./Transfer.js";
 
 interface LightningReceiveRequest {
+  /**
+   * The unique identifier of this entity across all Lightspark systems. Should be treated as an opaque
+   * string.
+   **/
+  id: string;
 
+  /** The date and time when the entity was first created. **/
+  createdAt: string;
 
-    /**
- * The unique identifier of this entity across all Lightspark systems. Should be treated as an opaque
- * string.
-**/
-id: string;
+  /** The date and time when the entity was last updated. **/
+  updatedAt: string;
 
-    /** The date and time when the entity was first created. **/
-createdAt: string;
+  /** The network the lightning send request is on. **/
+  network: BitcoinNetwork;
 
-    /** The date and time when the entity was last updated. **/
-updatedAt: string;
+  /** The lightning invoice generated to receive lightning payment. **/
+  invoice: Invoice;
 
-    /** The network the lightning send request is on. **/
-network: BitcoinNetwork;
+  /** The status of the request. **/
+  status: LightningReceiveRequestStatus;
 
-    /** The lightning invoice generated to receive lightning payment. **/
-invoice: Invoice;
+  /** The typename of the object **/
+  typename: string;
 
-    /** The status of the request. **/
-status: LightningReceiveRequestStatus;
+  /** The leaves transfer after lightning payment was received. **/
+  transfer?: Transfer | undefined;
 
-    /** The typename of the object **/
-typename: string;
+  /** The payment preimage of the invoice if retrieved from SE. **/
+  paymentPreimage?: string | undefined;
 
-    /** The leaves transfer after lightning payment was received. **/
-transfer?: Transfer | undefined;
-
-    /** The payment preimage of the invoice if retrieved from SE. **/
-paymentPreimage?: string | undefined;
-
-
-
-
+  /** The receiver's identity public key if different from owner of the request. **/
+  receiverIdentityPublicKey?: string | undefined;
 }
 
-export const LightningReceiveRequestFromJson = (obj: any): LightningReceiveRequest => {
-    return {
-        id: obj["lightning_receive_request_id"],
-        createdAt: obj["lightning_receive_request_created_at"],
-        updatedAt: obj["lightning_receive_request_updated_at"],
-        network: BitcoinNetwork[obj["lightning_receive_request_network"]] ?? BitcoinNetwork.FUTURE_VALUE,
-        invoice: InvoiceFromJson(obj["lightning_receive_request_invoice"]),
-        status: LightningReceiveRequestStatus[obj["lightning_receive_request_status"]] ?? LightningReceiveRequestStatus.FUTURE_VALUE,
-typename: "LightningReceiveRequest",        transfer: (!!obj["lightning_receive_request_transfer"] ? TransferFromJson(obj["lightning_receive_request_transfer"]) : undefined),
-        paymentPreimage: obj["lightning_receive_request_payment_preimage"],
+export const LightningReceiveRequestFromJson = (
+  obj: any,
+): LightningReceiveRequest => {
+  return {
+    id: obj["lightning_receive_request_id"],
+    createdAt: obj["lightning_receive_request_created_at"],
+    updatedAt: obj["lightning_receive_request_updated_at"],
+    network:
+      BitcoinNetwork[obj["lightning_receive_request_network"]] ??
+      BitcoinNetwork.FUTURE_VALUE,
+    invoice: InvoiceFromJson(obj["lightning_receive_request_invoice"]),
+    status:
+      LightningReceiveRequestStatus[obj["lightning_receive_request_status"]] ??
+      LightningReceiveRequestStatus.FUTURE_VALUE,
+    typename: "LightningReceiveRequest",
+    transfer: !!obj["lightning_receive_request_transfer"]
+      ? TransferFromJson(obj["lightning_receive_request_transfer"])
+      : undefined,
+    paymentPreimage: obj["lightning_receive_request_payment_preimage"],
+    receiverIdentityPublicKey:
+      obj["lightning_receive_request_receiver_identity_public_key"],
+  } as LightningReceiveRequest;
+};
+export const LightningReceiveRequestToJson = (
+  obj: LightningReceiveRequest,
+): any => {
+  return {
+    __typename: "LightningReceiveRequest",
+    lightning_receive_request_id: obj.id,
+    lightning_receive_request_created_at: obj.createdAt,
+    lightning_receive_request_updated_at: obj.updatedAt,
+    lightning_receive_request_network: obj.network,
+    lightning_receive_request_invoice: InvoiceToJson(obj.invoice),
+    lightning_receive_request_status: obj.status,
+    lightning_receive_request_transfer: obj.transfer
+      ? obj.transfer.toJson()
+      : undefined,
+    lightning_receive_request_payment_preimage: obj.paymentPreimage,
+    lightning_receive_request_receiver_identity_public_key:
+      obj.receiverIdentityPublicKey,
+  };
+};
 
-        } as LightningReceiveRequest;
-
-}
-export const LightningReceiveRequestToJson = (obj: LightningReceiveRequest): any => {
-return {
-__typename: "LightningReceiveRequest",lightning_receive_request_id: obj.id,
-lightning_receive_request_created_at: obj.createdAt,
-lightning_receive_request_updated_at: obj.updatedAt,
-lightning_receive_request_network: obj.network,
-lightning_receive_request_invoice: InvoiceToJson(obj.invoice),
-lightning_receive_request_status: obj.status,
-lightning_receive_request_transfer: (obj.transfer ? obj.transfer.toJson() : undefined),
-lightning_receive_request_payment_preimage: obj.paymentPreimage,
-
-        }
-
-}
-
-
-    export const FRAGMENT = `
+export const FRAGMENT = `
 fragment LightningReceiveRequestFragment on LightningReceiveRequest {
     __typename
     lightning_receive_request_id: id
@@ -120,13 +125,14 @@ fragment LightningReceiveRequestFragment on LightningReceiveRequest {
         }
     }
     lightning_receive_request_payment_preimage: payment_preimage
+    lightning_receive_request_receiver_identity_public_key: receiver_identity_public_key
 }`;
 
-
-
-    export const getLightningReceiveRequestQuery = (id: string): Query<LightningReceiveRequest> => {
-        return {
-            queryPayload: `
+export const getLightningReceiveRequestQuery = (
+  id: string,
+): Query<LightningReceiveRequest> => {
+  return {
+    queryPayload: `
 query GetLightningReceiveRequest($id: ID!) {
     entity(id: $id) {
         ... on LightningReceiveRequest {
@@ -137,10 +143,12 @@ query GetLightningReceiveRequest($id: ID!) {
 
 ${FRAGMENT}    
 `,
-            variables: {id},
-            constructObject: (data: unknown) => isObject(data) && "entity" in data && isObject(data.entity) ? LightningReceiveRequestFromJson(data.entity) : null,
-        }
-    }
-
+    variables: { id },
+    constructObject: (data: unknown) =>
+      isObject(data) && "entity" in data && isObject(data.entity)
+        ? LightningReceiveRequestFromJson(data.entity)
+        : null,
+  };
+};
 
 export default LightningReceiveRequest;

@@ -1,7 +1,7 @@
 export { default as BitcoinNetwork } from "./BitcoinNetwork.js";
 export {
-  type default as ClaimStaticDeposit,
   getClaimStaticDepositQuery,
+  type default as ClaimStaticDeposit,
 } from "./ClaimStaticDeposit.js";
 export type { default as ClaimStaticDepositInput } from "./ClaimStaticDepositInput.js";
 export type { default as ClaimStaticDepositOutput } from "./ClaimStaticDepositOutput.js";
@@ -18,7 +18,13 @@ export type { default as CoopExitFeeEstimate } from "./CoopExitFeeEstimate.js";
 export type { default as CoopExitFeeEstimatesInput } from "./CoopExitFeeEstimatesInput.js";
 export type { default as CoopExitFeeEstimatesOutput } from "./CoopExitFeeEstimatesOutput.js";
 export {
-  type default as CoopExitRequest,
+  getCoopExitFeeQuoteQuery,
+  type default as CoopExitFeeQuote,
+} from "./CoopExitFeeQuote.js";
+export type { default as CoopExitFeeQuoteInput } from "./CoopExitFeeQuoteInput.js";
+export type { default as CoopExitFeeQuoteOutput } from "./CoopExitFeeQuoteOutput.js";
+export type {
+  default as CoopExitRequest,
   getCoopExitRequestQuery,
 } from "./CoopExitRequest.js";
 export type { default as CurrencyAmount } from "./CurrencyAmount.js";
@@ -71,7 +77,10 @@ export type { default as StaticDepositQuoteOutput } from "./StaticDepositQuoteOu
 export type { default as SwapLeaf } from "./SwapLeaf.js";
 export { default as Transfer } from "./Transfer.js";
 export type { default as UserLeafInput } from "./UserLeafInput.js";
-export { getUserRequestQuery, type default as UserRequest } from "./UserRequest.js";
+export {
+  getUserRequestQuery,
+  type default as UserRequest,
+} from "./UserRequest.js";
 export type { default as VerifyChallengeInput } from "./VerifyChallengeInput.js";
 export type { default as VerifyChallengeOutput } from "./VerifyChallengeOutput.js";
 export type { default as WalletUserIdentityPublicKeyInput } from "./WalletUserIdentityPublicKeyInput.js";

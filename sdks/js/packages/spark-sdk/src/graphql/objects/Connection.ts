@@ -3,15 +3,15 @@
 
 
 import {UserRequestFromJson} from './UserRequest.js';
-import {UserRequestToJson} from './UserRequest.js';
-import {LeafFromJson} from './Leaf.js';
-import SparkWalletUserToUserRequestsConnection from './SparkWalletUserToUserRequestsConnection.js';
-import SparkTransferToLeavesConnection from './SparkTransferToLeavesConnection.js';
 import PageInfo from './PageInfo.js';
-import {LeafToJson} from './Leaf.js';
 import {PageInfoFromJson} from './PageInfo.js';
+import {LeafFromJson} from './Leaf.js';
 import { LightsparkException } from '@lightsparkdev/core';
+import SparkWalletUserToUserRequestsConnection from './SparkWalletUserToUserRequestsConnection.js';
 import {PageInfoToJson} from './PageInfo.js';
+import {UserRequestToJson} from './UserRequest.js';
+import SparkTransferToLeavesConnection from './SparkTransferToLeavesConnection.js';
+import {LeafToJson} from './Leaf.js';
 
 
 interface Connection {
