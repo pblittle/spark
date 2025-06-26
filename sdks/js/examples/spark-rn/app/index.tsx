@@ -1,6 +1,7 @@
 import {
   ReactNativeSparkSigner,
   SparkWallet,
+  createDummyTx,
 } from "@buildonspark/spark-sdk/native";
 import { useEffect, useState } from "react";
 import { Button, Text, View } from "react-native";
@@ -11,6 +12,7 @@ export default function Index() {
   const [invoice, setInvoice] = useState<string | null>(null);
   const [wallet, setWallet] = useState<SparkWallet | null>(null);
   const [wallet1, setWallet1] = useState<SparkWallet | null>(null);
+  const [dummyTx, setDummyTx] = useState("");
 
   useEffect(() => {
     if (wallet) {
@@ -73,6 +75,13 @@ export default function Index() {
       };
     }
   }, [wallet1]);
+
+  useEffect(() => {
+    (async () =>{
+      const dummyTx = await createDummyTx("bcrt1qnuyejmm2l4kavspq0jqaw0fv07lg6zv3z9z3te", 65536n);
+      setDummyTx(dummyTx.txid);
+    })(); 
+  }, [])
 
   const initializeWallet = async () => {
     try {
@@ -157,68 +166,87 @@ export default function Index() {
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
-        flexDirection: "row",
+        flexDirection: "column",
       }}
     >
       <View
         style={{
-          flex: 1,
           justifyContent: "center",
           alignItems: "center",
+          flexDirection: "row",
         }}
       >
-        <Text style={{ marginBottom: 20 }}>Balance: {balance}</Text>
-        <View style={{ marginBottom: 20 }}>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ marginBottom: 20 }}>Balance: {balance}</Text>
+          <View style={{ marginBottom: 20 }}>
+            <Button
+              title="Initialize Wallet"
+              onPress={() => {
+                initializeWallet();
+              }}
+            />
+          </View>
           <Button
-            title="Initialize Wallet"
+            title="Create Invoice"
             onPress={() => {
-              initializeWallet();
+              createInvoice();
+            }}
+          />
+          <Text style={{ marginTop: 20 }}>Invoice: {invoice}</Text>
+          <Button
+            title="Transfer"
+            onPress={() => {
+              transfer();
             }}
           />
         </View>
-        <Button
-          title="Create Invoice"
-          onPress={() => {
-            createInvoice();
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
           }}
-        />
-        <Text style={{ marginTop: 20 }}>Invoice: {invoice}</Text>
-        <Button
-          title="Transfer"
-          onPress={() => {
-            transfer();
-          }}
-        />
+        >
+          <Text style={{ marginBottom: 20 }}>Balance: {balance1}</Text>
+          <View style={{ marginBottom: 20 }}>
+            <Button
+              title="Initialize Wallet"
+              onPress={() => {
+                initializeWallet();
+              }}
+            />
+          </View>
+          <Button
+            title="Create Invoice"
+            onPress={() => {
+              createInvoice();
+            }}
+          />
+          <Text style={{ marginTop: 20 }}>Invoice: {invoice}</Text>
+          <Button
+            title="Transfer"
+            onPress={() => {
+              transfer1();
+            }}
+          />
+        </View>
       </View>
       <View
         style={{
-          flex: 1,
+          marginTop: 30,
           justifyContent: "center",
           alignItems: "center",
+          width: "80%",
         }}
       >
-        <Text style={{ marginBottom: 20 }}>Balance: {balance1}</Text>
-        <View style={{ marginBottom: 20 }}>
-          <Button
-            title="Initialize Wallet"
-            onPress={() => {
-              initializeWallet();
-            }}
-          />
-        </View>
-        <Button
-          title="Create Invoice"
-          onPress={() => {
-            createInvoice();
-          }}
-        />
-        <Text style={{ marginTop: 20 }}>Invoice: {invoice}</Text>
-        <Button
-          title="Transfer"
-          onPress={() => {
-            transfer1();
-          }}
-        />
+        <Text style={{ marginBottom: 15 }}>Dummy Transaction ID</Text>
+        <Text>{dummyTx}</Text>
       </View>
     </View>
   );

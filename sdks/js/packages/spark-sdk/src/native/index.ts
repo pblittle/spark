@@ -4,4 +4,5 @@ export { ReactNativeSparkSigner } from "../signer/signer.react-native.js";
 export { ReactNativeSparkSigner as DefaultSparkSigner } from "../signer/signer.react-native.js";
 export { SparkWallet } from "../spark-wallet/spark-wallet.js";
 export { getLatestDepositTxId } from "../utils/mempool.js";
+export { createDummyTx } from "../spark_bindings/native/index.js";
 export * from "../utils/index.js";
