@@ -9,21 +9,35 @@ echo 'export PATH="/opt/homebrew/opt/llvm/bin:$PATH"' >> ~/.zshrc
 # Install Rust tools
 cargo install wasm-pack
 rustup target add wasm32-unknown-unknown
+```
 
-# Install Android NDK
-# Option 1: Using Android Studio
-# 1. Open Android Studio
-# 2. Go to Tools → SDK Manager
-# 3. Click on the "SDK Tools" tab
-# 4. Check the box next to "NDK (Side by side)"
-# 5. Click "Apply" and wait for the download to complete
+## Install Android NDK
 
-# Option 2: Using command line
+### Option 1 (recommended for easier debugging): Using Android Studio
+1. Open Android Studio
+2. Go to Tools → SDK Manager
+3. Click on the "SDK Tools" tab
+4. Check the box next to "NDK (Side by side)"
+5. Check the box next to "Android SDK command-line tools"
+6. Click "Apply" and wait for the download to complete
+7. Add Android Studio NDK path with the version you downloaded above:
+```sh
+echo 'export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/27.2.12479018' >> ~/.zshrc
+# Add Android SDK command-line tools to path:
+echo 'export PATH=$HOME/Library/Android/sdk/cmdline-tools/latest/bin:$PATH' >> ~/.zshrc
+```
+
+### Option 2: Using homebrew
+```sh
 brew install android-commandlinetools
-sdkmanager --install "ndk;25.2.9519653"  # or whatever version you prefer
+sdkmanager --install "ndk;27.2.12479018" # or whatever version you prefer
+echo 'export ANDROID_NDK_HOME=/opt/homebrew/share/android-commandlinetools/ndk/27.2.12479018' >> ~/.zshrc
+```
 
+## Finish configuation
+
+```sh
 # Add Android NDK environment variables to your shell
-echo 'export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/25.2.9519653' >> ~/.zshrc
 echo 'export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH' >> ~/.zshrc
 
 # Reload shell configuration
@@ -60,5 +74,3 @@ cd spark/signer/spark-frost-uniffi
 cargo build
 ./build-bindings.sh
 ```
-
-Note: Make sure to adjust the NDK version number (25.2.9519653) to match the version you installed.

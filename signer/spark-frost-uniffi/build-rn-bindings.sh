@@ -13,6 +13,11 @@ echo "Script directory: $SCRIPT_DIR"
 echo "Target directory: $TARGET"
 echo "SDK directory: $SDK_DIR"
 
+export CC_armv7_linux_androideabi=armv7a-linux-androideabi33-clang
+export CC_aarch64_linux_android=aarch64-linux-android33-clang
+export CC_i686_linux_android=i686-linux-android33-clang
+export CC_x86_64_linux_android=x86_64-linux-android33-clang
+
 # Add all targets
 echo "Adding build targets..."
 # Android targets
@@ -24,6 +29,7 @@ rustup target add x86_64-linux-android
 rustup target add aarch64-apple-ios
 rustup target add x86_64-apple-ios
 rustup target add aarch64-apple-ios-sim
+rustup target add x86_64-apple-darwin
 
 echo "Generating bindings..."
 # Generate Kotlin bindings for Android with native bindings
