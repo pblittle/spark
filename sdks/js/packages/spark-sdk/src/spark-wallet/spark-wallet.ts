@@ -2647,7 +2647,7 @@ export class SparkWallet extends EventEmitter {
         throw new Error("Failed to swap nodes for preimage");
       }
 
-      const transfer = await this.transferService.sendTransferTweakKey(
+      const transfer = await this.transferService.deliverTransferPackage(
         swapResponse.transfer,
         leavesToSend,
         new Map(),

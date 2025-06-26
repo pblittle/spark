@@ -245,6 +245,98 @@ describe("LightningService", () => {
     await transferService.claimTransfer(receiverTransfer!, [claimingNode]);
   }, 60000);
 
+  it("test receive lightning v2 payment", async () => {
+    const faucet = BitcoinFaucet.getInstance();
+
+    const preimage = hexToBytes(
+      "2d059c3ede82a107aa1452c0bea47759be3c5c6e5342be6a310f6c3a907d9f4c",
+    );
+    const paymentHash = sha256(preimage);
+
+    const invoice = await lightningService.createLightningInvoiceWithPreImage({
+      invoiceCreator: fakeInvoiceCreator,
+      amountSats: 100,
+      memo: "test",
+      preimage,
+    });
+
+    expect(invoice).toBeDefined();
+
+    const sspLeafPubKey = await sspWallet.getSigner().generatePublicKey();
+    const nodeToSend = await createNewTree(
+      sspWallet,
+      sspLeafPubKey,
+      faucet,
+      12345n,
+    );
+
+    const newLeafPubKey = await sspWallet
+      .getSigner()
+      .generatePublicKey(sha256("1"));
+
+    const leaves: LeafKeyTweak[] = [
+      {
+        leaf: nodeToSend,
+        signingPubKey: sspLeafPubKey,
+        newSigningPubKey: newLeafPubKey,
+      },
+    ];
+
+    const response = await sspLightningService.swapNodesForPreimage({
+      leaves,
+      receiverIdentityPubkey: await userConfig.signer.getIdentityPublicKey(),
+      paymentHash,
+      isInboundPayment: true,
+    });
+
+    expect(equalBytes(response.preimage, preimage)).toBe(true);
+
+    const senderTransfer = response.transfer;
+
+    expect(senderTransfer).toBeDefined();
+
+    const transfer = await sspTransferService.deliverTransferPackage(
+      senderTransfer!,
+      leaves,
+      new Map(),
+    );
+
+    expect(transfer.status).toEqual(
+      TransferStatus.TRANSFER_STATUS_SENDER_KEY_TWEAKED,
+    );
+
+    const pendingTransfer = await transferService.queryPendingTransfers();
+
+    expect(pendingTransfer.transfers.length).toBe(1);
+
+    const receiverTransfer = pendingTransfer.transfers[0];
+
+    expect(receiverTransfer!.id).toEqual(senderTransfer!.id);
+
+    const leafPrivKeyMap = await transferService.verifyPendingTransfer(
+      receiverTransfer!,
+    );
+
+    expect(leafPrivKeyMap.size).toBe(1);
+    expect(leafPrivKeyMap.has(nodeToSend.id)).toBe(true);
+    expect(equalBytes(leafPrivKeyMap.get(nodeToSend.id)!, newLeafPubKey)).toBe(
+      true,
+    );
+
+    const finalLeafPubKey = await userWallet.getSigner().generatePublicKey();
+
+    const leaf = receiverTransfer!.leaves[0]!.leaf;
+    expect(leaf).toBeDefined();
+
+    const claimingNode = {
+      leaf: leaf!,
+      signingPubKey: newLeafPubKey,
+      newSigningPubKey: finalLeafPubKey,
+    };
+
+    await transferService.claimTransfer(receiverTransfer!, [claimingNode]);
+  }, 60000);
+
   it("test send lightning payment", async () => {
     const faucet = BitcoinFaucet.getInstance();
 
@@ -293,6 +385,98 @@ describe("LightningService", () => {
 
     expect(transfer.status).toEqual(
       TransferStatus.TRANSFER_STATUS_SENDER_KEY_TWEAK_PENDING,
+    );
+
+    const refunds =
+      await sspLightningService.queryUserSignedRefunds(paymentHash);
+
+    let totalValue = 0n;
+    for (const refund of refunds) {
+      const value = sspLightningService.validateUserSignedRefund(refund);
+      totalValue += value;
+    }
+
+    expect(totalValue).toBe(12345n);
+    const receiverTransfer =
+      await sspLightningService.providePreimage(preimage);
+
+    expect(receiverTransfer.status).toEqual(
+      TransferStatus.TRANSFER_STATUS_SENDER_KEY_TWEAKED,
+    );
+    expect(receiverTransfer.id).toEqual(transfer.id);
+
+    const leafPrivKeyMap =
+      await sspTransferService.verifyPendingTransfer(receiverTransfer);
+
+    expect(leafPrivKeyMap.size).toBe(1);
+    expect(leafPrivKeyMap.has(nodeToSend.id)).toBe(true);
+    expect(equalBytes(leafPrivKeyMap.get(nodeToSend.id)!, newLeafPubKey)).toBe(
+      true,
+    );
+
+    const finalLeafPubKey = await sspWallet
+      .getSigner()
+      .generatePublicKey(sha256("2"));
+
+    expect(receiverTransfer.leaves[0]!.leaf).toBeDefined();
+
+    const claimingNode = {
+      leaf: receiverTransfer.leaves[0]!.leaf!,
+      signingPubKey: newLeafPubKey,
+      newSigningPubKey: finalLeafPubKey,
+    };
+
+    await sspTransferService.claimTransfer(receiverTransfer, [claimingNode]);
+  }, 60000);
+
+  it("test send lightning v2 payment", async () => {
+    const faucet = BitcoinFaucet.getInstance();
+
+    const preimage = hexToBytes(
+      "2d059c3ede82a107aa1452c0bea47759be3c5c6e5342be6a310f6c3a907d9f4c",
+    );
+    const paymentHash = sha256(preimage);
+
+    const userLeafPubKey = await userWallet
+      .getSigner()
+      .generatePublicKey(sha256("1"));
+    const nodeToSend = await createNewTree(
+      userWallet,
+      userLeafPubKey,
+      faucet,
+      12345n,
+    );
+
+    const newLeafPubKey = await userWallet
+      .getSigner()
+      .generatePublicKey(sha256("2"));
+
+    const leaves: LeafKeyTweak[] = [
+      {
+        leaf: nodeToSend,
+        signingPubKey: userLeafPubKey,
+        newSigningPubKey: newLeafPubKey,
+      },
+    ];
+
+    const response = await lightningService.swapNodesForPreimage({
+      leaves,
+      receiverIdentityPubkey: await sspConfig.signer.getIdentityPublicKey(),
+      paymentHash,
+      isInboundPayment: false,
+      invoiceString: (await fakeInvoiceCreator()).invoice.encodedInvoice,
+    });
+
+    expect(response.transfer).toBeDefined();
+
+    const transfer = await transferService.deliverTransferPackage(
+      response.transfer!,
+      leaves,
+      new Map(),
+    );
+
+    expect(transfer.status).toEqual(
+      TransferStatus.TRANSFER_STATUS_SENDER_INITIATED_COORDINATOR,
     );
 
     const refunds =
