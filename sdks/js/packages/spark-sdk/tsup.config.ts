@@ -1,10 +1,18 @@
 import { defineConfig } from "tsup";
+import { readFileSync } from "node:fs";
+
+const pkg = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+);
 
 const commonConfig = {
   sourcemap: false,
   dts: true,
   clean: false,
   inject: ["./buffer.js"],
+  define: {
+    __PACKAGE_VERSION__: JSON.stringify(pkg.version),
+  },
 };
 
 export default defineConfig([

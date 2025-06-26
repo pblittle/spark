@@ -7,7 +7,7 @@ import type {
   Channel as ChannelWeb,
   ClientFactory as ClientFactoryWeb,
 } from "nice-grpc-web";
-import { isBun, isReactNative } from "../constants.js";
+import { isBun, isReactNative, clientEnv } from "../constants.js";
 import { AuthenticationError, NetworkError } from "../errors/types.js";
 import { MockServiceClient, MockServiceDefinition } from "../proto/mock.js";
 import { SparkServiceClient, SparkServiceDefinition } from "../proto/spark.js";
@@ -283,11 +283,48 @@ export class ConnectionManager {
     certPath?: string,
   ): Promise<SparkAuthnServiceClient & { close?: () => void }> {
     const channel = await this.createChannelWithTLS(address, certPath);
+    const authnMiddleware = this.createAuthnMiddleware();
     return this.createGrpcClient<SparkAuthnServiceClient>(
       SparkAuthnServiceDefinition,
       channel,
       false,
+      authnMiddleware,
     );
+  }
+
+  private createAuthnMiddleware() {
+    if (isNode) {
+      return async function* (
+        this: ConnectionManager,
+        call: ClientMiddlewareCall<any, any>,
+        options: SparkCallOptions,
+      ) {
+        const metadata = Metadata(options.metadata).set(
+          "X-Client-Env",
+          clientEnv,
+        );
+        return yield* call.next(call.request, {
+          ...options,
+          metadata,
+        });
+      }.bind(this);
+    } else {
+      return async function* (
+        this: ConnectionManager,
+        call: ClientMiddlewareCall<any, any>,
+        options: SparkCallOptions,
+      ) {
+        const metadata = Metadata(options.metadata)
+          .set("X-Requested-With", "XMLHttpRequest")
+          .set("X-Grpc-Web", "1")
+          .set("X-Client-Env", clientEnv)
+          .set("Content-Type", "application/grpc-web+proto");
+        return yield* call.next(call.request, {
+          ...options,
+          metadata,
+        });
+      }.bind(this);
+    }
   }
 
   private createMiddleware(address: string, authToken: string) {
@@ -304,27 +341,30 @@ export class ConnectionManager {
       call: ClientMiddlewareCall<any, any>,
       options: SparkCallOptions,
     ) {
+      const metadata = Metadata(options.metadata).set(
+        "X-Client-Env",
+        clientEnv,
+      );
       try {
         return yield* call.next(call.request, {
           ...options,
-          metadata: Metadata(options.metadata)
-            .set(
-              "Authorization",
-              `Bearer ${this.clients.get(address)?.authToken || initialAuthToken}`,
-            )
-            .set("User-Agent", "spark-js-sdk"),
+          metadata: metadata.set(
+            "Authorization",
+            `Bearer ${this.clients.get(address)?.authToken || initialAuthToken}`,
+          ),
         });
       } catch (error: any) {
         if (error.message?.includes("token has expired")) {
           const newAuthToken = await this.authenticate(address);
-          // @ts-ignore - We can only get here if the client exists
-          this.clients.get(address).authToken = newAuthToken;
+          const clientData = this.clients.get(address);
+          if (!clientData) {
+            throw new Error(`No client found for address: ${address}`);
+          }
+          clientData.authToken = newAuthToken;
 
           return yield* call.next(call.request, {
             ...options,
-            metadata: Metadata(options.metadata)
-              .set("Authorization", `Bearer ${newAuthToken}`)
-              .set("User-Agent", "spark-js-sdk"),
+            metadata: metadata.set("Authorization", `Bearer ${newAuthToken}`),
           });
         }
         throw error;
@@ -338,33 +378,32 @@ export class ConnectionManager {
       call: ClientMiddlewareCall<any, any>,
       options: SparkCallOptions,
     ) {
+      const metadata = Metadata(options.metadata)
+        .set("X-Requested-With", "XMLHttpRequest")
+        .set("X-Grpc-Web", "1")
+        .set("X-Client-Env", clientEnv)
+        .set("Content-Type", "application/grpc-web+proto");
+
       try {
         return yield* call.next(call.request, {
           ...options,
-          metadata: Metadata(options.metadata)
-            .set(
-              "Authorization",
-              `Bearer ${this.clients.get(address)?.authToken || initialAuthToken}`,
-            )
-            .set("X-Requested-With", "XMLHttpRequest")
-            .set("X-Grpc-Web", "1")
-            .set("Content-Type", "application/grpc-web+proto")
-            .set("User-Agent", "spark-js-sdk"),
+          metadata: metadata.set(
+            "Authorization",
+            `Bearer ${this.clients.get(address)?.authToken || initialAuthToken}`,
+          ),
         });
       } catch (error: any) {
         if (error.message?.includes("token has expired")) {
           const newAuthToken = await this.authenticate(address);
-          // @ts-ignore - We can only get here if the client exists
-          this.clients.get(address).authToken = newAuthToken;
+          const clientData = this.clients.get(address);
+          if (!clientData) {
+            throw new Error(`No client found for address: ${address}`);
+          }
+          clientData.authToken = newAuthToken;
 
           return yield* call.next(call.request, {
             ...options,
-            metadata: Metadata(options.metadata)
-              .set("Authorization", `Bearer ${newAuthToken}`)
-              .set("X-Requested-With", "XMLHttpRequest")
-              .set("X-Grpc-Web", "1")
-              .set("Content-Type", "application/grpc-web+proto")
-              .set("User-Agent", "spark-js-sdk"),
+            metadata: metadata.set("Authorization", `Bearer ${newAuthToken}`),
           });
         }
         throw error;

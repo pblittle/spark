@@ -6,7 +6,7 @@ import type {
   Channel as ChannelWeb,
   ClientFactory as ClientFactoryWeb,
 } from "nice-grpc-web";
-import { isBun, isReactNative } from "../constants.js";
+import { isBun, isReactNative, clientEnv } from "../constants.js";
 import { NetworkError } from "../errors/types.js";
 import { SparkServiceClient, SparkServiceDefinition } from "../proto/lrc20.js";
 import { RetryOptions, SparkCallOptions } from "../types/grpc.js";
@@ -126,7 +126,7 @@ export class Lrc20ConnectionManager {
     ) {
       return yield* call.next(call.request, {
         ...options,
-        metadata: Metadata(options.metadata).set("User-Agent", "spark-js-sdk"),
+        metadata: Metadata(options.metadata).set("X-Client-Env", clientEnv),
       });
     }.bind(this);
   }
@@ -143,7 +143,7 @@ export class Lrc20ConnectionManager {
           .set("X-Requested-With", "XMLHttpRequest")
           .set("X-Grpc-Web", "1")
           .set("Content-Type", "application/grpc-web+proto")
-          .set("User-Agent", "spark-js-sdk"),
+          .set("X-Client-Env", clientEnv),
       });
     }.bind(this);
   }
