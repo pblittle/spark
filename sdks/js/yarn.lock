@@ -15375,9 +15375,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"my-app@workspace:examples/spark-rn":
+"my-app@workspace:examples/spark-expo-react-native-app":
   version: 0.0.0-use.local
-  resolution: "my-app@workspace:examples/spark-rn"
+  resolution: "my-app@workspace:examples/spark-expo-react-native-app"
   dependencies:
     "@babel/core": "npm:^7.27.3"
     "@buildonspark/spark-sdk": "npm:^0.1.28"
