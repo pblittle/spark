@@ -17,7 +17,3 @@ dist
 
 # Turbo
 .turbo
-
-# Dev configs
-dev-regtest-config.json
-dev-mainnet-config.json
