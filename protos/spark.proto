@@ -18,7 +18,10 @@ service SparkService {
     rpc finalize_node_signatures(FinalizeNodeSignaturesRequest) returns (FinalizeNodeSignaturesResponse) {}
 
     rpc start_transfer(StartTransferRequest) returns (StartTransferResponse) {}
-    rpc finalize_transfer(FinalizeTransferRequest) returns (FinalizeTransferResponse) {}
+    // This is deprecated, please use finalize_transfer_with_transfer_package instead.
+    rpc finalize_transfer(FinalizeTransferRequest) returns (FinalizeTransferResponse) {
+        option deprecated = true;
+    }
     rpc finalize_transfer_with_transfer_package(FinalizeTransferWithTransferPackageRequest) returns (FinalizeTransferResponse) {}
     rpc cancel_transfer(CancelTransferRequest) returns (CancelTransferResponse) {}
 
