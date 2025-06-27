@@ -50,7 +50,7 @@ export class CoopExitService extends BaseTransferService {
       connectorOutputs,
       receiverPubKey,
     );
-    const transferTweak = await this.sendTransferTweakKey(
+    const transferTweak = await this.deliverTransferPackage(
       transfer,
       leaves,
       signaturesMap,
