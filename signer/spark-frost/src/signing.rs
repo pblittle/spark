@@ -51,7 +51,7 @@ pub fn frost_signing_commiement_map_from_proto(
         .map(
             |(k, v)| -> Result<(Identifier, FrostSigningCommitments), String> {
                 let identifier = hex_string_to_identifier(k)
-                    .map_err(|e| format!("Failed to parse identifier: {}", e))?;
+                    .map_err(|e| format!("Failed to parse identifier: {e}"))?;
                 let commitments = frost_commitments_from_proto(v)?;
                 Ok((identifier, commitments))
             },
@@ -87,7 +87,7 @@ pub fn frost_signature_shares_from_proto(
         .iter()
         .map(|(k, v)| -> Result<(Identifier, SignatureShare), String> {
             let identifier = hex_string_to_identifier(k)
-                .map_err(|e| format!("Failed to parse identifier: {}", e))?;
+                .map_err(|e| format!("Failed to parse identifier: {e}"))?;
             let share = SignatureShare::deserialize(v).map_err(|e| e.to_string())?;
             Ok((identifier, share))
         })
@@ -181,9 +181,9 @@ pub fn frost_nonce(req: &FrostNonceRequest) -> Result<FrostNonceResponse, String
 
     for key_package in req.key_packages.iter() {
         let verifying_key = verifying_key_from_bytes(key_package.public_key.clone())
-            .map_err(|e| format!("Failed to parse verifying key: {:?}", e))?;
+            .map_err(|e| format!("Failed to parse verifying key: {e:?}"))?;
         let key_package = frost_key_package_from_proto(key_package, None, verifying_key, 0)
-            .map_err(|e| format!("Failed to parse key package: {:?}", e))?;
+            .map_err(|e| format!("Failed to parse key package: {e:?}"))?;
 
         let rng = &mut rand::thread_rng();
         let (nonce, commitment) =
@@ -198,11 +198,11 @@ pub fn frost_nonce(req: &FrostNonceRequest) -> Result<FrostNonceResponse, String
             hiding: commitment
                 .hiding()
                 .serialize()
-                .map_err(|e| format!("Failed to serialize hiding commitment: {:?}", e))?,
+                .map_err(|e| format!("Failed to serialize hiding commitment: {e:?}"))?,
             binding: commitment
                 .binding()
                 .serialize()
-                .map_err(|e| format!("Failed to serialize binding commitment: {:?}", e))?,
+                .map_err(|e| format!("Failed to serialize binding commitment: {e:?}"))?,
         };
 
         results.push(SigningNonceResult {
@@ -218,7 +218,7 @@ pub fn sign_frost(req: &SignFrostRequest) -> Result<SignFrostResponse, String> {
     let mut results = HashMap::new();
     for job in req.signing_jobs.iter() {
         let mut commitments = frost_signing_commiement_map_from_proto(&job.commitments)
-            .map_err(|e| format!("Failed to parse signing commitments: {:?}", e))?;
+            .map_err(|e| format!("Failed to parse signing commitments: {e:?}"))?;
 
         let user_identifier =
             Identifier::derive("user".as_bytes()).expect("Failed to derive user identifier");
@@ -230,7 +230,7 @@ pub fn sign_frost(req: &SignFrostRequest) -> Result<SignFrostResponse, String> {
 
         if let Some(c) = &job.user_commitments {
             let user_commitments = frost_commitments_from_proto(c)
-                .map_err(|e| format!("Failed to parse user commitments: {:?}", e))?;
+                .map_err(|e| format!("Failed to parse user commitments: {e:?}"))?;
             commitments.insert(user_identifier, user_commitments);
             signing_participants_groups.push(BTreeSet::from([user_identifier]));
         };
@@ -238,12 +238,12 @@ pub fn sign_frost(req: &SignFrostRequest) -> Result<SignFrostResponse, String> {
 
         let nonce = match &job.nonce {
             Some(nonce) => frost_nonce_from_proto(nonce)
-                .map_err(|e| format!("Failed to parse nonce: {:?}", e))?,
+                .map_err(|e| format!("Failed to parse nonce: {e:?}"))?,
             None => return Err("Nonce is required".to_string()),
         };
 
         let verifying_key = verifying_key_from_bytes(job.verifying_key.clone())
-            .map_err(|e| format!("Failed to parse verifying key: {:?}", e))?;
+            .map_err(|e| format!("Failed to parse verifying key: {e:?}"))?;
 
         let identifier_override = match req.role {
             0 => None,
@@ -258,7 +258,7 @@ pub fn sign_frost(req: &SignFrostRequest) -> Result<SignFrostResponse, String> {
                 verifying_key,
                 req.role,
             )
-            .map_err(|e| format!("Failed to parse key package: {:?}", e))?,
+            .map_err(|e| format!("Failed to parse key package: {e:?}"))?,
             None => return Err("Key package is required".to_string()),
         };
 
@@ -278,9 +278,9 @@ pub fn sign_frost(req: &SignFrostRequest) -> Result<SignFrostResponse, String> {
                 &key_package,
                 Some(tweak.as_slice()),
             )
-            .map_err(|e| format!("Failed to sign frost: {:?}", e))?,
+            .map_err(|e| format!("Failed to sign frost: {e:?}"))?,
             _ => frost_secp256k1_tr::round2::sign(&signing_package, &nonce, &key_package)
-                .map_err(|e| format!("Failed to sign frost: {:?}", e))?,
+                .map_err(|e| format!("Failed to sign frost: {e:?}"))?,
         };
         tracing::info!("Signing frost completed");
 
@@ -297,7 +297,7 @@ pub fn sign_frost(req: &SignFrostRequest) -> Result<SignFrostResponse, String> {
 
 pub fn aggregate_frost(req: &AggregateFrostRequest) -> Result<AggregateFrostResponse, String> {
     let mut commitments = frost_signing_commiement_map_from_proto(&req.commitments)
-        .map_err(|e| format!("Failed to parse signing commitments: {:?}", e))?;
+        .map_err(|e| format!("Failed to parse signing commitments: {e:?}"))?;
 
     let mut signing_participants_groups = Vec::new();
     signing_participants_groups.push(commitments.keys().cloned().collect());
@@ -307,12 +307,12 @@ pub fn aggregate_frost(req: &AggregateFrostRequest) -> Result<AggregateFrostResp
 
     if let Some(c) = &req.user_commitments {
         let user_commitments = frost_commitments_from_proto(c)
-            .map_err(|e| format!("Failed to parse user commitments: {:?}", e))?;
+            .map_err(|e| format!("Failed to parse user commitments: {e:?}"))?;
         commitments.insert(user_identifier, user_commitments);
     };
 
     let verifying_key = verifying_key_from_bytes(req.verifying_key.clone())
-        .map_err(|e| format!("Failed to parse verifying key: {:?}", e))?;
+        .map_err(|e| format!("Failed to parse verifying key: {e:?}"))?;
 
     signing_participants_groups.push(BTreeSet::from([user_identifier]));
 
@@ -328,7 +328,7 @@ pub fn aggregate_frost(req: &AggregateFrostRequest) -> Result<AggregateFrostResp
         user_identifier,
         &req.user_signature_share,
     )
-    .map_err(|e| format!("Failed to parse signature shares: {:?}", e))?;
+    .map_err(|e| format!("Failed to parse signature shares: {e:?}"))?;
 
     let public_package = frost_public_package_from_proto(
         &req.public_shares,
@@ -336,7 +336,7 @@ pub fn aggregate_frost(req: &AggregateFrostRequest) -> Result<AggregateFrostResp
         req.user_public_key.clone(),
         verifying_key,
     )
-    .map_err(|e| format!("Failed to parse public package: {:?}", e))?;
+    .map_err(|e| format!("Failed to parse public package: {e:?}"))?;
 
     let tweak = vec![];
 
@@ -350,30 +350,30 @@ pub fn aggregate_frost(req: &AggregateFrostRequest) -> Result<AggregateFrostResp
         &public_package,
         Some(&tweak),
     )
-    .map_err(|e| format!("Failed to aggregate frost: {:?}", e))?;
+    .map_err(|e| format!("Failed to aggregate frost: {e:?}"))?;
 
     Ok(AggregateFrostResponse {
         signature: signature
             .serialize()
-            .map_err(|e| format!("Failed to serialize signature: {:?}", e))?,
+            .map_err(|e| format!("Failed to serialize signature: {e:?}"))?,
     })
 }
 
 pub fn validate_signature_share(req: &ValidateSignatureShareRequest) -> Result<(), String> {
     let identifier = match req.role {
         0 => hex_string_to_identifier(&req.identifier)
-            .map_err(|e| format!("Failed to parse identifier: {:?}", e))?,
+            .map_err(|e| format!("Failed to parse identifier: {e:?}"))?,
         1 => Identifier::derive("user".as_bytes()).expect("Failed to derive user identifier"),
         _ => return Err("Invalid signing role".to_string()),
     };
 
     let signature_share = SignatureShare::deserialize(req.signature_share.as_slice())
-        .map_err(|e| format!("Failed to parse signature share: {:?}", e))?;
+        .map_err(|e| format!("Failed to parse signature share: {e:?}"))?;
     let verifying_key = verifying_key_from_bytes(req.verifying_key.clone())
-        .map_err(|e| format!("Failed to parse verifying key: {:?}", e))?;
+        .map_err(|e| format!("Failed to parse verifying key: {e:?}"))?;
 
     let mut commitments = frost_signing_commiement_map_from_proto(&req.commitments)
-        .map_err(|e| format!("Failed to parse signing commitments: {:?}", e))?;
+        .map_err(|e| format!("Failed to parse signing commitments: {e:?}"))?;
 
     let user_identifier =
         Identifier::derive("user".as_bytes()).expect("Failed to derive user identifier");
@@ -383,13 +383,13 @@ pub fn validate_signature_share(req: &ValidateSignatureShareRequest) -> Result<(
 
     if let Some(c) = &req.user_commitments {
         let user_commitments = frost_commitments_from_proto(c)
-            .map_err(|e| format!("Failed to parse user commitments: {:?}", e))?;
+            .map_err(|e| format!("Failed to parse user commitments: {e:?}"))?;
         commitments.insert(user_identifier, user_commitments);
         signing_participants_groups.push(BTreeSet::from([user_identifier]));
     }
 
     let public_share = VerifyingShare::deserialize(req.public_share.as_slice())
-        .map_err(|e| format!("Failed to parse public share: {:?}", e))?;
+        .map_err(|e| format!("Failed to parse public share: {e:?}"))?;
 
     let adaptor_key: Vec<u8> = vec![];
 
@@ -401,7 +401,7 @@ pub fn validate_signature_share(req: &ValidateSignatureShareRequest) -> Result<(
     );
 
     let dummy_signing_share = SigningShare::deserialize(&[0; 32])
-        .map_err(|e| format!("Failed to parse dummy signing share: {:?}", e))?;
+        .map_err(|e| format!("Failed to parse dummy signing share: {e:?}"))?;
 
     let result = FrostKeyPackage::new(
         identifier,
@@ -433,7 +433,7 @@ pub fn validate_signature_share(req: &ValidateSignatureShareRequest) -> Result<(
         &signing_package,
         result_tweaked.verifying_key(),
     )
-    .map_err(|e| format!("Failed to verify signature share: {:?}", e))?;
+    .map_err(|e| format!("Failed to verify signature share: {e:?}"))?;
 
     tracing::info!("Signature share is valid");
 

@@ -31,7 +31,7 @@ impl FrostService for FrostServer {
     async fn echo(&self, request: Request<EchoRequest>) -> Result<Response<EchoResponse>, Status> {
         let message = request.get_ref().message.clone();
         Ok(Response::new(EchoResponse {
-            message: format!("echo: {}", message),
+            message: format!("echo: {message}"),
         }))
     }
 
@@ -58,10 +58,7 @@ impl FrostService for FrostServer {
         }
 
         let identifier = hex_string_to_identifier(&req.identifier).map_err(|e| {
-            Status::internal(format!(
-                "Failed to convert hex string to identifier: {:?}",
-                e
-            ))
+            Status::internal(format!("Failed to convert hex string to identifier: {e:?}"))
         })?;
         let min_signers = req.min_signers as u16;
         let max_signers = req.max_signers as u16;
@@ -83,10 +80,10 @@ impl FrostService for FrostServer {
                 min_signers,
                 &mut *rng,
             )
-            .map_err(|e| Status::internal(format!("Failed to generate DKG round 1: {:?}", e)))?;
+            .map_err(|e| Status::internal(format!("Failed to generate DKG round 1: {e:?}")))?;
             result_secret_packages.push(round1_secret_packages);
             result_packages.push(round1_packages.serialize().map_err(|e| {
-                Status::internal(format!("Failed to serialize DKG round 1 package: {:?}", e))
+                Status::internal(format!("Failed to serialize DKG round 1 package: {e:?}"))
             })?);
         }
 
@@ -113,7 +110,7 @@ impl FrostService for FrostServer {
         };
         let round1_packages_maps = round1_package_maps_from_package_maps(&req.round1_packages_maps)
             .map_err(|e| {
-                Status::internal(format!("Failed to parse round1 packages maps: {:?}", e))
+                Status::internal(format!("Failed to parse round1 packages maps: {e:?}"))
             })?;
 
         if round1_packages_maps.len() != round1_secrets.len() {
@@ -130,7 +127,7 @@ impl FrostService for FrostServer {
             let (round2_secret, round2_packages) =
                 frost_secp256k1_tr::keys::dkg::part2(round1_secret.clone(), round1_packages_map)
                     .map_err(|e| {
-                        Status::internal(format!("Failed to generate DKG round 2: {:?}", e))
+                        Status::internal(format!("Failed to generate DKG round 2: {e:?}"))
                     })?;
 
             result_secret_packages.push(round2_secret);
@@ -177,12 +174,12 @@ impl FrostService for FrostServer {
 
         let round1_packages_maps =
             round1_package_maps_from_package_maps(&request.round1_packages_maps).map_err(|e| {
-                Status::internal(format!("Failed to parse round1 packages maps: {:?}", e))
+                Status::internal(format!("Failed to parse round1 packages maps: {e:?}"))
             })?;
 
         let round2_packages_maps =
             round2_package_maps_from_package_maps(&request.round2_packages_maps).map_err(|e| {
-                Status::internal(format!("Failed to parse round2 packages maps: {:?}", e))
+                Status::internal(format!("Failed to parse round2 packages maps: {e:?}"))
             })?;
 
         if round1_packages_maps.len() != round2_secrets.len()
@@ -204,13 +201,12 @@ impl FrostService for FrostServer {
                 round1_packages,
                 round2_packages,
             )
-            .map_err(|e| Status::internal(format!("Failed to generate DKG round 3: {:?}", e)))?;
+            .map_err(|e| Status::internal(format!("Failed to generate DKG round 3: {e:?}")))?;
 
             let key_package =
                 key_package_from_dkg_result(secret_package, public_package).map_err(|e| {
                     Status::internal(format!(
-                        "Failed to convert DKG result to key package: {:?}",
-                        e
+                        "Failed to convert DKG result to key package: {e:?}"
                     ))
                 })?;
 

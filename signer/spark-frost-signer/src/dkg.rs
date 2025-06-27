@@ -21,7 +21,7 @@ pub fn round1_package_map_from_package_map(
     for (id, package) in package_map.packages.iter() {
         let identifier = spark_frost::hex_string_to_identifier(id)?;
         let package = frost_secp256k1_tr::keys::dkg::round1::Package::deserialize(package)
-            .map_err(|e| format!("Failed to deserialize round1 package: {:?}", e))?;
+            .map_err(|e| format!("Failed to deserialize round1 package: {e:?}"))?;
         result.insert(identifier, package);
     }
     Ok(result)
@@ -45,7 +45,7 @@ pub fn round2_package_map_from_package_map(
     for (id, package) in package_map.packages.iter() {
         let identifier = spark_frost::hex_string_to_identifier(id)?;
         let package = frost_secp256k1_tr::keys::dkg::round2::Package::deserialize(package)
-            .map_err(|e| format!("Failed to deserialize round2 package: {:?}", e))?;
+            .map_err(|e| format!("Failed to deserialize round2 package: {e:?}"))?;
         result.insert(identifier, package);
     }
     Ok(result)

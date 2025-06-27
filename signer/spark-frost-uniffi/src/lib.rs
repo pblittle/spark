@@ -37,14 +37,14 @@ impl From<String> for Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Spark(s) => write!(f, "Spark error: {}", s),
+            Error::Spark(s) => write!(f, "Spark error: {s}"),
         }
     }
 }
 
 impl From<Error> for JsValue {
     fn from(val: Error) -> Self {
-        JsValue::from_str(&format!("{}", val))
+        JsValue::from_str(&format!("{val}"))
     }
 }
 
@@ -242,8 +242,8 @@ pub fn wasm_sign_frost(
 ) -> Result<Vec<u8>, Error> {
     let statechain_commitments: HashMap<String, SigningCommitment> =
         serde_wasm_bindgen::from_value(statechain_commitments).map_err(|e| {
-            log_to_file(&format!("Deserialization error: {:?}", e));
-            Error::Spark(format!("Failed to deserialize commitments: {}", e))
+            log_to_file(&format!("Deserialization error: {e:?}"));
+            Error::Spark(format!("Failed to deserialize commitments: {e}"))
         })?;
     sign_frost(
         msg,
@@ -642,7 +642,7 @@ fn log_to_file(message: &str) {
         .append(true)
         .open("/Users/zhenlu/rust.log")
     {
-        writeln!(file, "{}", message).ok();
+        writeln!(file, "{message}").ok();
     }
 }
 
