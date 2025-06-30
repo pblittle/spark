@@ -15,6 +15,7 @@ export type PayLightningInvoiceParams = {
   invoice: string;
   maxFeeSats: number;
   preferSpark?: boolean;
+  amountSatsToSend?: number;
 };
 
 export type TransferParams = {

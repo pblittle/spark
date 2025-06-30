@@ -2532,12 +2532,14 @@ export class SparkWallet extends EventEmitter {
    * @param {Object} params - Parameters for paying the invoice
    * @param {string} params.invoice - The BOLT11-encoded Lightning invoice to pay
    * @param {boolean} [params.preferSpark] - Whether to prefer a spark transfer over lightning for the payment
+   * @param {number} [params.amountSatsToSend] - The amount in sats to send. This is only valid for 0 amount lightning invoices.
    * @returns {Promise<LightningSendRequest>} The Lightning payment request details
    */
   public async payLightningInvoice({
     invoice,
     maxFeeSats,
     preferSpark = false,
+    amountSatsToSend,
   }: PayLightningInvoiceParams) {
     const invoiceNetwork = getNetworkFromInvoice(invoice);
     const walletNetwork = this.config.getNetwork();
@@ -2553,10 +2555,45 @@ export class SparkWallet extends EventEmitter {
     }
 
     const decodedInvoice = decodeInvoice(invoice);
-    const amountSats =
-      decodedInvoice.amountMSats !== null
-        ? Number(decodedInvoice.amountMSats / 1000n)
-        : 0;
+    const amountMSats = decodedInvoice.amountMSats;
+    const isZeroAmountInvoice = !amountMSats;
+
+    // Check if user is trying to send amountSatsToSend for non 0 amount lightning invoice
+    if (!isZeroAmountInvoice && amountSatsToSend !== undefined) {
+      throw new ValidationError(
+        "Invalid amount. User can only specify amountSatsToSend for 0 amount lightning invoice",
+        {
+          field: "amountMSats",
+          value: Number(amountMSats),
+          expected: "0",
+        },
+      );
+    }
+
+    // If 0 amount lightning invoice, check that user has specified amountSatsToSend
+    if (isZeroAmountInvoice && amountSatsToSend === undefined) {
+      throw new ValidationError(
+        "Invalid amount. User must specify amountSatsToSend for 0 amount lightning invoice",
+        {
+          field: "amountMSats",
+          value: Number(amountMSats),
+          expected: "0",
+        },
+      );
+    }
+
+    const amountSats = isZeroAmountInvoice
+      ? amountSatsToSend!
+      : Number(amountMSats / 1000n);
+
+    if (isNaN(amountSats) || amountSats <= 0) {
+      throw new ValidationError("Invalid amount", {
+        field: "amountSats",
+        value: amountSats,
+        expected: "greater than 0",
+      });
+    }
+
     const sparkFallbackAddress = decodedInvoice.fallbackAddress;
     const paymentHash = decodedInvoice.paymentHash;
 
@@ -2586,16 +2623,10 @@ export class SparkWallet extends EventEmitter {
     return await this.withLeaves(async () => {
       const sspClient = this.getSspClient();
 
-      if (isNaN(amountSats) || amountSats <= 0) {
-        throw new ValidationError("Invalid amount", {
-          field: "amountSats",
-          value: amountSats,
-          expected: "positive number",
-        });
-      }
-
+      // If 0 amount lightning invoice, use amountSatsToSend for fee estimate
       const feeEstimate = await this.getLightningSendFeeEstimate({
         encodedInvoice: invoice,
+        amountSats: isZeroAmountInvoice ? amountSatsToSend! : undefined,
       });
 
       if (maxFeeSats < feeEstimate) {
@@ -2641,13 +2672,14 @@ export class SparkWallet extends EventEmitter {
         isInboundPayment: false,
         invoiceString: invoice,
         feeSats: feeEstimate,
+        amountSatsToSend: amountSatsToSend,
       });
 
       if (!swapResponse.transfer) {
         throw new Error("Failed to swap nodes for preimage");
       }
 
-      const transfer = await this.transferService.deliverTransferPackage(
+      await this.transferService.deliverTransferPackage(
         swapResponse.transfer,
         leavesToSend,
         new Map(),
@@ -2656,6 +2688,7 @@ export class SparkWallet extends EventEmitter {
       const sspResponse = await sspClient.requestLightningSend({
         encodedInvoice: invoice,
         idempotencyKey: paymentHash,
+        amountSats: isZeroAmountInvoice ? amountSatsToSend! : undefined,
       });
 
       if (!sspResponse) {
@@ -2677,11 +2710,14 @@ export class SparkWallet extends EventEmitter {
    */
   public async getLightningSendFeeEstimate({
     encodedInvoice,
+    amountSats,
   }: LightningSendFeeEstimateInput): Promise<number> {
     const sspClient = this.getSspClient();
 
-    const feeEstimate =
-      await sspClient.getLightningSendFeeEstimate(encodedInvoice);
+    const feeEstimate = await sspClient.getLightningSendFeeEstimate(
+      encodedInvoice,
+      amountSats,
+    );
 
     if (!feeEstimate) {
       throw new Error("Failed to get lightning send fee estimate");

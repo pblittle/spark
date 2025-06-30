@@ -422,7 +422,7 @@ async function runCLI() {
   refundstaticdeposit <depositTransactionId> <destinationAddress> <fee> [outputIndex] - Refund a static deposit
   gettransfers [limit] [offset]                                       - Get a list of transfers
   createinvoice <amount> <memo> <includeSparkAddress> [receiverIdentityPubkey] [descriptionHash] - Create a new lightning invoice
-  payinvoice <invoice> <maxFeeSats> <preferSpark>                     - Pay a lightning invoice
+  payinvoice <invoice> <maxFeeSats> <preferSpark> [amountSatsToSend]  - Pay a lightning invoice
   createpaymentintent <asset("btc" | tokenPubKey)> <amount> <memo>   - Create a spark payment request
   sendtransfer <amount> <receiverSparkAddress>                        - Send a spark transfer
   withdraw <amount> <onchainAddress> <exitSpeed(FAST|MEDIUM|SLOW)>    - Withdraw funds to an L1 address
@@ -965,6 +965,7 @@ async function runCLI() {
             invoice: args[0],
             maxFeeSats: maxFeeSats,
             preferSpark: args[2] === "true",
+            amountSatsToSend: args[3] ? parseInt(args[3]) : undefined,
           });
           console.log(payment);
           break;

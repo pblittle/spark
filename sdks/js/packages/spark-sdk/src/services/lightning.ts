@@ -52,6 +52,7 @@ export type SwapNodesForPreimageParams = {
   invoiceString?: string;
   isInboundPayment: boolean;
   feeSats?: number;
+  amountSatsToSend?: number;
 };
 
 export class LightningService {
@@ -182,6 +183,7 @@ export class LightningService {
     invoiceString,
     isInboundPayment,
     feeSats = 0,
+    amountSatsToSend,
   }: SwapNodesForPreimageParams): Promise<InitiatePreimageSwapResponse> {
     const sparkClient = await this.connectionManager.createSparkClient(
       this.config.getCoordinatorAddress(),
@@ -222,7 +224,29 @@ export class LightningService {
         console.error("Error decoding invoice", error);
       }
 
-      amountSats = amountMsats / 1000;
+      const isZeroAmountInvoice = !amountMsats;
+
+      if (isZeroAmountInvoice && amountSatsToSend === undefined) {
+        throw new ValidationError(
+          "Invalid amount. User must specify amountSatsToSend for 0 amount lightning invoice",
+          {
+            field: "amountSatsToSend",
+            value: amountSatsToSend,
+            expected: "positive number",
+          },
+        );
+      }
+
+      amountSats = isZeroAmountInvoice ? amountSatsToSend! : amountMsats / 1000;
+
+      if (isNaN(amountSats) || amountSats <= 0) {
+        throw new ValidationError("Invalid amount", {
+          field: "amountSats",
+          value: amountSats,
+          expected: "greater than 0",
+        });
+      }
+
       bolt11String = invoiceString;
     }
 
