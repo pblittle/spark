@@ -141,6 +141,7 @@ export type ConfigOptions = MayHaveLrc20WalletApiConfig &
     readonly lrc20Address?: string;
     readonly threshold?: number;
     readonly tokenSignatures?: "ECDSA" | "SCHNORR";
+    readonly tokenValidityDurationSeconds?: number;
     readonly tokenTransactionVersion?: "V0" | "V1";
     readonly electrsUrl?: string;
     readonly lrc20ApiConfig?: LRC20WalletApiConfig;
@@ -175,6 +176,7 @@ const BASE_CONFIG: Required<ConfigOptions> = {
   signingOperators: getLocalSigningOperators(),
   tokenSignatures: "SCHNORR",
   tokenTransactionVersion: "V0",
+  tokenValidityDurationSeconds: 180,
   electrsUrl: getElectrsUrl("LOCAL"),
   expectedWithdrawBondSats: 10000,
   expectedWithdrawRelativeBlockLocktime: 1000,

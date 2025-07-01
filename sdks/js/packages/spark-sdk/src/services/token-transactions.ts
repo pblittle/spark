@@ -636,6 +636,9 @@ export class TokenTransactionService {
       {
         identityPublicKey: await this.config.signer.getIdentityPublicKey(),
         partialTokenTransaction: tokenTransaction,
+        validityDurationSeconds:
+          await this.config.getTokenValidityDurationSeconds(),
+        partialTokenTransactionOwnerSignatures: ownerSignaturesWithIndex,
       },
       {
         retry: true,

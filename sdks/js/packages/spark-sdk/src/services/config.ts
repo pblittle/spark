@@ -118,6 +118,10 @@ export class WalletConfigService
     return this.config.tokenTransactionVersion;
   }
 
+  public getTokenValidityDurationSeconds(): number {
+    return this.config.tokenValidityDurationSeconds;
+  }
+
   public getElectrsUrl(): string {
     return this.config.electrsUrl;
   }
