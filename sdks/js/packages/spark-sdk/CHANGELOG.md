@@ -1,5 +1,12 @@
 # @buildonspark/spark-sdk
 
+## 0.1.42
+
+### Patch Changes
+
+- - Add X-Client-Env with SDK and env information
+  - Make use of Swap V2 endpoints in coop exit + lightning sends
+
 ## 0.1.41
 
 ### Patch Changes
