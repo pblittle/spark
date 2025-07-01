@@ -14,6 +14,7 @@ import { secp256k1 } from "@noble/curves/secp256k1";
 import { SparkCallOptions } from "../types/grpc.js";
 import {
   hashOperatorSpecificTokenTransactionSignablePayload,
+  hashTokenTransactionV0,
   hashTokenTransaction,
 } from "../utils/token-hashing.js";
 import {
@@ -456,7 +457,7 @@ export class TokenTransactionService {
       this.config.getCoordinatorAddress(),
     );
 
-    const partialTokenTransactionHash = hashTokenTransaction(
+    const partialTokenTransactionHash = hashTokenTransactionV0(
       tokenTransaction,
       true,
     );
@@ -547,7 +548,7 @@ export class TokenTransactionService {
     );
 
     const finalTokenTransaction = startResponse.finalTokenTransaction;
-    const finalTokenTransactionHash = hashTokenTransaction(
+    const finalTokenTransactionHash = hashTokenTransactionV0(
       finalTokenTransaction,
       false,
     );
