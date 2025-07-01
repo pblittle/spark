@@ -1,12 +1,5 @@
-import {
-  address,
-  crypto as bitcoinJsCrypto,
-  payments,
-  Psbt,
-  script,
-  Transaction,
-  type Network as BitcoinJsNetwork,
-} from "bitcoinjs-lib";
+import { bitcoin } from "../../bitcoin-core.ts";
+import { type Network as BitcoinJsNetwork, type Transaction as BitcoinJsTransaction } from "bitcoinjs-lib";
 import { plainToInstance } from "class-transformer";
 import { publicKeyToAddress } from "../../address/index.ts";
 import { NetworkType, toNetworkType, toPsbtNetwork } from "../../network/index.ts";
@@ -61,6 +54,8 @@ import {
   toXOnly,
 } from "../utils/index.ts";
 import { DefaultTokenSigner, TokenSigner } from "../signer/signer.ts";
+
+const { address, crypto: bitcoinJsCrypto, payments, Psbt, script, Transaction } = bitcoin;
 
 export interface LRC20WalletApiConfig {
   lrc20NodeUrl: string;
@@ -267,7 +262,7 @@ export class LRCWallet {
     feeRateVb: number,
     locktime = 0,
     sequence = 0,
-  ): Promise<Transaction> {
+  ): Promise<BitcoinJsTransaction> {
     const satsAmount = transfers.reduce((acc, transfer) => acc + BigInt(transfer.sats), BigInt(0));
     const inputs = await this.createInputsFromUtxos(
       new BtcUtxosCoinSelection(this.btcUtxos).selectUtxos(0, 0, transfers.length, feeRateVb, false, satsAmount),
@@ -1144,7 +1139,7 @@ export class LRCWallet {
   private convertToLrc20Transaction(
     inputs: Array<TxInput>,
     outputs: Array<TxOutput>,
-    transaction: Transaction,
+    transaction: BitcoinJsTransaction,
     type: Lrc20TransactionTypeEnum,
     announcement?: AnnouncementData,
   ): Lrc20Transaction {
@@ -1532,7 +1527,7 @@ export class LRCWallet {
     });
   }
 
-  public async signRawTransaction(hex: string): Promise<Transaction> {
+  public async signRawTransaction(hex: string): Promise<BitcoinJsTransaction> {
     let unsignedTx = Transaction.fromHex(hex);
     let prevouts = new Map<String, String>();
 

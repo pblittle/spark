@@ -1,10 +1,10 @@
-import { initEccLib } from "bitcoinjs-lib";
+import * as bitcoin from "bitcoinjs-lib";
 import * as ecc from "@bitcoinerlab/secp256k1";
 import { secp256k1, schnorr } from "@noble/curves/secp256k1";
 import type { Network } from "bitcoinjs-lib";
 import { bytesToHex as b2h } from "@noble/hashes/utils";
 
-initEccLib(ecc);
+bitcoin.initEccLib(ecc);
 
 /** Buffer ∣ Uint8Array → Uint8Array (zero-copy when possible) */
 const toU8 = (b: Buffer | Uint8Array): Uint8Array => (b instanceof Uint8Array ? b : new Uint8Array(b));
@@ -76,3 +76,5 @@ export const fromPrivateKey = (privKey: Buffer, opts: { network?: Network } = {}
 /** Create a watch-only key from a compressed SEC public key. */
 export const fromPublicKey = (pubKey: Buffer, opts: { network?: Network } = {}): KeyPair =>
   makeKeyPair(undefined, pubKey, opts.network);
+
+export { bitcoin };
