@@ -341,6 +341,17 @@ message TokenMintInput {
     // TODO: Consider whether implementing generic idempotency controls and/or a
     // random nonce would be favorable to populating this field.
     uint64 issuer_provided_timestamp = 2;
+    optional bytes token_identifier = 3 [(validate.rules).bytes.len = 32];
+}
+
+message TokenCreateInput {
+    bytes issuer_public_key = 1 [(validate.rules).bytes.len = 33];
+    string token_name = 2 [(validate.rules).string = {min_len: 3, max_len: 20}];
+    string token_ticker = 3 [(validate.rules).string = {min_len: 3, max_len: 6}];
+    uint32 decimals = 4 [(validate.rules).uint32.lte = 255];
+    bytes max_supply = 5 [(validate.rules).bytes.len = 16]; // Decoded uint128
+    bool is_freezable = 6;
+    optional bytes creation_entity_public_key = 7 [(validate.rules).bytes.len = 32];
 }
 
 // This proto is constructed by the wallet to specify outputs it wants to create
@@ -352,7 +363,8 @@ message TokenOutput {
     optional bytes revocation_commitment = 3 [(validate.rules).bytes.len = 33];
     optional uint64 withdraw_bond_sats = 4;
     optional uint64 withdraw_relative_block_locktime = 5;
-    bytes token_public_key = 6 [(validate.rules).bytes.len = 33];
+    optional bytes token_public_key = 6 [(validate.rules).bytes = {len: 33}]; 
+    optional bytes token_identifier = 8 [(validate.rules).bytes.len = 32];
     bytes token_amount = 7 [(validate.rules).bytes.len = 16];  // Decoded uint128
 }
 
@@ -360,17 +372,17 @@ message TokenOutput {
 // This proto is deterministically hashed to generate the token_transaction_hash that
 // is cooperatively signed by the SO group to confirm a token transaction.
 message TokenTransaction {
-    // For mint transactions issuer_public_key will be specified without any outputs_to_spend.
+    // For mint transactions token_public_key will be specified without any outputs_to_spend.
     // For transfer transactions the token amount in the input leaves must match the token amount in the output leaves.
     oneof token_inputs {
         TokenMintInput mint_input = 1;
         TokenTransferInput transfer_input = 2;
-    }
+        TokenCreateInput create_input = 5;
+    }   
     repeated TokenOutput token_outputs = 3;
     repeated bytes spark_operator_identity_public_keys = 4 [(validate.rules).repeated.items.bytes.len = 33];
     Network network = 10 [(validate.rules).enum = {not_in: [0]}];
 }
-
 
 enum TokenTransactionStatus {
     TOKEN_TRANSACTION_STARTED = 0;
@@ -407,7 +419,7 @@ message SignatureWithIndex {
 
 message TokenTransactionSignatures {
       // Filled by signing the partial token transaction hash with the owner/issuer private key.
-      // For mint transactions this will be one signature for the input issuer_public_key
+      // For mint transactions this will be one signature for the input token_public_key
       // For transfer transactions this will be one for each output for the output owner_public_key
       repeated SignatureWithIndex owner_signatures = 1;
 }
@@ -480,6 +492,7 @@ message FreezeTokensPayload {
     bytes operator_identity_public_key = 4 [(validate.rules).bytes.len = 33];
     // Set to false when requesting a freeze.
     bool should_unfreeze = 5;
+    optional bytes token_identifier = 6 [(validate.rules).bytes.len = 32];
 }
 
 message FreezeTokensRequest {
@@ -497,6 +510,7 @@ message QueryTokenOutputsRequest {
     repeated bytes owner_public_keys = 1 [(validate.rules).repeated.items.bytes.len = 33];
     // Optionally provide token public keys. If not set return leaves for all tokens.
     repeated bytes token_public_keys = 2 [(validate.rules).repeated.items.bytes.len = 33];
+    repeated bytes token_identifiers = 4 [(validate.rules).repeated.items.bytes.len = 32];
     Network network = 3; // defaults to mainnet when no network is provided.
 }
 
@@ -508,6 +522,8 @@ message QueryTokenTransactionsRequest {
     repeated bytes owner_public_keys = 2 [(validate.rules).repeated.items.bytes.len = 33];
     // Returns transactions that related to this token public key.
     repeated bytes token_public_keys = 3 [(validate.rules).repeated.items.bytes.len = 33];
+    // Returns transactions that related to this token identifier.
+    repeated bytes token_identifiers = 7 [(validate.rules).repeated.items.bytes.len = 32];
     // Returns transactions that match the provided transaction hashes.
     repeated bytes token_transaction_hashes = 4 [(validate.rules).repeated.items.bytes.len = 32];
     int64 limit = 5;

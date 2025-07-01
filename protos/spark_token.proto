@@ -41,6 +41,17 @@ message TokenMintInput {
     // TODO: Consider whether implementing generic idempotency controls and/or a
     // random nonce would be favorable to populating this field.
     uint64 issuer_provided_timestamp = 2;
+    optional bytes token_identifier = 3 [(validate.rules).bytes.len = 32];
+}
+
+message TokenCreateInput {
+    bytes issuer_public_key = 1 [(validate.rules).bytes.len = 33];
+    string token_name = 2 [(validate.rules).string = {min_len: 3, max_len: 20}];
+    string token_ticker = 3 [(validate.rules).string = {min_len: 3, max_len: 6}];
+    uint32 decimals = 4 [(validate.rules).uint32.lte = 255];
+    bytes max_supply = 5 [(validate.rules).bytes.len = 16]; // Decoded uint128
+    bool is_freezable = 6;
+    optional bytes creation_entity_public_key = 7 [(validate.rules).bytes.len = 32];
 }
 
 // This proto is constructed by the wallet to specify outputs it wants to create
@@ -53,9 +64,11 @@ message TokenOutput {
     optional bytes revocation_commitment = 3 [(validate.rules).bytes.len = 33];
     optional uint64 withdraw_bond_sats   = 4;
     optional uint64 withdraw_relative_block_locktime = 5;
-    bytes token_public_key = 6 [(validate.rules).bytes.len = 33];
+    optional bytes token_public_key = 6 [(validate.rules).bytes = {len: 33}]; 
+    optional bytes token_identifier = 8 [(validate.rules).bytes.len = 32];
     bytes token_amount     = 7
         [(validate.rules).bytes.len = 16];  // Decoded uint128
+
 }
 
 // This proto is constructed by the wallet and is the core transaction data
@@ -70,6 +83,7 @@ message TokenTransaction {
     oneof token_inputs {
         TokenMintInput mint_input         = 2;
         TokenTransferInput transfer_input = 3;
+        TokenCreateInput create_input = 8;
     }
     repeated TokenOutput token_outputs                 = 4;
     repeated bytes spark_operator_identity_public_keys = 5
