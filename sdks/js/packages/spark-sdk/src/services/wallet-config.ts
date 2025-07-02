@@ -194,6 +194,7 @@ const BASE_CONFIG: Required<ConfigOptions> = {
 
 export const LOCAL_WALLET_CONFIG: Required<ConfigOptions> = {
   ...BASE_CONFIG,
+  threshold: 3,
 };
 
 export const LOCAL_WALLET_CONFIG_SCHNORR: Required<ConfigOptions> = {

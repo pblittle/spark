@@ -602,19 +602,21 @@ export function hashTokenTransactionV1(
   hashObj.update(networkBytes);
   allHashes.push(hashObj.digest());
 
-  // Hash expiry time
-  const expiryHashObj = sha256.create();
-  const validityDurationBytes = new Uint8Array(8);
-  const expiryUnixTime = tokenTransaction.expiryTime
-    ? Math.floor(tokenTransaction.expiryTime.getTime() / 1000)
-    : 0;
-  new DataView(validityDurationBytes.buffer).setBigUint64(
-    0,
-    BigInt(expiryUnixTime),
-    false, // false for big-endian
-  );
-  expiryHashObj.update(validityDurationBytes);
-  allHashes.push(expiryHashObj.digest());
+  if (!partialHash) {
+    // Hash expiry time
+    const expiryHashObj = sha256.create();
+    const expiryTimeBytes = new Uint8Array(8);
+    const expiryUnixTime = tokenTransaction.expiryTime
+      ? Math.floor(tokenTransaction.expiryTime.getTime() / 1000)
+      : 0;
+    new DataView(expiryTimeBytes.buffer).setBigUint64(
+      0,
+      BigInt(expiryUnixTime),
+      false, // false for big-endian
+    );
+    expiryHashObj.update(expiryTimeBytes);
+    allHashes.push(expiryHashObj.digest());
+  }
 
   // Final hash of all concatenated hashes
   const finalHashObj = sha256.create();

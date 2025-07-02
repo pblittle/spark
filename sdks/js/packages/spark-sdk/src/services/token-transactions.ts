@@ -176,6 +176,13 @@ export class TokenTransactionService {
       tokenAmount: bigint;
     }>,
   ): Promise<TokenTransactionV0> {
+    // Ensure outputsToSpend are ordered by vout ascending so that the input indices
+    // used for owner signatures match the order expected by the SO, which sorts
+    // inputs by "prevTokenTransactionVout" before validating signatures.
+    selectedOutputs.sort(
+      (a, b) => a.previousTransactionVout - b.previousTransactionVout,
+    );
+
     const availableTokenAmount = calculateAvailableTokenAmount(selectedOutputs);
     const totalRequestedAmount = tokenOutputData.reduce(
       (sum, output) => sum + output.tokenAmount,
@@ -223,6 +230,10 @@ export class TokenTransactionService {
       tokenAmount: bigint;
     }>,
   ): Promise<TokenTransaction> {
+    selectedOutputs.sort(
+      (a, b) => a.previousTransactionVout - b.previousTransactionVout,
+    );
+
     const availableTokenAmount = calculateAvailableTokenAmount(selectedOutputs);
     const totalRequestedAmount = tokenOutputData.reduce(
       (sum, output) => sum + output.tokenAmount,
@@ -826,6 +837,7 @@ export class TokenTransactionService {
       await coordinatorClient.commit_transaction(
         {
           finalTokenTransaction,
+          finalTokenTransactionHash,
           inputTtxoSignaturesPerOperator,
           ownerIdentityPublicKey:
             await this.config.signer.getIdentityPublicKey(),
