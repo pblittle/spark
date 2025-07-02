@@ -5,8 +5,7 @@ import { BitcoinFaucet } from "../../utils/test-faucet.js";
 const DEPOSIT_AMOUNT = 10000n;
 const SECOND_DEPOSIT_AMOUNT = 20000n;
 
-// TODO: reenable this test when we have a way to test SSP tests consistently
-describe.skip("SSP static deposit address integration", () => {
+describe("SSP static deposit address integration", () => {
   it("should claim deposits to a static deposit address", async () => {
     const faucet = BitcoinFaucet.getInstance();
 
