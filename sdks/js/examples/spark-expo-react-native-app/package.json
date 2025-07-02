@@ -15,7 +15,7 @@
   "dependencies": {
     "@buildonspark/spark-sdk": "^0.1.28",
     "@expo/vector-icons": "^14.1.0",
-    "@react-native-community/cli": "^18.0.0",
+    "@react-native-community/cli": "19.0.0",
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
