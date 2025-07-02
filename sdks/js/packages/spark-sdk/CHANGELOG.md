@@ -1,5 +1,13 @@
 # @buildonspark/spark-sdk
 
+## 0.1.43
+
+### Patch Changes
+
+- - Improve serialization for some error context values (be15609)
+- Updated dependencies
+  - @buildonspark/lrc20-sdk@0.0.58
+
 ## 0.1.42
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "spark-nextjs-app",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@buildonspark/spark-sdk": "0.1.42",
+    "@buildonspark/spark-sdk": "0.1.43",
     "next": "15.3.2",
     "react": "19.0.0",
     "react-dom": "19.0.0"

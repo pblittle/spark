@@ -1,6 +1,6 @@
 {
   "name": "@buildonspark/spark-sdk",
-  "version": "0.1.42",
+  "version": "0.1.43",
   "author": "",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -149,7 +149,7 @@
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",
     "@bufbuild/protobuf": "^2.2.5",
-    "@buildonspark/lrc20-sdk": "0.0.57",
+    "@buildonspark/lrc20-sdk": "0.0.58",
     "@lightsparkdev/core": "^1.4.2",
     "@noble/curves": "^1.8.0",
     "@noble/hashes": "^1.7.1",

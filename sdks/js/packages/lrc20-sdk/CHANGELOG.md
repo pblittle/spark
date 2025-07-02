@@ -1,5 +1,11 @@
 # @buildonspark/lrc20-sdk
 
+## 0.0.58
+
+### Patch Changes
+
+- - Fix issue where LRCWallet failed to initialize in certain environments (5a332e99)
+
 ## 0.0.57
 
 ### Patch Changes
