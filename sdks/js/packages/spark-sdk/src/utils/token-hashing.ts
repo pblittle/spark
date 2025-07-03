@@ -602,6 +602,22 @@ export function hashTokenTransactionV1(
   hashObj.update(networkBytes);
   allHashes.push(hashObj.digest());
 
+  // Hash client created timestamp
+  const clientTimestampHashObj = sha256.create();
+  const clientCreatedTs: Date | undefined = (tokenTransaction as any)
+    .clientCreatedTimestamp;
+  const clientUnixTime = clientCreatedTs
+    ? Math.floor(clientCreatedTs.getTime() / 1000)
+    : 0;
+  const clientTimestampBytes = new Uint8Array(8);
+  new DataView(clientTimestampBytes.buffer).setBigUint64(
+    0,
+    BigInt(clientUnixTime),
+    false,
+  );
+  clientTimestampHashObj.update(clientTimestampBytes);
+  allHashes.push(clientTimestampHashObj.digest());
+
   if (!partialHash) {
     // Hash expiry time
     const expiryHashObj = sha256.create();
