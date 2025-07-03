@@ -103,8 +103,8 @@ export function getNextTransactionSequence(
     };
   }
 
-  if (nextTimelock < 100) {
-    throw new ValidationError("timelock interval is less than 100", {
+  if (nextTimelock < 0) {
+    throw new ValidationError("timelock interval is less than 0", {
       field: "nextTimelock",
       value: nextTimelock,
     });

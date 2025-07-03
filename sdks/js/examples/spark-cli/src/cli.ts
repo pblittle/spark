@@ -326,6 +326,7 @@ const commands = [
   "querytokentransactions",
   "gettransfer",
 
+  "unilateralexit",
   "generatefeebumppackagetobroadcast",
   "testonly_generateexternalwallet",
   "signfeebump",
@@ -431,10 +432,11 @@ async function runCLI() {
   getlightningsendrequest <requestId>                                 - Get a lightning send request by ID
   getlightningreceiverequest <requestId>                              - Get a lightning receive request by ID
   getcoopexitrequest <requestId>                                      - Get a coop exit request by ID
+  unilateralexit [testmode=true]                                     - Interactive unilateral exit flow (normal mode: timelocks must be naturally expired, test mode: automatically expires timelocks)
   generatefeebumppackagetobroadcast <feeRate> <utxo1:txid:vout:value:script:publicKey> [utxo2:...] [nodeHexString1] [nodeHexString2 ...] - Get fee bump packages for unilateral exit transactions (if no nodes provided, uses all wallet leaves)
   signfeebump <feeBumpPsbt> <privateKey>                                - Sign a fee bump package with the utxo private key
   testonly_generateexternalwallet                              - Generate test wallet to fund utxos for fee bumping
-  testonly_generateutxostring <txid> <vout> <value> <publicKey>                      - Generate correctly formatted UTXO string from your private key
+  testonly_generateutxostring <txid> <vout> <value> <publicKey>                      - Generate correctly formatted UTXO string from your public key
   checktimelock <leafId>                                              - Get the remaining timelock for a given leaf
   testonly_expiretimelock <leafId>                                            - Refresh the timelock for a given leaf
   testonly_expiretimelockrefundtx <leafId>                                    - Refresh only the refund transaction timelock for a given leaf
@@ -442,6 +444,8 @@ async function runCLI() {
   getleaves                                                           - Get all leaves owned by the wallet
    
   💡 Simplified Unilateral Exit Flow:
+  'unilateralexit' for interactive exit flow (normal mode - timelocks must be naturally expired).
+  'unilateralexit testmode=true' for interactive exit flow with automatic timelock expiration.
   'generatefeebumppackagetobroadcast <feeRate> <utxos>' for fee bumping.
   The advanced commands below are for specific use cases.
 
@@ -1350,19 +1354,16 @@ async function runCLI() {
           }
           if (args.length < 1) {
             console.log(
-              "Usage: generatefeebumppackagetobroadcast <feeRate> <utxo1:txid:vout:value:script:privateKey> [utxo2:...] [nodeHexString1] [nodeHexString2 ...]",
+              "Usage: generatefeebumppackagetobroadcast <feeRate> <utxo1:txid:vout:value:script:publicKey> [utxo2:...] [nodeHexString1] [nodeHexString2 ...]",
             );
             console.log(
               "  If no node hex strings are provided, all wallet leaves will be used automatically.",
             );
             console.log(
-              "  privateKey can be in hex format (64 chars) or WIF format (starting with L, K, 5, c, or 9)",
+              "  publicKey is the public key (not private key) - private key is only needed for signing later",
             );
             console.log(
-              "Example: generatefeebumppackagetobroadcast 10 abc123:0:10000:76a914...:9303c68c414a... def456:1:20000:76a914...:L23csh2NVzWyCZFK... nodeHex1 nodeHex2",
-            );
-            console.log(
-              "Example (auto-fetch leaves): generatefeebumppackagetobroadcast 10 abc123:0:10000:76a914...:9303c68c414a...",
+              "Example: generatefeebumppackagetobroadcast 10 abc123:0:10000:76a914...:02a1b2c3d4e5f6... def456:1:20000:76a914...:L23csh2NVzWyCZFK... nodeHex1 nodeHex2",
             );
             break;
           }
@@ -1405,7 +1406,7 @@ async function runCLI() {
 
                   if (isNaN(voutNum)) {
                     console.log(
-                      `Invalid UTXO format: ${arg}. Expected format: txid:vout:value:script:privateKey`,
+                      `Invalid UTXO format: ${arg}. Expected format: txid:vout:value:script:publicKey`,
                     );
                     validationFailed = true;
                     break;
@@ -1854,6 +1855,356 @@ async function runCLI() {
             console.log(utxoString);
           } catch (error: any) {
             console.error("Error generating UTXO string:", error.message);
+          }
+          break;
+        }
+        case "unilateralexit": {
+          if (!wallet) {
+            console.log("Please initialize a wallet first");
+            break;
+          }
+
+          const isTestMode = args.length > 0 && args[0] === "testmode=true";
+
+          try {
+            console.log("🚀 Starting interactive unilateral exit flow...");
+            if (isTestMode) {
+              console.log(
+                "🧪 Test mode enabled - timelocks will be expired automatically",
+              );
+            } else {
+              console.log(
+                "⚠️  Normal mode - ensure timelocks have expired before proceeding",
+              );
+            }
+            console.log("");
+
+            // Get all leaves
+            console.log("📋 Step 1: Fetching your leaves...");
+            const leaves = await wallet.getLeaves();
+
+            if (leaves.length === 0) {
+              console.log("❌ No leaves found in wallet. Nothing to exit.");
+              break;
+            }
+
+            console.log(`✅ Found ${leaves.length} leaves:`);
+            console.log("");
+
+            // Display leaves with numbers for selection
+            for (let i = 0; i < leaves.length; i++) {
+              const leaf = leaves[i];
+              console.log(`${i + 1}: ${leaf.id} ${leaf.value} sats`);
+            }
+            console.log("");
+
+            // Get user selection for multiple leaves
+            const selectionInput = await new Promise<string>((resolve) => {
+              rl.question(
+                "Select leaves to exit (enter numbers separated by commas, 'all' for all leaves, or '1,3,5' for specific leaves): ",
+                resolve,
+              );
+            });
+
+            let selectedLeaves: any[] = [];
+
+            if (selectionInput.toLowerCase().trim() === "all") {
+              selectedLeaves = leaves;
+              console.log(`✅ Selected all ${leaves.length} leaves`);
+            } else {
+              // Parse comma-separated numbers
+              const selections = selectionInput.split(",").map((s) => s.trim());
+              const selectedIndices: number[] = [];
+
+              for (const selection of selections) {
+                const index = parseInt(selection) - 1;
+                if (isNaN(index) || index < 0 || index >= leaves.length) {
+                  console.log(
+                    `❌ Invalid selection: ${selection}. Please enter valid numbers.`,
+                  );
+                  break;
+                }
+                if (!selectedIndices.includes(index)) {
+                  selectedIndices.push(index);
+                }
+              }
+
+              if (selectedIndices.length === 0) {
+                console.log("❌ No valid selections made. Please try again.");
+                break;
+              }
+
+              selectedLeaves = selectedIndices.map((index) => leaves[index]);
+              console.log(`✅ Selected ${selectedLeaves.length} leaves:`);
+              for (const leaf of selectedLeaves) {
+                console.log(`  - ${leaf.id} (${leaf.value} sats)`);
+              }
+            }
+            console.log("");
+
+            console.log("📋 Step 2: Converting leaves to hex strings...");
+            const hexStrings: string[] = [];
+            for (const leaf of selectedLeaves) {
+              const encodedBytes = TreeNode.encode(leaf).finish();
+              const hexString = bytesToHex(encodedBytes);
+              hexStrings.push(hexString);
+              console.log(`✅ Leaf ${leaf.id}: ${hexString}`);
+            }
+            console.log("");
+
+            // Check timelock status for all selected leaves
+            console.log("📋 Step 3: Checking timelock status...");
+            for (const leaf of selectedLeaves) {
+              try {
+                const { nodeTimelock, refundTimelock } =
+                  await wallet.checkTimelock(leaf.id);
+                console.log(
+                  `📊 Leaf ${leaf.id}: Node timelock: ${nodeTimelock} blocks, Refund timelock: ${refundTimelock} blocks`,
+                );
+
+                // Warn if timelocks haven't expired in normal mode
+                if (!isTestMode && (nodeTimelock > 0 || refundTimelock > 0)) {
+                  console.log(
+                    `⚠️  Leaf ${leaf.id}: Timelocks have not expired yet.`,
+                  );
+                }
+              } catch (error) {
+                console.log(
+                  `⚠️  Could not check timelock status for leaf ${leaf.id}, proceeding anyway...`,
+                );
+              }
+            }
+            console.log("");
+
+            // Expire timelocks if in test mode for all selected leaves
+            if (isTestMode) {
+              console.log("📋 Step 4: Expiring timelocks (test mode)...");
+
+              for (const leaf of selectedLeaves) {
+                console.log(`🔄 Processing leaf ${leaf.id}...`);
+
+                console.log(
+                  `  🔄 Expiring node timelock for leaf ${leaf.id}...`,
+                );
+                let nodeRefreshCount = 0;
+                let continueNodeRefreshing = true;
+
+                while (continueNodeRefreshing) {
+                  try {
+                    await wallet.testOnly_expireTimelock(leaf.id);
+                    nodeRefreshCount++;
+                    console.log(
+                      `    ✅ Node timelock refresh #${nodeRefreshCount}`,
+                    );
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                  } catch (error) {
+                    console.log(
+                      `    ✅ Node timelock expired after ${nodeRefreshCount} refresh(es)`,
+                    );
+                    continueNodeRefreshing = false;
+                  }
+                }
+
+                console.log(
+                  `  🔄 Expiring refund timelock for leaf ${leaf.id}...`,
+                );
+                let refundRefreshCount = 0;
+                let continueRefundRefreshing = true;
+
+                while (continueRefundRefreshing) {
+                  try {
+                    await wallet.testOnly_expireTimelockRefundTx(leaf.id);
+                    refundRefreshCount++;
+                    console.log(
+                      `    ✅ Refund timelock refresh #${refundRefreshCount}`,
+                    );
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                  } catch (error) {
+                    console.log(
+                      `    ✅ Refund timelock expired after ${refundRefreshCount} refresh(es)`,
+                    );
+                    continueRefundRefreshing = false;
+                  }
+                }
+                console.log("");
+              }
+            } else {
+              console.log(
+                "📋 Step 4: Skipping timelock expiration (normal mode)",
+              );
+              console.log(
+                "ℹ️  Ensure timelocks have naturally expired before proceeding with the exit.",
+              );
+              console.log("");
+            }
+
+            // Get fee rate from user
+            console.log("📋 Step 5: Fee rate configuration...");
+            const feeRateInput = await new Promise<string>((resolve) => {
+              rl.question(
+                "Enter fee rate in sat/vbyte (default: 10): ",
+                resolve,
+              );
+            });
+
+            const feeRate =
+              feeRateInput.trim() === "" ? 10 : parseFloat(feeRateInput);
+            if (isNaN(feeRate) || feeRate <= 0) {
+              console.log(
+                "❌ Invalid fee rate. Using default of 10 sat/vbyte.",
+              );
+            }
+            console.log(`✅ Fee rate: ${feeRate} sat/vbyte`);
+            console.log("");
+
+            // Get UTXOs from user
+            console.log("📋 Step 6: UTXO configuration...");
+            console.log(
+              "You need to provide UTXOs to fund the fee bump transactions.",
+            );
+            console.log("Format: txid:vout:value:script:publicKey");
+            console.log("Example: abc123:0:10000:76a914...:02a1b2c3d4e5f6...");
+            console.log("");
+
+            const utxoInput = await new Promise<string>((resolve) => {
+              rl.question(
+                "Enter UTXO string(s) separated by spaces: ",
+                resolve,
+              );
+            });
+
+            if (!utxoInput.trim()) {
+              console.log(
+                "❌ No UTXOs provided. Cannot proceed with unilateral exit.",
+              );
+              break;
+            }
+
+            // Parse UTXOs
+            const utxoStrings = utxoInput.trim().split(/\s+/);
+            const utxos = [];
+            let validationFailed = false;
+
+            for (let i = 0; i < utxoStrings.length; i++) {
+              const utxoString = utxoStrings[i];
+              const parts = utxoString.split(":");
+
+              if (parts.length !== 5) {
+                console.log(`❌ Invalid UTXO format: ${utxoString}`);
+                validationFailed = true;
+                break;
+              }
+
+              const [txid, vout, value, script, publicKey] = parts;
+              const voutNum = parseInt(vout);
+
+              if (isNaN(voutNum)) {
+                console.log(`❌ Invalid vout in UTXO: ${utxoString}`);
+                validationFailed = true;
+                break;
+              }
+
+              let valueNum: bigint;
+              try {
+                valueNum = BigInt(value);
+              } catch (error) {
+                console.log(`❌ Invalid value in UTXO: ${utxoString}`);
+                validationFailed = true;
+                break;
+              }
+
+              utxos.push({
+                txid,
+                vout: voutNum,
+                value: valueNum,
+                script,
+                publicKey,
+              });
+            }
+
+            if (validationFailed) {
+              break;
+            }
+
+            console.log(`✅ Parsed ${utxos.length} UTXO(s)`);
+            console.log("");
+
+            // Generate fee bump packages for all selected leaves
+            console.log("📋 Step 7: Generating fee bump packages...");
+
+            // Get sparkClient from wallet's connection manager
+            const sparkClient = await (
+              wallet as any
+            ).connectionManager.createSparkClient(
+              (wallet as any).config.getCoordinatorAddress(),
+            );
+
+            // Get network from wallet config
+            const network = (wallet as any).config.getNetwork();
+
+            // Get electrs URL from wallet config
+            const electrsUrl = (wallet as any).config.getElectrsUrl();
+
+            const feeBumpChains = await constructUnilateralExitFeeBumpPackages(
+              hexStrings, // Use all selected leaves
+              utxos,
+              { satPerVbyte: feeRate },
+              electrsUrl,
+              sparkClient,
+              network,
+            );
+
+            // Display results
+            console.log("🎉 Unilateral exit package generated successfully!");
+            console.log("");
+            console.log("=".repeat(80));
+            console.log(
+              "📦 UNILATERAL EXIT PACKAGE (READY TO SIGN AND BROADCAST)",
+            );
+            console.log("=".repeat(80));
+
+            for (const chain of feeBumpChains) {
+              console.log(`\n🌿 Leaf ID: ${chain.leafId}`);
+              console.log("📄 Transaction Packages:");
+
+              for (let i = 0; i < chain.txPackages.length; i++) {
+                const pkg = chain.txPackages[i];
+                let label: string;
+                if (
+                  i === chain.txPackages.length - 1 &&
+                  chain.txPackages.length > 1
+                ) {
+                  label = "leaf refund tx";
+                } else {
+                  label = `${i + 1}. node tx`;
+                }
+                console.log(`  ${label}:`);
+                console.log(`    Original tx: ${pkg.tx}`);
+                if (pkg.feeBumpPsbt) {
+                  console.log(
+                    `    Fee bump psbt (UNSIGNED): ${pkg.feeBumpPsbt}`,
+                  );
+                } else {
+                  console.log(`    No fee bump needed`);
+                }
+              }
+            }
+
+            console.log("");
+            console.log("=".repeat(80));
+            console.log("📋 NEXT STEPS:");
+            console.log("1. Sign the fee bump PSBT using bitcoin-cli:");
+            console.log(
+              '   bitcoin-cli walletprocesspsbt "<psbt_hex>" false "[]" false',
+            );
+            console.log(
+              '   bitcoin-cli finalizepsbt "<partially_signed_psbt>" false',
+            );
+            console.log("2. Broadcast the original transactions");
+            console.log("3. Broadcast the signed fee bump transactions");
+            console.log("=".repeat(80));
+          } catch (error) {
+            console.error("❌ Error in unilateral exit flow:", error);
           }
           break;
         }
