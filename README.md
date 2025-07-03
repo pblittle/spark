@@ -5,6 +5,7 @@
 ## [mise](https://mise.jdx.dev/)
 
 To install all of our protobuf, rust, and go toolchains install [mise](https://mise.jdx.dev/getting-started.html), then run:
+
 ```
 mise trust
 mise install
@@ -16,6 +17,7 @@ mise install
 
 We use `pkg-config` in the build process.
 One way to install it is through brew:
+
 ```
 brew install pkgconf
 ```
@@ -26,6 +28,7 @@ Lefthook gives us an easy way to declare pre-commit hooks (as well as other git 
 not pushing up PRs that immediately fail in CI.
 
 You can either install it through `mise` (above, recommended) or brew:
+
 ```
 brew install lefthook
 ```
@@ -94,8 +97,8 @@ If spark_frost.udl file has issue with VSCode, you can add the following to your
 
 Golang linting uses `golangci-lint`, installed with `mise install`.
 
-
 To run the linters, use either of
+
 ```
 mise lint
 
@@ -110,6 +113,7 @@ golangci-lint run
 mise test-go # works from any directory
 mise test # works from the spark folder
 ```
+
 or
 
 In spark folder, run:
@@ -143,6 +147,7 @@ mise run-minikube
 ```
 
 #### Local Setup (`./run-everything.sh`)
+
 ```
 brew install tmux
 brew install sqlx-cli # required for LRC20 Node
@@ -196,6 +201,7 @@ In the root folder, run:
 #   --dev-lrc20         - Sets USE_DEV_LRC20=true to use the locally built dev lrc20 image
 #   --no-spark-debug    - Sets USE_DEV_SPARK=true and SPARK_DEBUG=false to configure the local dev spark container to run without headless dlv debugger. If you are using a local "production" image, you must use this flag.
 #   --keep-data         - Sets RESET_DBS=false to preserve existing test data (databases and blockchain)
+#   --operators|-o      - The number of Spark operators to deploy (default: 5)
 #
 # Environment Variables:
 #   RESET_DBS           - Whether to reset operator databases and bitcoin blockchain (default: true)
@@ -207,17 +213,19 @@ In the root folder, run:
 #   USE_LIGHTSPARK_HELM_REPO - Whether to fetch helm charts from remote repo (default: false)
 #   OPS_DIR             - Path to the Lightspark ops repository which contains helm charts (auto-detected if not set)
 #   LRC20_REPLICAS      - The number of LRC20 replicas to deploy (default: 1)
+#   NUM_SPARK_OPERATORS - The number of Spark operators to deploy (default: 5)
 
 ./scripts/local-test.sh
 
 # CTR-C when done to remove shut down port forwarding
 ```
+
 OR
+
 ```
 # Local environment
 ./run-everything.sh
 ```
-
 
 then run your tests
 
@@ -234,6 +242,7 @@ gotestsum --format testname --rerun-fails ./so/grpc_test/...  # if you want pret
 ```
 
 In the sdks/js folder, you can run:
+
 ```
 yarn install
 yarn build
@@ -244,9 +253,9 @@ yarn test:integration
 
 1. For local testing, operator (go) and signer (rust) logs are found in `_data/run_X/logs`. For minikube, logs are found via kubernetes. [k9s](https://k9scli.io/) is a great tool to investigate your minikube k8 cluster.
 2. If you don't want to deal with `tmux` commands yourself, you can easily interact with tmux using the `iterm2` GUI and tmux control mode.
-From within `iterm2`, you can run:
+   From within `iterm2`, you can run:
 
-```tmux -CC attach -t operator```
+`tmux -CC attach -t operator`
 
 3. The first time you run `run-everything.sh` it will take a while to start up. You might actually need to run it a couple of times for everything to work properly. Attach to the `operator` session and check out the logs.
 
