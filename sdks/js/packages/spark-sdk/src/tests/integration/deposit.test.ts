@@ -19,6 +19,22 @@ describe("deposit", () => {
     expect(depositAddress).toBeDefined();
   }, 30000);
 
+  it("should should query multiple deposit addresses", async () => {
+    const { wallet: sdk } = await SparkWalletTesting.initialize({
+      options: {
+        network: "LOCAL",
+      },
+    });
+
+    for (let i = 0; i < 105; i++) {
+      await sdk.getSingleUseDepositAddress();
+    }
+
+    const depositAddresses = await sdk.getUnusedDepositAddresses();
+
+    expect(depositAddresses).toHaveLength(105);
+  }, 30000);
+
   it("should generate a staticdeposit address", async () => {
     const { wallet: sdk } = await SparkWalletTesting.initialize({
       options: {

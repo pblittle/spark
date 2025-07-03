@@ -102,7 +102,7 @@ import {
   SparkAddressFormat,
 } from "../address/index.js";
 import { isReactNative } from "../constants.js";
-import { networkToJSON } from "../proto/spark.js";
+import { networkToJSON, Network as NetworkProto } from "../proto/spark.js";
 import {
   decodeInvoice,
   getNetworkFromInvoice,
@@ -1750,16 +1750,60 @@ export class SparkWallet extends EventEmitter {
    * @returns {Promise<string[]>} The unused deposit addresses
    */
   public async getUnusedDepositAddresses(): Promise<string[]> {
+    return (await this.queryAllUnusedDepositAddresses({})).map(
+      (addr) => addr.depositAddress,
+    );
+  }
+
+  /**
+   * Gets all unused deposit addresses for the wallet.
+   *
+   * @param {Object} params - Parameters for querying unused deposit addresses
+   * @param {Uint8Array<ArrayBufferLike>} [params.identityPublicKey] - The identity public key
+   * @param {NetworkProto} [params.network] - The network
+   * @returns {Promise<DepositAddressQueryResult[]>} The unused deposit addresses
+   */
+  private async queryAllUnusedDepositAddresses({
+    identityPublicKey,
+    network,
+  }: {
+    identityPublicKey?: Uint8Array<ArrayBufferLike>;
+    network?: NetworkProto | undefined;
+  }): Promise<DepositAddressQueryResult[]> {
     const sparkClient = await this.connectionManager.createSparkClient(
       this.config.getCoordinatorAddress(),
     );
-    return (
-      await sparkClient.query_unused_deposit_addresses({
-        identityPublicKey: await this.config.signer.getIdentityPublicKey(),
-        network: NetworkToProto[this.config.getNetwork()],
-      })
-    ).depositAddresses.map((addr) => addr.depositAddress);
+
+    let limit = 100;
+    let offset = 0;
+    const pastOffsets = new Set<number>();
+    const depositAddresses: DepositAddressQueryResult[] = [];
+
+    while (offset >= 0) {
+      // Prevent infinite loop in case error with coordinator
+      if (pastOffsets.has(offset)) {
+        console.warn("Offset has already been seen, stopping");
+        break;
+      }
+
+      const response = await sparkClient.query_unused_deposit_addresses({
+        identityPublicKey:
+          identityPublicKey ??
+          (await this.config.signer.getIdentityPublicKey()),
+        network: network ?? NetworkToProto[this.config.getNetwork()],
+        limit,
+        offset,
+      });
+
+      depositAddresses.push(...response.depositAddresses);
+
+      pastOffsets.add(offset);
+      offset = response.offset;
+    }
+
+    return depositAddresses;
   }
+
   /**
    * Claims a deposit to the wallet.
    * Note that if you used advancedDeposit, you don't need to call this function.
@@ -1816,19 +1860,15 @@ export class SparkWallet extends EventEmitter {
       }
       const depositTx = getTxFromRawTxHex(txHex);
 
-      const sparkClient = await this.connectionManager.createSparkClient(
-        this.config.getCoordinatorAddress(),
-      );
-
       const unusedDepositAddresses: Map<string, DepositAddressQueryResult> =
         new Map(
           (
-            await sparkClient.query_unused_deposit_addresses({
+            await this.queryAllUnusedDepositAddresses({
               identityPublicKey:
                 await this.config.signer.getIdentityPublicKey(),
               network: NetworkToProto[this.config.getNetwork()],
             })
-          ).depositAddresses.map((addr) => [addr.depositAddress, addr]),
+          ).map((addr) => [addr.depositAddress, addr]),
         );
       let depositAddress: DepositAddressQueryResult | undefined;
       let vout = 0;
@@ -1888,17 +1928,15 @@ export class SparkWallet extends EventEmitter {
    */
   public async advancedDeposit(txHex: string) {
     const depositTx = getTxFromRawTxHex(txHex);
-    const sparkClient = await this.connectionManager.createSparkClient(
-      this.config.getCoordinatorAddress(),
-    );
+
     const unusedDepositAddresses: Map<string, DepositAddressQueryResult> =
       new Map(
         (
-          await sparkClient.query_unused_deposit_addresses({
+          await this.queryAllUnusedDepositAddresses({
             identityPublicKey: await this.config.signer.getIdentityPublicKey(),
             network: NetworkToProto[this.config.getNetwork()],
           })
-        ).depositAddresses.map((addr) => [addr.depositAddress, addr]),
+        ).map((addr) => [addr.depositAddress, addr]),
       );
 
     let vout = 0;
@@ -2325,7 +2363,7 @@ export class SparkWallet extends EventEmitter {
         transfer.status !==
           TransferStatus.TRANSFER_STATUS_RECEIVER_KEY_TWEAKED &&
         transfer.status !==
-          TransferStatus.TRANSFER_STATUSR_RECEIVER_REFUND_SIGNED &&
+          TransferStatus.TRANSFER_STATUS_RECEIVER_REFUND_SIGNED &&
         transfer.status !==
           TransferStatus.TRANSFER_STATUS_RECEIVER_KEY_TWEAK_APPLIED
       ) {
