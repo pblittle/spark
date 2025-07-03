@@ -351,7 +351,7 @@ message TokenCreateInput {
     uint32 decimals = 4 [(validate.rules).uint32.lte = 255];
     bytes max_supply = 5 [(validate.rules).bytes.len = 16]; // Decoded uint128
     bool is_freezable = 6;
-    optional bytes creation_entity_public_key = 7 [(validate.rules).bytes.len = 32];
+    optional bytes creation_entity_public_key = 7 [(validate.rules).bytes.len = 33];
 }
 
 // This proto is constructed by the wallet to specify outputs it wants to create
@@ -372,8 +372,6 @@ message TokenOutput {
 // This proto is deterministically hashed to generate the token_transaction_hash that
 // is cooperatively signed by the SO group to confirm a token transaction.
 message TokenTransaction {
-    // For mint transactions token_public_key will be specified without any outputs_to_spend.
-    // For transfer transactions the token amount in the input leaves must match the token amount in the output leaves.
     oneof token_inputs {
         TokenMintInput mint_input = 1;
         TokenTransferInput transfer_input = 2;
