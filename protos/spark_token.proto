@@ -64,7 +64,7 @@ message TokenOutput {
     optional bytes revocation_commitment = 3 [(validate.rules).bytes.len = 33];
     optional uint64 withdraw_bond_sats   = 4;
     optional uint64 withdraw_relative_block_locktime = 5;
-    optional bytes token_public_key = 6 [(validate.rules).bytes = {len: 33}]; 
+    optional bytes token_public_key = 6 [(validate.rules).bytes = {len: 33}];
     optional bytes token_identifier = 8 [(validate.rules).bytes.len = 32];
     bytes token_amount     = 7
         [(validate.rules).bytes.len = 16];  // Decoded uint128
@@ -93,6 +93,10 @@ message TokenTransaction {
     // creating the final transaction.
     google.protobuf.Timestamp expiry_time = 6;
     spark.Network network = 7 [(validate.rules).enum = { not_in: [ 0 ] }];
+    // The timestamp of when the client created the transaction. This is used to
+    // determine which transaction should win in a race condition. Earlier
+    // timestamps win over later ones.
+    google.protobuf.Timestamp client_created_timestamp = 9;
 }
 
 message SignatureWithIndex {
@@ -124,9 +128,9 @@ message StartTransactionRequest {
     repeated SignatureWithIndex partial_token_transaction_owner_signatures = 3;
     // How long the transaction should be valid for, in seconds.
     // The server will set the actual expiry_time in the final transaction based
-    // on this duration. Must be between 1 and 300 seconds.
+    // on this duration. Must be within [1, 300] seconds.
     uint64 validity_duration_seconds = 4
-        [(validate.rules).uint64 = { gt: 1, lt: 300 }];
+        [(validate.rules).uint64 = { gte: 1, lte: 300 }];
 }
 
 message StartTransactionResponse {
