@@ -1052,6 +1052,8 @@ message CancelTransferResponse {
 message QueryUnusedDepositAddressesRequest {
     bytes identity_public_key = 1;
     Network network = 2; // defaults to mainnet when no network is provided.
+    int64 limit = 3; // defaults to 100 if not set.
+    int64 offset = 4; // defaults to 0 if not set.
 }
 
 message QueryStaticDepositAddressesRequest {
@@ -1070,7 +1072,9 @@ message DepositAddressQueryResult {
 
 message QueryUnusedDepositAddressesResponse {
     repeated DepositAddressQueryResult deposit_addresses = 1;
+    int64 offset = 2; // defaults to -1 if there are no more results
 }
+
 message QueryStaticDepositAddressesResponse {
     repeated DepositAddressQueryResult deposit_addresses = 1;
 }
