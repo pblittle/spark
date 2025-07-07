@@ -42,5 +42,5 @@
     "ts-prune": "^0.10.3",
     "turbo": "^2.4.4"
   },
-  "packageManager": "yarn@4.5.0"
+  "packageManager": "yarn@4.9.2"
 }
