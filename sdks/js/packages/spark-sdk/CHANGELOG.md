@@ -1,5 +1,12 @@
 # @buildonspark/spark-sdk
 
+## 0.1.44
+
+### Patch Changes
+
+- Add fee estimate quote for coop exit requests
+- Allow coop exit fees to be taken from wallet balance instead of withdrawal amount if specified
+
 ## 0.1.43
 
 ### Patch Changes
