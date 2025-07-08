@@ -300,6 +300,8 @@ message StartTreeCreationRequest {
     SigningJob direct_root_tx_signing_job = 5;
     // The signing job for the root node's direct refund transaction
     SigningJob direct_refund_tx_signing_job = 6;
+    // The signing job for the root node's direct refund transaction
+    SigningJob direct_from_cpfp_refund_tx_signing_job = 7;
 }
 
 /**
