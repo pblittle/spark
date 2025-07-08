@@ -11,7 +11,11 @@ export const packageVersion =
   typeof __PACKAGE_VERSION__ !== "undefined" ? __PACKAGE_VERSION__ : "unknown";
 
 let baseEnvStr = "unknown";
-if (isNode) {
+if (isBun) {
+  const bunVersion =
+    "version" in globalThis.Bun ? globalThis.Bun.version : "unknown-version";
+  baseEnvStr = `bun/${bunVersion}`;
+} else if (isNode) {
   baseEnvStr = `node/${process.version}`;
 } else if (isReactNative) {
   baseEnvStr = "react-native";
