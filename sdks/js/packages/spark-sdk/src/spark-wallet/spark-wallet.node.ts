@@ -110,9 +110,9 @@ export class SparkWallet extends BaseSparkWallet {
       "SparkWallet.withdraw",
       this.withdraw.bind(this),
     );
-    this.getWithdrawalFeeEstimate = this.wrapWithOtelSpan(
-      "SparkWallet.getWithdrawalFeeEstimate",
-      this.getWithdrawalFeeEstimate.bind(this),
+    this.getWithdrawalFeeQuote = this.wrapWithOtelSpan(
+      "SparkWallet.getWithdrawalFeeQuote",
+      this.getWithdrawalFeeQuote.bind(this),
     );
   }
 

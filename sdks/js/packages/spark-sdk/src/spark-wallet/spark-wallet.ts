@@ -23,7 +23,7 @@ import SspClient from "../graphql/client.js";
 import {
   BitcoinNetwork,
   ClaimStaticDepositOutput,
-  CoopExitFeeEstimatesOutput,
+  CoopExitFeeQuote,
   CoopExitRequest,
   ExitSpeed,
   LeavesSwapFeeEstimateOutput,
@@ -31,8 +31,8 @@ import {
   LightningReceiveRequest,
   LightningSendFeeEstimateInput,
   LightningSendRequest,
+  RequestCoopExitInput,
   StaticDepositQuoteOutput,
-  SwapLeaf,
   UserLeafInput,
 } from "../graphql/objects/index.js";
 import GraphQLTransferObj from "../graphql/objects/Transfer.js";
@@ -524,12 +524,38 @@ export class SparkWallet extends EventEmitter {
       .map(([_, node]) => node);
   }
 
-  private async selectLeaves(targetAmount: number): Promise<TreeNode[]> {
-    if (targetAmount <= 0) {
-      throw new ValidationError("Target amount must be positive", {
-        field: "targetAmount",
-        value: targetAmount,
+  private async selectLeaves(
+    targetAmounts: number[],
+  ): Promise<Map<number, TreeNode[]>> {
+    if (targetAmounts.length === 0) {
+      throw new ValidationError("Target amounts must be non-empty", {
+        field: "targetAmounts",
+        value: targetAmounts,
       });
+    }
+
+    if (targetAmounts.some((amount) => amount <= 0)) {
+      throw new ValidationError("Target amount must be positive", {
+        field: "targetAmounts",
+        value: targetAmounts,
+      });
+    }
+
+    const totalTargetAmount = targetAmounts.reduce(
+      (acc, amount) => acc + amount,
+      0,
+    );
+    const totalBalance = this.getInternalBalance();
+
+    if (totalTargetAmount > totalBalance) {
+      throw new ValidationError(
+        "Total target amount exceeds available balance",
+        {
+          field: "targetAmounts",
+          value: totalTargetAmount,
+          expected: `less than or equal to ${totalBalance}`,
+        },
+      );
     }
 
     const leaves = await this.getLeaves();
@@ -541,37 +567,63 @@ export class SparkWallet extends EventEmitter {
 
     leaves.sort((a, b) => b.value - a.value);
 
-    let amount = 0;
-    let nodes: TreeNode[] = [];
-    for (const leaf of leaves) {
-      if (targetAmount - amount >= leaf.value) {
-        amount += leaf.value;
-        nodes.push(leaf);
-      }
-    }
+    const selectLeavesForTargets = (
+      targetAmounts: number[],
+      leaves: TreeNode[],
+    ) => {
+      const usedLeaves = new Set<string>();
+      const results: Map<number, TreeNode[]> = new Map();
+      let totalAmount = 0;
 
-    if (amount !== targetAmount) {
-      await this.requestLeavesSwap({ targetAmount });
+      for (const targetAmount of targetAmounts) {
+        const nodes: TreeNode[] = [];
+        let amount = 0;
 
-      amount = 0;
-      nodes = [];
-      const newLeaves = await this.getLeaves();
-      newLeaves.sort((a, b) => b.value - a.value);
-      for (const leaf of newLeaves) {
-        if (targetAmount - amount >= leaf.value) {
-          amount += leaf.value;
-          nodes.push(leaf);
+        for (const leaf of leaves) {
+          if (usedLeaves.has(leaf.id)) {
+            continue;
+          }
+
+          if (targetAmount - amount >= leaf.value) {
+            amount += leaf.value;
+            nodes.push(leaf);
+            usedLeaves.add(leaf.id);
+          }
         }
+
+        totalAmount += amount;
+        results.set(targetAmount, nodes);
       }
+
+      return {
+        results,
+        foundSelections: totalAmount === totalTargetAmount,
+      };
+    };
+
+    let { results, foundSelections } = selectLeavesForTargets(
+      targetAmounts,
+      leaves,
+    );
+
+    if (!foundSelections) {
+      const newLeaves = await this.requestLeavesSwap({ targetAmounts });
+
+      newLeaves.sort((a, b) => b.value - a.value);
+
+      ({ results, foundSelections } = selectLeavesForTargets(
+        targetAmounts,
+        newLeaves,
+      ));
     }
 
-    if (nodes.reduce((acc, leaf) => acc + leaf.value, 0) !== targetAmount) {
+    if (!foundSelections) {
       throw new Error(
-        `Failed to select leaves for target amount ${targetAmount}`,
+        `Failed to select leaves for target amount ${totalTargetAmount}`,
       );
     }
 
-    return nodes;
+    return results;
   }
 
   private async selectLeavesForSwap(targetAmount: number) {
@@ -853,32 +905,57 @@ export class SparkWallet extends EventEmitter {
    * @private
    */
   private async requestLeavesSwap({
-    targetAmount,
+    targetAmounts,
     leaves,
   }: {
-    targetAmount?: number;
+    targetAmounts?: number[];
     leaves?: TreeNode[];
-  }) {
-    if (targetAmount && targetAmount <= 0) {
-      throw new Error("targetAmount must be positive");
+  }): Promise<TreeNode[]> {
+    if (targetAmounts && targetAmounts.some((amount) => amount <= 0)) {
+      throw new Error("specified targetAmount must be positive");
     }
 
-    if (targetAmount && !Number.isSafeInteger(targetAmount)) {
+    if (
+      targetAmounts &&
+      targetAmounts.some((amount) => !Number.isSafeInteger(amount))
+    ) {
       throw new ValidationError("targetAmount must be less than 2^53", {
-        field: "targetAmount",
-        value: targetAmount,
+        field: "targetAmounts",
+        value: targetAmounts,
         expected: "smaller or equal to " + Number.MAX_SAFE_INTEGER,
       });
     }
 
     let leavesToSwap: TreeNode[];
-    if (targetAmount && leaves && leaves.length > 0) {
-      if (targetAmount < leaves.reduce((acc, leaf) => acc + leaf.value, 0)) {
+    const totalTargetAmount = targetAmounts?.reduce(
+      (acc, amount) => acc + amount,
+      0,
+    );
+
+    if (totalTargetAmount) {
+      const totalBalance = this.getInternalBalance();
+
+      if (totalTargetAmount > totalBalance) {
+        throw new ValidationError(
+          "Total target amount exceeds available balance",
+          {
+            field: "targetAmounts",
+            value: totalTargetAmount,
+            expected: `less than or equal to ${totalBalance}`,
+          },
+        );
+      }
+    }
+
+    if (totalTargetAmount && leaves && leaves.length > 0) {
+      if (
+        totalTargetAmount < leaves.reduce((acc, leaf) => acc + leaf.value, 0)
+      ) {
         throw new Error("targetAmount is less than the sum of leaves");
       }
       leavesToSwap = leaves;
-    } else if (targetAmount) {
-      leavesToSwap = await this.selectLeavesForSwap(targetAmount);
+    } else if (totalTargetAmount) {
+      leavesToSwap = await this.selectLeavesForSwap(totalTargetAmount);
     } else if (leaves && leaves.length > 0) {
       leavesToSwap = leaves;
     } else {
@@ -889,10 +966,10 @@ export class SparkWallet extends EventEmitter {
 
     const batches = chunkArray(leavesToSwap, 100);
 
-    const results: SwapLeaf[] = [];
+    const results: TreeNode[] = [];
     for (const batch of batches) {
-      const result = await this.processSwapBatch(batch, targetAmount);
-      results.push(...result.swapLeaves);
+      const result = await this.processSwapBatch(batch, targetAmounts);
+      results.push(...result);
     }
 
     return results;
@@ -903,8 +980,8 @@ export class SparkWallet extends EventEmitter {
    */
   private async processSwapBatch(
     leavesBatch: TreeNode[],
-    targetAmount?: number,
-  ): Promise<LeavesSwapRequest> {
+    targetAmounts?: number[],
+  ): Promise<TreeNode[]> {
     const leafKeyTweaks = await Promise.all(
       leavesBatch.map(async (leaf) => ({
         leaf,
@@ -981,9 +1058,10 @@ export class SparkWallet extends EventEmitter {
         userLeaves,
         adaptorPubkey,
         targetAmountSats:
-          targetAmount ||
+          targetAmounts?.reduce((acc, amount) => acc + amount, 0) ||
           leavesBatch.reduce((acc, leaf) => acc + leaf.value, 0),
         totalAmountSats: leavesBatch.reduce((acc, leaf) => acc + leaf.value, 0),
+        targetAmountSatsList: targetAmounts,
         // TODO: Request fee from SSP
         feeSats: 0,
         idempotencyKey: uuidv7(),
@@ -1051,13 +1129,24 @@ export class SparkWallet extends EventEmitter {
         leavesSwapRequestId: request.id,
       });
 
-      if (!completeResponse) {
+      if (!completeResponse || !completeResponse.inboundTransfer?.sparkId) {
         throw new Error("Failed to complete leaves swap");
       }
 
-      await this.claimTransfers(TransferType.COUNTER_SWAP);
+      const incomingTransfer = await this.transferService.queryTransfer(
+        completeResponse.inboundTransfer.sparkId,
+      );
 
-      return completeResponse;
+      if (!incomingTransfer) {
+        throw new Error("Failed to get incoming transfer");
+      }
+
+      return await this.claimTransfer({
+        transfer: incomingTransfer,
+        emit: false,
+        retryCount: 0,
+        optimize: false,
+      });
     } catch (e) {
       await this.cancelAllSenderInitiatedTransfers();
       throw new Error(`Failed to request leaves swap: ${e}`);
@@ -2061,7 +2150,9 @@ export class SparkWallet extends EventEmitter {
     );
 
     return await this.withLeaves(async () => {
-      let leavesToSend = await this.selectLeaves(amountSats);
+      let leavesToSend = (await this.selectLeaves([amountSats])).get(
+        amountSats,
+      )!;
 
       leavesToSend = await this.checkRefreshTimelockNodes(leavesToSend);
       leavesToSend = await this.checkExtendTimeLockNodes(leavesToSend);
@@ -2686,7 +2777,7 @@ export class SparkWallet extends EventEmitter {
         });
       }
 
-      let leaves = await this.selectLeaves(totalAmount);
+      let leaves = (await this.selectLeaves([totalAmount])).get(totalAmount)!;
 
       leaves = await this.checkRefreshTimelockNodes(leaves);
       leaves = await this.checkExtendTimeLockNodes(leaves);
@@ -2824,17 +2915,24 @@ export class SparkWallet extends EventEmitter {
    *
    * @param {Object} params - Parameters for the withdrawal
    * @param {string} params.onchainAddress - The Bitcoin address where the funds should be sent
-   * @param {number} [params.amountSats] - The amount in satoshis to withdraw. If not specified, attempts to withdraw all available funds
+   * @param {CoopExitFeeQuote} params.feeQuote - The fee quote for the withdrawal
+   * @param {ExitSpeed} params.exitSpeed - The exit speed chosen for the withdrawal
+   * @param {number} [params.amountSats] - The amount in satoshis to withdraw. If not specified, attempts to withdraw all available funds and deductFeeFromWithdrawalAmount is set to true.
+   * @param {boolean} [params.deductFeeFromWithdrawalAmount] - Controls how the withdrawal fee is handled. If true, the fee is deducted from the withdrawal amount (amountSats), meaning the recipient will receive amountSats minus the fee. If false, the fee is paid separately from the wallet balance, meaning the recipient will receive the full amountSats.
    * @returns {Promise<CoopExitRequest | null | undefined>} The withdrawal request details, or null/undefined if the request cannot be completed
    */
   public async withdraw({
     onchainAddress,
     exitSpeed,
+    feeQuote,
     amountSats,
+    deductFeeFromWithdrawalAmount = true,
   }: {
     onchainAddress: string;
     exitSpeed: ExitSpeed;
+    feeQuote: CoopExitFeeQuote;
     amountSats?: number;
+    deductFeeFromWithdrawalAmount?: boolean;
   }) {
     if (!Number.isSafeInteger(amountSats)) {
       throw new ValidationError("Sats amount must be less than 2^53", {
@@ -2844,7 +2942,13 @@ export class SparkWallet extends EventEmitter {
       });
     }
     return await this.withLeaves(async () => {
-      return await this.coopExit(onchainAddress, exitSpeed, amountSats);
+      return await this.coopExit(
+        onchainAddress,
+        feeQuote,
+        exitSpeed,
+        deductFeeFromWithdrawalAmount,
+        amountSats,
+      );
     });
   }
 
@@ -2858,7 +2962,9 @@ export class SparkWallet extends EventEmitter {
    */
   private async coopExit(
     onchainAddress: string,
+    feeEstimate: CoopExitFeeQuote,
     exitSpeed: ExitSpeed,
+    deductFeeFromWithdrawalAmount: boolean,
     targetAmountSats?: number,
   ) {
     if (!Number.isSafeInteger(targetAmountSats)) {
@@ -2869,53 +2975,46 @@ export class SparkWallet extends EventEmitter {
       });
     }
 
-    let leavesToSend: TreeNode[] = [];
-    if (targetAmountSats) {
-      leavesToSend = await this.selectLeaves(targetAmountSats);
-    } else {
-      leavesToSend = this.leaves.map((leaf) => ({
-        ...leaf,
-      }));
+    if (!targetAmountSats) {
+      deductFeeFromWithdrawalAmount = true;
     }
 
-    const sspClient = this.getSspClient();
-    const feeEstimate = await sspClient.getCoopExitFeeEstimate({
-      leafExternalIds: leavesToSend.map((leaf) => leaf.id),
-      withdrawalAddress: onchainAddress,
-    });
+    let fee: number | undefined;
+    switch (exitSpeed) {
+      case ExitSpeed.FAST:
+        fee =
+          (feeEstimate.l1BroadcastFeeFast?.originalValue || 0) +
+          (feeEstimate.userFeeFast?.originalValue || 0);
+        break;
+      case ExitSpeed.MEDIUM:
+        fee =
+          (feeEstimate.l1BroadcastFeeMedium?.originalValue || 0) +
+          (feeEstimate.userFeeMedium?.originalValue || 0);
+        break;
+      case ExitSpeed.SLOW:
+        fee =
+          (feeEstimate.l1BroadcastFeeSlow?.originalValue || 0) +
+          (feeEstimate.userFeeSlow?.originalValue || 0);
+        break;
+      default:
+        throw new ValidationError("Invalid exit speed", {
+          field: "exitSpeed",
+          value: exitSpeed,
+          expected: "FAST, MEDIUM, or SLOW",
+        });
+    }
 
-    if (feeEstimate) {
-      let fee: number | undefined;
-      switch (exitSpeed) {
-        case ExitSpeed.FAST:
-          fee =
-            (feeEstimate.speedFast?.l1BroadcastFee.originalValue || 0) +
-            (feeEstimate.speedFast?.userFee.originalValue || 0);
-          break;
-        case ExitSpeed.MEDIUM:
-          fee =
-            (feeEstimate.speedMedium?.l1BroadcastFee.originalValue || 0) +
-            (feeEstimate.speedMedium?.userFee.originalValue || 0);
-          break;
-        case ExitSpeed.SLOW:
-          fee =
-            (feeEstimate.speedSlow?.l1BroadcastFee.originalValue || 0) +
-            (feeEstimate.speedSlow?.userFee.originalValue || 0);
-          break;
-        default:
-          throw new ValidationError("Invalid exit speed", {
-            field: "exitSpeed",
-            value: exitSpeed,
-            expected: "FAST, MEDIUM, or SLOW",
-          });
-      }
+    let leavesToSendToSsp: TreeNode[] = [];
+    let leavesToSendToSE: TreeNode[] = [];
 
-      if (
-        fee !== undefined &&
-        fee > leavesToSend.reduce((acc, leaf) => acc + leaf.value, 0)
-      ) {
+    if (deductFeeFromWithdrawalAmount) {
+      leavesToSendToSsp = targetAmountSats
+        ? (await this.selectLeaves([targetAmountSats])).get(targetAmountSats)!
+        : this.leaves;
+
+      if (fee > leavesToSendToSsp.reduce((acc, leaf) => acc + leaf.value, 0)) {
         throw new ValidationError(
-          "The fee for the withdrawal is greater than the target amount",
+          "The fee for the withdrawal is greater than the target withdrawal amount",
           {
             field: "fee",
             value: fee,
@@ -2923,12 +3022,38 @@ export class SparkWallet extends EventEmitter {
           },
         );
       }
+    } else {
+      if (!targetAmountSats) {
+        throw new ValidationError(
+          "targetAmountSats is required when deductFeeFromWithdrawalAmount is false",
+          {
+            field: "targetAmountSats",
+            value: targetAmountSats,
+            expected: "defined when deductFeeFromWithdrawalAmount is false",
+          },
+        );
+      }
+
+      const leaves = await this.selectLeaves([targetAmountSats, fee]);
+
+      const leavesForTargetAmount = leaves.get(targetAmountSats);
+      const leavesForFee = leaves.get(fee);
+
+      if (!leavesForTargetAmount || !leavesForFee) {
+        throw new Error("Failed to select leaves for target amount and fee");
+      }
+
+      leavesToSendToSsp = leavesForTargetAmount;
+      leavesToSendToSE = leavesForFee;
     }
-    leavesToSend = await this.checkRefreshTimelockNodes(leavesToSend);
-    leavesToSend = await this.checkExtendTimeLockNodes(leavesToSend);
+
+    leavesToSendToSsp = await this.checkRefreshTimelockNodes(leavesToSendToSsp);
+    leavesToSendToSsp = await this.checkExtendTimeLockNodes(leavesToSendToSsp);
+    leavesToSendToSE = await this.checkRefreshTimelockNodes(leavesToSendToSE);
+    leavesToSendToSE = await this.checkExtendTimeLockNodes(leavesToSendToSE);
 
     const leafKeyTweaks = await Promise.all(
-      leavesToSend.map(async (leaf) => ({
+      [...leavesToSendToSE, ...leavesToSendToSsp].map(async (leaf) => ({
         leaf,
         signingPubKey: await this.config.signer.generatePublicKey(
           sha256(leaf.id),
@@ -2937,13 +3062,26 @@ export class SparkWallet extends EventEmitter {
       })),
     );
 
-    const coopExitRequest = await sspClient.requestCoopExit({
-      leafExternalIds: leavesToSend.map((leaf) => leaf.id),
+    const requestCoopExitParams: RequestCoopExitInput = {
+      leafExternalIds: leavesToSendToSsp.map((leaf) => leaf.id),
       withdrawalAddress: onchainAddress,
       idempotencyKey: uuidv7(),
       exitSpeed,
-      withdrawAll: true,
-    });
+      withdrawAll: deductFeeFromWithdrawalAmount,
+    };
+
+    if (!deductFeeFromWithdrawalAmount) {
+      requestCoopExitParams.feeQuoteId = feeEstimate.id;
+      requestCoopExitParams.feeLeafExternalIds = leavesToSendToSE.map(
+        (leaf) => leaf.id,
+      );
+    }
+
+    const sspClient = this.getSspClient();
+
+    const coopExitRequest = await sspClient.requestCoopExit(
+      requestCoopExitParams,
+    );
 
     if (!coopExitRequest?.rawConnectorTransaction) {
       throw new Error("Failed to request coop exit");
@@ -2990,15 +3128,15 @@ export class SparkWallet extends EventEmitter {
    * @param {Object} params - Input parameters for fee estimation
    * @param {number} params.amountSats - The amount in satoshis to withdraw
    * @param {string} params.withdrawalAddress - The Bitcoin address where the funds should be sent
-   * @returns {Promise<CoopExitFeeEstimatesOutput | null>} Fee estimate for the withdrawal
+   * @returns {Promise<CoopExitFeeQuote | null>} Fee estimate for the withdrawal
    */
-  public async getWithdrawalFeeEstimate({
+  public async getWithdrawalFeeQuote({
     amountSats,
     withdrawalAddress,
   }: {
     amountSats: number;
     withdrawalAddress: string;
-  }): Promise<CoopExitFeeEstimatesOutput | null> {
+  }): Promise<CoopExitFeeQuote | null> {
     const sspClient = this.getSspClient();
 
     if (!Number.isSafeInteger(amountSats)) {
@@ -3009,12 +3147,12 @@ export class SparkWallet extends EventEmitter {
       });
     }
 
-    let leaves = await this.selectLeaves(amountSats);
+    let leaves = (await this.selectLeaves([amountSats])).get(amountSats)!;
 
     leaves = await this.checkRefreshTimelockNodes(leaves);
     leaves = await this.checkExtendTimeLockNodes(leaves);
 
-    const feeEstimate = await sspClient.getCoopExitFeeEstimate({
+    const feeEstimate = await sspClient.getCoopExitFeeQuote({
       leafExternalIds: leaves.map((leaf) => leaf.id),
       withdrawalAddress,
     });

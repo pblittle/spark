@@ -14,7 +14,7 @@ import {
   MAINNET_WALLET_CONFIG,
   REGTEST_WALLET_CONFIG,
 } from "@buildonspark/spark-sdk/services/wallet-config";
-import { ExitSpeed } from "@buildonspark/spark-sdk/types";
+import { CoopExitFeeQuote, ExitSpeed } from "@buildonspark/spark-sdk/types";
 import {
   constructUnilateralExitFeeBumpPackages,
   getNetwork,
@@ -324,6 +324,7 @@ const commands = [
   "announcetoken",
   "nontrustydeposit",
   "querytokentransactions",
+  "gettransferfromssp",
   "gettransfer",
 
   "unilateralexit",
@@ -398,6 +399,7 @@ async function runCLI() {
   }
 
   let wallet: IssuerSparkWallet | undefined;
+  let coopExitFeeQuote: CoopExitFeeQuote | undefined;
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -426,7 +428,7 @@ async function runCLI() {
   payinvoice <invoice> <maxFeeSats> <preferSpark> [amountSatsToSend]  - Pay a lightning invoice
   createpaymentintent <asset("btc" | tokenPubKey)> <amount> <memo>   - Create a spark payment request
   sendtransfer <amount> <receiverSparkAddress>                        - Send a spark transfer
-  withdraw <amount> <onchainAddress> <exitSpeed(FAST|MEDIUM|SLOW)>    - Withdraw funds to an L1 address
+  withdraw <amount> <onchainAddress> <exitSpeed(FAST|MEDIUM|SLOW)> [deductFeeFromWithdrawalAmount(true|false)] - Withdraw funds to an L1 address
   withdrawalfee <amount> <withdrawalAddress>                          - Get a fee estimate for a withdrawal (cooperative exit)
   lightningsendfee <invoice>                                          - Get a fee estimate for a lightning send
   getlightningsendrequest <requestId>                                 - Get a lightning send request by ID
@@ -442,7 +444,7 @@ async function runCLI() {
   testonly_expiretimelockrefundtx <leafId>                                    - Refresh only the refund transaction timelock for a given leaf
   leafidtohex <leafId1> [leafId2] [leafId3] ...                              - Convert leaf ID to hex string for unilateral exit
   getleaves                                                           - Get all leaves owned by the wallet
-   
+
   💡 Simplified Unilateral Exit Flow:
   'unilateralexit' for interactive exit flow (normal mode - timelocks must be naturally expired).
   'unilateralexit testmode=true' for interactive exit flow with automatic timelock expiration.
@@ -1088,10 +1090,18 @@ async function runCLI() {
             console.log("Please initialize a wallet first");
             break;
           }
+          if (!coopExitFeeQuote) {
+            console.log(
+              "Please get a coop exit fee quote first using `withdrawalfee`",
+            );
+            break;
+          }
           const withdrawal = await wallet.withdraw({
             amountSats: parseInt(args[0]),
             onchainAddress: args[1],
             exitSpeed: args[2].toUpperCase() as ExitSpeed,
+            deductFeeFromWithdrawalAmount: args[3] === "true",
+            feeQuote: coopExitFeeQuote,
           });
           console.log(withdrawal);
           break;
@@ -1100,10 +1110,12 @@ async function runCLI() {
             console.log("Please initialize a wallet first");
             break;
           }
-          const fee = await wallet.getWithdrawalFeeEstimate({
+          const fee = await wallet.getWithdrawalFeeQuote({
             amountSats: parseInt(args[0]),
             withdrawalAddress: args[1],
           });
+
+          coopExitFeeQuote = fee || undefined;
 
           console.log(fee);
           break;

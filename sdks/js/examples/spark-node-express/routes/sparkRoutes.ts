@@ -686,9 +686,17 @@ export const createSparkRouter = (
           amountSats: number | undefined;
           exitSpeed: string;
         };
+        const feeQuote = await wallet!.getWithdrawalFeeQuote({
+          withdrawalAddress: onchainAddress,
+          amountSats: amountSats ?? 0,
+        });
+        if (!feeQuote) {
+          throw new Error("Failed to get withdrawal fee quote");
+        }
         const withdrawal = await wallet!.withdraw({
           onchainAddress,
           amountSats,
+          feeQuote,
           exitSpeed: exitSpeed as ExitSpeed,
         });
         res.json({
@@ -729,12 +737,15 @@ export const createSparkRouter = (
           amountSats: string;
           withdrawalAddress: string;
         };
-        const feeEstimate = await wallet!.getWithdrawalFeeEstimate({
-          amountSats: Number(amountSats),
+        const feeQuote = await wallet!.getWithdrawalFeeQuote({
           withdrawalAddress,
+          amountSats: Number(amountSats),
         });
+        if (!feeQuote) {
+          throw new Error("Failed to get withdrawal fee quote");
+        }
         res.json({
-          data: { feeEstimate },
+          data: { feeQuote },
         });
       } catch (error) {
         console.error(error);

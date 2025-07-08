@@ -6,6 +6,9 @@ export const RequestCoopExit = `
     $withdrawal_address: String!
     $idempotency_key: String!
     $exit_speed: ExitSpeed!
+    $withdraw_all: Boolean
+    $fee_leaf_external_ids: [UUID!]
+    $fee_quote_id: ID
   ) {
     request_coop_exit(
       input: {
@@ -13,6 +16,9 @@ export const RequestCoopExit = `
         withdrawal_address: $withdrawal_address
         idempotency_key: $idempotency_key
         exit_speed: $exit_speed
+        withdraw_all: $withdraw_all
+        fee_leaf_external_ids: $fee_leaf_external_ids
+        fee_quote_id: $fee_quote_id
       }
     ) {
       request {

@@ -49,7 +49,6 @@ import {
   getEphemeralAnchorOutput,
   getNextTransactionSequence,
   getTransactionSequence,
-  maybeApplyFee,
 } from "../utils/transaction.js";
 import { getTransferPackageSigningPayload } from "../utils/transfer_package.js";
 import { WalletConfigService } from "./config.js";
@@ -429,7 +428,6 @@ export class BaseTransferService {
         nodeTxSignature: new Uint8Array(),
       });
     }
-
     return nodeSignatures;
   }
 
@@ -607,7 +605,6 @@ export class TransferService extends BaseTransferService {
       leaves,
       proofMap,
     );
-
     return await this.finalizeNodeSignatures(signatures);
   }
 

@@ -8,6 +8,7 @@ export const RequestSwapLeaves = `
     $fee_sats: Long!
     $user_leaves: [UserLeafInput!]!
     $idempotency_key: String!
+    $target_amount_sats_list: [Long!]
   ) {
     request_leaves_swap(input: {
       adaptor_pubkey: $adaptor_pubkey
@@ -16,6 +17,7 @@ export const RequestSwapLeaves = `
       fee_sats: $fee_sats
       user_leaves: $user_leaves
       idempotency_key: $idempotency_key
+      target_amount_sats_list: $target_amount_sats_list
     }) {
       request {
         ...LeavesSwapRequestFragment

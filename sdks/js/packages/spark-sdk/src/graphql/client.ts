@@ -23,6 +23,7 @@ import ClaimStaticDepositOutput, {
 } from "./objects/ClaimStaticDepositOutput.js";
 import ClaimStaticDepositRequestType from "./objects/ClaimStaticDepositRequestType.js";
 import { CoopExitFeeEstimatesOutputFromJson } from "./objects/CoopExitFeeEstimatesOutput.js";
+import { CoopExitFeeQuoteFromJson } from "./objects/CoopExitFeeQuote.js";
 import CoopExitRequest, {
   CoopExitRequestFromJson,
 } from "./objects/CoopExitRequest.js";
@@ -33,6 +34,8 @@ import type {
   CompleteLeavesSwapInput,
   CoopExitFeeEstimatesInput,
   CoopExitFeeEstimatesOutput,
+  CoopExitFeeQuote,
+  CoopExitFeeQuoteInput,
   GetChallengeOutput,
   LeavesSwapFeeEstimateOutput,
   LightningSendRequest,
@@ -63,6 +66,7 @@ import VerifyChallengeOutput, {
 } from "./objects/VerifyChallengeOutput.js";
 import { CoopExitFeeEstimate } from "./queries/CoopExitFeeEstimate.js";
 import { GetClaimDepositQuote } from "./queries/GetClaimDepositQuote.js";
+import { GetCoopExitFeeQuote } from "./queries/GetCoopExitFeeQuote.js";
 import { LeavesSwapFeeEstimate } from "./queries/LeavesSwapFeeEstimate.js";
 import { LightningSendFeeEstimate } from "./queries/LightningSendFeeEstimate.js";
 import { GetTransfer } from "./queries/Transfer.js";
@@ -229,6 +233,9 @@ export default class SspClient {
     withdrawalAddress,
     idempotencyKey,
     exitSpeed,
+    feeLeafExternalIds,
+    feeQuoteId,
+    withdrawAll,
   }: RequestCoopExitInput): Promise<CoopExitRequest | null> {
     return await this.executeRawQuery({
       queryPayload: RequestCoopExit,
@@ -237,6 +244,9 @@ export default class SspClient {
         withdrawal_address: withdrawalAddress,
         idempotency_key: idempotencyKey,
         exit_speed: exitSpeed,
+        fee_leaf_external_ids: feeLeafExternalIds,
+        fee_quote_id: feeQuoteId,
+        withdraw_all: withdrawAll,
       },
       constructObject: (response: { request_coop_exit: any }) => {
         return CoopExitRequestFromJson(response.request_coop_exit.request);
@@ -302,6 +312,7 @@ export default class SspClient {
     feeSats,
     userLeaves,
     idempotencyKey,
+    targetAmountSatsList,
   }: RequestLeavesSwapInput): Promise<LeavesSwapRequest | null> {
     const query = {
       queryPayload: RequestSwapLeaves,
@@ -312,6 +323,7 @@ export default class SspClient {
         fee_sats: feeSats,
         user_leaves: userLeaves,
         idempotency_key: idempotencyKey,
+        target_amount_sats_list: targetAmountSatsList,
       },
       constructObject: (response: { request_leaves_swap: any }) => {
         if (!response.request_leaves_swap) {
@@ -537,6 +549,22 @@ export default class SspClient {
       verifyChallenge.sessionToken,
       new Date(verifyChallenge.validUntil),
     );
+  }
+
+  async getCoopExitFeeQuote({
+    leafExternalIds,
+    withdrawalAddress,
+  }: CoopExitFeeQuoteInput): Promise<CoopExitFeeQuote | null> {
+    return await this.executeRawQuery({
+      queryPayload: GetCoopExitFeeQuote,
+      variables: {
+        leaf_external_ids: leafExternalIds,
+        withdrawal_address: withdrawalAddress,
+      },
+      constructObject: (response: { coop_exit_fee_quote: any }) => {
+        return CoopExitFeeQuoteFromJson(response.coop_exit_fee_quote.quote);
+      },
+    });
   }
 }
 
