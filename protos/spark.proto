@@ -257,6 +257,12 @@ message NodeSignatureShares {
     SigningResult refund_tx_signing_result = 3;
     // The verifying key of the node.
     bytes verifying_key = 4;
+    // The signing result of the node's transaction. This transaction is to pay to self.
+    SigningResult direct_node_tx_signing_result = 5;
+    // The signing result of the node's direct refund transaction. This transaction is to broadcast for the SO.
+    SigningResult direct_refund_tx_signing_result = 6;
+    // The signing result of the node's direct from cpfp refund transaction. This transaction is to broadcast for the SO.
+    SigningResult direct_from_cpfp_refund_tx_signing_result = 7;
 }
 
 /**
@@ -266,10 +272,16 @@ message NodeSignatureShares {
 message NodeSignatures {
     // The id of the node.
     string node_id = 1;
-    // The final signature of the node's transaction. This transaction is to pay to self.
+    // The final signature of the node's cpfp transaction. This transaction is to pay to self.
     bytes node_tx_signature = 2;
-    // The final signature of the node's refund transaction. This transaction is to pay to the user.
+    // The final signature of the node's cpfp refund transaction. This transaction is to pay to the user.
     bytes refund_tx_signature = 3;
+    // The final signature of the node's direct transaction. This transaction is to pay for the watchtower.
+    bytes direct_node_tx_signature = 4;
+    // The final signature of the node's direct refund transaction. This transaction is to pay for the watchtower.
+    bytes direct_refund_tx_signature = 5;
+    // The final signature of the node's direct from cpfp refund transaction. This transaction is to pay for the watchtower.
+    bytes direct_from_cpfp_refund_tx_signature = 6;
 }
 
 /**
@@ -280,10 +292,14 @@ message StartTreeCreationRequest {
     bytes identity_public_key = 1;
     // The on-chain utxo to be used to be spent by the root node.
     UTXO on_chain_utxo = 2;
-    // The signing job for the root node's transaction.
+    // The signing job for the root node's cpfp transaction.
     SigningJob root_tx_signing_job = 3;
-    // The signing job for the root node's refund transaction.
+    // The signing job for the root node's cpfp refund transaction.
     SigningJob refund_tx_signing_job = 4;
+    // The signing job for the root node's direct transaction.
+    SigningJob direct_root_tx_signing_job = 5;
+    // The signing job for the root node's direct refund transaction
+    SigningJob direct_refund_tx_signing_job = 6;
 }
 
 /**
@@ -308,6 +324,12 @@ message StartDepositTreeCreationRequest {
     SigningJob root_tx_signing_job = 3;
     // The signing job for the root node's refund transaction.
     SigningJob refund_tx_signing_job = 4;
+    // The direct signing job for the root node's transaction.
+    SigningJob direct_root_tx_signing_job = 5;
+    // The signing job for the root node's direct refund transaction.
+    SigningJob direct_refund_tx_signing_job = 6;
+    // The signing job for the root node's direct from cpfp refund transaction.
+    SigningJob direct_from_cpfp_refund_tx_signing_job = 7;
 }
 
 /**
@@ -555,7 +577,7 @@ message TreeNode {
     uint64 value = 3;
     // The id of the parent node.
     optional string parent_node_id = 4;
-    // The transaction of the node, this transaction is to pay to the same address as the node.
+    // The cpfp transaction of the node, this transaction is to pay to the same address as the node.
     bytes node_tx = 5;
     // The refund transaction of the node, this transaction is to pay to the user.
     bytes refund_tx = 6;
@@ -577,6 +599,12 @@ message TreeNode {
     google.protobuf.Timestamp updated_time = 14;
     // The signing public key of the owner of the node.
     bytes owner_signing_public_key = 15;
+    // The direct transaction of the node, this transaction is for the watchtower to broadcast.
+    bytes direct_tx = 16;
+    // The refund transaction of the node, this transaction is to pay to the user.
+    bytes direct_refund_tx = 17;
+    // The refund transaction of the node, this transaction is to pay to the user.
+    bytes direct_from_cpfp_refund_tx = 18;
 }
 
 /**
@@ -622,6 +650,8 @@ message SecretProof {
 message LeafRefundTxSigningJob {
     string leaf_id = 1;
     SigningJob refund_tx_signing_job = 2;
+    SigningJob direct_refund_tx_signing_job = 3;
+    SigningJob direct_from_cpfp_refund_tx_signing_job = 4;
 }
 
 message UserSignedTxSigningJob {
@@ -637,6 +667,8 @@ message LeafRefundTxSigningResult {
     string leaf_id = 1;
     SigningResult refund_tx_signing_result = 2;
     bytes verifying_key = 3;
+    SigningResult direct_refund_tx_signing_result = 4;
+    SigningResult direct_from_cpfp_refund_tx_signing_result = 5;
 }
 
 message StartUserSignedTransferRequest {
@@ -645,6 +677,8 @@ message StartUserSignedTransferRequest {
     repeated UserSignedTxSigningJob leaves_to_send = 3;
     bytes receiver_identity_public_key = 4;
     google.protobuf.Timestamp expiry_time = 5;
+    repeated UserSignedTxSigningJob direct_leaves_to_send = 6;
+    repeated UserSignedTxSigningJob direct_from_cpfp_leaves_to_send = 7;
 }
 
 
@@ -672,12 +706,16 @@ message StartTransferResponse {
  * the coordinator SO.
  */
 message TransferPackage {
-    // The leaves to send, with user signed refunds and signing package.
+    // The leaves to send, with user signed cpfp refunds and signing package.
     repeated UserSignedTxSigningJob leaves_to_send = 1;
     // The map of SO identifier to ciphertext of SendLeafTweaks.
     map<string, bytes> key_tweak_package = 2;
     // The signature of user to prove that the key_tweak_package is not tampered.
     bytes user_signature = 3;
+    // The leaves to send, with user signed direct refunds and signing package.
+    repeated UserSignedTxSigningJob direct_leaves_to_send = 4;
+    // The leaves to send, with user signed direct from cpfp refunds and signing package.
+    repeated UserSignedTxSigningJob direct_from_cpfp_leaves_to_send = 5;
 }
 
 message SendLeafKeyTweaks {
@@ -692,6 +730,8 @@ message SendLeafKeyTweak {
     // Signature over Sha256(leaf_id||transfer_id||secret_cipher)
     bytes signature = 5;
     bytes refund_signature = 6;
+    bytes direct_refund_signature = 7;
+    bytes direct_from_cpfp_refund_signature = 8;
 }
 
 message FinalizeTransferRequest {
@@ -752,6 +792,8 @@ message TransferLeaf {
     bytes secret_cipher = 2;
     bytes signature = 3;
     bytes intermediate_refund_tx = 4;
+    bytes intermediate_direct_refund_tx = 5;
+    bytes intermediate_direct_from_cpfp_refund_tx = 6;
 }
 
 
@@ -880,6 +922,8 @@ message CounterLeafSwapRequest {
     StartTransferRequest transfer = 1;
     string swap_id = 2;
     bytes adaptor_public_key = 3;
+    bytes direct_adaptor_public_key = 4;
+    bytes direct_from_cpfp_adaptor_public_key = 5;
 }
 
 message CounterLeafSwapResponse {
@@ -907,6 +951,9 @@ message ExtendLeafRequest {
     bytes owner_identity_public_key = 2;
     SigningJob node_tx_signing_job = 3;
     SigningJob refund_tx_signing_job = 4;
+    SigningJob direct_node_tx_signing_job = 5;
+    SigningJob direct_refund_tx_signing_job = 6;
+    SigningJob direct_from_cpfp_refund_tx_signing_job = 7;
 }
 
 message ExtendLeafSigningResult {
@@ -918,6 +965,9 @@ message ExtendLeafResponse {
     string leaf_id = 1;
     ExtendLeafSigningResult node_tx_signing_result = 2;
     ExtendLeafSigningResult refund_tx_signing_result = 3;
+    ExtendLeafSigningResult direct_node_tx_signing_result = 4;
+    ExtendLeafSigningResult direct_refund_tx_signing_result = 5;
+    ExtendLeafSigningResult direct_from_cpfp_refund_tx_signing_result = 6;
 }
 
 message AddressRequestNode {
@@ -946,13 +996,19 @@ message PrepareTreeAddressResponse {
 }
 
 message CreationNode {
-    // This is the tx that spends the parent node's output.
+    // This is the cpfp tx that spends the parent node's output.
     SigningJob node_tx_signing_job = 1;
     // The refund tx can only exist if there's no children.
     SigningJob refund_tx_signing_job = 2;
 
     // The children will spend the output of the node's tx. Vout is the index of the child.
     repeated CreationNode children = 3;
+    // This is the direct tx that spends the parent node's output.
+    SigningJob direct_node_tx_signing_job = 4;
+    // The direct refund tx can only exist if there's no children.
+    SigningJob direct_refund_tx_signing_job = 5;
+    // The direct from cpfp refund tx can only exist if there's no children.
+    SigningJob direct_from_cpfp_refund_tx_signing_job = 6;
 }
 
 message CreateTreeRequest {
@@ -972,6 +1028,9 @@ message CreationResponseNode {
     SigningResult node_tx_signing_result = 2;
     SigningResult refund_tx_signing_result = 3;
     repeated CreationResponseNode children = 4;
+    SigningResult direct_node_tx_signing_result = 5;
+    SigningResult direct_refund_tx_signing_result = 6;
+    SigningResult direct_from_cpfp_refund_tx_signing_result = 7;
 }
 
 message CreateTreeResponse {
