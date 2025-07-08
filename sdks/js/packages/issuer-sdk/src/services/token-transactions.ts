@@ -62,6 +62,7 @@ export class IssuerTokenTransactionService extends TokenTransactionService {
       sparkOperatorIdentityPublicKeys:
         super.collectOperatorIdentityPublicKeys(),
       expiryTime: undefined,
+      clientCreatedTimestamp: new Date(),
     };
   }
 }

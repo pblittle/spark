@@ -1319,7 +1319,7 @@ async function runCLI() {
                     `    Owner Public Key: ${hex.encode(output.ownerPublicKey)}`,
                   );
                   console.log(
-                    `    Token Public Key: ${hex.encode(output.tokenPublicKey)}`,
+                    `    Token Public Key: ${hex.encode(output.tokenPublicKey!)}`,
                   );
                   console.log(
                     `    Token Amount: ${hex.encode(output.tokenAmount)}`,

@@ -19,7 +19,7 @@ export async function broadcastL1Withdrawal(
     ({ output, previousTransactionHash, previousTransactionVout }) => {
       return {
         amount: bytesToNumberBE(output!.tokenAmount),
-        tokenPubkey: bytesToHex(output!.tokenPublicKey),
+        tokenPubkey: bytesToHex(output!.tokenPublicKey!),
         sats: WITHDRAW_BOND_SATS,
         cltvOutputLocktime: WITHDRAW_RELATIVE_BLOCK_LOCKTIME,
         revocationKey: bytesToHex(output!.revocationCommitment!),

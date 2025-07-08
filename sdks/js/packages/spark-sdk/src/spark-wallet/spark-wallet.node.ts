@@ -66,10 +66,6 @@ export class SparkWallet extends BaseSparkWallet {
       "SparkWallet.getTransfers",
       this.getTransfers.bind(this),
     );
-    this.getTokenInfo = this.wrapWithOtelSpan(
-      "SparkWallet.getTokenInfo",
-      this.getTokenInfo.bind(this),
-    );
     this.getBalance = this.wrapWithOtelSpan(
       "SparkWallet.getBalance",
       this.getBalance.bind(this),

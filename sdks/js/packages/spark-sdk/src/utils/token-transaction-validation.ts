@@ -230,16 +230,16 @@ export function validateTokenTransaction(
 
     if (
       !areByteArraysEqual(
-        finalOutput.tokenPublicKey,
-        partialOutput.tokenPublicKey,
+        finalOutput.tokenPublicKey!,
+        partialOutput.tokenPublicKey!,
       )
     ) {
       throw new InternalValidationError(
         "Token public key mismatch in token output",
         {
           outputIndex: i,
-          value: finalOutput.tokenPublicKey.toString(),
-          expected: partialOutput.tokenPublicKey.toString(),
+          value: finalOutput.tokenPublicKey!.toString(),
+          expected: partialOutput.tokenPublicKey!.toString(),
         },
       );
     }

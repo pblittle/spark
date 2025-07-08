@@ -1,5 +1,5 @@
 import { IssuerSparkWallet } from "@buildonspark/issuer-sdk";
-import { SparkWallet, type TokenInfo } from "@buildonspark/spark-sdk";
+import { SparkWallet } from "@buildonspark/spark-sdk";
 import { Transfer } from "@buildonspark/spark-sdk/proto/spark";
 import { ConfigOptions } from "@buildonspark/spark-sdk/services/wallet-config";
 import {
@@ -784,29 +784,6 @@ export const createSparkRouter = (
       }
     }
   );
-
-  /**
-   * Returns the token information for all tokens held in this wallet.
-   * @route GET /tokens/info
-   * @returns {Promise<{
-   *   data: {
-   *     tokenInfo: TokenInfo[]
-   *   }
-   * }>}
-   */
-  router.get("/tokens/info", checkWalletInitialized, async (req, res) => {
-    const wallet = getWallet();
-    try {
-      const tokenInfo = await wallet!.getTokenInfo();
-      res.json({
-        data: { tokenInfo },
-      });
-    } catch (error) {
-      console.error(error);
-      const errorMsg = isError(error) ? error.message : "Unknown error";
-      res.status(500).json({ error: errorMsg });
-    }
-  });
 
   /**
    * Transfer tokens

@@ -125,7 +125,7 @@ import type {
   InitWalletResponse,
   PayLightningInvoiceParams,
   SparkWalletProps,
-  TokenInfo,
+  TokenMetadata,
   TransferParams,
 } from "./types.js";
 
@@ -1183,32 +1183,6 @@ export class SparkWallet extends EventEmitter {
   }
 
   /**
-   * Gets the held token info for the wallet.
-   *
-   * @deprecated The information is returned in getBalance
-   */
-  public async getTokenInfo(): Promise<TokenInfo[]> {
-    console.warn("getTokenInfo is deprecated. Use getBalance instead.");
-
-    await this.syncTokenOutputs();
-
-    const lrc20Client = await this.lrc20ConnectionManager.createLrc20Client();
-    const { balance, tokenBalances } = await this.getBalance();
-
-    const tokenInfo = await lrc20Client.getTokenPubkeyInfo({
-      publicKeys: Array.from(tokenBalances.keys()).map(hexToBytes),
-    });
-
-    return tokenInfo.tokenPubkeyInfos.map((info) => ({
-      tokenPublicKey: bytesToHex(info.announcement!.publicKey!.publicKey),
-      tokenName: info.announcement!.name,
-      tokenSymbol: info.announcement!.symbol,
-      tokenDecimals: Number(bytesToNumberBE(info.announcement!.decimal)),
-      maxSupply: bytesToNumberBE(info.announcement!.maxSupply),
-    }));
-  }
-
-  /**
    * Gets the current balance of the wallet.
    * You can use the forceRefetch option to synchronize your wallet and claim any
    * pending incoming lightning payment, spark transfer, or bitcoin deposit before returning the balance.
@@ -1219,19 +1193,25 @@ export class SparkWallet extends EventEmitter {
    */
   public async getBalance(): Promise<{
     balance: bigint;
-    tokenBalances: Map<string, { balance: bigint; tokenInfo: TokenInfo }>;
+    tokenBalances: Map<
+      string,
+      { balance: bigint; tokenMetadata: TokenMetadata }
+    >;
   }> {
     const leaves = await this.getLeaves(true);
     await this.syncTokenOutputs();
 
-    let tokenBalances: Map<string, { balance: bigint; tokenInfo: TokenInfo }>;
+    let tokenBalances: Map<
+      string,
+      { balance: bigint; tokenMetadata: TokenMetadata }
+    >;
 
     if (this.tokenOutputs.size !== 0) {
       tokenBalances = await this.getTokenBalance();
     } else {
       tokenBalances = new Map<
         string,
-        { balance: bigint; tokenInfo: TokenInfo }
+        { balance: bigint; tokenMetadata: TokenMetadata }
       >();
     }
 
@@ -1242,31 +1222,34 @@ export class SparkWallet extends EventEmitter {
   }
 
   private async getTokenBalance(): Promise<
-    Map<string, { balance: bigint; tokenInfo: TokenInfo }>
+    Map<string, { balance: bigint; tokenMetadata: TokenMetadata }>
   > {
-    const lrc20Client = await this.lrc20ConnectionManager.createLrc20Client();
+    const sparkTokenClient =
+      await this.connectionManager.createSparkTokenClient(
+        this.config.getCoordinatorAddress(),
+      );
 
-    // Get token info for all tokens
-    const tokenInfo = await lrc20Client.getTokenPubkeyInfo({
-      publicKeys: Array.from(this.tokenOutputs.keys()).map(hexToBytes),
+    const tokenMetadata = await sparkTokenClient.query_token_metadata({
+      issuerPublicKeys: Array.from(this.tokenOutputs.keys()).map(hexToBytes),
     });
 
-    const result = new Map<string, { balance: bigint; tokenInfo: TokenInfo }>();
+    const result = new Map<
+      string,
+      { balance: bigint; tokenMetadata: TokenMetadata }
+    >();
 
-    for (const info of tokenInfo.tokenPubkeyInfos) {
-      const tokenPublicKey = bytesToHex(
-        info.announcement!.publicKey!.publicKey,
-      );
-      const leaves = this.tokenOutputs.get(tokenPublicKey);
+    for (const metadata of tokenMetadata.tokenMetadata) {
+      const issuerPublicKey = bytesToHex(metadata.issuerPublicKey);
+      const leaves = this.tokenOutputs.get(issuerPublicKey);
 
-      result.set(tokenPublicKey, {
+      result.set(issuerPublicKey, {
         balance: leaves ? calculateAvailableTokenAmount(leaves) : BigInt(0),
-        tokenInfo: {
-          tokenPublicKey,
-          tokenName: info.announcement!.name,
-          tokenSymbol: info.announcement!.symbol,
-          tokenDecimals: Number(bytesToNumberBE(info.announcement!.decimal)),
-          maxSupply: bytesToNumberBE(info.announcement!.maxSupply),
+        tokenMetadata: {
+          issuerPublicKey,
+          tokenName: metadata.tokenName,
+          tokenTicker: metadata.tokenTicker,
+          decimals: metadata.decimals,
+          maxSupply: bytesToNumberBE(metadata.maxSupply),
         },
       });
     }

@@ -272,6 +272,7 @@ export class TokenTransactionService {
       tokenOutputs,
       sparkOperatorIdentityPublicKeys: this.collectOperatorIdentityPublicKeys(),
       expiryTime: undefined,
+      clientCreatedTimestamp: new Date(),
     };
   }
 

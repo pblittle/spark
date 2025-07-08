@@ -30,11 +30,11 @@ export type DepositParams = {
   vout: number;
 };
 
-export type TokenInfo = {
-  tokenPublicKey: string;
+export type TokenMetadata = {
+  issuerPublicKey: string;
   tokenName: string;
-  tokenSymbol: string;
-  tokenDecimals: number;
+  tokenTicker: string;
+  decimals: number;
   maxSupply: bigint;
 };
 
