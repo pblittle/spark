@@ -181,6 +181,17 @@
     "react-native": ">=0.71.0",
     "react-native-get-random-values": ">=1.11.0"
   },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    },
+    "react-native-get-random-values": {
+      "optional": true
+    }
+  },
   "engines": {
     "node": ">=18.0.0"
   },
