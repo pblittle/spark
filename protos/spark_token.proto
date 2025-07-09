@@ -20,6 +20,12 @@ service SparkTokenService {
 
     rpc query_token_metadata(QueryTokenMetadataRequest)
         returns (QueryTokenMetadataResponse) {}
+
+    rpc query_token_transactions(QueryTokenTransactionsRequest)
+        returns (QueryTokenTransactionsResponse) {}
+        
+    rpc query_token_outputs(QueryTokenOutputsRequest)
+        returns (QueryTokenOutputsResponse) {}
 }
 
 // This proto is constructed by the wallet to specify leaves it wants to spend
@@ -169,4 +175,68 @@ message TokenMetadata {
 
 message QueryTokenMetadataResponse {
     repeated TokenMetadata token_metadata = 1;
+}
+
+message QueryTokenOutputsRequest {
+    repeated bytes owner_public_keys = 1 [(validate.rules).repeated.items.bytes.len = 33];
+    // Optionally provide issuer public keys or token identifiers. If both are not set return outputs for all tokens.
+    repeated bytes issuer_public_keys = 2 [(validate.rules).repeated.items.bytes.len = 33];
+    repeated bytes token_identifiers = 4 [(validate.rules).repeated.items.bytes.len = 32];
+    spark.Network network = 3; // defaults to mainnet when no network is provided.
+}
+
+// Request constraints are combined using an AND relation.
+message QueryTokenTransactionsRequest {
+    // Returns transactions that have one of these output ids in the input or output.
+    repeated string output_ids = 1 [(validate.rules).repeated.items.string.uuid = true];
+    // Returns transactions that have this owner public key as the sender or receiver in one or more of the input/output leaves.
+    repeated bytes owner_public_keys = 2 [(validate.rules).repeated.items.bytes.len = 33];
+    // Returns transactions that related to this token public key.
+    repeated bytes issuer_public_keys = 3 [(validate.rules).repeated.items.bytes.len = 33];
+    // Returns transactions that related to this token identifier.
+    repeated bytes token_identifiers = 7 [(validate.rules).repeated.items.bytes.len = 32];
+    // Returns transactions that match the provided transaction hashes.
+    repeated bytes token_transaction_hashes = 4 [(validate.rules).repeated.items.bytes.len = 32];
+    int64 limit = 5;
+    int64 offset = 6;
+}
+
+message QueryTokenTransactionsResponse {
+    repeated TokenTransactionWithStatus token_transactions_with_status = 1;
+    int64 offset = 2;
+}
+
+message OutputWithPreviousTransactionData {
+    TokenOutput output = 1;
+	bytes previous_transaction_hash = 2 [(validate.rules).bytes.len = 32];
+	uint32 previous_transaction_vout = 3;
+}
+
+message QueryTokenOutputsResponse {
+    repeated OutputWithPreviousTransactionData outputs_with_previous_transaction_data = 1;
+}
+
+enum TokenTransactionStatus {
+    TOKEN_TRANSACTION_STARTED = 0;
+    TOKEN_TRANSACTION_SIGNED = 1;
+    TOKEN_TRANSACTION_REVEALED = 5;
+    TOKEN_TRANSACTION_FINALIZED = 2;
+    TOKEN_TRANSACTION_STARTED_CANCELLED = 3;
+    TOKEN_TRANSACTION_SIGNED_CANCELLED = 4;
+    TOKEN_TRANSACTION_UNKNOWN = 10;
+}
+
+message SpentTokenOutputMetadata {
+    string output_id = 1;
+    bytes revocation_secret = 2;
+}
+
+message TokenTransactionConfirmationMetadata {
+    repeated SpentTokenOutputMetadata spent_token_outputs_metadata = 1;
+}
+
+message TokenTransactionWithStatus {
+    TokenTransaction token_transaction = 1;
+    TokenTransactionStatus status = 2;
+    TokenTransactionConfirmationMetadata confirmation_metadata = 3;
 }
