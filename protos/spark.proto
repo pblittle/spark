@@ -1120,6 +1120,8 @@ message QueryStaticDepositAddressesRequest {
     Network network = 2; // defaults to mainnet when no network is provided.
     int64 limit = 4;
     int64 offset = 5;
+    // Optional filter. When specified, only the DepositAddress with this address is returned.
+    optional string deposit_address = 6;
 }
 
 message DepositAddressQueryResult {
