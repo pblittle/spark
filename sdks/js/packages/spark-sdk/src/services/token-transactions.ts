@@ -21,7 +21,10 @@ import {
   calculateAvailableTokenAmount,
   checkIfSelectedOutputsAreAvailable,
 } from "../utils/token-transactions.js";
-import { validateTokenTransaction } from "../utils/token-transaction-validation.js";
+import {
+  validateTokenTransactionV0,
+  validateTokenTransaction,
+} from "../utils/token-transaction-validation.js";
 import { WalletConfigService } from "./config.js";
 import { ConnectionManager } from "./connection.js";
 import {
@@ -549,7 +552,7 @@ export class TokenTransactionService {
       throw new Error("Keyshare info missing in start response");
     }
 
-    validateTokenTransaction(
+    validateTokenTransactionV0(
       startResponse.finalTokenTransaction,
       tokenTransaction,
       signingOperators,

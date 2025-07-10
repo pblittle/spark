@@ -156,6 +156,9 @@ export class CoopExitService extends BaseTransferService {
           rawTx: refundTx.toBytes(),
           signingNonceCommitment: signingNonceCommitment,
         },
+        // TODO: Add direct refund signature
+        directRefundTxSigningJob: undefined,
+        directFromCpfpRefundTxSigningJob: undefined,
       };
 
       signingJobs.push(signingJob);

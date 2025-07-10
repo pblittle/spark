@@ -315,6 +315,9 @@ export class TreeCreationService {
       nodeTxSigningJob: undefined,
       refundTxSigningJob: undefined,
       children: [],
+      directNodeTxSigningJob: undefined,
+      directRefundTxSigningJob: undefined,
+      directFromCpfpRefundTxSigningJob: undefined,
     };
 
     const tx = new Transaction({ version: 3 });
@@ -353,6 +356,9 @@ export class TreeCreationService {
       nodeTxSigningJob: undefined,
       refundTxSigningJob: undefined,
       children: [],
+      directNodeTxSigningJob: undefined,
+      directRefundTxSigningJob: undefined,
+      directFromCpfpRefundTxSigningJob: undefined,
     };
 
     const childTx = new Transaction({ version: 3 });
@@ -464,6 +470,9 @@ export class TreeCreationService {
       nodeTxSigningJob: rootNodeSigningJob,
       refundTxSigningJob: undefined,
       children: [],
+      directNodeTxSigningJob: undefined,
+      directRefundTxSigningJob: undefined,
+      directFromCpfpRefundTxSigningJob: undefined,
     };
     rootCreationNode.nodeTxSigningCommitment = rootNodeSigningCommitment;
 
@@ -584,6 +593,10 @@ export class TreeCreationService {
         nodeId: creationResponseNode.nodeId,
         nodeTxSignature: nodeTxSignature,
         refundTxSignature: refundTxSignature,
+        // TODO: Add direct refund signature
+        directNodeTxSignature: new Uint8Array(),
+        directRefundTxSignature: new Uint8Array(),
+        directFromCpfpRefundTxSignature: new Uint8Array(),
       },
     };
   }

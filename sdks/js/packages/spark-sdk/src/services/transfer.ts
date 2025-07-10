@@ -295,6 +295,9 @@ export class BaseTransferService {
       leavesToSend: leafSigningJobs,
       keyTweakPackage: encryptedKeyTweaks,
       userSignature: new Uint8Array(),
+      // TODO: Add direct refund signature
+      directLeavesToSend: [],
+      directFromCpfpLeavesToSend: [],
     };
 
     const transferPackageSigningPayload = getTransferPackageSigningPayload(
@@ -426,6 +429,10 @@ export class BaseTransferService {
         nodeId: operatorSigningResult.leafId,
         refundTxSignature: refundAggregate,
         nodeTxSignature: new Uint8Array(),
+        // TODO: Add direct refund signature
+        directNodeTxSignature: new Uint8Array(),
+        directRefundTxSignature: new Uint8Array(),
+        directFromCpfpRefundTxSignature: new Uint8Array(),
       });
     }
     return nodeSignatures;
@@ -532,6 +539,9 @@ export class BaseTransferService {
         secretCipher,
         signature,
         refundSignature: refundSignature ?? new Uint8Array(),
+        // TODO: Add direct refund signature
+        directRefundSignature: new Uint8Array(),
+        directFromCpfpRefundSignature: new Uint8Array(),
       });
     }
 
@@ -930,6 +940,10 @@ export class TransferService extends BaseTransferService {
           rawTx: refundTx.toBytes(),
           signingNonceCommitment: refundNonceCommitmentProto,
         },
+        // TODO: Add direct refund signature
+        directRefundTxSigningJob: undefined,
+        // TODO: Add direct refund signature
+        directFromCpfpRefundTxSigningJob: undefined,
       });
     }
 
@@ -1397,6 +1411,10 @@ export class TransferService extends BaseTransferService {
           nodeId: nodeId,
           nodeTxSignature: signature,
           refundTxSignature: new Uint8Array(),
+          // TODO: Add direct refund signature
+          directNodeTxSignature: new Uint8Array(),
+          directRefundTxSignature: new Uint8Array(),
+          directFromCpfpRefundTxSignature: new Uint8Array(),
         });
       } else if (i === nodes.length) {
         refundSignature = signature;
@@ -1414,6 +1432,10 @@ export class TransferService extends BaseTransferService {
       nodeId: leafNodeId,
       nodeTxSignature: leafSignature,
       refundTxSignature: refundSignature,
+      // TODO: Add direct refund signature
+      directNodeTxSignature: new Uint8Array(),
+      directRefundTxSignature: new Uint8Array(),
+      directFromCpfpRefundTxSignature: new Uint8Array(),
     });
 
     const result = await sparkClient.finalize_node_signatures({

@@ -90,14 +90,14 @@ describe("hash token transaction", () => {
       sparkOperatorIdentityPublicKeys: [],
       network: Network.REGTEST,
       expiryTime: new Date(0),
-      clientCreatedTimestamp: new Date(0),
+      clientCreatedTimestamp: new Date(100),
     };
 
     const hash = hashTokenTransactionV1(tokenTransaction, false);
 
     expect(Array.from(hash)).toEqual([
-      212, 137, 147, 110, 116, 95, 26, 127, 99, 28, 100, 72, 239, 236, 234, 213,
-      91, 153, 106, 17, 243, 84, 251, 219, 175, 224, 49, 90, 236, 5, 90, 126,
+      29, 127, 12, 222, 6, 194, 145, 170, 69, 30, 46, 158, 57, 38, 17, 109, 210,
+      115, 137, 157, 69, 190, 244, 48, 123, 145, 77, 81, 95, 223, 165, 88,
     ]);
   });
 });

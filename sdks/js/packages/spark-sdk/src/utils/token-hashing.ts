@@ -3,6 +3,7 @@ import { ValidationError } from "../errors/types.js";
 import {
   OperatorSpecificTokenTransactionSignablePayload,
   TokenTransaction as TokenTransactionV0,
+  TokenMintInput as TokenMintInputV0,
 } from "../proto/spark.js";
 import { TokenTransaction } from "../proto/spark_token.js";
 
@@ -24,7 +25,7 @@ export function hashTokenTransaction(
 }
 
 export function hashTokenTransactionV0(
-  tokenTransaction: TokenTransactionV0,
+  tokenTransaction: TokenTransactionV0 | TokenTransaction,
   partialHash: boolean = false,
 ): Uint8Array {
   if (!tokenTransaction) {
@@ -111,15 +112,30 @@ export function hashTokenTransactionV0(
       }
       hashObj.update(issuerPubKey);
 
-      if (
-        tokenTransaction.tokenInputs.mintInput!.issuerProvidedTimestamp != 0
+      // Handle both TokenTransactionV0 (with issuerProvidedTimestamp) and TokenTransaction (with clientCreatedTimestamp)
+      let timestampValue = 0;
+      const mintInput = tokenTransaction.tokenInputs.mintInput!;
+
+      // Check if this is a TokenTransactionV0 (has issuerProvidedTimestamp)
+      if ("issuerProvidedTimestamp" in mintInput) {
+        const v0MintInput = mintInput as TokenMintInputV0;
+        if (v0MintInput.issuerProvidedTimestamp != 0) {
+          timestampValue = v0MintInput.issuerProvidedTimestamp;
+        }
+      }
+      // Check if this is a TokenTransaction (has clientCreatedTimestamp)
+      else if (
+        "clientCreatedTimestamp" in tokenTransaction &&
+        tokenTransaction.clientCreatedTimestamp
       ) {
+        timestampValue = tokenTransaction.clientCreatedTimestamp.getTime();
+      }
+
+      if (timestampValue != 0) {
         const timestampBytes = new Uint8Array(8);
         new DataView(timestampBytes.buffer).setBigUint64(
           0,
-          BigInt(
-            tokenTransaction.tokenInputs.mintInput!.issuerProvidedTimestamp,
-          ),
+          BigInt(timestampValue),
           true, // true for little-endian to match Go implementation
         );
         hashObj.update(timestampBytes);
@@ -412,20 +428,6 @@ export function hashTokenTransactionV1(
         });
       }
       hashObj.update(issuerPubKey);
-
-      if (
-        tokenTransaction.tokenInputs.mintInput!.issuerProvidedTimestamp != 0
-      ) {
-        const timestampBytes = new Uint8Array(8);
-        new DataView(timestampBytes.buffer).setBigUint64(
-          0,
-          BigInt(
-            tokenTransaction.tokenInputs.mintInput!.issuerProvidedTimestamp,
-          ),
-          true, // true for little-endian to match Go implementation
-        );
-        hashObj.update(timestampBytes);
-      }
       allHashes.push(hashObj.digest());
     }
   }
@@ -606,9 +608,7 @@ export function hashTokenTransactionV1(
   const clientTimestampHashObj = sha256.create();
   const clientCreatedTs: Date | undefined = (tokenTransaction as any)
     .clientCreatedTimestamp;
-  const clientUnixTime = clientCreatedTs
-    ? Math.floor(clientCreatedTs.getTime() / 1000)
-    : 0;
+  const clientUnixTime = clientCreatedTs ? clientCreatedTs.getTime() : 0;
   const clientTimestampBytes = new Uint8Array(8);
   new DataView(clientTimestampBytes.buffer).setBigUint64(
     0,

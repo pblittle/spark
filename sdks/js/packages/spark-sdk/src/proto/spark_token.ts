@@ -12,6 +12,69 @@ import { Network, networkFromJSON, networkToJSON, SigningKeyshare } from "./spar
 
 export const protobufPackage = "spark_token";
 
+export enum TokenTransactionStatus {
+  TOKEN_TRANSACTION_STARTED = 0,
+  TOKEN_TRANSACTION_SIGNED = 1,
+  TOKEN_TRANSACTION_REVEALED = 5,
+  TOKEN_TRANSACTION_FINALIZED = 2,
+  TOKEN_TRANSACTION_STARTED_CANCELLED = 3,
+  TOKEN_TRANSACTION_SIGNED_CANCELLED = 4,
+  TOKEN_TRANSACTION_UNKNOWN = 10,
+  UNRECOGNIZED = -1,
+}
+
+export function tokenTransactionStatusFromJSON(object: any): TokenTransactionStatus {
+  switch (object) {
+    case 0:
+    case "TOKEN_TRANSACTION_STARTED":
+      return TokenTransactionStatus.TOKEN_TRANSACTION_STARTED;
+    case 1:
+    case "TOKEN_TRANSACTION_SIGNED":
+      return TokenTransactionStatus.TOKEN_TRANSACTION_SIGNED;
+    case 5:
+    case "TOKEN_TRANSACTION_REVEALED":
+      return TokenTransactionStatus.TOKEN_TRANSACTION_REVEALED;
+    case 2:
+    case "TOKEN_TRANSACTION_FINALIZED":
+      return TokenTransactionStatus.TOKEN_TRANSACTION_FINALIZED;
+    case 3:
+    case "TOKEN_TRANSACTION_STARTED_CANCELLED":
+      return TokenTransactionStatus.TOKEN_TRANSACTION_STARTED_CANCELLED;
+    case 4:
+    case "TOKEN_TRANSACTION_SIGNED_CANCELLED":
+      return TokenTransactionStatus.TOKEN_TRANSACTION_SIGNED_CANCELLED;
+    case 10:
+    case "TOKEN_TRANSACTION_UNKNOWN":
+      return TokenTransactionStatus.TOKEN_TRANSACTION_UNKNOWN;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return TokenTransactionStatus.UNRECOGNIZED;
+  }
+}
+
+export function tokenTransactionStatusToJSON(object: TokenTransactionStatus): string {
+  switch (object) {
+    case TokenTransactionStatus.TOKEN_TRANSACTION_STARTED:
+      return "TOKEN_TRANSACTION_STARTED";
+    case TokenTransactionStatus.TOKEN_TRANSACTION_SIGNED:
+      return "TOKEN_TRANSACTION_SIGNED";
+    case TokenTransactionStatus.TOKEN_TRANSACTION_REVEALED:
+      return "TOKEN_TRANSACTION_REVEALED";
+    case TokenTransactionStatus.TOKEN_TRANSACTION_FINALIZED:
+      return "TOKEN_TRANSACTION_FINALIZED";
+    case TokenTransactionStatus.TOKEN_TRANSACTION_STARTED_CANCELLED:
+      return "TOKEN_TRANSACTION_STARTED_CANCELLED";
+    case TokenTransactionStatus.TOKEN_TRANSACTION_SIGNED_CANCELLED:
+      return "TOKEN_TRANSACTION_SIGNED_CANCELLED";
+    case TokenTransactionStatus.TOKEN_TRANSACTION_UNKNOWN:
+      return "TOKEN_TRANSACTION_UNKNOWN";
+    case TokenTransactionStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 /**
  * This proto is constructed by the wallet to specify leaves it wants to spend
  * as part of the token transaction.
@@ -181,6 +244,61 @@ export interface TokenMetadata {
 
 export interface QueryTokenMetadataResponse {
   tokenMetadata: TokenMetadata[];
+}
+
+export interface QueryTokenOutputsRequest {
+  ownerPublicKeys: Uint8Array[];
+  /** Optionally provide issuer public keys or token identifiers. If both are not set return outputs for all tokens. */
+  issuerPublicKeys: Uint8Array[];
+  tokenIdentifiers: Uint8Array[];
+  /** defaults to mainnet when no network is provided. */
+  network: Network;
+}
+
+/** Request constraints are combined using an AND relation. */
+export interface QueryTokenTransactionsRequest {
+  /** Returns transactions that have one of these output ids in the input or output. */
+  outputIds: string[];
+  /** Returns transactions that have this owner public key as the sender or receiver in one or more of the input/output leaves. */
+  ownerPublicKeys: Uint8Array[];
+  /** Returns transactions that related to this token public key. */
+  issuerPublicKeys: Uint8Array[];
+  /** Returns transactions that related to this token identifier. */
+  tokenIdentifiers: Uint8Array[];
+  /** Returns transactions that match the provided transaction hashes. */
+  tokenTransactionHashes: Uint8Array[];
+  limit: number;
+  offset: number;
+}
+
+export interface QueryTokenTransactionsResponse {
+  tokenTransactionsWithStatus: TokenTransactionWithStatus[];
+  offset: number;
+}
+
+export interface OutputWithPreviousTransactionData {
+  output: TokenOutput | undefined;
+  previousTransactionHash: Uint8Array;
+  previousTransactionVout: number;
+}
+
+export interface QueryTokenOutputsResponse {
+  outputsWithPreviousTransactionData: OutputWithPreviousTransactionData[];
+}
+
+export interface SpentTokenOutputMetadata {
+  outputId: string;
+  revocationSecret: Uint8Array;
+}
+
+export interface TokenTransactionConfirmationMetadata {
+  spentTokenOutputsMetadata: SpentTokenOutputMetadata[];
+}
+
+export interface TokenTransactionWithStatus {
+  tokenTransaction: TokenTransaction | undefined;
+  status: TokenTransactionStatus;
+  confirmationMetadata: TokenTransactionConfirmationMetadata | undefined;
 }
 
 function createBaseTokenOutputToSpend(): TokenOutputToSpend {
@@ -1866,6 +1984,777 @@ export const QueryTokenMetadataResponse: MessageFns<QueryTokenMetadataResponse> 
   },
 };
 
+function createBaseQueryTokenOutputsRequest(): QueryTokenOutputsRequest {
+  return { ownerPublicKeys: [], issuerPublicKeys: [], tokenIdentifiers: [], network: 0 };
+}
+
+export const QueryTokenOutputsRequest: MessageFns<QueryTokenOutputsRequest> = {
+  encode(message: QueryTokenOutputsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.ownerPublicKeys) {
+      writer.uint32(10).bytes(v!);
+    }
+    for (const v of message.issuerPublicKeys) {
+      writer.uint32(18).bytes(v!);
+    }
+    for (const v of message.tokenIdentifiers) {
+      writer.uint32(34).bytes(v!);
+    }
+    if (message.network !== 0) {
+      writer.uint32(24).int32(message.network);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryTokenOutputsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryTokenOutputsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.ownerPublicKeys.push(reader.bytes());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.issuerPublicKeys.push(reader.bytes());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.tokenIdentifiers.push(reader.bytes());
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.network = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryTokenOutputsRequest {
+    return {
+      ownerPublicKeys: globalThis.Array.isArray(object?.ownerPublicKeys)
+        ? object.ownerPublicKeys.map((e: any) => bytesFromBase64(e))
+        : [],
+      issuerPublicKeys: globalThis.Array.isArray(object?.issuerPublicKeys)
+        ? object.issuerPublicKeys.map((e: any) => bytesFromBase64(e))
+        : [],
+      tokenIdentifiers: globalThis.Array.isArray(object?.tokenIdentifiers)
+        ? object.tokenIdentifiers.map((e: any) => bytesFromBase64(e))
+        : [],
+      network: isSet(object.network) ? networkFromJSON(object.network) : 0,
+    };
+  },
+
+  toJSON(message: QueryTokenOutputsRequest): unknown {
+    const obj: any = {};
+    if (message.ownerPublicKeys?.length) {
+      obj.ownerPublicKeys = message.ownerPublicKeys.map((e) => base64FromBytes(e));
+    }
+    if (message.issuerPublicKeys?.length) {
+      obj.issuerPublicKeys = message.issuerPublicKeys.map((e) => base64FromBytes(e));
+    }
+    if (message.tokenIdentifiers?.length) {
+      obj.tokenIdentifiers = message.tokenIdentifiers.map((e) => base64FromBytes(e));
+    }
+    if (message.network !== 0) {
+      obj.network = networkToJSON(message.network);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<QueryTokenOutputsRequest>): QueryTokenOutputsRequest {
+    return QueryTokenOutputsRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<QueryTokenOutputsRequest>): QueryTokenOutputsRequest {
+    const message = createBaseQueryTokenOutputsRequest();
+    message.ownerPublicKeys = object.ownerPublicKeys?.map((e) => e) || [];
+    message.issuerPublicKeys = object.issuerPublicKeys?.map((e) => e) || [];
+    message.tokenIdentifiers = object.tokenIdentifiers?.map((e) => e) || [];
+    message.network = object.network ?? 0;
+    return message;
+  },
+};
+
+function createBaseQueryTokenTransactionsRequest(): QueryTokenTransactionsRequest {
+  return {
+    outputIds: [],
+    ownerPublicKeys: [],
+    issuerPublicKeys: [],
+    tokenIdentifiers: [],
+    tokenTransactionHashes: [],
+    limit: 0,
+    offset: 0,
+  };
+}
+
+export const QueryTokenTransactionsRequest: MessageFns<QueryTokenTransactionsRequest> = {
+  encode(message: QueryTokenTransactionsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.outputIds) {
+      writer.uint32(10).string(v!);
+    }
+    for (const v of message.ownerPublicKeys) {
+      writer.uint32(18).bytes(v!);
+    }
+    for (const v of message.issuerPublicKeys) {
+      writer.uint32(26).bytes(v!);
+    }
+    for (const v of message.tokenIdentifiers) {
+      writer.uint32(58).bytes(v!);
+    }
+    for (const v of message.tokenTransactionHashes) {
+      writer.uint32(34).bytes(v!);
+    }
+    if (message.limit !== 0) {
+      writer.uint32(40).int64(message.limit);
+    }
+    if (message.offset !== 0) {
+      writer.uint32(48).int64(message.offset);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryTokenTransactionsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryTokenTransactionsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.outputIds.push(reader.string());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.ownerPublicKeys.push(reader.bytes());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.issuerPublicKeys.push(reader.bytes());
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.tokenIdentifiers.push(reader.bytes());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.tokenTransactionHashes.push(reader.bytes());
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.limit = longToNumber(reader.int64());
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.offset = longToNumber(reader.int64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryTokenTransactionsRequest {
+    return {
+      outputIds: globalThis.Array.isArray(object?.outputIds)
+        ? object.outputIds.map((e: any) => globalThis.String(e))
+        : [],
+      ownerPublicKeys: globalThis.Array.isArray(object?.ownerPublicKeys)
+        ? object.ownerPublicKeys.map((e: any) => bytesFromBase64(e))
+        : [],
+      issuerPublicKeys: globalThis.Array.isArray(object?.issuerPublicKeys)
+        ? object.issuerPublicKeys.map((e: any) => bytesFromBase64(e))
+        : [],
+      tokenIdentifiers: globalThis.Array.isArray(object?.tokenIdentifiers)
+        ? object.tokenIdentifiers.map((e: any) => bytesFromBase64(e))
+        : [],
+      tokenTransactionHashes: globalThis.Array.isArray(object?.tokenTransactionHashes)
+        ? object.tokenTransactionHashes.map((e: any) => bytesFromBase64(e))
+        : [],
+      limit: isSet(object.limit) ? globalThis.Number(object.limit) : 0,
+      offset: isSet(object.offset) ? globalThis.Number(object.offset) : 0,
+    };
+  },
+
+  toJSON(message: QueryTokenTransactionsRequest): unknown {
+    const obj: any = {};
+    if (message.outputIds?.length) {
+      obj.outputIds = message.outputIds;
+    }
+    if (message.ownerPublicKeys?.length) {
+      obj.ownerPublicKeys = message.ownerPublicKeys.map((e) => base64FromBytes(e));
+    }
+    if (message.issuerPublicKeys?.length) {
+      obj.issuerPublicKeys = message.issuerPublicKeys.map((e) => base64FromBytes(e));
+    }
+    if (message.tokenIdentifiers?.length) {
+      obj.tokenIdentifiers = message.tokenIdentifiers.map((e) => base64FromBytes(e));
+    }
+    if (message.tokenTransactionHashes?.length) {
+      obj.tokenTransactionHashes = message.tokenTransactionHashes.map((e) => base64FromBytes(e));
+    }
+    if (message.limit !== 0) {
+      obj.limit = Math.round(message.limit);
+    }
+    if (message.offset !== 0) {
+      obj.offset = Math.round(message.offset);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<QueryTokenTransactionsRequest>): QueryTokenTransactionsRequest {
+    return QueryTokenTransactionsRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<QueryTokenTransactionsRequest>): QueryTokenTransactionsRequest {
+    const message = createBaseQueryTokenTransactionsRequest();
+    message.outputIds = object.outputIds?.map((e) => e) || [];
+    message.ownerPublicKeys = object.ownerPublicKeys?.map((e) => e) || [];
+    message.issuerPublicKeys = object.issuerPublicKeys?.map((e) => e) || [];
+    message.tokenIdentifiers = object.tokenIdentifiers?.map((e) => e) || [];
+    message.tokenTransactionHashes = object.tokenTransactionHashes?.map((e) => e) || [];
+    message.limit = object.limit ?? 0;
+    message.offset = object.offset ?? 0;
+    return message;
+  },
+};
+
+function createBaseQueryTokenTransactionsResponse(): QueryTokenTransactionsResponse {
+  return { tokenTransactionsWithStatus: [], offset: 0 };
+}
+
+export const QueryTokenTransactionsResponse: MessageFns<QueryTokenTransactionsResponse> = {
+  encode(message: QueryTokenTransactionsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.tokenTransactionsWithStatus) {
+      TokenTransactionWithStatus.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.offset !== 0) {
+      writer.uint32(16).int64(message.offset);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryTokenTransactionsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryTokenTransactionsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.tokenTransactionsWithStatus.push(TokenTransactionWithStatus.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.offset = longToNumber(reader.int64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryTokenTransactionsResponse {
+    return {
+      tokenTransactionsWithStatus: globalThis.Array.isArray(object?.tokenTransactionsWithStatus)
+        ? object.tokenTransactionsWithStatus.map((e: any) => TokenTransactionWithStatus.fromJSON(e))
+        : [],
+      offset: isSet(object.offset) ? globalThis.Number(object.offset) : 0,
+    };
+  },
+
+  toJSON(message: QueryTokenTransactionsResponse): unknown {
+    const obj: any = {};
+    if (message.tokenTransactionsWithStatus?.length) {
+      obj.tokenTransactionsWithStatus = message.tokenTransactionsWithStatus.map((e) =>
+        TokenTransactionWithStatus.toJSON(e)
+      );
+    }
+    if (message.offset !== 0) {
+      obj.offset = Math.round(message.offset);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<QueryTokenTransactionsResponse>): QueryTokenTransactionsResponse {
+    return QueryTokenTransactionsResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<QueryTokenTransactionsResponse>): QueryTokenTransactionsResponse {
+    const message = createBaseQueryTokenTransactionsResponse();
+    message.tokenTransactionsWithStatus =
+      object.tokenTransactionsWithStatus?.map((e) => TokenTransactionWithStatus.fromPartial(e)) || [];
+    message.offset = object.offset ?? 0;
+    return message;
+  },
+};
+
+function createBaseOutputWithPreviousTransactionData(): OutputWithPreviousTransactionData {
+  return { output: undefined, previousTransactionHash: new Uint8Array(0), previousTransactionVout: 0 };
+}
+
+export const OutputWithPreviousTransactionData: MessageFns<OutputWithPreviousTransactionData> = {
+  encode(message: OutputWithPreviousTransactionData, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.output !== undefined) {
+      TokenOutput.encode(message.output, writer.uint32(10).fork()).join();
+    }
+    if (message.previousTransactionHash.length !== 0) {
+      writer.uint32(18).bytes(message.previousTransactionHash);
+    }
+    if (message.previousTransactionVout !== 0) {
+      writer.uint32(24).uint32(message.previousTransactionVout);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): OutputWithPreviousTransactionData {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseOutputWithPreviousTransactionData();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.output = TokenOutput.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.previousTransactionHash = reader.bytes();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.previousTransactionVout = reader.uint32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): OutputWithPreviousTransactionData {
+    return {
+      output: isSet(object.output) ? TokenOutput.fromJSON(object.output) : undefined,
+      previousTransactionHash: isSet(object.previousTransactionHash)
+        ? bytesFromBase64(object.previousTransactionHash)
+        : new Uint8Array(0),
+      previousTransactionVout: isSet(object.previousTransactionVout)
+        ? globalThis.Number(object.previousTransactionVout)
+        : 0,
+    };
+  },
+
+  toJSON(message: OutputWithPreviousTransactionData): unknown {
+    const obj: any = {};
+    if (message.output !== undefined) {
+      obj.output = TokenOutput.toJSON(message.output);
+    }
+    if (message.previousTransactionHash.length !== 0) {
+      obj.previousTransactionHash = base64FromBytes(message.previousTransactionHash);
+    }
+    if (message.previousTransactionVout !== 0) {
+      obj.previousTransactionVout = Math.round(message.previousTransactionVout);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<OutputWithPreviousTransactionData>): OutputWithPreviousTransactionData {
+    return OutputWithPreviousTransactionData.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<OutputWithPreviousTransactionData>): OutputWithPreviousTransactionData {
+    const message = createBaseOutputWithPreviousTransactionData();
+    message.output = (object.output !== undefined && object.output !== null)
+      ? TokenOutput.fromPartial(object.output)
+      : undefined;
+    message.previousTransactionHash = object.previousTransactionHash ?? new Uint8Array(0);
+    message.previousTransactionVout = object.previousTransactionVout ?? 0;
+    return message;
+  },
+};
+
+function createBaseQueryTokenOutputsResponse(): QueryTokenOutputsResponse {
+  return { outputsWithPreviousTransactionData: [] };
+}
+
+export const QueryTokenOutputsResponse: MessageFns<QueryTokenOutputsResponse> = {
+  encode(message: QueryTokenOutputsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.outputsWithPreviousTransactionData) {
+      OutputWithPreviousTransactionData.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryTokenOutputsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryTokenOutputsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.outputsWithPreviousTransactionData.push(
+            OutputWithPreviousTransactionData.decode(reader, reader.uint32()),
+          );
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryTokenOutputsResponse {
+    return {
+      outputsWithPreviousTransactionData: globalThis.Array.isArray(object?.outputsWithPreviousTransactionData)
+        ? object.outputsWithPreviousTransactionData.map((e: any) => OutputWithPreviousTransactionData.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: QueryTokenOutputsResponse): unknown {
+    const obj: any = {};
+    if (message.outputsWithPreviousTransactionData?.length) {
+      obj.outputsWithPreviousTransactionData = message.outputsWithPreviousTransactionData.map((e) =>
+        OutputWithPreviousTransactionData.toJSON(e)
+      );
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<QueryTokenOutputsResponse>): QueryTokenOutputsResponse {
+    return QueryTokenOutputsResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<QueryTokenOutputsResponse>): QueryTokenOutputsResponse {
+    const message = createBaseQueryTokenOutputsResponse();
+    message.outputsWithPreviousTransactionData =
+      object.outputsWithPreviousTransactionData?.map((e) => OutputWithPreviousTransactionData.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseSpentTokenOutputMetadata(): SpentTokenOutputMetadata {
+  return { outputId: "", revocationSecret: new Uint8Array(0) };
+}
+
+export const SpentTokenOutputMetadata: MessageFns<SpentTokenOutputMetadata> = {
+  encode(message: SpentTokenOutputMetadata, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.outputId !== "") {
+      writer.uint32(10).string(message.outputId);
+    }
+    if (message.revocationSecret.length !== 0) {
+      writer.uint32(18).bytes(message.revocationSecret);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SpentTokenOutputMetadata {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSpentTokenOutputMetadata();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.outputId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.revocationSecret = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SpentTokenOutputMetadata {
+    return {
+      outputId: isSet(object.outputId) ? globalThis.String(object.outputId) : "",
+      revocationSecret: isSet(object.revocationSecret) ? bytesFromBase64(object.revocationSecret) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: SpentTokenOutputMetadata): unknown {
+    const obj: any = {};
+    if (message.outputId !== "") {
+      obj.outputId = message.outputId;
+    }
+    if (message.revocationSecret.length !== 0) {
+      obj.revocationSecret = base64FromBytes(message.revocationSecret);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<SpentTokenOutputMetadata>): SpentTokenOutputMetadata {
+    return SpentTokenOutputMetadata.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<SpentTokenOutputMetadata>): SpentTokenOutputMetadata {
+    const message = createBaseSpentTokenOutputMetadata();
+    message.outputId = object.outputId ?? "";
+    message.revocationSecret = object.revocationSecret ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseTokenTransactionConfirmationMetadata(): TokenTransactionConfirmationMetadata {
+  return { spentTokenOutputsMetadata: [] };
+}
+
+export const TokenTransactionConfirmationMetadata: MessageFns<TokenTransactionConfirmationMetadata> = {
+  encode(message: TokenTransactionConfirmationMetadata, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.spentTokenOutputsMetadata) {
+      SpentTokenOutputMetadata.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TokenTransactionConfirmationMetadata {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTokenTransactionConfirmationMetadata();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.spentTokenOutputsMetadata.push(SpentTokenOutputMetadata.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): TokenTransactionConfirmationMetadata {
+    return {
+      spentTokenOutputsMetadata: globalThis.Array.isArray(object?.spentTokenOutputsMetadata)
+        ? object.spentTokenOutputsMetadata.map((e: any) => SpentTokenOutputMetadata.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: TokenTransactionConfirmationMetadata): unknown {
+    const obj: any = {};
+    if (message.spentTokenOutputsMetadata?.length) {
+      obj.spentTokenOutputsMetadata = message.spentTokenOutputsMetadata.map((e) => SpentTokenOutputMetadata.toJSON(e));
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<TokenTransactionConfirmationMetadata>): TokenTransactionConfirmationMetadata {
+    return TokenTransactionConfirmationMetadata.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<TokenTransactionConfirmationMetadata>): TokenTransactionConfirmationMetadata {
+    const message = createBaseTokenTransactionConfirmationMetadata();
+    message.spentTokenOutputsMetadata =
+      object.spentTokenOutputsMetadata?.map((e) => SpentTokenOutputMetadata.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseTokenTransactionWithStatus(): TokenTransactionWithStatus {
+  return { tokenTransaction: undefined, status: 0, confirmationMetadata: undefined };
+}
+
+export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> = {
+  encode(message: TokenTransactionWithStatus, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.tokenTransaction !== undefined) {
+      TokenTransaction.encode(message.tokenTransaction, writer.uint32(10).fork()).join();
+    }
+    if (message.status !== 0) {
+      writer.uint32(16).int32(message.status);
+    }
+    if (message.confirmationMetadata !== undefined) {
+      TokenTransactionConfirmationMetadata.encode(message.confirmationMetadata, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TokenTransactionWithStatus {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTokenTransactionWithStatus();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.tokenTransaction = TokenTransaction.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.status = reader.int32() as any;
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.confirmationMetadata = TokenTransactionConfirmationMetadata.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): TokenTransactionWithStatus {
+    return {
+      tokenTransaction: isSet(object.tokenTransaction) ? TokenTransaction.fromJSON(object.tokenTransaction) : undefined,
+      status: isSet(object.status) ? tokenTransactionStatusFromJSON(object.status) : 0,
+      confirmationMetadata: isSet(object.confirmationMetadata)
+        ? TokenTransactionConfirmationMetadata.fromJSON(object.confirmationMetadata)
+        : undefined,
+    };
+  },
+
+  toJSON(message: TokenTransactionWithStatus): unknown {
+    const obj: any = {};
+    if (message.tokenTransaction !== undefined) {
+      obj.tokenTransaction = TokenTransaction.toJSON(message.tokenTransaction);
+    }
+    if (message.status !== 0) {
+      obj.status = tokenTransactionStatusToJSON(message.status);
+    }
+    if (message.confirmationMetadata !== undefined) {
+      obj.confirmationMetadata = TokenTransactionConfirmationMetadata.toJSON(message.confirmationMetadata);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<TokenTransactionWithStatus>): TokenTransactionWithStatus {
+    return TokenTransactionWithStatus.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<TokenTransactionWithStatus>): TokenTransactionWithStatus {
+    const message = createBaseTokenTransactionWithStatus();
+    message.tokenTransaction = (object.tokenTransaction !== undefined && object.tokenTransaction !== null)
+      ? TokenTransaction.fromPartial(object.tokenTransaction)
+      : undefined;
+    message.status = object.status ?? 0;
+    message.confirmationMetadata = (object.confirmationMetadata !== undefined && object.confirmationMetadata !== null)
+      ? TokenTransactionConfirmationMetadata.fromPartial(object.confirmationMetadata)
+      : undefined;
+    return message;
+  },
+};
+
 export type SparkTokenServiceDefinition = typeof SparkTokenServiceDefinition;
 export const SparkTokenServiceDefinition = {
   name: "SparkTokenService",
@@ -1903,6 +2792,22 @@ export const SparkTokenServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    query_token_transactions: {
+      name: "query_token_transactions",
+      requestType: QueryTokenTransactionsRequest,
+      requestStream: false,
+      responseType: QueryTokenTransactionsResponse,
+      responseStream: false,
+      options: {},
+    },
+    query_token_outputs: {
+      name: "query_token_outputs",
+      requestType: QueryTokenOutputsRequest,
+      requestStream: false,
+      responseType: QueryTokenOutputsResponse,
+      responseStream: false,
+      options: {},
+    },
   },
 } as const;
 
@@ -1927,6 +2832,14 @@ export interface SparkTokenServiceImplementation<CallContextExt = {}> {
     request: QueryTokenMetadataRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<QueryTokenMetadataResponse>>;
+  query_token_transactions(
+    request: QueryTokenTransactionsRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<QueryTokenTransactionsResponse>>;
+  query_token_outputs(
+    request: QueryTokenOutputsRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<QueryTokenOutputsResponse>>;
 }
 
 export interface SparkTokenServiceClient<CallOptionsExt = {}> {
@@ -1950,6 +2863,14 @@ export interface SparkTokenServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<QueryTokenMetadataRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<QueryTokenMetadataResponse>;
+  query_token_transactions(
+    request: DeepPartial<QueryTokenTransactionsRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<QueryTokenTransactionsResponse>;
+  query_token_outputs(
+    request: DeepPartial<QueryTokenOutputsRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<QueryTokenOutputsResponse>;
 }
 
 function bytesFromBase64(b64: string): Uint8Array {

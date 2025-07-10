@@ -504,6 +504,16 @@ export interface NodeSignatureShares {
     | undefined;
   /** The verifying key of the node. */
   verifyingKey: Uint8Array;
+  /** The signing result of the node's transaction. This transaction is to pay to self. */
+  directNodeTxSigningResult:
+    | SigningResult
+    | undefined;
+  /** The signing result of the node's direct refund transaction. This transaction is to broadcast for the SO. */
+  directRefundTxSigningResult:
+    | SigningResult
+    | undefined;
+  /** The signing result of the node's direct from cpfp refund transaction. This transaction is to broadcast for the SO. */
+  directFromCpfpRefundTxSigningResult: SigningResult | undefined;
 }
 
 /**
@@ -513,10 +523,16 @@ export interface NodeSignatureShares {
 export interface NodeSignatures {
   /** The id of the node. */
   nodeId: string;
-  /** The final signature of the node's transaction. This transaction is to pay to self. */
+  /** The final signature of the node's cpfp transaction. This transaction is to pay to self. */
   nodeTxSignature: Uint8Array;
-  /** The final signature of the node's refund transaction. This transaction is to pay to the user. */
+  /** The final signature of the node's cpfp refund transaction. This transaction is to pay to the user. */
   refundTxSignature: Uint8Array;
+  /** The final signature of the node's direct transaction. This transaction is to pay for the watchtower. */
+  directNodeTxSignature: Uint8Array;
+  /** The final signature of the node's direct refund transaction. This transaction is to pay for the watchtower. */
+  directRefundTxSignature: Uint8Array;
+  /** The final signature of the node's direct from cpfp refund transaction. This transaction is to pay for the watchtower. */
+  directFromCpfpRefundTxSignature: Uint8Array;
 }
 
 /** StartTreeCreationRequest is the request to start the tree creation for a tree root node. */
@@ -527,12 +543,24 @@ export interface StartTreeCreationRequest {
   onChainUtxo:
     | UTXO
     | undefined;
-  /** The signing job for the root node's transaction. */
+  /** The signing job for the root node's cpfp transaction. */
   rootTxSigningJob:
     | SigningJob
     | undefined;
-  /** The signing job for the root node's refund transaction. */
-  refundTxSigningJob: SigningJob | undefined;
+  /** The signing job for the root node's cpfp refund transaction. */
+  refundTxSigningJob:
+    | SigningJob
+    | undefined;
+  /** The signing job for the root node's direct transaction. */
+  directRootTxSigningJob:
+    | SigningJob
+    | undefined;
+  /** The signing job for the root node's direct refund transaction */
+  directRefundTxSigningJob:
+    | SigningJob
+    | undefined;
+  /** The signing job for the root node's direct refund transaction */
+  directFromCpfpRefundTxSigningJob: SigningJob | undefined;
 }
 
 /** StartTreeCreationResponse is the response to the request to start the tree creation for a tree root node. */
@@ -556,7 +584,19 @@ export interface StartDepositTreeCreationRequest {
     | SigningJob
     | undefined;
   /** The signing job for the root node's refund transaction. */
-  refundTxSigningJob: SigningJob | undefined;
+  refundTxSigningJob:
+    | SigningJob
+    | undefined;
+  /** The direct signing job for the root node's transaction. */
+  directRootTxSigningJob:
+    | SigningJob
+    | undefined;
+  /** The signing job for the root node's direct refund transaction. */
+  directRefundTxSigningJob:
+    | SigningJob
+    | undefined;
+  /** The signing job for the root node's direct from cpfp refund transaction. */
+  directFromCpfpRefundTxSigningJob: SigningJob | undefined;
 }
 
 /** StartDepositTreeCreationResponse is the response to the request to start the tree creation for a tree root node. */
@@ -823,7 +863,7 @@ export interface TreeNode {
   parentNodeId?:
     | string
     | undefined;
-  /** The transaction of the node, this transaction is to pay to the same address as the node. */
+  /** The cpfp transaction of the node, this transaction is to pay to the same address as the node. */
   nodeTx: Uint8Array;
   /** The refund transaction of the node, this transaction is to pay to the user. */
   refundTx: Uint8Array;
@@ -851,6 +891,12 @@ export interface TreeNode {
     | undefined;
   /** The signing public key of the owner of the node. */
   ownerSigningPublicKey: Uint8Array;
+  /** The direct transaction of the node, this transaction is for the watchtower to broadcast. */
+  directTx: Uint8Array;
+  /** The refund transaction of the node, this transaction is to pay to the user. */
+  directRefundTx: Uint8Array;
+  /** The refund transaction of the node, this transaction is to pay to the user. */
+  directFromCpfpRefundTx: Uint8Array;
 }
 
 /** FinalizeNodeSignaturesRequest is the request to finalize the signatures for a node. */
@@ -896,6 +942,8 @@ export interface SecretProof {
 export interface LeafRefundTxSigningJob {
   leafId: string;
   refundTxSigningJob: SigningJob | undefined;
+  directRefundTxSigningJob: SigningJob | undefined;
+  directFromCpfpRefundTxSigningJob: SigningJob | undefined;
 }
 
 export interface UserSignedTxSigningJob {
@@ -911,6 +959,8 @@ export interface LeafRefundTxSigningResult {
   leafId: string;
   refundTxSigningResult: SigningResult | undefined;
   verifyingKey: Uint8Array;
+  directRefundTxSigningResult: SigningResult | undefined;
+  directFromCpfpRefundTxSigningResult: SigningResult | undefined;
 }
 
 export interface StartUserSignedTransferRequest {
@@ -919,6 +969,8 @@ export interface StartUserSignedTransferRequest {
   leavesToSend: UserSignedTxSigningJob[];
   receiverIdentityPublicKey: Uint8Array;
   expiryTime: Date | undefined;
+  directLeavesToSend: UserSignedTxSigningJob[];
+  directFromCpfpLeavesToSend: UserSignedTxSigningJob[];
 }
 
 export interface StartTransferRequest {
@@ -946,12 +998,16 @@ export interface StartTransferResponse {
  * the coordinator SO.
  */
 export interface TransferPackage {
-  /** The leaves to send, with user signed refunds and signing package. */
+  /** The leaves to send, with user signed cpfp refunds and signing package. */
   leavesToSend: UserSignedTxSigningJob[];
   /** The map of SO identifier to ciphertext of SendLeafTweaks. */
   keyTweakPackage: { [key: string]: Uint8Array };
   /** The signature of user to prove that the key_tweak_package is not tampered. */
   userSignature: Uint8Array;
+  /** The leaves to send, with user signed direct refunds and signing package. */
+  directLeavesToSend: UserSignedTxSigningJob[];
+  /** The leaves to send, with user signed direct from cpfp refunds and signing package. */
+  directFromCpfpLeavesToSend: UserSignedTxSigningJob[];
 }
 
 export interface TransferPackage_KeyTweakPackageEntry {
@@ -971,6 +1027,8 @@ export interface SendLeafKeyTweak {
   /** Signature over Sha256(leaf_id||transfer_id||secret_cipher) */
   signature: Uint8Array;
   refundSignature: Uint8Array;
+  directRefundSignature: Uint8Array;
+  directFromCpfpRefundSignature: Uint8Array;
 }
 
 export interface SendLeafKeyTweak_PubkeySharesTweakEntry {
@@ -1013,6 +1071,8 @@ export interface TransferLeaf {
   secretCipher: Uint8Array;
   signature: Uint8Array;
   intermediateRefundTx: Uint8Array;
+  intermediateDirectRefundTx: Uint8Array;
+  intermediateDirectFromCpfpRefundTx: Uint8Array;
 }
 
 export interface TransferFilter {
@@ -1184,6 +1244,8 @@ export interface CounterLeafSwapRequest {
   transfer: StartTransferRequest | undefined;
   swapId: string;
   adaptorPublicKey: Uint8Array;
+  directAdaptorPublicKey: Uint8Array;
+  directFromCpfpAdaptorPublicKey: Uint8Array;
 }
 
 export interface CounterLeafSwapResponse {
@@ -1214,6 +1276,9 @@ export interface ExtendLeafRequest {
   ownerIdentityPublicKey: Uint8Array;
   nodeTxSigningJob: SigningJob | undefined;
   refundTxSigningJob: SigningJob | undefined;
+  directNodeTxSigningJob: SigningJob | undefined;
+  directRefundTxSigningJob: SigningJob | undefined;
+  directFromCpfpRefundTxSigningJob: SigningJob | undefined;
 }
 
 export interface ExtendLeafSigningResult {
@@ -1225,6 +1290,9 @@ export interface ExtendLeafResponse {
   leafId: string;
   nodeTxSigningResult: ExtendLeafSigningResult | undefined;
   refundTxSigningResult: ExtendLeafSigningResult | undefined;
+  directNodeTxSigningResult: ExtendLeafSigningResult | undefined;
+  directRefundTxSigningResult: ExtendLeafSigningResult | undefined;
+  directFromCpfpRefundTxSigningResult: ExtendLeafSigningResult | undefined;
 }
 
 export interface AddressRequestNode {
@@ -1255,7 +1323,7 @@ export interface PrepareTreeAddressResponse {
 }
 
 export interface CreationNode {
-  /** This is the tx that spends the parent node's output. */
+  /** This is the cpfp tx that spends the parent node's output. */
   nodeTxSigningJob:
     | SigningJob
     | undefined;
@@ -1265,6 +1333,16 @@ export interface CreationNode {
     | undefined;
   /** The children will spend the output of the node's tx. Vout is the index of the child. */
   children: CreationNode[];
+  /** This is the direct tx that spends the parent node's output. */
+  directNodeTxSigningJob:
+    | SigningJob
+    | undefined;
+  /** The direct refund tx can only exist if there's no children. */
+  directRefundTxSigningJob:
+    | SigningJob
+    | undefined;
+  /** The direct from cpfp refund tx can only exist if there's no children. */
+  directFromCpfpRefundTxSigningJob: SigningJob | undefined;
 }
 
 export interface CreateTreeRequest {
@@ -1285,6 +1363,9 @@ export interface CreationResponseNode {
   nodeTxSigningResult: SigningResult | undefined;
   refundTxSigningResult: SigningResult | undefined;
   children: CreationResponseNode[];
+  directNodeTxSigningResult: SigningResult | undefined;
+  directRefundTxSigningResult: SigningResult | undefined;
+  directFromCpfpRefundTxSigningResult: SigningResult | undefined;
 }
 
 export interface CreateTreeResponse {
@@ -3260,6 +3341,9 @@ function createBaseNodeSignatureShares(): NodeSignatureShares {
     nodeTxSigningResult: undefined,
     refundTxSigningResult: undefined,
     verifyingKey: new Uint8Array(0),
+    directNodeTxSigningResult: undefined,
+    directRefundTxSigningResult: undefined,
+    directFromCpfpRefundTxSigningResult: undefined,
   };
 }
 
@@ -3276,6 +3360,15 @@ export const NodeSignatureShares: MessageFns<NodeSignatureShares> = {
     }
     if (message.verifyingKey.length !== 0) {
       writer.uint32(34).bytes(message.verifyingKey);
+    }
+    if (message.directNodeTxSigningResult !== undefined) {
+      SigningResult.encode(message.directNodeTxSigningResult, writer.uint32(42).fork()).join();
+    }
+    if (message.directRefundTxSigningResult !== undefined) {
+      SigningResult.encode(message.directRefundTxSigningResult, writer.uint32(50).fork()).join();
+    }
+    if (message.directFromCpfpRefundTxSigningResult !== undefined) {
+      SigningResult.encode(message.directFromCpfpRefundTxSigningResult, writer.uint32(58).fork()).join();
     }
     return writer;
   },
@@ -3319,6 +3412,30 @@ export const NodeSignatureShares: MessageFns<NodeSignatureShares> = {
           message.verifyingKey = reader.bytes();
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directNodeTxSigningResult = SigningResult.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.directRefundTxSigningResult = SigningResult.decode(reader, reader.uint32());
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.directFromCpfpRefundTxSigningResult = SigningResult.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3338,6 +3455,15 @@ export const NodeSignatureShares: MessageFns<NodeSignatureShares> = {
         ? SigningResult.fromJSON(object.refundTxSigningResult)
         : undefined,
       verifyingKey: isSet(object.verifyingKey) ? bytesFromBase64(object.verifyingKey) : new Uint8Array(0),
+      directNodeTxSigningResult: isSet(object.directNodeTxSigningResult)
+        ? SigningResult.fromJSON(object.directNodeTxSigningResult)
+        : undefined,
+      directRefundTxSigningResult: isSet(object.directRefundTxSigningResult)
+        ? SigningResult.fromJSON(object.directRefundTxSigningResult)
+        : undefined,
+      directFromCpfpRefundTxSigningResult: isSet(object.directFromCpfpRefundTxSigningResult)
+        ? SigningResult.fromJSON(object.directFromCpfpRefundTxSigningResult)
+        : undefined,
     };
   },
 
@@ -3354,6 +3480,15 @@ export const NodeSignatureShares: MessageFns<NodeSignatureShares> = {
     }
     if (message.verifyingKey.length !== 0) {
       obj.verifyingKey = base64FromBytes(message.verifyingKey);
+    }
+    if (message.directNodeTxSigningResult !== undefined) {
+      obj.directNodeTxSigningResult = SigningResult.toJSON(message.directNodeTxSigningResult);
+    }
+    if (message.directRefundTxSigningResult !== undefined) {
+      obj.directRefundTxSigningResult = SigningResult.toJSON(message.directRefundTxSigningResult);
+    }
+    if (message.directFromCpfpRefundTxSigningResult !== undefined) {
+      obj.directFromCpfpRefundTxSigningResult = SigningResult.toJSON(message.directFromCpfpRefundTxSigningResult);
     }
     return obj;
   },
@@ -3372,12 +3507,31 @@ export const NodeSignatureShares: MessageFns<NodeSignatureShares> = {
         ? SigningResult.fromPartial(object.refundTxSigningResult)
         : undefined;
     message.verifyingKey = object.verifyingKey ?? new Uint8Array(0);
+    message.directNodeTxSigningResult =
+      (object.directNodeTxSigningResult !== undefined && object.directNodeTxSigningResult !== null)
+        ? SigningResult.fromPartial(object.directNodeTxSigningResult)
+        : undefined;
+    message.directRefundTxSigningResult =
+      (object.directRefundTxSigningResult !== undefined && object.directRefundTxSigningResult !== null)
+        ? SigningResult.fromPartial(object.directRefundTxSigningResult)
+        : undefined;
+    message.directFromCpfpRefundTxSigningResult =
+      (object.directFromCpfpRefundTxSigningResult !== undefined && object.directFromCpfpRefundTxSigningResult !== null)
+        ? SigningResult.fromPartial(object.directFromCpfpRefundTxSigningResult)
+        : undefined;
     return message;
   },
 };
 
 function createBaseNodeSignatures(): NodeSignatures {
-  return { nodeId: "", nodeTxSignature: new Uint8Array(0), refundTxSignature: new Uint8Array(0) };
+  return {
+    nodeId: "",
+    nodeTxSignature: new Uint8Array(0),
+    refundTxSignature: new Uint8Array(0),
+    directNodeTxSignature: new Uint8Array(0),
+    directRefundTxSignature: new Uint8Array(0),
+    directFromCpfpRefundTxSignature: new Uint8Array(0),
+  };
 }
 
 export const NodeSignatures: MessageFns<NodeSignatures> = {
@@ -3390,6 +3544,15 @@ export const NodeSignatures: MessageFns<NodeSignatures> = {
     }
     if (message.refundTxSignature.length !== 0) {
       writer.uint32(26).bytes(message.refundTxSignature);
+    }
+    if (message.directNodeTxSignature.length !== 0) {
+      writer.uint32(34).bytes(message.directNodeTxSignature);
+    }
+    if (message.directRefundTxSignature.length !== 0) {
+      writer.uint32(42).bytes(message.directRefundTxSignature);
+    }
+    if (message.directFromCpfpRefundTxSignature.length !== 0) {
+      writer.uint32(50).bytes(message.directFromCpfpRefundTxSignature);
     }
     return writer;
   },
@@ -3425,6 +3588,30 @@ export const NodeSignatures: MessageFns<NodeSignatures> = {
           message.refundTxSignature = reader.bytes();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.directNodeTxSignature = reader.bytes();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directRefundTxSignature = reader.bytes();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.directFromCpfpRefundTxSignature = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3441,6 +3628,15 @@ export const NodeSignatures: MessageFns<NodeSignatures> = {
       refundTxSignature: isSet(object.refundTxSignature)
         ? bytesFromBase64(object.refundTxSignature)
         : new Uint8Array(0),
+      directNodeTxSignature: isSet(object.directNodeTxSignature)
+        ? bytesFromBase64(object.directNodeTxSignature)
+        : new Uint8Array(0),
+      directRefundTxSignature: isSet(object.directRefundTxSignature)
+        ? bytesFromBase64(object.directRefundTxSignature)
+        : new Uint8Array(0),
+      directFromCpfpRefundTxSignature: isSet(object.directFromCpfpRefundTxSignature)
+        ? bytesFromBase64(object.directFromCpfpRefundTxSignature)
+        : new Uint8Array(0),
     };
   },
 
@@ -3455,6 +3651,15 @@ export const NodeSignatures: MessageFns<NodeSignatures> = {
     if (message.refundTxSignature.length !== 0) {
       obj.refundTxSignature = base64FromBytes(message.refundTxSignature);
     }
+    if (message.directNodeTxSignature.length !== 0) {
+      obj.directNodeTxSignature = base64FromBytes(message.directNodeTxSignature);
+    }
+    if (message.directRefundTxSignature.length !== 0) {
+      obj.directRefundTxSignature = base64FromBytes(message.directRefundTxSignature);
+    }
+    if (message.directFromCpfpRefundTxSignature.length !== 0) {
+      obj.directFromCpfpRefundTxSignature = base64FromBytes(message.directFromCpfpRefundTxSignature);
+    }
     return obj;
   },
 
@@ -3466,6 +3671,9 @@ export const NodeSignatures: MessageFns<NodeSignatures> = {
     message.nodeId = object.nodeId ?? "";
     message.nodeTxSignature = object.nodeTxSignature ?? new Uint8Array(0);
     message.refundTxSignature = object.refundTxSignature ?? new Uint8Array(0);
+    message.directNodeTxSignature = object.directNodeTxSignature ?? new Uint8Array(0);
+    message.directRefundTxSignature = object.directRefundTxSignature ?? new Uint8Array(0);
+    message.directFromCpfpRefundTxSignature = object.directFromCpfpRefundTxSignature ?? new Uint8Array(0);
     return message;
   },
 };
@@ -3476,6 +3684,9 @@ function createBaseStartTreeCreationRequest(): StartTreeCreationRequest {
     onChainUtxo: undefined,
     rootTxSigningJob: undefined,
     refundTxSigningJob: undefined,
+    directRootTxSigningJob: undefined,
+    directRefundTxSigningJob: undefined,
+    directFromCpfpRefundTxSigningJob: undefined,
   };
 }
 
@@ -3492,6 +3703,15 @@ export const StartTreeCreationRequest: MessageFns<StartTreeCreationRequest> = {
     }
     if (message.refundTxSigningJob !== undefined) {
       SigningJob.encode(message.refundTxSigningJob, writer.uint32(34).fork()).join();
+    }
+    if (message.directRootTxSigningJob !== undefined) {
+      SigningJob.encode(message.directRootTxSigningJob, writer.uint32(42).fork()).join();
+    }
+    if (message.directRefundTxSigningJob !== undefined) {
+      SigningJob.encode(message.directRefundTxSigningJob, writer.uint32(50).fork()).join();
+    }
+    if (message.directFromCpfpRefundTxSigningJob !== undefined) {
+      SigningJob.encode(message.directFromCpfpRefundTxSigningJob, writer.uint32(58).fork()).join();
     }
     return writer;
   },
@@ -3535,6 +3755,30 @@ export const StartTreeCreationRequest: MessageFns<StartTreeCreationRequest> = {
           message.refundTxSigningJob = SigningJob.decode(reader, reader.uint32());
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directRootTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.directRefundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.directFromCpfpRefundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3552,6 +3796,15 @@ export const StartTreeCreationRequest: MessageFns<StartTreeCreationRequest> = {
       onChainUtxo: isSet(object.onChainUtxo) ? UTXO.fromJSON(object.onChainUtxo) : undefined,
       rootTxSigningJob: isSet(object.rootTxSigningJob) ? SigningJob.fromJSON(object.rootTxSigningJob) : undefined,
       refundTxSigningJob: isSet(object.refundTxSigningJob) ? SigningJob.fromJSON(object.refundTxSigningJob) : undefined,
+      directRootTxSigningJob: isSet(object.directRootTxSigningJob)
+        ? SigningJob.fromJSON(object.directRootTxSigningJob)
+        : undefined,
+      directRefundTxSigningJob: isSet(object.directRefundTxSigningJob)
+        ? SigningJob.fromJSON(object.directRefundTxSigningJob)
+        : undefined,
+      directFromCpfpRefundTxSigningJob: isSet(object.directFromCpfpRefundTxSigningJob)
+        ? SigningJob.fromJSON(object.directFromCpfpRefundTxSigningJob)
+        : undefined,
     };
   },
 
@@ -3568,6 +3821,15 @@ export const StartTreeCreationRequest: MessageFns<StartTreeCreationRequest> = {
     }
     if (message.refundTxSigningJob !== undefined) {
       obj.refundTxSigningJob = SigningJob.toJSON(message.refundTxSigningJob);
+    }
+    if (message.directRootTxSigningJob !== undefined) {
+      obj.directRootTxSigningJob = SigningJob.toJSON(message.directRootTxSigningJob);
+    }
+    if (message.directRefundTxSigningJob !== undefined) {
+      obj.directRefundTxSigningJob = SigningJob.toJSON(message.directRefundTxSigningJob);
+    }
+    if (message.directFromCpfpRefundTxSigningJob !== undefined) {
+      obj.directFromCpfpRefundTxSigningJob = SigningJob.toJSON(message.directFromCpfpRefundTxSigningJob);
     }
     return obj;
   },
@@ -3587,6 +3849,18 @@ export const StartTreeCreationRequest: MessageFns<StartTreeCreationRequest> = {
     message.refundTxSigningJob = (object.refundTxSigningJob !== undefined && object.refundTxSigningJob !== null)
       ? SigningJob.fromPartial(object.refundTxSigningJob)
       : undefined;
+    message.directRootTxSigningJob =
+      (object.directRootTxSigningJob !== undefined && object.directRootTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directRootTxSigningJob)
+        : undefined;
+    message.directRefundTxSigningJob =
+      (object.directRefundTxSigningJob !== undefined && object.directRefundTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directRefundTxSigningJob)
+        : undefined;
+    message.directFromCpfpRefundTxSigningJob =
+      (object.directFromCpfpRefundTxSigningJob !== undefined && object.directFromCpfpRefundTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directFromCpfpRefundTxSigningJob)
+        : undefined;
     return message;
   },
 };
@@ -3678,6 +3952,9 @@ function createBaseStartDepositTreeCreationRequest(): StartDepositTreeCreationRe
     onChainUtxo: undefined,
     rootTxSigningJob: undefined,
     refundTxSigningJob: undefined,
+    directRootTxSigningJob: undefined,
+    directRefundTxSigningJob: undefined,
+    directFromCpfpRefundTxSigningJob: undefined,
   };
 }
 
@@ -3694,6 +3971,15 @@ export const StartDepositTreeCreationRequest: MessageFns<StartDepositTreeCreatio
     }
     if (message.refundTxSigningJob !== undefined) {
       SigningJob.encode(message.refundTxSigningJob, writer.uint32(34).fork()).join();
+    }
+    if (message.directRootTxSigningJob !== undefined) {
+      SigningJob.encode(message.directRootTxSigningJob, writer.uint32(42).fork()).join();
+    }
+    if (message.directRefundTxSigningJob !== undefined) {
+      SigningJob.encode(message.directRefundTxSigningJob, writer.uint32(50).fork()).join();
+    }
+    if (message.directFromCpfpRefundTxSigningJob !== undefined) {
+      SigningJob.encode(message.directFromCpfpRefundTxSigningJob, writer.uint32(58).fork()).join();
     }
     return writer;
   },
@@ -3737,6 +4023,30 @@ export const StartDepositTreeCreationRequest: MessageFns<StartDepositTreeCreatio
           message.refundTxSigningJob = SigningJob.decode(reader, reader.uint32());
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directRootTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.directRefundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.directFromCpfpRefundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3754,6 +4064,15 @@ export const StartDepositTreeCreationRequest: MessageFns<StartDepositTreeCreatio
       onChainUtxo: isSet(object.onChainUtxo) ? UTXO.fromJSON(object.onChainUtxo) : undefined,
       rootTxSigningJob: isSet(object.rootTxSigningJob) ? SigningJob.fromJSON(object.rootTxSigningJob) : undefined,
       refundTxSigningJob: isSet(object.refundTxSigningJob) ? SigningJob.fromJSON(object.refundTxSigningJob) : undefined,
+      directRootTxSigningJob: isSet(object.directRootTxSigningJob)
+        ? SigningJob.fromJSON(object.directRootTxSigningJob)
+        : undefined,
+      directRefundTxSigningJob: isSet(object.directRefundTxSigningJob)
+        ? SigningJob.fromJSON(object.directRefundTxSigningJob)
+        : undefined,
+      directFromCpfpRefundTxSigningJob: isSet(object.directFromCpfpRefundTxSigningJob)
+        ? SigningJob.fromJSON(object.directFromCpfpRefundTxSigningJob)
+        : undefined,
     };
   },
 
@@ -3770,6 +4089,15 @@ export const StartDepositTreeCreationRequest: MessageFns<StartDepositTreeCreatio
     }
     if (message.refundTxSigningJob !== undefined) {
       obj.refundTxSigningJob = SigningJob.toJSON(message.refundTxSigningJob);
+    }
+    if (message.directRootTxSigningJob !== undefined) {
+      obj.directRootTxSigningJob = SigningJob.toJSON(message.directRootTxSigningJob);
+    }
+    if (message.directRefundTxSigningJob !== undefined) {
+      obj.directRefundTxSigningJob = SigningJob.toJSON(message.directRefundTxSigningJob);
+    }
+    if (message.directFromCpfpRefundTxSigningJob !== undefined) {
+      obj.directFromCpfpRefundTxSigningJob = SigningJob.toJSON(message.directFromCpfpRefundTxSigningJob);
     }
     return obj;
   },
@@ -3789,6 +4117,18 @@ export const StartDepositTreeCreationRequest: MessageFns<StartDepositTreeCreatio
     message.refundTxSigningJob = (object.refundTxSigningJob !== undefined && object.refundTxSigningJob !== null)
       ? SigningJob.fromPartial(object.refundTxSigningJob)
       : undefined;
+    message.directRootTxSigningJob =
+      (object.directRootTxSigningJob !== undefined && object.directRootTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directRootTxSigningJob)
+        : undefined;
+    message.directRefundTxSigningJob =
+      (object.directRefundTxSigningJob !== undefined && object.directRefundTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directRefundTxSigningJob)
+        : undefined;
+    message.directFromCpfpRefundTxSigningJob =
+      (object.directFromCpfpRefundTxSigningJob !== undefined && object.directFromCpfpRefundTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directFromCpfpRefundTxSigningJob)
+        : undefined;
     return message;
   },
 };
@@ -6712,6 +7052,9 @@ function createBaseTreeNode(): TreeNode {
     createdTime: undefined,
     updatedTime: undefined,
     ownerSigningPublicKey: new Uint8Array(0),
+    directTx: new Uint8Array(0),
+    directRefundTx: new Uint8Array(0),
+    directFromCpfpRefundTx: new Uint8Array(0),
   };
 }
 
@@ -6761,6 +7104,15 @@ export const TreeNode: MessageFns<TreeNode> = {
     }
     if (message.ownerSigningPublicKey.length !== 0) {
       writer.uint32(122).bytes(message.ownerSigningPublicKey);
+    }
+    if (message.directTx.length !== 0) {
+      writer.uint32(130).bytes(message.directTx);
+    }
+    if (message.directRefundTx.length !== 0) {
+      writer.uint32(138).bytes(message.directRefundTx);
+    }
+    if (message.directFromCpfpRefundTx.length !== 0) {
+      writer.uint32(146).bytes(message.directFromCpfpRefundTx);
     }
     return writer;
   },
@@ -6892,6 +7244,30 @@ export const TreeNode: MessageFns<TreeNode> = {
           message.ownerSigningPublicKey = reader.bytes();
           continue;
         }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.directTx = reader.bytes();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.directRefundTx = reader.bytes();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.directFromCpfpRefundTx = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -6923,6 +7299,11 @@ export const TreeNode: MessageFns<TreeNode> = {
       updatedTime: isSet(object.updatedTime) ? fromJsonTimestamp(object.updatedTime) : undefined,
       ownerSigningPublicKey: isSet(object.ownerSigningPublicKey)
         ? bytesFromBase64(object.ownerSigningPublicKey)
+        : new Uint8Array(0),
+      directTx: isSet(object.directTx) ? bytesFromBase64(object.directTx) : new Uint8Array(0),
+      directRefundTx: isSet(object.directRefundTx) ? bytesFromBase64(object.directRefundTx) : new Uint8Array(0),
+      directFromCpfpRefundTx: isSet(object.directFromCpfpRefundTx)
+        ? bytesFromBase64(object.directFromCpfpRefundTx)
         : new Uint8Array(0),
     };
   },
@@ -6974,6 +7355,15 @@ export const TreeNode: MessageFns<TreeNode> = {
     if (message.ownerSigningPublicKey.length !== 0) {
       obj.ownerSigningPublicKey = base64FromBytes(message.ownerSigningPublicKey);
     }
+    if (message.directTx.length !== 0) {
+      obj.directTx = base64FromBytes(message.directTx);
+    }
+    if (message.directRefundTx.length !== 0) {
+      obj.directRefundTx = base64FromBytes(message.directRefundTx);
+    }
+    if (message.directFromCpfpRefundTx.length !== 0) {
+      obj.directFromCpfpRefundTx = base64FromBytes(message.directFromCpfpRefundTx);
+    }
     return obj;
   },
 
@@ -6999,6 +7389,9 @@ export const TreeNode: MessageFns<TreeNode> = {
     message.createdTime = object.createdTime ?? undefined;
     message.updatedTime = object.updatedTime ?? undefined;
     message.ownerSigningPublicKey = object.ownerSigningPublicKey ?? new Uint8Array(0);
+    message.directTx = object.directTx ?? new Uint8Array(0);
+    message.directRefundTx = object.directRefundTx ?? new Uint8Array(0);
+    message.directFromCpfpRefundTx = object.directFromCpfpRefundTx ?? new Uint8Array(0);
     return message;
   },
 };
@@ -7276,7 +7669,12 @@ export const SecretProof: MessageFns<SecretProof> = {
 };
 
 function createBaseLeafRefundTxSigningJob(): LeafRefundTxSigningJob {
-  return { leafId: "", refundTxSigningJob: undefined };
+  return {
+    leafId: "",
+    refundTxSigningJob: undefined,
+    directRefundTxSigningJob: undefined,
+    directFromCpfpRefundTxSigningJob: undefined,
+  };
 }
 
 export const LeafRefundTxSigningJob: MessageFns<LeafRefundTxSigningJob> = {
@@ -7286,6 +7684,12 @@ export const LeafRefundTxSigningJob: MessageFns<LeafRefundTxSigningJob> = {
     }
     if (message.refundTxSigningJob !== undefined) {
       SigningJob.encode(message.refundTxSigningJob, writer.uint32(18).fork()).join();
+    }
+    if (message.directRefundTxSigningJob !== undefined) {
+      SigningJob.encode(message.directRefundTxSigningJob, writer.uint32(26).fork()).join();
+    }
+    if (message.directFromCpfpRefundTxSigningJob !== undefined) {
+      SigningJob.encode(message.directFromCpfpRefundTxSigningJob, writer.uint32(34).fork()).join();
     }
     return writer;
   },
@@ -7313,6 +7717,22 @@ export const LeafRefundTxSigningJob: MessageFns<LeafRefundTxSigningJob> = {
           message.refundTxSigningJob = SigningJob.decode(reader, reader.uint32());
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.directRefundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.directFromCpfpRefundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -7326,6 +7746,12 @@ export const LeafRefundTxSigningJob: MessageFns<LeafRefundTxSigningJob> = {
     return {
       leafId: isSet(object.leafId) ? globalThis.String(object.leafId) : "",
       refundTxSigningJob: isSet(object.refundTxSigningJob) ? SigningJob.fromJSON(object.refundTxSigningJob) : undefined,
+      directRefundTxSigningJob: isSet(object.directRefundTxSigningJob)
+        ? SigningJob.fromJSON(object.directRefundTxSigningJob)
+        : undefined,
+      directFromCpfpRefundTxSigningJob: isSet(object.directFromCpfpRefundTxSigningJob)
+        ? SigningJob.fromJSON(object.directFromCpfpRefundTxSigningJob)
+        : undefined,
     };
   },
 
@@ -7336,6 +7762,12 @@ export const LeafRefundTxSigningJob: MessageFns<LeafRefundTxSigningJob> = {
     }
     if (message.refundTxSigningJob !== undefined) {
       obj.refundTxSigningJob = SigningJob.toJSON(message.refundTxSigningJob);
+    }
+    if (message.directRefundTxSigningJob !== undefined) {
+      obj.directRefundTxSigningJob = SigningJob.toJSON(message.directRefundTxSigningJob);
+    }
+    if (message.directFromCpfpRefundTxSigningJob !== undefined) {
+      obj.directFromCpfpRefundTxSigningJob = SigningJob.toJSON(message.directFromCpfpRefundTxSigningJob);
     }
     return obj;
   },
@@ -7349,6 +7781,14 @@ export const LeafRefundTxSigningJob: MessageFns<LeafRefundTxSigningJob> = {
     message.refundTxSigningJob = (object.refundTxSigningJob !== undefined && object.refundTxSigningJob !== null)
       ? SigningJob.fromPartial(object.refundTxSigningJob)
       : undefined;
+    message.directRefundTxSigningJob =
+      (object.directRefundTxSigningJob !== undefined && object.directRefundTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directRefundTxSigningJob)
+        : undefined;
+    message.directFromCpfpRefundTxSigningJob =
+      (object.directFromCpfpRefundTxSigningJob !== undefined && object.directFromCpfpRefundTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directFromCpfpRefundTxSigningJob)
+        : undefined;
     return message;
   },
 };
@@ -7510,7 +7950,13 @@ export const UserSignedTxSigningJob: MessageFns<UserSignedTxSigningJob> = {
 };
 
 function createBaseLeafRefundTxSigningResult(): LeafRefundTxSigningResult {
-  return { leafId: "", refundTxSigningResult: undefined, verifyingKey: new Uint8Array(0) };
+  return {
+    leafId: "",
+    refundTxSigningResult: undefined,
+    verifyingKey: new Uint8Array(0),
+    directRefundTxSigningResult: undefined,
+    directFromCpfpRefundTxSigningResult: undefined,
+  };
 }
 
 export const LeafRefundTxSigningResult: MessageFns<LeafRefundTxSigningResult> = {
@@ -7523,6 +7969,12 @@ export const LeafRefundTxSigningResult: MessageFns<LeafRefundTxSigningResult> = 
     }
     if (message.verifyingKey.length !== 0) {
       writer.uint32(26).bytes(message.verifyingKey);
+    }
+    if (message.directRefundTxSigningResult !== undefined) {
+      SigningResult.encode(message.directRefundTxSigningResult, writer.uint32(34).fork()).join();
+    }
+    if (message.directFromCpfpRefundTxSigningResult !== undefined) {
+      SigningResult.encode(message.directFromCpfpRefundTxSigningResult, writer.uint32(42).fork()).join();
     }
     return writer;
   },
@@ -7558,6 +8010,22 @@ export const LeafRefundTxSigningResult: MessageFns<LeafRefundTxSigningResult> = 
           message.verifyingKey = reader.bytes();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.directRefundTxSigningResult = SigningResult.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directFromCpfpRefundTxSigningResult = SigningResult.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -7574,6 +8042,12 @@ export const LeafRefundTxSigningResult: MessageFns<LeafRefundTxSigningResult> = 
         ? SigningResult.fromJSON(object.refundTxSigningResult)
         : undefined,
       verifyingKey: isSet(object.verifyingKey) ? bytesFromBase64(object.verifyingKey) : new Uint8Array(0),
+      directRefundTxSigningResult: isSet(object.directRefundTxSigningResult)
+        ? SigningResult.fromJSON(object.directRefundTxSigningResult)
+        : undefined,
+      directFromCpfpRefundTxSigningResult: isSet(object.directFromCpfpRefundTxSigningResult)
+        ? SigningResult.fromJSON(object.directFromCpfpRefundTxSigningResult)
+        : undefined,
     };
   },
 
@@ -7587,6 +8061,12 @@ export const LeafRefundTxSigningResult: MessageFns<LeafRefundTxSigningResult> = 
     }
     if (message.verifyingKey.length !== 0) {
       obj.verifyingKey = base64FromBytes(message.verifyingKey);
+    }
+    if (message.directRefundTxSigningResult !== undefined) {
+      obj.directRefundTxSigningResult = SigningResult.toJSON(message.directRefundTxSigningResult);
+    }
+    if (message.directFromCpfpRefundTxSigningResult !== undefined) {
+      obj.directFromCpfpRefundTxSigningResult = SigningResult.toJSON(message.directFromCpfpRefundTxSigningResult);
     }
     return obj;
   },
@@ -7602,6 +8082,14 @@ export const LeafRefundTxSigningResult: MessageFns<LeafRefundTxSigningResult> = 
         ? SigningResult.fromPartial(object.refundTxSigningResult)
         : undefined;
     message.verifyingKey = object.verifyingKey ?? new Uint8Array(0);
+    message.directRefundTxSigningResult =
+      (object.directRefundTxSigningResult !== undefined && object.directRefundTxSigningResult !== null)
+        ? SigningResult.fromPartial(object.directRefundTxSigningResult)
+        : undefined;
+    message.directFromCpfpRefundTxSigningResult =
+      (object.directFromCpfpRefundTxSigningResult !== undefined && object.directFromCpfpRefundTxSigningResult !== null)
+        ? SigningResult.fromPartial(object.directFromCpfpRefundTxSigningResult)
+        : undefined;
     return message;
   },
 };
@@ -7613,6 +8101,8 @@ function createBaseStartUserSignedTransferRequest(): StartUserSignedTransferRequ
     leavesToSend: [],
     receiverIdentityPublicKey: new Uint8Array(0),
     expiryTime: undefined,
+    directLeavesToSend: [],
+    directFromCpfpLeavesToSend: [],
   };
 }
 
@@ -7632,6 +8122,12 @@ export const StartUserSignedTransferRequest: MessageFns<StartUserSignedTransferR
     }
     if (message.expiryTime !== undefined) {
       Timestamp.encode(toTimestamp(message.expiryTime), writer.uint32(42).fork()).join();
+    }
+    for (const v of message.directLeavesToSend) {
+      UserSignedTxSigningJob.encode(v!, writer.uint32(50).fork()).join();
+    }
+    for (const v of message.directFromCpfpLeavesToSend) {
+      UserSignedTxSigningJob.encode(v!, writer.uint32(58).fork()).join();
     }
     return writer;
   },
@@ -7683,6 +8179,22 @@ export const StartUserSignedTransferRequest: MessageFns<StartUserSignedTransferR
           message.expiryTime = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
           continue;
         }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.directLeavesToSend.push(UserSignedTxSigningJob.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.directFromCpfpLeavesToSend.push(UserSignedTxSigningJob.decode(reader, reader.uint32()));
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -7705,6 +8217,12 @@ export const StartUserSignedTransferRequest: MessageFns<StartUserSignedTransferR
         ? bytesFromBase64(object.receiverIdentityPublicKey)
         : new Uint8Array(0),
       expiryTime: isSet(object.expiryTime) ? fromJsonTimestamp(object.expiryTime) : undefined,
+      directLeavesToSend: globalThis.Array.isArray(object?.directLeavesToSend)
+        ? object.directLeavesToSend.map((e: any) => UserSignedTxSigningJob.fromJSON(e))
+        : [],
+      directFromCpfpLeavesToSend: globalThis.Array.isArray(object?.directFromCpfpLeavesToSend)
+        ? object.directFromCpfpLeavesToSend.map((e: any) => UserSignedTxSigningJob.fromJSON(e))
+        : [],
     };
   },
 
@@ -7725,6 +8243,12 @@ export const StartUserSignedTransferRequest: MessageFns<StartUserSignedTransferR
     if (message.expiryTime !== undefined) {
       obj.expiryTime = message.expiryTime.toISOString();
     }
+    if (message.directLeavesToSend?.length) {
+      obj.directLeavesToSend = message.directLeavesToSend.map((e) => UserSignedTxSigningJob.toJSON(e));
+    }
+    if (message.directFromCpfpLeavesToSend?.length) {
+      obj.directFromCpfpLeavesToSend = message.directFromCpfpLeavesToSend.map((e) => UserSignedTxSigningJob.toJSON(e));
+    }
     return obj;
   },
 
@@ -7738,6 +8262,9 @@ export const StartUserSignedTransferRequest: MessageFns<StartUserSignedTransferR
     message.leavesToSend = object.leavesToSend?.map((e) => UserSignedTxSigningJob.fromPartial(e)) || [];
     message.receiverIdentityPublicKey = object.receiverIdentityPublicKey ?? new Uint8Array(0);
     message.expiryTime = object.expiryTime ?? undefined;
+    message.directLeavesToSend = object.directLeavesToSend?.map((e) => UserSignedTxSigningJob.fromPartial(e)) || [];
+    message.directFromCpfpLeavesToSend =
+      object.directFromCpfpLeavesToSend?.map((e) => UserSignedTxSigningJob.fromPartial(e)) || [];
     return message;
   },
 };
@@ -7995,7 +8522,13 @@ export const StartTransferResponse: MessageFns<StartTransferResponse> = {
 };
 
 function createBaseTransferPackage(): TransferPackage {
-  return { leavesToSend: [], keyTweakPackage: {}, userSignature: new Uint8Array(0) };
+  return {
+    leavesToSend: [],
+    keyTweakPackage: {},
+    userSignature: new Uint8Array(0),
+    directLeavesToSend: [],
+    directFromCpfpLeavesToSend: [],
+  };
 }
 
 export const TransferPackage: MessageFns<TransferPackage> = {
@@ -8008,6 +8541,12 @@ export const TransferPackage: MessageFns<TransferPackage> = {
     });
     if (message.userSignature.length !== 0) {
       writer.uint32(26).bytes(message.userSignature);
+    }
+    for (const v of message.directLeavesToSend) {
+      UserSignedTxSigningJob.encode(v!, writer.uint32(34).fork()).join();
+    }
+    for (const v of message.directFromCpfpLeavesToSend) {
+      UserSignedTxSigningJob.encode(v!, writer.uint32(42).fork()).join();
     }
     return writer;
   },
@@ -8046,6 +8585,22 @@ export const TransferPackage: MessageFns<TransferPackage> = {
           message.userSignature = reader.bytes();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.directLeavesToSend.push(UserSignedTxSigningJob.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directFromCpfpLeavesToSend.push(UserSignedTxSigningJob.decode(reader, reader.uint32()));
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -8067,6 +8622,12 @@ export const TransferPackage: MessageFns<TransferPackage> = {
         }, {})
         : {},
       userSignature: isSet(object.userSignature) ? bytesFromBase64(object.userSignature) : new Uint8Array(0),
+      directLeavesToSend: globalThis.Array.isArray(object?.directLeavesToSend)
+        ? object.directLeavesToSend.map((e: any) => UserSignedTxSigningJob.fromJSON(e))
+        : [],
+      directFromCpfpLeavesToSend: globalThis.Array.isArray(object?.directFromCpfpLeavesToSend)
+        ? object.directFromCpfpLeavesToSend.map((e: any) => UserSignedTxSigningJob.fromJSON(e))
+        : [],
     };
   },
 
@@ -8087,6 +8648,12 @@ export const TransferPackage: MessageFns<TransferPackage> = {
     if (message.userSignature.length !== 0) {
       obj.userSignature = base64FromBytes(message.userSignature);
     }
+    if (message.directLeavesToSend?.length) {
+      obj.directLeavesToSend = message.directLeavesToSend.map((e) => UserSignedTxSigningJob.toJSON(e));
+    }
+    if (message.directFromCpfpLeavesToSend?.length) {
+      obj.directFromCpfpLeavesToSend = message.directFromCpfpLeavesToSend.map((e) => UserSignedTxSigningJob.toJSON(e));
+    }
     return obj;
   },
 
@@ -8106,6 +8673,9 @@ export const TransferPackage: MessageFns<TransferPackage> = {
       {},
     );
     message.userSignature = object.userSignature ?? new Uint8Array(0);
+    message.directLeavesToSend = object.directLeavesToSend?.map((e) => UserSignedTxSigningJob.fromPartial(e)) || [];
+    message.directFromCpfpLeavesToSend =
+      object.directFromCpfpLeavesToSend?.map((e) => UserSignedTxSigningJob.fromPartial(e)) || [];
     return message;
   },
 };
@@ -8256,6 +8826,8 @@ function createBaseSendLeafKeyTweak(): SendLeafKeyTweak {
     secretCipher: new Uint8Array(0),
     signature: new Uint8Array(0),
     refundSignature: new Uint8Array(0),
+    directRefundSignature: new Uint8Array(0),
+    directFromCpfpRefundSignature: new Uint8Array(0),
   };
 }
 
@@ -8278,6 +8850,12 @@ export const SendLeafKeyTweak: MessageFns<SendLeafKeyTweak> = {
     }
     if (message.refundSignature.length !== 0) {
       writer.uint32(50).bytes(message.refundSignature);
+    }
+    if (message.directRefundSignature.length !== 0) {
+      writer.uint32(58).bytes(message.directRefundSignature);
+    }
+    if (message.directFromCpfpRefundSignature.length !== 0) {
+      writer.uint32(66).bytes(message.directFromCpfpRefundSignature);
     }
     return writer;
   },
@@ -8340,6 +8918,22 @@ export const SendLeafKeyTweak: MessageFns<SendLeafKeyTweak> = {
           message.refundSignature = reader.bytes();
           continue;
         }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.directRefundSignature = reader.bytes();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.directFromCpfpRefundSignature = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -8362,6 +8956,12 @@ export const SendLeafKeyTweak: MessageFns<SendLeafKeyTweak> = {
       secretCipher: isSet(object.secretCipher) ? bytesFromBase64(object.secretCipher) : new Uint8Array(0),
       signature: isSet(object.signature) ? bytesFromBase64(object.signature) : new Uint8Array(0),
       refundSignature: isSet(object.refundSignature) ? bytesFromBase64(object.refundSignature) : new Uint8Array(0),
+      directRefundSignature: isSet(object.directRefundSignature)
+        ? bytesFromBase64(object.directRefundSignature)
+        : new Uint8Array(0),
+      directFromCpfpRefundSignature: isSet(object.directFromCpfpRefundSignature)
+        ? bytesFromBase64(object.directFromCpfpRefundSignature)
+        : new Uint8Array(0),
     };
   },
 
@@ -8391,6 +8991,12 @@ export const SendLeafKeyTweak: MessageFns<SendLeafKeyTweak> = {
     if (message.refundSignature.length !== 0) {
       obj.refundSignature = base64FromBytes(message.refundSignature);
     }
+    if (message.directRefundSignature.length !== 0) {
+      obj.directRefundSignature = base64FromBytes(message.directRefundSignature);
+    }
+    if (message.directFromCpfpRefundSignature.length !== 0) {
+      obj.directFromCpfpRefundSignature = base64FromBytes(message.directFromCpfpRefundSignature);
+    }
     return obj;
   },
 
@@ -8415,6 +9021,8 @@ export const SendLeafKeyTweak: MessageFns<SendLeafKeyTweak> = {
     message.secretCipher = object.secretCipher ?? new Uint8Array(0);
     message.signature = object.signature ?? new Uint8Array(0);
     message.refundSignature = object.refundSignature ?? new Uint8Array(0);
+    message.directRefundSignature = object.directRefundSignature ?? new Uint8Array(0);
+    message.directFromCpfpRefundSignature = object.directFromCpfpRefundSignature ?? new Uint8Array(0);
     return message;
   },
 };
@@ -8990,6 +9598,8 @@ function createBaseTransferLeaf(): TransferLeaf {
     secretCipher: new Uint8Array(0),
     signature: new Uint8Array(0),
     intermediateRefundTx: new Uint8Array(0),
+    intermediateDirectRefundTx: new Uint8Array(0),
+    intermediateDirectFromCpfpRefundTx: new Uint8Array(0),
   };
 }
 
@@ -9006,6 +9616,12 @@ export const TransferLeaf: MessageFns<TransferLeaf> = {
     }
     if (message.intermediateRefundTx.length !== 0) {
       writer.uint32(34).bytes(message.intermediateRefundTx);
+    }
+    if (message.intermediateDirectRefundTx.length !== 0) {
+      writer.uint32(42).bytes(message.intermediateDirectRefundTx);
+    }
+    if (message.intermediateDirectFromCpfpRefundTx.length !== 0) {
+      writer.uint32(50).bytes(message.intermediateDirectFromCpfpRefundTx);
     }
     return writer;
   },
@@ -9049,6 +9665,22 @@ export const TransferLeaf: MessageFns<TransferLeaf> = {
           message.intermediateRefundTx = reader.bytes();
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.intermediateDirectRefundTx = reader.bytes();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.intermediateDirectFromCpfpRefundTx = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -9065,6 +9697,12 @@ export const TransferLeaf: MessageFns<TransferLeaf> = {
       signature: isSet(object.signature) ? bytesFromBase64(object.signature) : new Uint8Array(0),
       intermediateRefundTx: isSet(object.intermediateRefundTx)
         ? bytesFromBase64(object.intermediateRefundTx)
+        : new Uint8Array(0),
+      intermediateDirectRefundTx: isSet(object.intermediateDirectRefundTx)
+        ? bytesFromBase64(object.intermediateDirectRefundTx)
+        : new Uint8Array(0),
+      intermediateDirectFromCpfpRefundTx: isSet(object.intermediateDirectFromCpfpRefundTx)
+        ? bytesFromBase64(object.intermediateDirectFromCpfpRefundTx)
         : new Uint8Array(0),
     };
   },
@@ -9083,6 +9721,12 @@ export const TransferLeaf: MessageFns<TransferLeaf> = {
     if (message.intermediateRefundTx.length !== 0) {
       obj.intermediateRefundTx = base64FromBytes(message.intermediateRefundTx);
     }
+    if (message.intermediateDirectRefundTx.length !== 0) {
+      obj.intermediateDirectRefundTx = base64FromBytes(message.intermediateDirectRefundTx);
+    }
+    if (message.intermediateDirectFromCpfpRefundTx.length !== 0) {
+      obj.intermediateDirectFromCpfpRefundTx = base64FromBytes(message.intermediateDirectFromCpfpRefundTx);
+    }
     return obj;
   },
 
@@ -9095,6 +9739,8 @@ export const TransferLeaf: MessageFns<TransferLeaf> = {
     message.secretCipher = object.secretCipher ?? new Uint8Array(0);
     message.signature = object.signature ?? new Uint8Array(0);
     message.intermediateRefundTx = object.intermediateRefundTx ?? new Uint8Array(0);
+    message.intermediateDirectRefundTx = object.intermediateDirectRefundTx ?? new Uint8Array(0);
+    message.intermediateDirectFromCpfpRefundTx = object.intermediateDirectFromCpfpRefundTx ?? new Uint8Array(0);
     return message;
   },
 };
@@ -11258,7 +11904,13 @@ export const CooperativeExitResponse: MessageFns<CooperativeExitResponse> = {
 };
 
 function createBaseCounterLeafSwapRequest(): CounterLeafSwapRequest {
-  return { transfer: undefined, swapId: "", adaptorPublicKey: new Uint8Array(0) };
+  return {
+    transfer: undefined,
+    swapId: "",
+    adaptorPublicKey: new Uint8Array(0),
+    directAdaptorPublicKey: new Uint8Array(0),
+    directFromCpfpAdaptorPublicKey: new Uint8Array(0),
+  };
 }
 
 export const CounterLeafSwapRequest: MessageFns<CounterLeafSwapRequest> = {
@@ -11271,6 +11923,12 @@ export const CounterLeafSwapRequest: MessageFns<CounterLeafSwapRequest> = {
     }
     if (message.adaptorPublicKey.length !== 0) {
       writer.uint32(26).bytes(message.adaptorPublicKey);
+    }
+    if (message.directAdaptorPublicKey.length !== 0) {
+      writer.uint32(34).bytes(message.directAdaptorPublicKey);
+    }
+    if (message.directFromCpfpAdaptorPublicKey.length !== 0) {
+      writer.uint32(42).bytes(message.directFromCpfpAdaptorPublicKey);
     }
     return writer;
   },
@@ -11306,6 +11964,22 @@ export const CounterLeafSwapRequest: MessageFns<CounterLeafSwapRequest> = {
           message.adaptorPublicKey = reader.bytes();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.directAdaptorPublicKey = reader.bytes();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directFromCpfpAdaptorPublicKey = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -11320,6 +11994,12 @@ export const CounterLeafSwapRequest: MessageFns<CounterLeafSwapRequest> = {
       transfer: isSet(object.transfer) ? StartTransferRequest.fromJSON(object.transfer) : undefined,
       swapId: isSet(object.swapId) ? globalThis.String(object.swapId) : "",
       adaptorPublicKey: isSet(object.adaptorPublicKey) ? bytesFromBase64(object.adaptorPublicKey) : new Uint8Array(0),
+      directAdaptorPublicKey: isSet(object.directAdaptorPublicKey)
+        ? bytesFromBase64(object.directAdaptorPublicKey)
+        : new Uint8Array(0),
+      directFromCpfpAdaptorPublicKey: isSet(object.directFromCpfpAdaptorPublicKey)
+        ? bytesFromBase64(object.directFromCpfpAdaptorPublicKey)
+        : new Uint8Array(0),
     };
   },
 
@@ -11334,6 +12014,12 @@ export const CounterLeafSwapRequest: MessageFns<CounterLeafSwapRequest> = {
     if (message.adaptorPublicKey.length !== 0) {
       obj.adaptorPublicKey = base64FromBytes(message.adaptorPublicKey);
     }
+    if (message.directAdaptorPublicKey.length !== 0) {
+      obj.directAdaptorPublicKey = base64FromBytes(message.directAdaptorPublicKey);
+    }
+    if (message.directFromCpfpAdaptorPublicKey.length !== 0) {
+      obj.directFromCpfpAdaptorPublicKey = base64FromBytes(message.directFromCpfpAdaptorPublicKey);
+    }
     return obj;
   },
 
@@ -11347,6 +12033,8 @@ export const CounterLeafSwapRequest: MessageFns<CounterLeafSwapRequest> = {
       : undefined;
     message.swapId = object.swapId ?? "";
     message.adaptorPublicKey = object.adaptorPublicKey ?? new Uint8Array(0);
+    message.directAdaptorPublicKey = object.directAdaptorPublicKey ?? new Uint8Array(0);
+    message.directFromCpfpAdaptorPublicKey = object.directFromCpfpAdaptorPublicKey ?? new Uint8Array(0);
     return message;
   },
 };
@@ -11673,6 +12361,9 @@ function createBaseExtendLeafRequest(): ExtendLeafRequest {
     ownerIdentityPublicKey: new Uint8Array(0),
     nodeTxSigningJob: undefined,
     refundTxSigningJob: undefined,
+    directNodeTxSigningJob: undefined,
+    directRefundTxSigningJob: undefined,
+    directFromCpfpRefundTxSigningJob: undefined,
   };
 }
 
@@ -11689,6 +12380,15 @@ export const ExtendLeafRequest: MessageFns<ExtendLeafRequest> = {
     }
     if (message.refundTxSigningJob !== undefined) {
       SigningJob.encode(message.refundTxSigningJob, writer.uint32(34).fork()).join();
+    }
+    if (message.directNodeTxSigningJob !== undefined) {
+      SigningJob.encode(message.directNodeTxSigningJob, writer.uint32(42).fork()).join();
+    }
+    if (message.directRefundTxSigningJob !== undefined) {
+      SigningJob.encode(message.directRefundTxSigningJob, writer.uint32(50).fork()).join();
+    }
+    if (message.directFromCpfpRefundTxSigningJob !== undefined) {
+      SigningJob.encode(message.directFromCpfpRefundTxSigningJob, writer.uint32(58).fork()).join();
     }
     return writer;
   },
@@ -11732,6 +12432,30 @@ export const ExtendLeafRequest: MessageFns<ExtendLeafRequest> = {
           message.refundTxSigningJob = SigningJob.decode(reader, reader.uint32());
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directNodeTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.directRefundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.directFromCpfpRefundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -11749,6 +12473,15 @@ export const ExtendLeafRequest: MessageFns<ExtendLeafRequest> = {
         : new Uint8Array(0),
       nodeTxSigningJob: isSet(object.nodeTxSigningJob) ? SigningJob.fromJSON(object.nodeTxSigningJob) : undefined,
       refundTxSigningJob: isSet(object.refundTxSigningJob) ? SigningJob.fromJSON(object.refundTxSigningJob) : undefined,
+      directNodeTxSigningJob: isSet(object.directNodeTxSigningJob)
+        ? SigningJob.fromJSON(object.directNodeTxSigningJob)
+        : undefined,
+      directRefundTxSigningJob: isSet(object.directRefundTxSigningJob)
+        ? SigningJob.fromJSON(object.directRefundTxSigningJob)
+        : undefined,
+      directFromCpfpRefundTxSigningJob: isSet(object.directFromCpfpRefundTxSigningJob)
+        ? SigningJob.fromJSON(object.directFromCpfpRefundTxSigningJob)
+        : undefined,
     };
   },
 
@@ -11766,6 +12499,15 @@ export const ExtendLeafRequest: MessageFns<ExtendLeafRequest> = {
     if (message.refundTxSigningJob !== undefined) {
       obj.refundTxSigningJob = SigningJob.toJSON(message.refundTxSigningJob);
     }
+    if (message.directNodeTxSigningJob !== undefined) {
+      obj.directNodeTxSigningJob = SigningJob.toJSON(message.directNodeTxSigningJob);
+    }
+    if (message.directRefundTxSigningJob !== undefined) {
+      obj.directRefundTxSigningJob = SigningJob.toJSON(message.directRefundTxSigningJob);
+    }
+    if (message.directFromCpfpRefundTxSigningJob !== undefined) {
+      obj.directFromCpfpRefundTxSigningJob = SigningJob.toJSON(message.directFromCpfpRefundTxSigningJob);
+    }
     return obj;
   },
 
@@ -11782,6 +12524,18 @@ export const ExtendLeafRequest: MessageFns<ExtendLeafRequest> = {
     message.refundTxSigningJob = (object.refundTxSigningJob !== undefined && object.refundTxSigningJob !== null)
       ? SigningJob.fromPartial(object.refundTxSigningJob)
       : undefined;
+    message.directNodeTxSigningJob =
+      (object.directNodeTxSigningJob !== undefined && object.directNodeTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directNodeTxSigningJob)
+        : undefined;
+    message.directRefundTxSigningJob =
+      (object.directRefundTxSigningJob !== undefined && object.directRefundTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directRefundTxSigningJob)
+        : undefined;
+    message.directFromCpfpRefundTxSigningJob =
+      (object.directFromCpfpRefundTxSigningJob !== undefined && object.directFromCpfpRefundTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directFromCpfpRefundTxSigningJob)
+        : undefined;
     return message;
   },
 };
@@ -11865,7 +12619,14 @@ export const ExtendLeafSigningResult: MessageFns<ExtendLeafSigningResult> = {
 };
 
 function createBaseExtendLeafResponse(): ExtendLeafResponse {
-  return { leafId: "", nodeTxSigningResult: undefined, refundTxSigningResult: undefined };
+  return {
+    leafId: "",
+    nodeTxSigningResult: undefined,
+    refundTxSigningResult: undefined,
+    directNodeTxSigningResult: undefined,
+    directRefundTxSigningResult: undefined,
+    directFromCpfpRefundTxSigningResult: undefined,
+  };
 }
 
 export const ExtendLeafResponse: MessageFns<ExtendLeafResponse> = {
@@ -11878,6 +12639,15 @@ export const ExtendLeafResponse: MessageFns<ExtendLeafResponse> = {
     }
     if (message.refundTxSigningResult !== undefined) {
       ExtendLeafSigningResult.encode(message.refundTxSigningResult, writer.uint32(26).fork()).join();
+    }
+    if (message.directNodeTxSigningResult !== undefined) {
+      ExtendLeafSigningResult.encode(message.directNodeTxSigningResult, writer.uint32(34).fork()).join();
+    }
+    if (message.directRefundTxSigningResult !== undefined) {
+      ExtendLeafSigningResult.encode(message.directRefundTxSigningResult, writer.uint32(42).fork()).join();
+    }
+    if (message.directFromCpfpRefundTxSigningResult !== undefined) {
+      ExtendLeafSigningResult.encode(message.directFromCpfpRefundTxSigningResult, writer.uint32(50).fork()).join();
     }
     return writer;
   },
@@ -11913,6 +12683,30 @@ export const ExtendLeafResponse: MessageFns<ExtendLeafResponse> = {
           message.refundTxSigningResult = ExtendLeafSigningResult.decode(reader, reader.uint32());
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.directNodeTxSigningResult = ExtendLeafSigningResult.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directRefundTxSigningResult = ExtendLeafSigningResult.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.directFromCpfpRefundTxSigningResult = ExtendLeafSigningResult.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -11931,6 +12725,15 @@ export const ExtendLeafResponse: MessageFns<ExtendLeafResponse> = {
       refundTxSigningResult: isSet(object.refundTxSigningResult)
         ? ExtendLeafSigningResult.fromJSON(object.refundTxSigningResult)
         : undefined,
+      directNodeTxSigningResult: isSet(object.directNodeTxSigningResult)
+        ? ExtendLeafSigningResult.fromJSON(object.directNodeTxSigningResult)
+        : undefined,
+      directRefundTxSigningResult: isSet(object.directRefundTxSigningResult)
+        ? ExtendLeafSigningResult.fromJSON(object.directRefundTxSigningResult)
+        : undefined,
+      directFromCpfpRefundTxSigningResult: isSet(object.directFromCpfpRefundTxSigningResult)
+        ? ExtendLeafSigningResult.fromJSON(object.directFromCpfpRefundTxSigningResult)
+        : undefined,
     };
   },
 
@@ -11944,6 +12747,17 @@ export const ExtendLeafResponse: MessageFns<ExtendLeafResponse> = {
     }
     if (message.refundTxSigningResult !== undefined) {
       obj.refundTxSigningResult = ExtendLeafSigningResult.toJSON(message.refundTxSigningResult);
+    }
+    if (message.directNodeTxSigningResult !== undefined) {
+      obj.directNodeTxSigningResult = ExtendLeafSigningResult.toJSON(message.directNodeTxSigningResult);
+    }
+    if (message.directRefundTxSigningResult !== undefined) {
+      obj.directRefundTxSigningResult = ExtendLeafSigningResult.toJSON(message.directRefundTxSigningResult);
+    }
+    if (message.directFromCpfpRefundTxSigningResult !== undefined) {
+      obj.directFromCpfpRefundTxSigningResult = ExtendLeafSigningResult.toJSON(
+        message.directFromCpfpRefundTxSigningResult,
+      );
     }
     return obj;
   },
@@ -11960,6 +12774,18 @@ export const ExtendLeafResponse: MessageFns<ExtendLeafResponse> = {
     message.refundTxSigningResult =
       (object.refundTxSigningResult !== undefined && object.refundTxSigningResult !== null)
         ? ExtendLeafSigningResult.fromPartial(object.refundTxSigningResult)
+        : undefined;
+    message.directNodeTxSigningResult =
+      (object.directNodeTxSigningResult !== undefined && object.directNodeTxSigningResult !== null)
+        ? ExtendLeafSigningResult.fromPartial(object.directNodeTxSigningResult)
+        : undefined;
+    message.directRefundTxSigningResult =
+      (object.directRefundTxSigningResult !== undefined && object.directRefundTxSigningResult !== null)
+        ? ExtendLeafSigningResult.fromPartial(object.directRefundTxSigningResult)
+        : undefined;
+    message.directFromCpfpRefundTxSigningResult =
+      (object.directFromCpfpRefundTxSigningResult !== undefined && object.directFromCpfpRefundTxSigningResult !== null)
+        ? ExtendLeafSigningResult.fromPartial(object.directFromCpfpRefundTxSigningResult)
         : undefined;
     return message;
   },
@@ -12315,7 +13141,14 @@ export const PrepareTreeAddressResponse: MessageFns<PrepareTreeAddressResponse> 
 };
 
 function createBaseCreationNode(): CreationNode {
-  return { nodeTxSigningJob: undefined, refundTxSigningJob: undefined, children: [] };
+  return {
+    nodeTxSigningJob: undefined,
+    refundTxSigningJob: undefined,
+    children: [],
+    directNodeTxSigningJob: undefined,
+    directRefundTxSigningJob: undefined,
+    directFromCpfpRefundTxSigningJob: undefined,
+  };
 }
 
 export const CreationNode: MessageFns<CreationNode> = {
@@ -12328,6 +13161,15 @@ export const CreationNode: MessageFns<CreationNode> = {
     }
     for (const v of message.children) {
       CreationNode.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.directNodeTxSigningJob !== undefined) {
+      SigningJob.encode(message.directNodeTxSigningJob, writer.uint32(34).fork()).join();
+    }
+    if (message.directRefundTxSigningJob !== undefined) {
+      SigningJob.encode(message.directRefundTxSigningJob, writer.uint32(42).fork()).join();
+    }
+    if (message.directFromCpfpRefundTxSigningJob !== undefined) {
+      SigningJob.encode(message.directFromCpfpRefundTxSigningJob, writer.uint32(50).fork()).join();
     }
     return writer;
   },
@@ -12363,6 +13205,30 @@ export const CreationNode: MessageFns<CreationNode> = {
           message.children.push(CreationNode.decode(reader, reader.uint32()));
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.directNodeTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directRefundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.directFromCpfpRefundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -12379,6 +13245,15 @@ export const CreationNode: MessageFns<CreationNode> = {
       children: globalThis.Array.isArray(object?.children)
         ? object.children.map((e: any) => CreationNode.fromJSON(e))
         : [],
+      directNodeTxSigningJob: isSet(object.directNodeTxSigningJob)
+        ? SigningJob.fromJSON(object.directNodeTxSigningJob)
+        : undefined,
+      directRefundTxSigningJob: isSet(object.directRefundTxSigningJob)
+        ? SigningJob.fromJSON(object.directRefundTxSigningJob)
+        : undefined,
+      directFromCpfpRefundTxSigningJob: isSet(object.directFromCpfpRefundTxSigningJob)
+        ? SigningJob.fromJSON(object.directFromCpfpRefundTxSigningJob)
+        : undefined,
     };
   },
 
@@ -12392,6 +13267,15 @@ export const CreationNode: MessageFns<CreationNode> = {
     }
     if (message.children?.length) {
       obj.children = message.children.map((e) => CreationNode.toJSON(e));
+    }
+    if (message.directNodeTxSigningJob !== undefined) {
+      obj.directNodeTxSigningJob = SigningJob.toJSON(message.directNodeTxSigningJob);
+    }
+    if (message.directRefundTxSigningJob !== undefined) {
+      obj.directRefundTxSigningJob = SigningJob.toJSON(message.directRefundTxSigningJob);
+    }
+    if (message.directFromCpfpRefundTxSigningJob !== undefined) {
+      obj.directFromCpfpRefundTxSigningJob = SigningJob.toJSON(message.directFromCpfpRefundTxSigningJob);
     }
     return obj;
   },
@@ -12408,6 +13292,18 @@ export const CreationNode: MessageFns<CreationNode> = {
       ? SigningJob.fromPartial(object.refundTxSigningJob)
       : undefined;
     message.children = object.children?.map((e) => CreationNode.fromPartial(e)) || [];
+    message.directNodeTxSigningJob =
+      (object.directNodeTxSigningJob !== undefined && object.directNodeTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directNodeTxSigningJob)
+        : undefined;
+    message.directRefundTxSigningJob =
+      (object.directRefundTxSigningJob !== undefined && object.directRefundTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directRefundTxSigningJob)
+        : undefined;
+    message.directFromCpfpRefundTxSigningJob =
+      (object.directFromCpfpRefundTxSigningJob !== undefined && object.directFromCpfpRefundTxSigningJob !== null)
+        ? SigningJob.fromPartial(object.directFromCpfpRefundTxSigningJob)
+        : undefined;
     return message;
   },
 };
@@ -12544,7 +13440,15 @@ export const CreateTreeRequest: MessageFns<CreateTreeRequest> = {
 };
 
 function createBaseCreationResponseNode(): CreationResponseNode {
-  return { nodeId: "", nodeTxSigningResult: undefined, refundTxSigningResult: undefined, children: [] };
+  return {
+    nodeId: "",
+    nodeTxSigningResult: undefined,
+    refundTxSigningResult: undefined,
+    children: [],
+    directNodeTxSigningResult: undefined,
+    directRefundTxSigningResult: undefined,
+    directFromCpfpRefundTxSigningResult: undefined,
+  };
 }
 
 export const CreationResponseNode: MessageFns<CreationResponseNode> = {
@@ -12560,6 +13464,15 @@ export const CreationResponseNode: MessageFns<CreationResponseNode> = {
     }
     for (const v of message.children) {
       CreationResponseNode.encode(v!, writer.uint32(34).fork()).join();
+    }
+    if (message.directNodeTxSigningResult !== undefined) {
+      SigningResult.encode(message.directNodeTxSigningResult, writer.uint32(42).fork()).join();
+    }
+    if (message.directRefundTxSigningResult !== undefined) {
+      SigningResult.encode(message.directRefundTxSigningResult, writer.uint32(50).fork()).join();
+    }
+    if (message.directFromCpfpRefundTxSigningResult !== undefined) {
+      SigningResult.encode(message.directFromCpfpRefundTxSigningResult, writer.uint32(58).fork()).join();
     }
     return writer;
   },
@@ -12603,6 +13516,30 @@ export const CreationResponseNode: MessageFns<CreationResponseNode> = {
           message.children.push(CreationResponseNode.decode(reader, reader.uint32()));
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.directNodeTxSigningResult = SigningResult.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.directRefundTxSigningResult = SigningResult.decode(reader, reader.uint32());
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.directFromCpfpRefundTxSigningResult = SigningResult.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -12624,6 +13561,15 @@ export const CreationResponseNode: MessageFns<CreationResponseNode> = {
       children: globalThis.Array.isArray(object?.children)
         ? object.children.map((e: any) => CreationResponseNode.fromJSON(e))
         : [],
+      directNodeTxSigningResult: isSet(object.directNodeTxSigningResult)
+        ? SigningResult.fromJSON(object.directNodeTxSigningResult)
+        : undefined,
+      directRefundTxSigningResult: isSet(object.directRefundTxSigningResult)
+        ? SigningResult.fromJSON(object.directRefundTxSigningResult)
+        : undefined,
+      directFromCpfpRefundTxSigningResult: isSet(object.directFromCpfpRefundTxSigningResult)
+        ? SigningResult.fromJSON(object.directFromCpfpRefundTxSigningResult)
+        : undefined,
     };
   },
 
@@ -12640,6 +13586,15 @@ export const CreationResponseNode: MessageFns<CreationResponseNode> = {
     }
     if (message.children?.length) {
       obj.children = message.children.map((e) => CreationResponseNode.toJSON(e));
+    }
+    if (message.directNodeTxSigningResult !== undefined) {
+      obj.directNodeTxSigningResult = SigningResult.toJSON(message.directNodeTxSigningResult);
+    }
+    if (message.directRefundTxSigningResult !== undefined) {
+      obj.directRefundTxSigningResult = SigningResult.toJSON(message.directRefundTxSigningResult);
+    }
+    if (message.directFromCpfpRefundTxSigningResult !== undefined) {
+      obj.directFromCpfpRefundTxSigningResult = SigningResult.toJSON(message.directFromCpfpRefundTxSigningResult);
     }
     return obj;
   },
@@ -12658,6 +13613,18 @@ export const CreationResponseNode: MessageFns<CreationResponseNode> = {
         ? SigningResult.fromPartial(object.refundTxSigningResult)
         : undefined;
     message.children = object.children?.map((e) => CreationResponseNode.fromPartial(e)) || [];
+    message.directNodeTxSigningResult =
+      (object.directNodeTxSigningResult !== undefined && object.directNodeTxSigningResult !== null)
+        ? SigningResult.fromPartial(object.directNodeTxSigningResult)
+        : undefined;
+    message.directRefundTxSigningResult =
+      (object.directRefundTxSigningResult !== undefined && object.directRefundTxSigningResult !== null)
+        ? SigningResult.fromPartial(object.directRefundTxSigningResult)
+        : undefined;
+    message.directFromCpfpRefundTxSigningResult =
+      (object.directFromCpfpRefundTxSigningResult !== undefined && object.directFromCpfpRefundTxSigningResult !== null)
+        ? SigningResult.fromPartial(object.directFromCpfpRefundTxSigningResult)
+        : undefined;
     return message;
   },
 };
