@@ -102,7 +102,7 @@ import {
   SparkAddressFormat,
 } from "../address/index.js";
 import { isReactNative } from "../constants.js";
-import { networkToJSON, Network as NetworkProto } from "../proto/spark.js";
+import { Network as NetworkProto, networkToJSON } from "../proto/spark.js";
 import {
   decodeInvoice,
   getNetworkFromInvoice,
@@ -3156,8 +3156,15 @@ export class SparkWallet extends EventEmitter {
    * @param {string} id - The ID of the transfer
    * @returns {Promise<Transfer | undefined>} The transfer
    */
-  public async getTransfer(id: string): Promise<Transfer | undefined> {
-    return await this.transferService.queryTransfer(id);
+  public async getTransfer(id: string): Promise<WalletTransfer | undefined> {
+    const transfer = await this.transferService.queryTransfer(id);
+    if (!transfer) {
+      return undefined;
+    }
+    return mapTransferToWalletTransfer(
+      transfer,
+      bytesToHex(await this.config.signer.getIdentityPublicKey()),
+    );
   }
 
   // ***** Token Flow *****
