@@ -671,8 +671,8 @@ export function validateTokenTransaction(
   }
 
   if (
-    finalTokenTransaction.clientCreatedTimestamp !==
-    partialTokenTransaction.clientCreatedTimestamp
+    finalTokenTransaction.clientCreatedTimestamp!.getTime() !==
+    partialTokenTransaction.clientCreatedTimestamp!.getTime()
   ) {
     throw new InternalValidationError("Client created timestamp mismatch", {
       value: finalTokenTransaction.clientCreatedTimestamp,
