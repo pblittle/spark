@@ -1,6 +1,7 @@
 import type { Transaction } from "@scure/btc-signer";
 import { ConfigOptions } from "../services/wallet-config.js";
 import type { SparkSigner } from "../signer/signer.js";
+import { HumanReadableTokenIdentifier } from "../utils/token-identifier.js";
 
 export type CreateLightningInvoiceParams = {
   amountSats: number;
@@ -30,13 +31,48 @@ export type DepositParams = {
   vout: number;
 };
 
+/**
+ * Token metadata containing essential information about a token.
+ * This is the wallet's internal representation with JavaScript-friendly types.
+ *
+ * rawTokenIdentifier: This is the raw binary token identifier - This is used to encode the human readable token identifier.
+ *
+ * tokenPublicKey: This is the hex-encoded public key of the token issuer - Same as issuerPublicKey.
+ *
+ * @example
+ * ```typescript
+ * const tokenMetadata: TokenMetadata = {
+ *   rawTokenIdentifier: new Uint8Array([1, 2, 3]),
+ *   tokenPublicKey: "0348fbb...",
+ *   tokenName: "SparkToken",
+ *   tokenTicker: "SPK",
+ *   decimals: 8,
+ *   maxSupply: 1000000n
+ * };
+ * ```
+ */
 export type TokenMetadata = {
-  issuerPublicKey: string;
+  /** Raw binary token identifier - This is used to encode the human readable token identifier */
+  rawTokenIdentifier: Uint8Array;
+  /** Hex-encoded public key of the token issuer - Same as issuerPublicKey */
+  tokenPublicKey: string;
+  /** Human-readable name of the token (e.g., SparkToken)*/
   tokenName: string;
+  /** Short ticker symbol for the token (e.g., "SPK") */
   tokenTicker: string;
+  /** Number of decimal places for token amounts */
   decimals: number;
+  /** Maximum supply of tokens that can ever be minted */
   maxSupply: bigint;
 };
+
+export type TokenBalanceMap = Map<
+  HumanReadableTokenIdentifier,
+  {
+    balance: bigint;
+    tokenMetadata: TokenMetadata;
+  }
+>;
 
 export type InitWalletResponse = {
   mnemonic?: string | undefined;

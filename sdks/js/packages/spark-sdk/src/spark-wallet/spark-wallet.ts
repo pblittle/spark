@@ -127,7 +127,9 @@ import type {
   SparkWalletProps,
   TokenMetadata,
   TransferParams,
+  TokenBalanceMap,
 } from "./types.js";
+import { encodeHumanReadableTokenIdentifier } from "../utils/token-identifier.js";
 
 /**
  * The SparkWallet class is the primary interface for interacting with the Spark network.
@@ -164,6 +166,7 @@ export class SparkWallet extends EventEmitter {
   private streamController: AbortController | null = null;
 
   protected leaves: TreeNode[] = [];
+
   protected tokenOutputs: Map<string, OutputWithPreviousTransactionData[]> =
     new Map();
 
@@ -1189,30 +1192,21 @@ export class SparkWallet extends EventEmitter {
    *
    * @returns {Promise<Object>} Object containing:
    *   - balance: The wallet's current balance in satoshis
-   *   - tokenBalances: Map of token public keys to token balances and token info
+   *   - tokenBalances: Map of the human readable token identifier to token balances and token info
    */
   public async getBalance(): Promise<{
     balance: bigint;
-    tokenBalances: Map<
-      string,
-      { balance: bigint; tokenMetadata: TokenMetadata }
-    >;
+    tokenBalances: TokenBalanceMap;
   }> {
     const leaves = await this.getLeaves(true);
     await this.syncTokenOutputs();
 
-    let tokenBalances: Map<
-      string,
-      { balance: bigint; tokenMetadata: TokenMetadata }
-    >;
+    let tokenBalances: TokenBalanceMap;
 
     if (this.tokenOutputs.size !== 0) {
       tokenBalances = await this.getTokenBalance();
     } else {
-      tokenBalances = new Map<
-        string,
-        { balance: bigint; tokenMetadata: TokenMetadata }
-      >();
+      tokenBalances = new Map();
     }
 
     return {
@@ -1221,9 +1215,7 @@ export class SparkWallet extends EventEmitter {
     };
   }
 
-  private async getTokenBalance(): Promise<
-    Map<string, { balance: bigint; tokenMetadata: TokenMetadata }>
-  > {
+  private async getTokenBalance(): Promise<TokenBalanceMap> {
     const sparkTokenClient =
       await this.connectionManager.createSparkTokenClient(
         this.config.getCoordinatorAddress(),
@@ -1232,20 +1224,20 @@ export class SparkWallet extends EventEmitter {
     const tokenMetadata = await sparkTokenClient.query_token_metadata({
       issuerPublicKeys: Array.from(this.tokenOutputs.keys()).map(hexToBytes),
     });
-
-    const result = new Map<
-      string,
-      { balance: bigint; tokenMetadata: TokenMetadata }
-    >();
+    const result: TokenBalanceMap = new Map();
 
     for (const metadata of tokenMetadata.tokenMetadata) {
-      const issuerPublicKey = bytesToHex(metadata.issuerPublicKey);
-      const leaves = this.tokenOutputs.get(issuerPublicKey);
-
-      result.set(issuerPublicKey, {
+      const tokenPublicKey = bytesToHex(metadata.issuerPublicKey);
+      const leaves = this.tokenOutputs.get(tokenPublicKey);
+      const humanReadableTokenIdentifier = encodeHumanReadableTokenIdentifier({
+        tokenIdentifier: metadata.tokenIdentifier,
+        network: this.config.getNetworkType(),
+      });
+      result.set(humanReadableTokenIdentifier, {
         balance: leaves ? calculateAvailableTokenAmount(leaves) : BigInt(0),
         tokenMetadata: {
-          issuerPublicKey,
+          tokenPublicKey,
+          rawTokenIdentifier: metadata.tokenIdentifier,
           tokenName: metadata.tokenName,
           tokenTicker: metadata.tokenTicker,
           decimals: metadata.decimals,

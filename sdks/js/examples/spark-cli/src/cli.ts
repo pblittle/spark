@@ -811,10 +811,15 @@ async function runCLI() {
           if (balanceInfo.tokenBalances && balanceInfo.tokenBalances.size > 0) {
             console.log("\nToken Balances:");
             for (const [
-              tokenPublicKey,
+              humanReadableTokenIdentifier,
               tokenInfo,
             ] of balanceInfo.tokenBalances.entries()) {
-              console.log(`  Token (${tokenPublicKey}):`);
+              console.log(
+                `  Token Identifier (${humanReadableTokenIdentifier}):`,
+              );
+              console.log(
+                `    Token Public Key: ${tokenInfo.tokenMetadata.tokenPublicKey}`,
+              );
               console.log(`    Balance: ${tokenInfo.balance}`);
             }
           }

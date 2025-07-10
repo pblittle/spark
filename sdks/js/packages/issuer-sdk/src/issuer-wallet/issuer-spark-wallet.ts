@@ -140,14 +140,17 @@ export class IssuerSparkWallet extends SparkWallet {
   }> {
     const publicKey = await super.getIdentityPublicKey();
     const balanceObj = await this.getBalance();
+    const issuerBalance = [...balanceObj.tokenBalances.entries()].find(
+      ([, info]) => info.tokenMetadata.tokenPublicKey === publicKey,
+    ); // [tokenIdentifier, { balance, tokenMetadata }]
 
-    if (!balanceObj.tokenBalances || !balanceObj.tokenBalances.has(publicKey)) {
+    if (!balanceObj.tokenBalances || issuerBalance === undefined) {
       return {
         balance: 0n,
       };
     }
     return {
-      balance: balanceObj.tokenBalances.get(publicKey)!.balance,
+      balance: issuerBalance[1].balance,
     };
   }
 

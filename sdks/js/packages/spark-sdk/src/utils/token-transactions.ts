@@ -1,5 +1,6 @@
 import { bytesToHex, bytesToNumberBE } from "@noble/curves/abstract/utils";
 import { OutputWithPreviousTransactionData } from "../proto/spark.js";
+import { TokenBalanceMap } from "../spark-wallet/types.js";
 
 export function calculateAvailableTokenAmount(
   outputLeaves: OutputWithPreviousTransactionData[],
@@ -45,20 +46,23 @@ export function checkIfSelectedOutputsAreAvailable(
 }
 
 export function filterTokenBalanceForTokenPublicKey(
-  tokenBalances: Map<
-    string,
-    {
-      balance: bigint;
-    }
-  >,
+  tokenBalances: TokenBalanceMap,
   publicKey: string,
 ): { balance: bigint } {
-  if (!tokenBalances || !tokenBalances.has(publicKey)) {
+  if (!tokenBalances) {
+    return { balance: 0n };
+  }
+
+  const tokenBalance = [...tokenBalances.entries()].find(
+    ([, info]) => info.tokenMetadata.tokenPublicKey === publicKey,
+  );
+
+  if (!tokenBalance) {
     return {
       balance: 0n,
     };
   }
   return {
-    balance: tokenBalances.get(publicKey)!.balance,
+    balance: tokenBalance[1].balance,
   };
 }
