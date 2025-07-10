@@ -75,8 +75,19 @@ service SparkService {
 
     rpc subscribe_to_events(SubscribeToEventsRequest) returns (stream SubscribeToEventsResponse) {}
 
-    // Claim a deposit to a static address from SSP side
-    rpc initiate_utxo_swap(InitiateUtxoSwapRequest) returns (InitiateUtxoSwapResponse) {}
+    // Signs the provided refund transaction which spends the UTXO from a static
+    // deposit address. If successful, the UTXO will no longer be available to claim on
+    // the Spark network, and the refund transaction must be broadcasted on L1 to claim
+    // the funds. Returns an error if the UTXO has already been claimed.
+    rpc initiate_static_deposit_utxo_refund(InitiateStaticDepositUtxoRefundRequest) returns (InitiateStaticDepositUtxoRefundResponse) {}
+
+    // DEPRECATED: This unified method is being split for better clarity and type safety
+    // 
+    // For swap operations: Use spark_ssp_internal.initiate_static_deposit_utxo_swap()
+    // For refund operations: Use initiate_static_deposit_utxo_refund()
+    rpc initiate_utxo_swap(InitiateUtxoSwapRequest) returns (InitiateUtxoSwapResponse) {
+        option deprecated = true;
+    }
 
     rpc exit_single_node_trees(ExitSingleNodeTreesRequest) returns (ExitSingleNodeTreesResponse) {}
 }
@@ -1173,6 +1184,21 @@ enum UtxoSwapRequestType {
   Refund = 2;
 }
 
+message InitiateStaticDepositUtxoRefundRequest {
+    UTXO on_chain_utxo = 1;
+    // A package that is used for signing L1 Bitcoin transactions using FROST.
+    // SE consumes it to return SigningResult structure, that is used by the user to
+    // construct the final signature for the refund Bitcoin transaction.
+    SigningJob refund_tx_signing_job = 3;
+}
+
+message InitiateStaticDepositUtxoRefundResponse {
+    // The FROST signing results which must be aggregated by the user to complete signing
+    SigningResult refund_tx_signing_result = 1;
+    DepositAddressQueryResult deposit_address = 2;
+}
+
+
 message InitiateUtxoSwapRequest {
     UTXO on_chain_utxo = 1;
     UtxoSwapRequestType request_type = 2;
@@ -1191,7 +1217,6 @@ message InitiateUtxoSwapResponse {
     Transfer transfer = 2;
     DepositAddressQueryResult deposit_address = 3;
 }
-
 
 message ExitingTree {
     string tree_id = 1;
