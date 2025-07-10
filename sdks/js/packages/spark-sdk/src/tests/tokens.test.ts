@@ -199,7 +199,6 @@ describe("hash token transaction", () => {
         $case: "mintInput" as const,
         mintInput: {
           issuerPublicKey: TEST_TOKEN_PUBLIC_KEY,
-          issuerProvidedTimestamp: TEST_ISSUER_TIMESTAMP,
           tokenIdentifier: TEST_TOKEN_IDENTIFIER,
         },
       },

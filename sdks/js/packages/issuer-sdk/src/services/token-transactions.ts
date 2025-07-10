@@ -49,7 +49,6 @@ export class IssuerTokenTransactionService extends TokenTransactionService {
         $case: "mintInput",
         mintInput: {
           issuerPublicKey: tokenPublicKey,
-          issuerProvidedTimestamp: Date.now(),
         },
       },
       tokenOutputs: [

@@ -135,17 +135,6 @@ export interface TokenTransferInput {
 
 export interface TokenMintInput {
   issuerPublicKey: Uint8Array;
-  /**
-   * Issuer provided timestamp of when the transaction was signed/constructed.
-   * Helps provide idempotency and ensures that each mint input signature is
-   * unique as long as multiple mint signatures are not happening at the same
-   * time. Also gives a potentially useful data point for when the issuer
-   * authorized from their perspective.  Note that we have no way of proving
-   * this is accurate.
-   * TODO: Consider whether implementing generic idempotency controls and/or a
-   * random nonce would be favorable to populating this field.
-   */
-  issuerProvidedTimestamp: number;
   tokenIdentifier?: Uint8Array | undefined;
 }
 
@@ -489,7 +478,7 @@ export const TokenTransferInput: MessageFns<TokenTransferInput> = {
 };
 
 function createBaseTokenMintInput(): TokenMintInput {
-  return { issuerPublicKey: new Uint8Array(0), issuerProvidedTimestamp: 0, tokenIdentifier: undefined };
+  return { issuerPublicKey: new Uint8Array(0), tokenIdentifier: undefined };
 }
 
 export const TokenMintInput: MessageFns<TokenMintInput> = {
@@ -497,11 +486,8 @@ export const TokenMintInput: MessageFns<TokenMintInput> = {
     if (message.issuerPublicKey.length !== 0) {
       writer.uint32(10).bytes(message.issuerPublicKey);
     }
-    if (message.issuerProvidedTimestamp !== 0) {
-      writer.uint32(16).uint64(message.issuerProvidedTimestamp);
-    }
     if (message.tokenIdentifier !== undefined) {
-      writer.uint32(26).bytes(message.tokenIdentifier);
+      writer.uint32(18).bytes(message.tokenIdentifier);
     }
     return writer;
   },
@@ -522,15 +508,7 @@ export const TokenMintInput: MessageFns<TokenMintInput> = {
           continue;
         }
         case 2: {
-          if (tag !== 16) {
-            break;
-          }
-
-          message.issuerProvidedTimestamp = longToNumber(reader.uint64());
-          continue;
-        }
-        case 3: {
-          if (tag !== 26) {
+          if (tag !== 18) {
             break;
           }
 
@@ -549,9 +527,6 @@ export const TokenMintInput: MessageFns<TokenMintInput> = {
   fromJSON(object: any): TokenMintInput {
     return {
       issuerPublicKey: isSet(object.issuerPublicKey) ? bytesFromBase64(object.issuerPublicKey) : new Uint8Array(0),
-      issuerProvidedTimestamp: isSet(object.issuerProvidedTimestamp)
-        ? globalThis.Number(object.issuerProvidedTimestamp)
-        : 0,
       tokenIdentifier: isSet(object.tokenIdentifier) ? bytesFromBase64(object.tokenIdentifier) : undefined,
     };
   },
@@ -560,9 +535,6 @@ export const TokenMintInput: MessageFns<TokenMintInput> = {
     const obj: any = {};
     if (message.issuerPublicKey.length !== 0) {
       obj.issuerPublicKey = base64FromBytes(message.issuerPublicKey);
-    }
-    if (message.issuerProvidedTimestamp !== 0) {
-      obj.issuerProvidedTimestamp = Math.round(message.issuerProvidedTimestamp);
     }
     if (message.tokenIdentifier !== undefined) {
       obj.tokenIdentifier = base64FromBytes(message.tokenIdentifier);
@@ -576,7 +548,6 @@ export const TokenMintInput: MessageFns<TokenMintInput> = {
   fromPartial(object: DeepPartial<TokenMintInput>): TokenMintInput {
     const message = createBaseTokenMintInput();
     message.issuerPublicKey = object.issuerPublicKey ?? new Uint8Array(0);
-    message.issuerProvidedTimestamp = object.issuerProvidedTimestamp ?? 0;
     message.tokenIdentifier = object.tokenIdentifier ?? undefined;
     return message;
   },
