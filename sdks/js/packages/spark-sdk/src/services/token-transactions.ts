@@ -49,6 +49,12 @@ import {
 
 const MAX_TOKEN_OUTPUTS = 500;
 
+export interface FetchOwnedTokenOutputsParams {
+  ownerPublicKeys: Uint8Array[];
+  issuerPublicKeys?: Uint8Array[];
+  tokenIdentifiers?: Uint8Array[];
+}
+
 export class TokenTransactionService {
   protected readonly config: WalletConfigService;
   protected readonly connectionManager: ConnectionManager;
@@ -871,9 +877,24 @@ export class TokenTransactionService {
   }
 
   public async fetchOwnedTokenOutputs(
-    ownerPublicKeys: Uint8Array[],
-    tokenPublicKeys: Uint8Array[],
+    params: FetchOwnedTokenOutputsParams,
   ): Promise<OutputWithPreviousTransactionData[]> {
+    if (this.config.getTokenTransactionVersion() === "V0") {
+      return this.fetchOwnedTokenOutputsV0(params);
+    } else {
+      return this.fetchOwnedTokenOutputsV1(params);
+    }
+  }
+
+  private async fetchOwnedTokenOutputsV0(
+    params: FetchOwnedTokenOutputsParams,
+  ): Promise<OutputWithPreviousTransactionData[]> {
+    const {
+      ownerPublicKeys,
+      issuerPublicKeys: tokenPublicKeys = [],
+      tokenIdentifiers = [],
+    } = params;
+
     const sparkClient = await this.connectionManager.createSparkClient(
       this.config.getCoordinatorAddress(),
     );
@@ -882,6 +903,7 @@ export class TokenTransactionService {
       const result = await sparkClient.query_token_outputs({
         ownerPublicKeys,
         tokenPublicKeys,
+        tokenIdentifiers,
         network: this.config.getNetworkProto(),
       });
 
@@ -890,7 +912,42 @@ export class TokenTransactionService {
       throw new NetworkError(
         "Failed to fetch owned token outputs",
         {
-          operation: "query_token_outputs",
+          operation: "spark.query_token_outputs",
+          errorCount: 1,
+          errors: error instanceof Error ? error.message : String(error),
+        },
+        error as Error,
+      );
+    }
+  }
+
+  private async fetchOwnedTokenOutputsV1(
+    params: FetchOwnedTokenOutputsParams,
+  ): Promise<OutputWithPreviousTransactionData[]> {
+    const {
+      ownerPublicKeys,
+      issuerPublicKeys = [],
+      tokenIdentifiers = [],
+    } = params;
+
+    const tokenClient = await this.connectionManager.createSparkTokenClient(
+      this.config.getCoordinatorAddress(),
+    );
+
+    try {
+      const result = await tokenClient.query_token_outputs({
+        ownerPublicKeys,
+        issuerPublicKeys,
+        tokenIdentifiers,
+        network: this.config.getNetworkProto(),
+      });
+
+      return result.outputsWithPreviousTransactionData;
+    } catch (error) {
+      throw new NetworkError(
+        "Failed to fetch owned token outputs",
+        {
+          operation: "spark_token.query_token_outputs",
           errorCount: 1,
           errors: error instanceof Error ? error.message : String(error),
         },
@@ -902,10 +959,9 @@ export class TokenTransactionService {
   public async syncTokenOutputs(
     tokenOutputs: Map<string, OutputWithPreviousTransactionData[]>,
   ) {
-    const unsortedTokenOutputs = await this.fetchOwnedTokenOutputs(
-      await this.config.signer.getTrackedPublicKeys(),
-      [],
-    );
+    const unsortedTokenOutputs = await this.fetchOwnedTokenOutputs({
+      ownerPublicKeys: await this.config.signer.getTrackedPublicKeys(),
+    });
 
     unsortedTokenOutputs.forEach((output) => {
       const tokenKey = bytesToHex(output.output!.tokenPublicKey!);

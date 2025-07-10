@@ -3180,10 +3180,9 @@ export class SparkWallet extends EventEmitter {
     this.tokenOutputs.clear();
 
     const unsortedTokenOutputs =
-      await this.tokenTransactionService.fetchOwnedTokenOutputs(
-        [await this.config.signer.getIdentityPublicKey()],
-        [],
-      );
+      await this.tokenTransactionService.fetchOwnedTokenOutputs({
+        ownerPublicKeys: [await this.config.signer.getIdentityPublicKey()],
+      });
 
     const filteredTokenOutputs = unsortedTokenOutputs.filter(
       (output) =>
