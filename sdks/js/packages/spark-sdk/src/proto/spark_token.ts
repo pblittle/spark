@@ -12,6 +12,51 @@ import { Network, networkFromJSON, networkToJSON, SigningKeyshare } from "./spar
 
 export const protobufPackage = "spark_token";
 
+export enum TokenTransactionType {
+  TOKEN_TRANSACTION_TYPE_UNSPECIFIED = 0,
+  TOKEN_TRANSACTION_TYPE_CREATE = 1,
+  TOKEN_TRANSACTION_TYPE_MINT = 2,
+  TOKEN_TRANSACTION_TYPE_TRANSFER = 3,
+  UNRECOGNIZED = -1,
+}
+
+export function tokenTransactionTypeFromJSON(object: any): TokenTransactionType {
+  switch (object) {
+    case 0:
+    case "TOKEN_TRANSACTION_TYPE_UNSPECIFIED":
+      return TokenTransactionType.TOKEN_TRANSACTION_TYPE_UNSPECIFIED;
+    case 1:
+    case "TOKEN_TRANSACTION_TYPE_CREATE":
+      return TokenTransactionType.TOKEN_TRANSACTION_TYPE_CREATE;
+    case 2:
+    case "TOKEN_TRANSACTION_TYPE_MINT":
+      return TokenTransactionType.TOKEN_TRANSACTION_TYPE_MINT;
+    case 3:
+    case "TOKEN_TRANSACTION_TYPE_TRANSFER":
+      return TokenTransactionType.TOKEN_TRANSACTION_TYPE_TRANSFER;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return TokenTransactionType.UNRECOGNIZED;
+  }
+}
+
+export function tokenTransactionTypeToJSON(object: TokenTransactionType): string {
+  switch (object) {
+    case TokenTransactionType.TOKEN_TRANSACTION_TYPE_UNSPECIFIED:
+      return "TOKEN_TRANSACTION_TYPE_UNSPECIFIED";
+    case TokenTransactionType.TOKEN_TRANSACTION_TYPE_CREATE:
+      return "TOKEN_TRANSACTION_TYPE_CREATE";
+    case TokenTransactionType.TOKEN_TRANSACTION_TYPE_MINT:
+      return "TOKEN_TRANSACTION_TYPE_MINT";
+    case TokenTransactionType.TOKEN_TRANSACTION_TYPE_TRANSFER:
+      return "TOKEN_TRANSACTION_TYPE_TRANSFER";
+    case TokenTransactionType.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export enum TokenTransactionStatus {
   TOKEN_TRANSACTION_STARTED = 0,
   TOKEN_TRANSACTION_SIGNED = 1,

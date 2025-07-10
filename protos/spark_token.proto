@@ -23,7 +23,7 @@ service SparkTokenService {
 
     rpc query_token_transactions(QueryTokenTransactionsRequest)
         returns (QueryTokenTransactionsResponse) {}
-        
+
     rpc query_token_outputs(QueryTokenOutputsRequest)
         returns (QueryTokenOutputsResponse) {}
 }
@@ -78,6 +78,13 @@ message TokenOutput {
     bytes token_amount     = 7
         [(validate.rules).bytes.len = 16];  // Decoded uint128
 
+}
+
+enum TokenTransactionType {
+    TOKEN_TRANSACTION_TYPE_UNSPECIFIED = 0;
+    TOKEN_TRANSACTION_TYPE_CREATE = 1;
+    TOKEN_TRANSACTION_TYPE_MINT = 2;
+    TOKEN_TRANSACTION_TYPE_TRANSFER = 3;
 }
 
 // This proto is constructed by the wallet and is the core transaction data

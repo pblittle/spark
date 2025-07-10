@@ -5,7 +5,10 @@ import {
   TokenTransaction as TokenTransactionV0,
   TokenMintInput as TokenMintInputV0,
 } from "../proto/spark.js";
-import { TokenTransaction } from "../proto/spark_token.js";
+import {
+  TokenTransaction,
+  TokenTransactionType,
+} from "../proto/spark_token.js";
 
 export function hashTokenTransaction(
   tokenTransaction: TokenTransaction,
@@ -144,6 +147,108 @@ export function hashTokenTransactionV0(
     }
   }
 
+  // Hash create input if a create
+  if (tokenTransaction.tokenInputs?.$case === "createInput") {
+    const issuerPubKeyHashObj = sha256.create();
+    const createInput = tokenTransaction.tokenInputs.createInput!;
+
+    // Hash issuer public key
+    if (
+      !createInput.issuerPublicKey ||
+      createInput.issuerPublicKey.length === 0
+    ) {
+      throw new ValidationError("issuer public key cannot be nil or empty", {
+        field: "tokenInputs.createInput.issuerPublicKey",
+      });
+    }
+    issuerPubKeyHashObj.update(createInput.issuerPublicKey);
+    allHashes.push(issuerPubKeyHashObj.digest());
+
+    // Hash token name (fixed 20 bytes)
+    const tokenNameHashObj = sha256.create();
+    if (!createInput.tokenName || createInput.tokenName.length === 0) {
+      throw new ValidationError("token name cannot be empty", {
+        field: "tokenInputs.createInput.tokenName",
+      });
+    }
+    if (createInput.tokenName.length > 20) {
+      throw new ValidationError("token name cannot be longer than 20 bytes", {
+        field: "tokenInputs.createInput.tokenName",
+        value: createInput.tokenName,
+        expectedLength: 20,
+        actualLength: createInput.tokenName.length,
+      });
+    }
+    const tokenNameBytes = new Uint8Array(20);
+    const tokenNameEncoder = new TextEncoder();
+    tokenNameBytes.set(tokenNameEncoder.encode(createInput.tokenName));
+    tokenNameHashObj.update(tokenNameBytes);
+    allHashes.push(tokenNameHashObj.digest());
+
+    // Hash token ticker (fixed 6 bytes)
+    const tokenTickerHashObj = sha256.create();
+    if (!createInput.tokenTicker || createInput.tokenTicker.length === 0) {
+      throw new ValidationError("token ticker cannot be empty", {
+        field: "tokenInputs.createInput.tokenTicker",
+      });
+    }
+    if (createInput.tokenTicker.length > 6) {
+      throw new ValidationError("token ticker cannot be longer than 6 bytes", {
+        field: "tokenInputs.createInput.tokenTicker",
+        value: createInput.tokenTicker,
+        expectedLength: 6,
+        actualLength: createInput.tokenTicker.length,
+      });
+    }
+    const tokenTickerBytes = new Uint8Array(6);
+    const tokenTickerEncoder = new TextEncoder();
+    tokenTickerBytes.set(tokenTickerEncoder.encode(createInput.tokenTicker));
+    tokenTickerHashObj.update(tokenTickerBytes);
+    allHashes.push(tokenTickerHashObj.digest());
+
+    // Hash decimals
+    const decimalsHashObj = sha256.create();
+    const decimalsBytes = new Uint8Array(4);
+    new DataView(decimalsBytes.buffer).setUint32(
+      0,
+      createInput.decimals,
+      false,
+    );
+    decimalsHashObj.update(decimalsBytes);
+    allHashes.push(decimalsHashObj.digest());
+
+    // Hash max supply (fixed 16 bytes)
+    const maxSupplyHashObj = sha256.create();
+    if (!createInput.maxSupply) {
+      throw new ValidationError("max supply cannot be nil", {
+        field: "tokenInputs.createInput.maxSupply",
+      });
+    }
+    if (createInput.maxSupply.length !== 16) {
+      throw new ValidationError("max supply must be exactly 16 bytes", {
+        field: "tokenInputs.createInput.maxSupply",
+        value: createInput.maxSupply,
+        expectedLength: 16,
+        actualLength: createInput.maxSupply.length,
+      });
+    }
+    maxSupplyHashObj.update(createInput.maxSupply);
+    allHashes.push(maxSupplyHashObj.digest());
+
+    // Hash is freezable
+    const isFreezableHashObj = sha256.create();
+    const isFreezableByte = new Uint8Array([createInput.isFreezable ? 1 : 0]);
+    isFreezableHashObj.update(isFreezableByte);
+    allHashes.push(isFreezableHashObj.digest());
+
+    // Hash creation entity public key (only for final hash)
+    const creationEntityHashObj = sha256.create();
+    if (!partialHash && createInput.creationEntityPublicKey) {
+      creationEntityHashObj.update(createInput.creationEntityPublicKey);
+    }
+    allHashes.push(creationEntityHashObj.digest());
+  }
+
   // Hash token outputs
   if (!tokenTransaction.tokenOutputs) {
     throw new ValidationError("token outputs cannot be null", {
@@ -151,7 +256,12 @@ export function hashTokenTransactionV0(
     });
   }
 
-  if (tokenTransaction.tokenOutputs.length === 0) {
+  if (
+    tokenTransaction.tokenOutputs.length === 0 &&
+    tokenTransaction.tokenInputs?.$case !== "createInput"
+  ) {
+    // Mint and transfer transactions must have at least one output, but create transactions
+    // are allowed to have none (they define metadata only).
     throw new ValidationError("token outputs cannot be empty", {
       field: "tokenOutputs",
     });
@@ -353,7 +463,31 @@ export function hashTokenTransactionV1(
   versionHashObj.update(versionBytes);
   allHashes.push(versionHashObj.digest());
 
-  // Hash token inputs if a transfer
+  // Hash transaction type
+  const typeHashObj = sha256.create();
+  const typeBytes = new Uint8Array(4);
+  let transactionType = 0;
+
+  if (tokenTransaction.tokenInputs?.$case === "mintInput") {
+    transactionType = TokenTransactionType.TOKEN_TRANSACTION_TYPE_MINT;
+  } else if (tokenTransaction.tokenInputs?.$case === "transferInput") {
+    transactionType = TokenTransactionType.TOKEN_TRANSACTION_TYPE_TRANSFER;
+  } else if (tokenTransaction.tokenInputs?.$case === "createInput") {
+    transactionType = TokenTransactionType.TOKEN_TRANSACTION_TYPE_CREATE;
+  } else {
+    throw new ValidationError(
+      "token transaction must have exactly one input type",
+      {
+        field: "tokenInputs",
+      },
+    );
+  }
+
+  new DataView(typeBytes.buffer).setUint32(0, transactionType, false);
+  typeHashObj.update(typeBytes);
+  allHashes.push(typeHashObj.digest());
+
+  // Hash token inputs based on type
   if (tokenTransaction.tokenInputs?.$case === "transferInput") {
     if (!tokenTransaction.tokenInputs.transferInput.outputsToSpend) {
       throw new ValidationError("outputs to spend cannot be null", {
@@ -368,6 +502,17 @@ export function hashTokenTransactionV1(
         field: "tokenInputs.transferInput.outputsToSpend",
       });
     }
+
+    // Hash outputs to spend length
+    const outputsLenHashObj = sha256.create();
+    const outputsLenBytes = new Uint8Array(4);
+    new DataView(outputsLenBytes.buffer).setUint32(
+      0,
+      tokenTransaction.tokenInputs.transferInput.outputsToSpend.length,
+      false,
+    );
+    outputsLenHashObj.update(outputsLenBytes);
+    allHashes.push(outputsLenHashObj.digest());
 
     // Hash outputs to spend
     for (const [
@@ -410,10 +555,7 @@ export function hashTokenTransactionV1(
 
       allHashes.push(hashObj.digest());
     }
-  }
-
-  // Hash input issuance if a mint
-  if (tokenTransaction.tokenInputs?.$case === "mintInput") {
+  } else if (tokenTransaction.tokenInputs?.$case === "mintInput") {
     const hashObj = sha256.create();
 
     if (tokenTransaction.tokenInputs.mintInput!.issuerPublicKey) {
@@ -429,21 +571,134 @@ export function hashTokenTransactionV1(
       }
       hashObj.update(issuerPubKey);
       allHashes.push(hashObj.digest());
+
+      const tokenIdentifierHashObj = sha256.create();
+      if (tokenTransaction.tokenInputs.mintInput.tokenIdentifier) {
+        tokenIdentifierHashObj.update(
+          tokenTransaction.tokenInputs.mintInput.tokenIdentifier,
+        );
+      } else {
+        tokenIdentifierHashObj.update(new Uint8Array(32));
+      }
+      allHashes.push(tokenIdentifierHashObj.digest());
     }
+  } else if (tokenTransaction.tokenInputs?.$case === "createInput") {
+    const createInput = tokenTransaction.tokenInputs.createInput!;
+
+    // Hash issuer public key
+    const issuerPubKeyHashObj = sha256.create();
+    if (
+      !createInput.issuerPublicKey ||
+      createInput.issuerPublicKey.length === 0
+    ) {
+      throw new ValidationError("issuer public key cannot be nil or empty", {
+        field: "tokenInputs.createInput.issuerPublicKey",
+      });
+    }
+    issuerPubKeyHashObj.update(createInput.issuerPublicKey);
+    allHashes.push(issuerPubKeyHashObj.digest());
+
+    // Hash token name
+    const tokenNameHashObj = sha256.create();
+    if (!createInput.tokenName || createInput.tokenName.length === 0) {
+      throw new ValidationError("token name cannot be empty", {
+        field: "tokenInputs.createInput.tokenName",
+      });
+    }
+    if (createInput.tokenName.length > 20) {
+      throw new ValidationError("token name cannot be longer than 20 bytes", {
+        field: "tokenInputs.createInput.tokenName",
+        value: createInput.tokenName,
+        expectedLength: 20,
+        actualLength: createInput.tokenName.length,
+      });
+    }
+    const tokenNameEncoder = new TextEncoder();
+    tokenNameHashObj.update(tokenNameEncoder.encode(createInput.tokenName));
+    allHashes.push(tokenNameHashObj.digest());
+
+    // Hash token ticker
+    const tokenTickerHashObj = sha256.create();
+    if (!createInput.tokenTicker || createInput.tokenTicker.length === 0) {
+      throw new ValidationError("token ticker cannot be empty", {
+        field: "tokenInputs.createInput.tokenTicker",
+      });
+    }
+    if (createInput.tokenTicker.length > 6) {
+      throw new ValidationError("token ticker cannot be longer than 6 bytes", {
+        field: "tokenInputs.createInput.tokenTicker",
+        value: createInput.tokenTicker,
+        expectedLength: 6,
+        actualLength: createInput.tokenTicker.length,
+      });
+    }
+    const tokenTickerEncoder = new TextEncoder();
+    tokenTickerHashObj.update(
+      tokenTickerEncoder.encode(createInput.tokenTicker),
+    );
+    allHashes.push(tokenTickerHashObj.digest());
+
+    // Hash decimals
+    const decimalsHashObj = sha256.create();
+    const decimalsBytes = new Uint8Array(4);
+    new DataView(decimalsBytes.buffer).setUint32(
+      0,
+      createInput.decimals,
+      false,
+    );
+    decimalsHashObj.update(decimalsBytes);
+    allHashes.push(decimalsHashObj.digest());
+
+    // Hash max supply (fixed 16 bytes)
+    const maxSupplyHashObj = sha256.create();
+    if (!createInput.maxSupply) {
+      throw new ValidationError("max supply cannot be nil", {
+        field: "tokenInputs.createInput.maxSupply",
+      });
+    }
+    if (createInput.maxSupply.length !== 16) {
+      throw new ValidationError("max supply must be exactly 16 bytes", {
+        field: "tokenInputs.createInput.maxSupply",
+        value: createInput.maxSupply,
+        expectedLength: 16,
+        actualLength: createInput.maxSupply.length,
+      });
+    }
+    maxSupplyHashObj.update(createInput.maxSupply);
+    allHashes.push(maxSupplyHashObj.digest());
+
+    // Hash is freezable
+    const isFreezableHashObj = sha256.create();
+    isFreezableHashObj.update(
+      new Uint8Array([createInput.isFreezable ? 1 : 0]),
+    );
+    allHashes.push(isFreezableHashObj.digest());
+
+    // Hash creation entity public key (only for final hash)
+    const creationEntityHashObj = sha256.create();
+    if (!partialHash && createInput.creationEntityPublicKey) {
+      creationEntityHashObj.update(createInput.creationEntityPublicKey);
+    }
+    allHashes.push(creationEntityHashObj.digest());
   }
 
-  // Hash token outputs
+  // Hash token outputs (length + contents)
   if (!tokenTransaction.tokenOutputs) {
     throw new ValidationError("token outputs cannot be null", {
       field: "tokenOutputs",
     });
   }
 
-  if (tokenTransaction.tokenOutputs.length === 0) {
-    throw new ValidationError("token outputs cannot be empty", {
-      field: "tokenOutputs",
-    });
-  }
+  // Hash outputs length
+  const outputsLenHashObj = sha256.create();
+  const outputsLenBytes = new Uint8Array(4);
+  new DataView(outputsLenBytes.buffer).setUint32(
+    0,
+    tokenTransaction.tokenOutputs.length,
+    false,
+  );
+  outputsLenHashObj.update(outputsLenBytes);
+  allHashes.push(outputsLenHashObj.digest());
 
   for (const [i, output] of tokenTransaction.tokenOutputs.entries()) {
     if (!output) {
@@ -510,18 +765,20 @@ export function hashTokenTransactionV1(
       hashObj.update(locktimeBytes);
     }
 
-    if (output.tokenPublicKey) {
-      if (output.tokenPublicKey.length === 0) {
-        throw new ValidationError(
-          `token public key at index ${i} cannot be empty`,
-          {
-            field: `tokenOutputs[${i}].tokenPublicKey`,
-            index: i,
-          },
-        );
-      }
+    // Hash token public key (33 bytes if present, otherwise 33 zero bytes)
+    if (!output.tokenPublicKey || output.tokenPublicKey.length === 0) {
+      hashObj.update(new Uint8Array(33));
+    } else {
       hashObj.update(output.tokenPublicKey);
     }
+
+    // Hash token identifier (32 bytes if present, otherwise 32 zero bytes)
+    if (!output.tokenIdentifier || output.tokenIdentifier.length === 0) {
+      hashObj.update(new Uint8Array(32));
+    } else {
+      hashObj.update(output.tokenIdentifier);
+    }
+
     if (output.tokenAmount) {
       if (output.tokenAmount.length === 0) {
         throw new ValidationError(
@@ -568,6 +825,17 @@ export function hashTokenTransactionV1(
     return a.length - b.length;
   });
 
+  // Hash spark operator identity public keys length
+  const operatorLenHashObj = sha256.create();
+  const operatorLenBytes = new Uint8Array(4);
+  new DataView(operatorLenBytes.buffer).setUint32(
+    0,
+    sortedPubKeys.length,
+    false,
+  );
+  operatorLenHashObj.update(operatorLenBytes);
+  allHashes.push(operatorLenHashObj.digest());
+
   // Hash spark operator identity public keys
   for (const [i, pubKey] of sortedPubKeys.entries()) {
     if (!pubKey) {
@@ -608,7 +876,15 @@ export function hashTokenTransactionV1(
   const clientTimestampHashObj = sha256.create();
   const clientCreatedTs: Date | undefined = (tokenTransaction as any)
     .clientCreatedTimestamp;
-  const clientUnixTime = clientCreatedTs ? clientCreatedTs.getTime() : 0;
+  if (!clientCreatedTs) {
+    throw new ValidationError(
+      "client created timestamp cannot be null for V1 token transactions",
+      {
+        field: "clientCreatedTimestamp",
+      },
+    );
+  }
+  const clientUnixTime = clientCreatedTs.getTime();
   const clientTimestampBytes = new Uint8Array(8);
   new DataView(clientTimestampBytes.buffer).setBigUint64(
     0,
