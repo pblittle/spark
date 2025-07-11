@@ -482,13 +482,6 @@ function parseQueryTokenTransactionsArgsWithYargs(
     const issuerPublicKeys =
       parsed.issuerPublicKeys?.filter((key) => key !== "~") || [];
 
-    console.log("ownerPublicKeys", ownerPublicKeys);
-    console.log("issuerPublicKeys", issuerPublicKeys);
-    console.log("parsed", parsed);
-    console.log("explicitEmptyOwnerKeys", explicitEmptyOwnerKeys);
-    console.log("useWalletForOwner", useWalletForOwner);
-    console.log("useWalletForIssuer", useWalletForIssuer);
-
     return {
       ownerPublicKeys,
       issuerPublicKeys,
@@ -1406,7 +1399,6 @@ async function runCLI() {
             break;
           }
 
-          console.log("parsedArgs", parsedArgs);
           let ownerPublicKeys = parsedArgs.ownerPublicKeys || [];
           if (parsedArgs.useWalletIdentityKeyForOwner) {
             ownerPublicKeys.push(await wallet.getIdentityPublicKey());
@@ -1424,8 +1416,6 @@ async function runCLI() {
             parsedArgs.tokenIdentifiers,
             parsedArgs.outputIds,
           );
-
-          console.log("transactionsLength", transactions.length);
 
           console.log("\nToken Transactions:");
           for (const tx of transactions) {
