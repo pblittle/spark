@@ -489,8 +489,7 @@ export class SparkWallet extends EventEmitter {
                 leaf.signingKeyshare.publicKey,
                 operatorLeaf.signingKeyshare.publicKey,
               ) ||
-              !equalBytes(leaf.nodeTx, operatorLeaf.nodeTx) ||
-              !equalBytes(leaf.refundTx, operatorLeaf.refundTx)
+              !equalBytes(leaf.nodeTx, operatorLeaf.nodeTx)
             ) {
               leavesToIgnore.add(nodeId);
             }
