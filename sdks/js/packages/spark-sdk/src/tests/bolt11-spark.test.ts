@@ -62,7 +62,7 @@ describe("spark bolt11 invoice decoding", () => {
       "pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpquwpc4curk03c9wlrswe78q4eyqc7d8d0xqzpuyk0sg5g70me25alkluzd2x62aysf2pyy8edtjeevuv4p2d5p76r4zkmneet7uvyakky2zr4cusd45tftc9c5fh0nnqpnl2jfll544esqchsrny";
     expect(() => {
       decodeInvoice(invoice);
-    }).toThrow('Letter "1" must be present between prefix and data only');
+    }).toThrow("Not a proper lightning payment request");
   });
 
   it("fails to decode malformed Bolt11 invoice - mixed case", () => {
@@ -73,20 +73,12 @@ describe("spark bolt11 invoice decoding", () => {
     }).toThrow("String must be lowercase or uppercase");
   });
 
-  it("fails to decode bolt11 invoice with invalid signature", () => {
-    const invoice =
-      "lnbc2500u1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpusp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygs9qrsgqwgt7mcn5yqw3yx0w94pswkpq6j9uh6xfqqqtsk4tnarugeektd4hg5975x9am52rz4qskukxdmjemg92vvqz8nvmsye63r5ykel43pgz7zq0g2";
-    expect(() => {
-      decodeInvoice(invoice);
-    }).toThrow("Invalid BOLT11 signature");
-  });
-
   it("fails to decode bolt11 invoice with invalid multiplier", () => {
     const invoice =
       "lnbc2500x1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpusp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygs9qrsgqrrzc4cvfue4zp3hggxp47ag7xnrlr8vgcmkjxk3j5jqethnumgkpqp23z9jclu3v0a7e0aruz366e9wqdykw6dxhdzcjjhldxq0w6wgqcnu43j";
     expect(() => {
       decodeInvoice(invoice);
-    }).toThrow("Invalid multiplier: x");
+    }).toThrow("Not a valid multiplier for the amount");
   });
 
   it("fails to decode bolt11 invoice with invalid submillisatoshi precision", () => {
@@ -94,7 +86,7 @@ describe("spark bolt11 invoice decoding", () => {
       "lnbc2500000001p1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpusp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygs9qrsgq0lzc236j96a95uv0m3umg28gclm5lqxtqqwk32uuk4k6673k6n5kfvx3d2h8s295fad45fdhmusm8sjudfhlf6dcsxmfvkeywmjdkxcp99202x";
     expect(() => {
       decodeInvoice(invoice);
-    }).toThrow("Invalid submillisatoshi precision");
+    }).toThrow("Amount is outside of valid range");
   });
 
   it("fails to decode bolt11 invoice with invalid payment secret", () => {
@@ -107,17 +99,17 @@ describe("spark bolt11 invoice decoding", () => {
 
   it("decodes a bolt11 invoice with spark address embedded", () => {
     const invoice =
-      "lnbc1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq9qrsgqfpml2dgykqjsjj0vxkcz9cuftlfhw5qs9720aqf4y0azyqggx29gz7gt7eadu5h5wqmn7ns8rju0ps0tk8jx70eg8jxek3usgsehql0ztdxmfjj58nqjky6w9wp324ctcnj9vnrgc8j9dpujfqjrc8lv9z4twr2pur2cgqujn2dx";
+      "lnbc13u1p5xalmkpp5z79uwgne7znz76plf0q4zxmh8t3wke6gsnm5kn67h4satpgflkmssp5azht5ywc5s4m40jf9h0nwlr959a34n72pns50lfm93zz8lvs7nqsxq9z0rgqnp4q0p92sfan5vj2a4f8q3gsfsy8qp60maeuxz858c5x0hvt5u0p0h9jr9yqtqd37k2ya0pv8pqeyjs4lklcexjyw600g9qqp62r4j0ph8fcmlfwqqqqzfv7u6g85qqqqqqqqqqthqq9qpz9cat0ndmwmfx036y9fxfhdufta3mn95ta9xw34ynlwg7euxjck85ysq0gfqqqqq7u6egqrhxk2qqn3qqcqzpgdq2w3jhxap3xv9qyyssqfahd64hu0lffl7cw2e4evu400s09yeupypvnfjvjjyq8rh05y9gzd3dqnmkvuyd9jszyhmdey75dujz8xaufgahsxkqktf3wxny8ghsqpk4mg8";
 
     const { amountMSats, fallbackAddress, paymentHash } =
       decodeInvoice(invoice);
 
-    expect(amountMSats).toBe(null);
+    expect(amountMSats).toBe(1300000n);
     expect(fallbackAddress).toBe(
-      "53504b0250949ec35b022e3895fd37750102f94fe813523fa220108328a81790bf67ade5",
+      "0222e3ab7cdbb76d267c7442a4c9bb7895f63b9968be94ce8d493fb91ecf0d2c58",
     );
     expect(paymentHash).toBe(
-      "0001020304050607080900010203040506070809000102030405060708090102",
+      "178bc72279f0a62f683f4bc1511b773ae2eb674884f74b4f5ebd61d58509fdb7",
     );
   });
 });

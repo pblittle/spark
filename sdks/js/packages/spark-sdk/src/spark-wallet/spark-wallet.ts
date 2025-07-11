@@ -2585,31 +2585,27 @@ export class SparkWallet extends EventEmitter {
           invoice.invoice.encodedInvoice,
         ).fallbackAddress;
 
-        if (
-          sparkFallbackAddress &&
-          isValidSparkFallback(hexToBytes(sparkFallbackAddress))
-        ) {
-          const invoiceIdentityPubkey = sparkFallbackAddress.slice(6); // remove the 3 byte header
-          const expectedIdentityPubkey =
-            receiverIdentityPubkey ?? (await this.getIdentityPublicKey());
-
-          if (invoiceIdentityPubkey !== expectedIdentityPubkey) {
-            throw new ValidationError(
-              "Mismatch between spark identity embedded in lightning invoice and designated recipient spark identity",
-              {
-                field: "sparkFallbackAddress",
-                value: invoiceIdentityPubkey,
-                expected: expectedIdentityPubkey,
-              },
-            );
-          }
-        } else {
+        if (!sparkFallbackAddress) {
           throw new ValidationError(
-            "No valid spark fallback address found in lightning invoice",
+            "No spark fallback address found in lightning invoice",
             {
               field: "sparkFallbackAddress",
               value: sparkFallbackAddress,
               expected: "Valid spark fallback address",
+            },
+          );
+        }
+
+        const expectedIdentityPubkey =
+          receiverIdentityPubkey ?? (await this.getIdentityPublicKey());
+
+        if (sparkFallbackAddress !== expectedIdentityPubkey) {
+          throw new ValidationError(
+            "Mismatch between spark identity embedded in lightning invoice and designated recipient spark identity",
+            {
+              field: "sparkFallbackAddress",
+              value: sparkFallbackAddress,
+              expected: expectedIdentityPubkey,
             },
           );
         }
@@ -2710,9 +2706,8 @@ export class SparkWallet extends EventEmitter {
           "No valid spark address found in invoice. Defaulting to lightning.",
         );
       } else {
-        const identityPublicKey = sparkFallbackAddress.slice(6); // remove the 3 byte header
         const receiverSparkAddress = encodeSparkAddress({
-          identityPublicKey,
+          identityPublicKey: sparkFallbackAddress,
           network: Network[invoiceNetwork] as NetworkType,
         });
         return await this.transfer({
