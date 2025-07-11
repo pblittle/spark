@@ -105,10 +105,6 @@ export class IssuerSparkWallet extends SparkWallet {
       "SparkIssuerWallet.unfreezeTokens",
       this.unfreezeTokens.bind(this),
     );
-    this.getIssuerTokenActivity = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.getIssuerTokenActivity",
-      this.getIssuerTokenActivity.bind(this),
-    );
     this.getIssuerTokenDistribution = this.wrapWithOtelSpan(
       "SparkIssuerWallet.getIssuerTokenDistribution",
       this.getIssuerTokenDistribution.bind(this),
@@ -288,118 +284,6 @@ export class IssuerSparkWallet extends SparkWallet {
       impactedOutputIds: response.impactedOutputIds,
       impactedTokenAmount: tokenAmount,
     };
-  }
-
-  /**
-   * Retrieves the activity history for the issuer's token.
-   * @param pageSize - The number of transactions to return per page (default: 100)
-   * @param cursor - Optional cursor for pagination
-   * @param operationTypes - Optional array of operation types to filter by
-   * @param beforeTimestamp - Optional timestamp to filter transactions before
-   * @param afterTimestamp - Optional timestamp to filter transactions after
-   * @returns An object containing the token activity data
-   * @throws {ValidationError} If pageSize is not a safe integer
-   * @throws {NetworkError} If the activity data cannot be retrieved
-   */
-  public async getIssuerTokenActivity(
-    pageSize: number = 100,
-    cursor?: {
-      lastTransactionHash: string | Uint8Array;
-      layer: string | Layer;
-    },
-    operationTypes?: string[] | OperationType[],
-    beforeTimestamp?: Date,
-    afterTimestamp?: Date,
-  ): Promise<TokenActivityResponse> {
-    if (!Number.isSafeInteger(pageSize)) {
-      throw new ValidationError("pageSize must be less than 2^53", {
-        field: "pageSize",
-        value: pageSize,
-        expected: "smaller or equal to " + Number.MAX_SAFE_INTEGER,
-      });
-    }
-
-    const lrc20Client = await this.lrc20ConnectionManager.createLrc20Client();
-
-    // Convert cursor to proper ListAllTokenTransactionsCursor format
-    let convertedCursor: ListAllTokenTransactionsCursor | undefined;
-    if (cursor) {
-      const lastTransactionHash =
-        typeof cursor.lastTransactionHash === "string"
-          ? hexToBytes(cursor.lastTransactionHash)
-          : cursor.lastTransactionHash;
-
-      let layer: Layer;
-      if (typeof cursor.layer === "string") {
-        switch (cursor.layer.toUpperCase()) {
-          case "L1":
-            layer = Layer.L1;
-            break;
-          case "Spark":
-            layer = Layer.SPARK;
-            break;
-          default:
-            layer = Layer.UNRECOGNIZED;
-        }
-      } else {
-        layer = cursor.layer;
-      }
-
-      convertedCursor = {
-        lastTransactionHash,
-        layer,
-      };
-    }
-
-    // Convert operationTypes to proper OperationType[] format
-    let convertedOperationTypes: OperationType[] | undefined;
-    if (operationTypes) {
-      if (typeof operationTypes[0] === "string") {
-        convertedOperationTypes = (operationTypes as string[]).map((opType) => {
-          switch (opType.toUpperCase()) {
-            case "USER_TRANSFER":
-              return OperationType.USER_TRANSFER;
-            case "USER_BURN":
-              return OperationType.USER_BURN;
-            case "ISSUER_ANNOUNCE":
-              return OperationType.ISSUER_ANNOUNCE;
-            case "ISSUER_MINT":
-              return OperationType.ISSUER_MINT;
-            case "ISSUER_TRANSFER":
-              return OperationType.ISSUER_TRANSFER;
-            case "ISSUER_FREEZE":
-              return OperationType.ISSUER_FREEZE;
-            case "ISSUER_UNFREEZE":
-              return OperationType.ISSUER_UNFREEZE;
-            case "ISSUER_BURN":
-              return OperationType.ISSUER_BURN;
-            default:
-              return OperationType.UNRECOGNIZED;
-          }
-        });
-      } else {
-        convertedOperationTypes = operationTypes as OperationType[];
-      }
-    }
-
-    try {
-      const transactions = await lrc20Client.listTransactions({
-        tokenPublicKey: hexToBytes(await super.getIdentityPublicKey()),
-        cursor: convertedCursor,
-        pageSize,
-        beforeTimestamp,
-        afterTimestamp,
-        operationTypes: convertedOperationTypes,
-      });
-
-      return convertToTokenActivity(transactions);
-    } catch (error) {
-      throw new NetworkError("Failed to get token activity", {
-        operation: "listTransactions",
-        errorCount: 1,
-        errors: error instanceof Error ? error.message : String(error),
-      });
-    }
   }
 
   /**

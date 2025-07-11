@@ -610,7 +610,6 @@ async function runCLI() {
   burntokens <amount>                                                 - Burn tokens
   freezetokens <sparkAddress>                                         - Freeze tokens for a specific address
   unfreezetokens <sparkAddress>                                       - Unfreeze tokens for a specific address
-  getissuertokenactivity                                              - Get issuer's token activity
   announcetoken <tokenName> <tokenTicker> <decimals> <maxSupply> <isFreezable> - Announce token on L1
 
   help                                                                - Show this help message
@@ -1371,22 +1370,6 @@ async function runCLI() {
             impactedOutputIds: result.impactedOutputIds,
             impactedTokenAmount: result.impactedTokenAmount.toString(),
           });
-          break;
-        }
-        case "getissuertokenactivity": {
-          if (!wallet) {
-            console.log("Please initialize a wallet first");
-            break;
-          }
-          const result = await wallet.getIssuerTokenActivity();
-          if (!result.transactions || result.transactions.length === 0) {
-            console.log("No transactions found");
-          }
-          for (const transaction of result.transactions) {
-            console.log(
-              `Token Activity - case: ${transaction.transaction?.$case} | operation type: ${transaction.transaction?.$case === "spark" ? transaction.transaction?.spark.operationType : transaction.transaction?.onChain.operationType}`,
-            );
-          }
           break;
         }
         case "announcetoken": {
