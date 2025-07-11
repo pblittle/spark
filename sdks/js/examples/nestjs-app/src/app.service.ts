@@ -1,5 +1,7 @@
-import { SparkWallet, createDummyTx } from "@buildonspark/spark-sdk";
+import { SparkWallet } from "@buildonspark/spark-sdk";
 import { Injectable } from "@nestjs/common";
+const { createDummyTx } = require("@buildonspark/spark-sdk/spark-frost");
+
 @Injectable()
 export class AppService {
   getHello(): string {

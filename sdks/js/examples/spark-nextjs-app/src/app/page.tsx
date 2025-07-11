@@ -1,8 +1,9 @@
 "use client";
 
-import { SparkWallet, createDummyTx } from "@buildonspark/spark-sdk";
-import { useState } from "react";
+import { SparkWallet } from "@buildonspark/spark-sdk";
+import { createDummyTx } from "@buildonspark/spark-sdk/spark-frost";
 import Image from "next/image";
+import { useState } from "react";
 
 export default function Home() {
   const [sparkWallet, setSparkWallet] = useState<SparkWallet | null>(null);
@@ -96,9 +97,7 @@ export default function Home() {
           >
             Create Invoice (100 sats)
           </button>
-          {invoice && (
-            <p className="text-sm break-all">Invoice: {invoice}</p>
-          )}
+          {invoice && <p className="text-sm break-all">Invoice: {invoice}</p>}
         </div>
 
         <div>
@@ -140,7 +139,7 @@ export default function Home() {
           rel="noopener noreferrer"
           className="flex items-center"
         >
-           <span className="text-sm text-gray-400 mr-1">Deployed with</span>
+          <span className="text-sm text-gray-400 mr-1">Deployed with</span>
           <Image
             src="/vercel.svg"
             alt="Vercel Logo"

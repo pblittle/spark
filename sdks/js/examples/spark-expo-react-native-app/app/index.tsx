@@ -1,8 +1,8 @@
 import {
   ReactNativeSparkSigner,
   SparkWallet,
-  createDummyTx,
 } from "@buildonspark/spark-sdk/native";
+import { createDummyTx } from "@buildonspark/spark-sdk/native/spark-frost";
 import { useEffect, useState } from "react";
 import { Button, Text, View } from "react-native";
 
@@ -77,11 +77,14 @@ export default function Index() {
   }, [wallet1]);
 
   useEffect(() => {
-    (async () =>{
-      const dummyTx = await createDummyTx("bcrt1qnuyejmm2l4kavspq0jqaw0fv07lg6zv3z9z3te", 65536n);
+    (async () => {
+      const dummyTx = await createDummyTx(
+        "bcrt1qnuyejmm2l4kavspq0jqaw0fv07lg6zv3z9z3te",
+        65536n
+      );
       setDummyTx(dummyTx.txid);
-    })(); 
-  }, [])
+    })();
+  }, []);
 
   const initializeWallet = async () => {
     try {

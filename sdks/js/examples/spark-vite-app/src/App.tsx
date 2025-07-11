@@ -1,4 +1,5 @@
-import { SparkWallet, createDummyTx } from "@buildonspark/spark-sdk";
+import { SparkWallet } from "@buildonspark/spark-sdk";
+import { createDummyTx } from "@buildonspark/spark-sdk/spark-frost";
 import { useState } from "react";
 
 function App() {

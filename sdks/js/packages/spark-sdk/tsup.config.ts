@@ -1,5 +1,5 @@
-import { defineConfig } from "tsup";
 import { readFileSync } from "node:fs";
+import { defineConfig } from "tsup";
 
 const pkg = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
@@ -35,6 +35,8 @@ export default defineConfig([
       "src/graphql/objects/index.ts",
       "src/types/index.ts",
       "src/address/index.ts",
+      "src/spark_bindings/wasm/index.ts",
+      "src/spark_bindings/native/index.ts",
     ],
     format: ["cjs", "esm"],
     outDir: "dist",

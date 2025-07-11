@@ -92,6 +92,14 @@
     "./native": {
       "import": "./dist/native/index.js",
       "require": "./dist/native/index.cjs"
+    },
+    "./native/spark-frost": {
+      "import": "./dist/spark_bindings/native/index.js",
+      "require": "./dist/spark_bindings/native/index.cjs"
+    },
+    "./spark-frost": {
+      "import": "./dist/spark_bindings/wasm/index.js",
+      "require": "./dist/spark_bindings/wasm/index.cjs"
     }
   },
   "browser": {

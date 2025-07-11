@@ -1,6 +1,6 @@
-import React from 'react';
-import { SparkWallet, createDummyTx } from "@buildonspark/spark-sdk";
-import { useState } from "react";
+import { SparkWallet } from "@buildonspark/spark-sdk";
+import { createDummyTx } from "@buildonspark/spark-sdk/spark-frost";
+import React, { useState } from "react";
 
 function App() {
   const [sparkWallet, setSparkWallet] = useState(null);
@@ -67,4 +67,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

@@ -6,7 +6,7 @@
  */
 
 import { SparkWallet } from '@buildonspark/spark-sdk';
-import { createDummyTx } from '@buildonspark/spark-sdk/native';
+import { createDummyTx } from '@buildonspark/spark-sdk/native/spark-frost';
 import { useState } from 'react';
 import {
   Button,
