@@ -87,14 +87,8 @@ export function getNextTransactionSequence(
   nextSequence: number;
   needRefresh: boolean;
 } {
-  // Check if the previous sequence is valid. If not, the user could lose funds.
-  checkIfValidSequence(currSequence);
-
   const currentTimelock = getCurrentTimelock(currSequence);
   const nextTimelock = currentTimelock - TIME_LOCK_INTERVAL;
-
-  // Confirm that the next sequence is valid. This should never happen since bit 17-31 should all be 0.
-  checkIfValidSequence(nextTimelock);
 
   if (forRefresh && nextTimelock <= 100 && currentTimelock > 0) {
     return {
