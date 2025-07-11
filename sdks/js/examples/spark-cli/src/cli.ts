@@ -24,7 +24,11 @@ import {
   Network,
   NetworkType,
 } from "@buildonspark/spark-sdk/utils";
-import { bytesToHex, hexToBytes } from "@noble/curves/abstract/utils";
+import {
+  bytesToHex,
+  hexToBytes,
+  bytesToNumberBE,
+} from "@noble/curves/abstract/utils";
 import { schnorr, secp256k1 } from "@noble/curves/secp256k1";
 import { ripemd160 } from "@noble/hashes/legacy";
 import { sha256 } from "@noble/hashes/sha2";
@@ -32,6 +36,7 @@ import { hex } from "@scure/base";
 import { Address, OutScript, Transaction } from "@scure/btc-signer";
 import fs from "fs";
 import readline from "readline";
+import yargs from "yargs";
 
 // Types for fee bump functionality
 export interface Utxo {
@@ -361,6 +366,146 @@ function getExplorerUrl(network: string, txid: string): string {
   }
 }
 
+interface QueryTokenTransactionsArgs {
+  ownerPublicKeys?: string[];
+  issuerPublicKeys?: string[];
+  tokenTransactionHashes?: string[];
+  tokenIdentifiers?: string[];
+  outputIds?: string[];
+  useWalletIdentityKeyForOwner: boolean;
+  useWalletIdentityKeyForIssuer: boolean;
+}
+
+function showQueryTokenTransactionsHelp() {
+  console.log("Usage: querytokentransactions [options]");
+  console.log("");
+  console.log("Options:");
+  console.log(
+    "  --ownerPublicKeys <keys>      Comma-separated list of owner public keys (default: wallet's identity key, use ',' for empty list, '~' for wallet)",
+  );
+  console.log(
+    "  --issuerPublicKeys <keys>     Comma-separated list of issuer public keys (default: empty, use ',' for empty list, '~' for wallet)",
+  );
+  console.log(
+    "  --tokenTransactionHashes <hashes>  Comma-separated list of token transaction hashes",
+  );
+  console.log(
+    "  --tokenIdentifiers <identifiers>   Comma-separated list of token identifiers",
+  );
+  console.log(
+    "  --outputIds <ids>            Comma-separated list of output IDs",
+  );
+  console.log("  --help                        Show this help message");
+  console.log("");
+  console.log("Examples:");
+  console.log("  querytokentransactions");
+  console.log("  querytokentransactions --ownerPublicKeys 02abc123...");
+  console.log("  querytokentransactions --issuerPublicKeys 02abc123...");
+  console.log("  querytokentransactions --tokenTransactionHashes abc123...");
+  console.log(
+    "  querytokentransactions --ownerPublicKeys ~ --issuerPublicKeys 02abc123...",
+  );
+  console.log(
+    "  querytokentransactions --ownerPublicKeys key1,key2 --tokenIdentifiers id1,id2",
+  );
+  console.log(
+    "  querytokentransactions --ownerPublicKeys , --tokenIdentifiers def456...",
+  );
+}
+
+function parseQueryTokenTransactionsArgsWithYargs(
+  args: string[],
+): QueryTokenTransactionsArgs | null {
+  try {
+    const parsed = yargs(args)
+      .option("ownerPublicKeys", {
+        type: "string",
+        description:
+          "Comma-separated list of owner public keys (default: wallet's identity key). Use ',' for empty list, '~' for wallet's identity key.",
+        coerce: (value: string) => {
+          if (!value) return [];
+          // If it's just a comma, return empty array (explicit empty list)
+          if (value === ",") return [];
+          // Otherwise split by comma and filter out empty strings
+          return value.split(",").filter((key) => key.trim() !== "");
+        },
+      })
+      .option("issuerPublicKeys", {
+        type: "string",
+        description:
+          "Comma-separated list of issuer public keys (default: empty). Use ',' for empty list, '~' for wallet's identity key.",
+        coerce: (value: string) => {
+          if (!value) return [];
+          // If it's just a comma, return empty array (explicit empty list)
+          if (value === ",") return [];
+          // Otherwise split by comma and filter out empty strings
+          return value.split(",").filter((key) => key.trim() !== "");
+        },
+      })
+      .option("tokenTransactionHashes", {
+        type: "string",
+        description: "Comma-separated list of token transaction hashes",
+        coerce: (value: string) => (value ? value.split(",") : []),
+      })
+      .option("tokenIdentifiers", {
+        type: "string",
+        description: "Comma-separated list of token identifiers",
+        coerce: (value: string) => (value ? value.split(",") : []),
+      })
+      .option("outputIds", {
+        type: "string",
+        description: "Comma-separated list of output IDs",
+        coerce: (value: string) => (value ? value.split(",") : []),
+      })
+      .help(false) // Disable yargs built-in help
+      .parseSync();
+
+    // Check if --help was requested
+    if (args.includes("--help")) {
+      showQueryTokenTransactionsHelp();
+      return null;
+    }
+
+    // Check if user explicitly specified empty keys with ','
+    const rawArgs = args.join(" ");
+    const explicitEmptyOwnerKeys =
+      /--ownerPublicKeys\s+,/.test(rawArgs) ||
+      /--ownerPublicKeys=,/.test(rawArgs);
+
+    // Check if user specified '~' for wallet identity key
+    const useWalletForOwner = parsed.ownerPublicKeys?.includes("~") || false;
+    const useWalletForIssuer = parsed.issuerPublicKeys?.includes("~") || false;
+
+    // Filter out '~' from the arrays
+    const ownerPublicKeys =
+      parsed.ownerPublicKeys?.filter((key) => key !== "~") || [];
+    const issuerPublicKeys =
+      parsed.issuerPublicKeys?.filter((key) => key !== "~") || [];
+
+    console.log("ownerPublicKeys", ownerPublicKeys);
+    console.log("issuerPublicKeys", issuerPublicKeys);
+    console.log("parsed", parsed);
+    console.log("explicitEmptyOwnerKeys", explicitEmptyOwnerKeys);
+    console.log("useWalletForOwner", useWalletForOwner);
+    console.log("useWalletForIssuer", useWalletForIssuer);
+
+    return {
+      ownerPublicKeys,
+      issuerPublicKeys,
+      tokenTransactionHashes: parsed.tokenTransactionHashes,
+      tokenIdentifiers: parsed.tokenIdentifiers,
+      outputIds: parsed.outputIds,
+      useWalletIdentityKeyForOwner:
+        !explicitEmptyOwnerKeys &&
+        (ownerPublicKeys.length === 0 || useWalletForOwner),
+      useWalletIdentityKeyForIssuer: useWalletForIssuer,
+    };
+  } catch (error) {
+    showQueryTokenTransactionsHelp();
+    throw error;
+  }
+}
+
 async function runCLI() {
   // Get network from environment variable
   const network = (() => {
@@ -452,8 +597,9 @@ async function runCLI() {
   The advanced commands below are for specific use cases.
 
   Token Holder Commands:
-  transfertokens <tokenPubKey> <receiverSparkAddress> <amount>        - Transfer tokens
-  batchtransfertokens <tokenPubKey> <receiverAddress1:amount1> <receiverAddress2:amount2> ... - Transfer tokens with multiple outputs
+    transfertokens <tokenPubKey> <receiverSparkAddress> <amount>        - Transfer tokens
+    batchtransfertokens <tokenPubKey> <receiverAddress1:amount1> <receiverAddress2:amount2> ... - Transfer tokens with multiple outputs
+    querytokentransactions [--ownerPublicKeys] [--issuerPublicKeys] [--tokenTransactionHashes] [--tokenIdentifiers] [--outputIds] - Query token transaction history
 
   Token Issuer Commands:
   gettokenl1address                                                   - Get the L1 address for on-chain token operations
@@ -1271,81 +1417,104 @@ async function runCLI() {
             console.log("Please initialize a wallet first");
             break;
           }
-          if (args.length > 2) {
-            console.log(
-              "Usage: querytokentransactions [tokenPublicKey] [tokenTransactionHash]",
-            );
+
+          const parsedArgs = parseQueryTokenTransactionsArgsWithYargs(args);
+          if (!parsedArgs) {
             break;
           }
 
-          try {
-            let tokenPublicKeys: string[];
-            if (args.length === 0) {
-              // If no token public key is provided, use the wallet's own public key
-              const publicKey = await wallet.getIdentityPublicKey();
-              tokenPublicKeys = [publicKey];
+          console.log("parsedArgs", parsedArgs);
+          let ownerPublicKeys = parsedArgs.ownerPublicKeys || [];
+          if (parsedArgs.useWalletIdentityKeyForOwner) {
+            ownerPublicKeys.push(await wallet.getIdentityPublicKey());
+          }
+
+          let issuerPublicKeys = parsedArgs.issuerPublicKeys || [];
+          if (parsedArgs.useWalletIdentityKeyForIssuer) {
+            issuerPublicKeys.push(await wallet.getIdentityPublicKey());
+          }
+
+          const transactions = await wallet.queryTokenTransactions(
+            ownerPublicKeys,
+            issuerPublicKeys,
+            parsedArgs.tokenTransactionHashes,
+            parsedArgs.tokenIdentifiers,
+            parsedArgs.outputIds,
+          );
+
+          console.log("transactionsLength", transactions.length);
+
+          console.log("\nToken Transactions:");
+          for (const tx of transactions) {
+            console.log("\nTransaction Details:");
+            console.log(`  Status: ${TokenTransactionStatus[tx.status]}`);
+            var tokenIdentifier = "";
+            var issuerPublicKey = "";
+            if (tx.tokenTransaction?.tokenInputs?.$case === "createInput") {
+              issuerPublicKey = hex.encode(
+                tx.tokenTransaction?.tokenInputs.createInput.issuerPublicKey,
+              );
             } else {
-              tokenPublicKeys = [args[0]];
+              issuerPublicKey = hex.encode(
+                tx.tokenTransaction?.tokenOutputs[0].tokenPublicKey ||
+                  new Uint8Array(0),
+              );
+            }
+            console.log(`  Token Identifier: ${tokenIdentifier}`);
+            console.log(`  Issuer Public Key: ${issuerPublicKey}`);
+
+            if (tx.tokenTransaction?.tokenInputs) {
+              const input = tx.tokenTransaction.tokenInputs;
+              if (input.$case === "mintInput") {
+                console.log("  Type: Mint");
+                console.log(
+                  `  Issuer Public Key: ${hex.encode(input.mintInput.issuerPublicKey)}`,
+                );
+                console.log(
+                  `  Timestamp: ${tx.tokenTransaction.clientCreatedTimestamp?.toISOString() || "N/A"}`,
+                );
+              } else if (input.$case === "transferInput") {
+                console.log("  Type: Transfer");
+                console.log(
+                  `  Outputs to Spend: ${input.transferInput.outputsToSpend.length}`,
+                );
+              } else if (input.$case === "createInput") {
+                console.log("  Type: Create");
+                console.log(
+                  `  Token Name: ${input.createInput.tokenName}`,
+                  `  Token Ticker: ${input.createInput.tokenTicker}`,
+                  `  Max Supply: ${hex.encode(input.createInput.maxSupply)} (decimal: ${bytesToNumberBE(input.createInput.maxSupply)})`,
+                  `  Decimals: ${input.createInput.decimals}`,
+                  `  Is Freezable: ${input.createInput.isFreezable}`,
+                  `  Creation Entity Public Key: ${hex.encode(input.createInput.creationEntityPublicKey!)}`,
+                );
+              }
             }
 
-            const tokenTransactionHashes = args[1] ? [args[1]] : undefined;
-
-            const transactions = await wallet.queryTokenTransactions(
-              tokenPublicKeys,
-              tokenTransactionHashes,
-            );
-            console.log("\nToken Transactions:");
-            for (const tx of transactions) {
-              console.log("\nTransaction Details:");
-              console.log(`  Status: ${TokenTransactionStatus[tx.status]}`);
-
-              if (tx.tokenTransaction?.tokenInputs) {
-                const input = tx.tokenTransaction.tokenInputs;
-                if (input.$case === "mintInput") {
-                  console.log("  Type: Mint");
+            if (tx.tokenTransaction?.tokenOutputs) {
+              console.log("\n  Outputs:");
+              for (const output of tx.tokenTransaction.tokenOutputs) {
+                console.log(`    Output ID: ${output.id}`);
+                console.log(
+                  `    Owner Public Key: ${hex.encode(output.ownerPublicKey)}`,
+                );
+                console.log(
+                  `    Token Amount: 0x${hex.encode(output.tokenAmount)} (decimal: ${bytesToNumberBE(output.tokenAmount)})`,
+                );
+                if (output.withdrawBondSats !== undefined) {
                   console.log(
-                    `  Issuer Public Key: ${hex.encode(input.mintInput.issuerPublicKey)}`,
-                  );
-                  console.log(
-                    `  Timestamp: ${new Date(input.mintInput.issuerProvidedTimestamp * 1000).toISOString()}`,
-                  );
-                } else if (input.$case === "transferInput") {
-                  console.log("  Type: Transfer");
-                  console.log(
-                    `  Outputs to Spend: ${input.transferInput.outputsToSpend.length}`,
+                    `    Withdraw Bond Sats: ${output.withdrawBondSats}`,
                   );
                 }
-              }
-
-              if (tx.tokenTransaction?.tokenOutputs) {
-                console.log("\n  Outputs:");
-                for (const output of tx.tokenTransaction.tokenOutputs) {
+                if (output.withdrawRelativeBlockLocktime !== undefined) {
                   console.log(
-                    `    Owner Public Key: ${hex.encode(output.ownerPublicKey)}`,
+                    `    Withdraw Relative Block Locktime: ${output.withdrawRelativeBlockLocktime}`,
                   );
-                  console.log(
-                    `    Token Public Key: ${hex.encode(output.tokenPublicKey!)}`,
-                  );
-                  console.log(
-                    `    Token Amount: ${hex.encode(output.tokenAmount)}`,
-                  );
-                  if (output.withdrawBondSats !== undefined) {
-                    console.log(
-                      `    Withdraw Bond Sats: ${output.withdrawBondSats}`,
-                    );
-                  }
-                  if (output.withdrawRelativeBlockLocktime !== undefined) {
-                    console.log(
-                      `    Withdraw Relative Block Locktime: ${output.withdrawRelativeBlockLocktime}`,
-                    );
-                  }
-                  console.log("    ---");
                 }
+                console.log("    ---");
               }
-              console.log("----------------------------------------");
             }
-          } catch (error) {
-            console.error("Error querying token transactions:", error);
+            console.log("----------------------------------------");
           }
           break;
         }

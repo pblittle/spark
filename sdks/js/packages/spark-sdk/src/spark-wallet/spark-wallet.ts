@@ -43,7 +43,6 @@ import {
   QueryNodesResponse,
   SigningJob,
   SubscribeToEventsResponse,
-  TokenTransactionWithStatus,
   Transfer,
   TransferStatus,
   TransferType,
@@ -130,6 +129,7 @@ import type {
   TokenBalanceMap,
 } from "./types.js";
 import { encodeHumanReadableTokenIdentifier } from "../utils/token-identifier.js";
+import { TokenTransactionWithStatus } from "../proto/spark_token.js";
 
 /**
  * The SparkWallet class is the primary interface for interacting with the Spark network.
@@ -3312,34 +3312,27 @@ export class SparkWallet extends EventEmitter {
    * Retrieves token transaction history for specified tokens owned by the wallet.
    * Can optionally filter by specific transaction hashes.
    *
-   * @param tokenPublicKeys - Array of token public keys to query transactions for
+   * @param ownerPublicKeys - Optional array of owner public keys to query transactions for
+   * @param issuerPublicKeys - Optional array of issuer public keys to query transactions for
    * @param tokenTransactionHashes - Optional array of specific transaction hashes to filter by
+   * @param tokenIdentifiers - Optional array of token identifiers to filter by
+   * @param outputIds - Optional array of output IDs to filter by
    * @returns Promise resolving to array of token transactions with their current status
    */
   public async queryTokenTransactions(
-    tokenPublicKeys: string[],
+    ownerPublicKeys?: string[],
+    issuerPublicKeys?: string[],
     tokenTransactionHashes?: string[],
+    tokenIdentifiers?: string[],
+    outputIds?: string[],
   ): Promise<TokenTransactionWithStatus[]> {
-    const sparkClient = await this.connectionManager.createSparkClient(
-      this.config.getCoordinatorAddress(),
-    );
-
-    let queryParams;
-    if (tokenTransactionHashes?.length) {
-      queryParams = {
-        tokenPublicKeys: tokenPublicKeys?.map(hexToBytes)!,
-        ownerPublicKeys: [hexToBytes(await this.getIdentityPublicKey())],
-        tokenTransactionHashes: tokenTransactionHashes.map(hexToBytes),
-      };
-    } else {
-      queryParams = {
-        tokenPublicKeys: tokenPublicKeys?.map(hexToBytes)!,
-        ownerPublicKeys: [hexToBytes(await this.getIdentityPublicKey())],
-      };
-    }
-
-    const response = await sparkClient.query_token_transactions(queryParams);
-    return response.tokenTransactionsWithStatus;
+    return this.tokenTransactionService.queryTokenTransactions({
+      ownerPublicKeys,
+      issuerPublicKeys,
+      tokenTransactionHashes,
+      tokenIdentifiers,
+      outputIds,
+    }) as Promise<TokenTransactionWithStatus[]>;
   }
 
   public async getTokenL1Address(): Promise<string> {

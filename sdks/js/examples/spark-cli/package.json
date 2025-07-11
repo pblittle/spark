@@ -29,7 +29,8 @@
   "dependencies": {
     "@buildonspark/issuer-sdk": "^0.0.75",
     "@buildonspark/spark-sdk": "^0.1.44",
-    "tsx": "^4.19.3"
+    "tsx": "^4.19.3",
+    "yargs": "^18.0.0"
   },
   "engines": {
     "node": ">=18"

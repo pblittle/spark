@@ -9,6 +9,8 @@ import {
   SignTokenTransactionResponse,
   OperatorSpecificOwnerSignature,
   RevocationSecretWithIndex,
+  TokenTransactionWithStatus as TokenTransactionWithStatusV0,
+  QueryTokenTransactionsRequest as QueryTokenTransactionsRequestV0,
 } from "../proto/spark.js";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { SparkCallOptions } from "../types/grpc.js";
@@ -39,6 +41,8 @@ import {
   TokenTransaction,
   SignatureWithIndex,
   InputTtxoSignaturesPerOperator,
+  QueryTokenTransactionsRequest as QueryTokenTransactionsRequestV1,
+  TokenTransactionWithStatus as TokenTransactionWithStatusV1,
 } from "../proto/spark_token.js";
 import { TokenTransaction as TokenTransactionV0 } from "../proto/spark.js";
 import { collectResponses } from "../utils/response-validation.js";
@@ -53,6 +57,14 @@ export interface FetchOwnedTokenOutputsParams {
   ownerPublicKeys: Uint8Array[];
   issuerPublicKeys?: Uint8Array[];
   tokenIdentifiers?: Uint8Array[];
+}
+
+export interface QueryTokenTransactionsParams {
+  ownerPublicKeys?: string[];
+  issuerPublicKeys?: string[];
+  tokenTransactionHashes?: string[];
+  tokenIdentifiers?: string[];
+  outputIds?: string[];
 }
 
 export class TokenTransactionService {
@@ -886,6 +898,16 @@ export class TokenTransactionService {
     }
   }
 
+  public async queryTokenTransactions(
+    params: QueryTokenTransactionsParams,
+  ): Promise<TokenTransactionWithStatusV0[] | TokenTransactionWithStatusV1[]> {
+    if (this.config.getTokenTransactionVersion() === "V0") {
+      return this.queryTokenTransactionsV0(params);
+    } else {
+      return this.queryTokenTransactionsV1(params);
+    }
+  }
+
   private async fetchOwnedTokenOutputsV0(
     params: FetchOwnedTokenOutputsParams,
   ): Promise<OutputWithPreviousTransactionData[]> {
@@ -948,6 +970,112 @@ export class TokenTransactionService {
         "Failed to fetch owned token outputs",
         {
           operation: "spark_token.query_token_outputs",
+          errorCount: 1,
+          errors: error instanceof Error ? error.message : String(error),
+        },
+        error as Error,
+      );
+    }
+  }
+
+  private async queryTokenTransactionsV0(
+    params: QueryTokenTransactionsParams,
+  ): Promise<TokenTransactionWithStatusV1[]> {
+    const {
+      ownerPublicKeys,
+      issuerPublicKeys,
+      tokenTransactionHashes,
+      tokenIdentifiers,
+      outputIds,
+    } = params;
+
+    const sparkClient = await this.connectionManager.createSparkClient(
+      this.config.getCoordinatorAddress(),
+    );
+
+    let queryParams: QueryTokenTransactionsRequestV0 = {
+      tokenPublicKeys: issuerPublicKeys?.map(hexToBytes)!,
+      ownerPublicKeys: ownerPublicKeys?.map(hexToBytes)!,
+      tokenIdentifiers: tokenIdentifiers?.map(hexToBytes)!,
+      tokenTransactionHashes: tokenTransactionHashes?.map(hexToBytes)!,
+      outputIds: outputIds || [],
+      limit: 100,
+      offset: 0,
+    };
+
+    try {
+      const response = await sparkClient.query_token_transactions(queryParams);
+      return response.tokenTransactionsWithStatus.map((tx) => {
+        // Convert V0 structure to V1 structure
+        const v1TokenTransaction: TokenTransaction = {
+          version: 1,
+          network: tx.tokenTransaction!.network,
+          tokenInputs: tx.tokenTransaction!.tokenInputs,
+          tokenOutputs: tx.tokenTransaction!.tokenOutputs!,
+          sparkOperatorIdentityPublicKeys:
+            tx.tokenTransaction!.sparkOperatorIdentityPublicKeys!,
+          expiryTime: undefined, // V0 doesn't have expiry time
+          clientCreatedTimestamp:
+            tx.tokenTransaction?.tokenInputs?.$case === "mintInput"
+              ? new Date(
+                  tx.tokenTransaction.tokenInputs.mintInput
+                    .issuerProvidedTimestamp * 1000,
+                )
+              : new Date(),
+        };
+
+        return {
+          tokenTransaction: v1TokenTransaction,
+          status: tx.status,
+          confirmationMetadata: tx.confirmationMetadata,
+        };
+      });
+    } catch (error) {
+      throw new NetworkError(
+        "Failed to query token transactions",
+        {
+          operation: "spark.query_token_transactions",
+          errorCount: 1,
+          errors: error instanceof Error ? error.message : String(error),
+        },
+        error as Error,
+      );
+    }
+  }
+
+  private async queryTokenTransactionsV1(
+    params: QueryTokenTransactionsParams,
+  ): Promise<TokenTransactionWithStatusV1[]> {
+    const {
+      ownerPublicKeys,
+      issuerPublicKeys,
+      tokenTransactionHashes,
+      tokenIdentifiers,
+      outputIds,
+    } = params;
+
+    const tokenClient = await this.connectionManager.createSparkTokenClient(
+      this.config.getCoordinatorAddress(),
+    );
+
+    let queryParams: QueryTokenTransactionsRequestV1 = {
+      issuerPublicKeys: issuerPublicKeys?.map(hexToBytes)!,
+      ownerPublicKeys: ownerPublicKeys?.map(hexToBytes)!,
+      tokenIdentifiers: tokenIdentifiers?.map(hexToBytes)!,
+      tokenTransactionHashes: tokenTransactionHashes?.map(hexToBytes)!,
+      outputIds: outputIds || [],
+      limit: 100,
+      offset: 0,
+    };
+
+    try {
+      const response = await tokenClient.query_token_transactions(queryParams);
+      return response.tokenTransactionsWithStatus;
+    } catch (error) {
+      throw new NetworkError(
+        "Failed to query token transactions",
+        {
+          operation: "spark_token.query_token_transactions",
           errorCount: 1,
           errors: error instanceof Error ? error.message : String(error),
         },
