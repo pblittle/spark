@@ -1,3 +1,5 @@
+dkg:
+  min_available_keys: 100
 bitcoind:
   regtest:
     network: regtest

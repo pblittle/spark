@@ -524,7 +524,6 @@ run_operators_tmux() {
            -signer '${signer_socket}' \
            -port ${port} \
            ${cert_config} \
-           -dkg-limit-override 100 \
            -run-dir '${run_dir}' \
            -local true \
            2>&1 | tee '${log_file}'"
