@@ -1,5 +1,16 @@
 # @buildonspark/issuer-sdk
 
+## 0.0.76
+
+### Patch Changes
+
+- - Update parsing of spark address from fallback_adress to route_hints
+  - Update sdk checks on transactions
+  - Add token features
+  - Improve stability and cleanup
+- Updated dependencies
+  - @buildonspark/spark-sdk@0.1.45
+
 ## 0.0.75
 
 ### Patch Changes
