@@ -856,6 +856,7 @@ message RequestedSigningCommitments {
 
 message GetSigningCommitmentsRequest {
     repeated string node_ids = 1;
+    uint32 count = 2;
 }
 
 message GetSigningCommitmentsResponse {
