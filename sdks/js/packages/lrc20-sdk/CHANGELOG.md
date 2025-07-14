@@ -1,5 +1,11 @@
 # @buildonspark/lrc20-sdk
 
+## 0.0.59
+
+### Patch Changes
+
+- Upgrades to token transfers
+
 ## 0.0.58
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @buildonspark/spark-sdk
 
+## 0.1.46
+
+### Patch Changes
+
+- Upgrades to token transfers
+- Updated dependencies
+  - @buildonspark/lrc20-sdk@0.0.59
+
 ## 0.1.45
 
 ### Patch Changes
