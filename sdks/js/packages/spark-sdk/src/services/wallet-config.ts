@@ -175,7 +175,7 @@ export const BASE_CONFIG: Required<ConfigOptions> = {
   threshold: 2,
   signingOperators: getLocalSigningOperators(),
   tokenSignatures: "SCHNORR",
-  tokenTransactionVersion: "V0",
+  tokenTransactionVersion: "V1",
   tokenValidityDurationSeconds: 180,
   electrsUrl: getElectrsUrl("LOCAL"),
   expectedWithdrawBondSats: 10000,
