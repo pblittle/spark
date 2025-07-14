@@ -291,3 +291,21 @@ Update the sspClientOptions for dev-regtest-config.json
 ```
 
 Running yarn cli:dev will now point to you local SSP server and will be connected to dev SOs and dev dbs.
+
+## Releasing
+
+Releases are triggered by creating a release, which kicks off the [Release](https://github.com/lightsparkdev/spark/actions/workflows/release.yaml)
+workflow.
+
+Every hour we build a [Release Candidate](https://github.com/lightsparkdev/spark/actions/workflows/rc.yaml).
+The Release Candidate does the following:
+- Chooses the most recent SO build that has successfully gone through CI.
+- Runs all hermetic tests against the build.
+- Restarts the SOs and LRC20 node in Loadtest with the build.
+- (Soon) runs Artillery tests.
+
+In regular circumstances (i.e. unless fixing a production issue), releasing from the release
+candidate is greatly preferred. You can create a release from the release candidate [here](https://github.com/lightsparkdev/spark/releases/new?target=rc).
+
+Each release has a name, which should follow `prod-spark-YYYY.MM.DD.N`, where `N` starts at 1 and
+increments for each release on a given day.
