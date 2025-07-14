@@ -476,7 +476,7 @@ describe("LightningService", () => {
     );
 
     expect(transfer.status).toEqual(
-      TransferStatus.TRANSFER_STATUS_SENDER_INITIATED_COORDINATOR,
+      TransferStatus.TRANSFER_STATUS_SENDER_KEY_TWEAK_PENDING,
     );
 
     const refunds =
