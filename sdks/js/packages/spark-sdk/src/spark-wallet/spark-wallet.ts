@@ -3303,7 +3303,7 @@ export class SparkWallet extends EventEmitter {
   }
 
   /**
-   * Retrieves token transaction history for specified tokens owned by the wallet.
+   * Retrieves token transaction history for specified tokens
    * Can optionally filter by specific transaction hashes.
    *
    * @param ownerPublicKeys - Optional array of owner public keys to query transactions for
