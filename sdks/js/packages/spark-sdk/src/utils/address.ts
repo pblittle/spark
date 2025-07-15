@@ -2,7 +2,7 @@ import { secp256k1 } from "@noble/curves/secp256k1";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { bech32m } from "@scure/base";
 import { PaymentIntentFields, SparkAddress } from "../proto/spark.js";
-import { NetworkType } from "../utils/network.js";
+import { NetworkType } from "./network.js";
 import { ValidationError } from "../errors/index.js";
 
 import { UUID, uuidv7 } from "uuidv7";

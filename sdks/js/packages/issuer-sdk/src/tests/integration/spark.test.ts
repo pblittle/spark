@@ -1,34 +1,34 @@
-import { filterTokenBalanceForTokenPublicKey } from "@buildonspark/spark-sdk/utils";
+import { filterTokenBalanceForTokenPublicKey } from "@buildonspark/spark-sdk";
 import { jest } from "@jest/globals";
-import { encodeSparkAddress } from "@buildonspark/spark-sdk/address";
+import { encodeSparkAddress } from "@buildonspark/spark-sdk";
 import { BitcoinFaucet } from "../../../../spark-sdk/src/tests/utils/test-faucet.js";
 import { IssuerSparkWalletTesting } from "../utils/issuer-test-wallet.js";
 import { hexToBytes } from "@noble/curves/abstract/utils";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { IssuerSparkWallet } from "../../index.js";
-import { LOCAL_WALLET_CONFIG } from "@buildonspark/spark-sdk/services/wallet-config";
-import { ConfigOptions } from "@buildonspark/spark-sdk/services/wallet-config";
+import { WalletConfig } from "@buildonspark/spark-sdk";
+import { ConfigOptions } from "@buildonspark/spark-sdk";
 
 export const TOKENS_V0_SCHNORR_CONFIG: Required<ConfigOptions> = {
-  ...LOCAL_WALLET_CONFIG,
+  ...WalletConfig.LOCAL,
   tokenTransactionVersion: "V0",
   tokenSignatures: "SCHNORR",
 };
 
 export const TOKENS_V1_SCHNORR_CONFIG: Required<ConfigOptions> = {
-  ...LOCAL_WALLET_CONFIG,
+  ...WalletConfig.LOCAL,
   tokenTransactionVersion: "V1",
   tokenSignatures: "SCHNORR",
 };
 
 export const TOKENS_V0_ECDSA_CONFIG: Required<ConfigOptions> = {
-  ...LOCAL_WALLET_CONFIG,
+  ...WalletConfig.LOCAL,
   tokenSignatures: "ECDSA",
   tokenTransactionVersion: "V0",
 };
 
 export const TOKENS_V1_ECDSA_CONFIG: Required<ConfigOptions> = {
-  ...LOCAL_WALLET_CONFIG,
+  ...WalletConfig.LOCAL,
   tokenSignatures: "ECDSA",
   tokenTransactionVersion: "V1",
 };

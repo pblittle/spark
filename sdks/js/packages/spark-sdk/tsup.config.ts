@@ -21,20 +21,13 @@ export default defineConfig([
     entry: [
       "src/index.ts",
       "src/index.node.ts",
-      "src/signer/signer.ts",
-      "src/services/config.ts",
-      "src/services/index.ts",
-      "src/services/wallet-config.ts",
-      "src/services/token-transactions.ts",
-      "src/services/connection.ts",
-      "src/services/lrc-connection.ts",
-      "src/utils/index.ts",
+      /* Entrypoints other than index should be static only, i.e. modules that never depend
+         on the state of other modules. Everything else should be exported from index. */
       "src/proto/spark.ts",
       "src/proto/spark_token.ts",
       "src/proto/lrc20.ts",
       "src/graphql/objects/index.ts",
       "src/types/index.ts",
-      "src/address/index.ts",
       "src/spark_bindings/wasm/index.ts",
       "src/spark_bindings/native/index.ts",
     ],

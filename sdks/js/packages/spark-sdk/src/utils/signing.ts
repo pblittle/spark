@@ -1,6 +1,6 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { ValidationError } from "../errors/index.js";
-import type { SigningCommitment, SigningNonce } from "../signer/signer.js";
+import type { SigningCommitment, SigningNonce } from "../signer/types.js";
 
 export function getRandomSigningNonce(): SigningNonce {
   const binding = secp256k1.utils.randomPrivateKey();

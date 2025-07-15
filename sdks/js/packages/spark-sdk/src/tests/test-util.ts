@@ -6,17 +6,11 @@ import { TreeNode } from "../proto/spark.js";
 import { WalletConfigService } from "../services/config.js";
 import { ConnectionManager } from "../services/connection.js";
 import { DepositService } from "../services/deposit.js";
-import {
-  ConfigOptions,
-  LOCAL_WALLET_CONFIG,
-} from "../services/wallet-config.js";
+import { ConfigOptions, WalletConfig } from "../services/wallet-config.js";
 import { getP2TRAddressFromPublicKey } from "../utils/bitcoin.js";
-import { getCrypto } from "../utils/crypto.js";
 import { getNetwork, Network } from "../utils/network.js";
 import { SparkWalletTesting } from "./utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "./utils/test-faucet.js";
-
-const crypto = getCrypto();
 
 export function getTestWalletConfig() {
   const identityPrivateKey = secp256k1.utils.randomPrivateKey();
@@ -27,7 +21,7 @@ export function getTestWalletConfigWithIdentityKey(
   identityPrivateKey: Uint8Array,
 ) {
   return {
-    ...LOCAL_WALLET_CONFIG,
+    ...WalletConfig.LOCAL,
     identityPrivateKey,
   } as ConfigOptions;
 }

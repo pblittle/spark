@@ -1,8 +1,10 @@
 import { IssuerSparkWallet } from "../../issuer-wallet/issuer-spark-wallet.js";
 import { jest } from "@jest/globals";
-import { SparkWallet } from "@buildonspark/spark-sdk";
-import { filterTokenBalanceForTokenPublicKey } from "@buildonspark/spark-sdk/utils";
-import { LOCAL_WALLET_CONFIG } from "@buildonspark/spark-sdk/services/wallet-config";
+import {
+  SparkWallet,
+  filterTokenBalanceForTokenPublicKey,
+  WalletConfig,
+} from "@buildonspark/spark-sdk";
 
 const TEST_TIMEOUT = 600_000; // 10 minutes
 const TOKEN_AMOUNT: bigint = 1000n;
@@ -31,10 +33,10 @@ describe("Stress test for token transfers", () => {
 
     const start_time = Date.now();
     const { wallet: issuerWallet } = await IssuerSparkWallet.initialize({
-      options: LOCAL_WALLET_CONFIG,
+      options: WalletConfig.LOCAL,
     });
     const { wallet: userWallet } = await SparkWallet.initialize({
-      options: LOCAL_WALLET_CONFIG,
+      options: WalletConfig.LOCAL,
     });
 
     await issuerWallet.mintTokens(TOKEN_AMOUNT);
@@ -116,10 +118,10 @@ describe("Stress test for token transfers", () => {
         .fill(0)
         .map(async () => {
           const issuer = await IssuerSparkWallet.initialize({
-            options: LOCAL_WALLET_CONFIG,
+            options: WalletConfig.LOCAL,
           });
           const user = await SparkWallet.initialize({
-            options: LOCAL_WALLET_CONFIG,
+            options: WalletConfig.LOCAL,
           });
 
           await issuer.wallet.mintTokens(TOKEN_AMOUNT);

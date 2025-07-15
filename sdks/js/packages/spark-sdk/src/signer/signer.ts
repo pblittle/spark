@@ -12,7 +12,7 @@ import * as ecies from "eciesjs";
 import { isReactNative } from "../constants.js";
 import { ConfigurationError, ValidationError } from "../errors/types.js";
 import { TreeNode } from "../proto/spark.js";
-import { IKeyPackage, ISigningCommitment } from "../spark_bindings/types.js";
+import { IKeyPackage } from "../spark_bindings/types.js";
 import { generateAdaptorFromSignature } from "../utils/adaptor-signature.js";
 import { subtractPrivateKeys } from "../utils/keys.js";
 import {
@@ -23,19 +23,6 @@ import {
   getRandomSigningNonce,
   getSigningCommitmentFromNonce,
 } from "../utils/signing.js";
-
-let sparkFrostModule: any = undefined;
-const getSparkFrostModule = async () => {
-  if (isReactNative) {
-    return undefined;
-  }
-  if (!sparkFrostModule) {
-    // Use dynamic import
-    sparkFrostModule = await import("../spark_bindings/wasm/index.js");
-  }
-  return sparkFrostModule;
-};
-
 import { privateAdd, privateNegate } from "@bitcoinerlab/secp256k1";
 import {
   fromPrivateKey,
@@ -47,53 +34,26 @@ import { sha256 } from "@noble/hashes/sha2";
 import { Transaction } from "@scure/btc-signer";
 import { taprootTweakPrivKey } from "@scure/btc-signer/utils";
 import type { Psbt } from "bitcoinjs-lib";
+import type {
+  AggregateFrostParams,
+  DerivedHDKey,
+  KeyPair,
+  SignFrostParams,
+  SigningCommitment,
+  SigningNonce,
+  SplitSecretWithProofsParams,
+} from "./types.js";
 
-export { Receipt, PARITY, fromPrivateKey } from "@buildonspark/lrc20-sdk";
-export { MultisigReceiptInput } from "@buildonspark/lrc20-sdk/lrc/types";
-
-export type SigningNonce = {
-  binding: Uint8Array;
-  hiding: Uint8Array;
-};
-
-export type SigningCommitment = {
-  binding: Uint8Array;
-  hiding: Uint8Array;
-};
-
-export type SignFrostParams = {
-  message: Uint8Array;
-  privateAsPubKey: Uint8Array;
-  publicKey: Uint8Array;
-  verifyingKey: Uint8Array;
-  selfCommitment: ISigningCommitment;
-  statechainCommitments?: { [key: string]: ISigningCommitment } | undefined;
-  adaptorPubKey?: Uint8Array | undefined;
-};
-
-export type AggregateFrostParams = Omit<SignFrostParams, "privateAsPubKey"> & {
-  selfSignature: Uint8Array;
-  statechainSignatures?: { [key: string]: Uint8Array } | undefined;
-  statechainPublicKeys?: { [key: string]: Uint8Array } | undefined;
-};
-
-export type SplitSecretWithProofsParams = {
-  secret: Uint8Array;
-  curveOrder: bigint;
-  threshold: number;
-  numShares: number;
-  isSecretPubkey?: boolean;
-};
-
-type DerivedHDKey = {
-  hdKey: HDKey;
-  privateKey: Uint8Array;
-  publicKey: Uint8Array;
-};
-
-type KeyPair = {
-  privateKey: Uint8Array;
-  publicKey: Uint8Array;
+let sparkFrostModule: any = undefined;
+const getSparkFrostModule = async () => {
+  if (isReactNative) {
+    return undefined;
+  }
+  if (!sparkFrostModule) {
+    // Use dynamic import
+    sparkFrostModule = await import("../spark_bindings/wasm/index.js");
+  }
+  return sparkFrostModule;
 };
 
 interface SparkKeysGenerator {
@@ -936,5 +896,10 @@ class TaprootSparkSigner extends DefaultSparkSigner {
   }
 }
 
-export { DefaultSparkSigner, TaprootSparkSigner, TaprootOutputKeysGenerator };
-export type { SparkSigner, TokenSigner };
+export {
+  DefaultSparkSigner,
+  TaprootSparkSigner,
+  TaprootOutputKeysGenerator,
+  type SparkSigner,
+  type TokenSigner,
+};

@@ -3,8 +3,8 @@ import {
   QueryTransfersResponse,
   Transfer,
 } from "@buildonspark/spark-sdk/proto/spark";
-import { ConfigOptions } from "@buildonspark/spark-sdk/services/wallet-config";
-import { SparkSigner } from "@buildonspark/spark-sdk/signer";
+import { ConfigOptions } from "@buildonspark/spark-sdk";
+import { SparkSigner } from "@buildonspark/spark-sdk";
 
 interface ISparkWalletTesting extends SparkWallet {
   getSigner(): SparkSigner;

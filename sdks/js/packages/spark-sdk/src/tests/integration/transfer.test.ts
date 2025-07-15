@@ -16,7 +16,7 @@ import { TransferService } from "../../services/transfer.js";
 import {
   ConfigOptions,
   getLocalSigningOperators,
-  LOCAL_WALLET_CONFIG,
+  WalletConfig,
 } from "../../services/wallet-config.js";
 import { createNewTree } from "../../tests/test-util.js";
 import { NetworkType } from "../../utils/network.js";
@@ -423,7 +423,7 @@ describe("Transfer", () => {
         ),
       );
       const missingOperatorOptions = {
-        ...LOCAL_WALLET_CONFIG,
+        ...WalletConfig.LOCAL,
         signingOperators,
       };
       const mnemonic = generateMnemonic(wordlist);
@@ -493,7 +493,7 @@ describe("Transfer", () => {
       ]);
 
       const receiverOptions = {
-        ...LOCAL_WALLET_CONFIG,
+        ...WalletConfig.LOCAL,
       };
 
       const { wallet: receiverWalletWithAllOperators } =
@@ -521,7 +521,7 @@ describe("Transfer", () => {
       const { wallet: receiverWalletWithMissingOperatorAsCoordinator } =
         await SparkWalletTesting.initialize({
           options: {
-            ...LOCAL_WALLET_CONFIG,
+            ...WalletConfig.LOCAL,
             coodinatorIdentifier: soToRemove,
           },
           mnemonicOrSeed: mnemonic,

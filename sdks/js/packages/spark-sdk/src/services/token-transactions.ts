@@ -36,7 +36,7 @@ import {
 } from "../errors/types.js";
 import { SigningOperator } from "./wallet-config.js";
 import { hexToBytes } from "@noble/hashes/utils";
-import { decodeSparkAddress } from "../address/index.js";
+import { decodeSparkAddress } from "../utils/address.js";
 import {
   TokenTransaction,
   SignatureWithIndex,

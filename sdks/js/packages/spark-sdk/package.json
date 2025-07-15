@@ -41,37 +41,9 @@
         }
       }
     },
-    "./signer": {
-      "import": "./dist/signer/signer.js",
-      "require": "./dist/signer/signer.cjs"
-    },
-    "./services/wallet-config": {
-      "import": "./dist/services/wallet-config.js",
-      "require": "./dist/services/wallet-config.cjs"
-    },
-    "./utils": {
-      "import": "./dist/utils/index.js",
-      "require": "./dist/utils/index.cjs"
-    },
-    "./token-transactions": {
-      "import": "./dist/services/token-transactions.js",
-      "require": "./dist/services/token-transactions.cjs"
-    },
     "./types": {
       "import": "./dist/types/index.js",
       "require": "./dist/types/index.cjs"
-    },
-    "./config": {
-      "import": "./dist/services/config.js",
-      "require": "./dist/services/config.cjs"
-    },
-    "./lrc-connection": {
-      "import": "./dist/services/lrc-connection.js",
-      "require": "./dist/services/lrc-connection.cjs"
-    },
-    "./connection": {
-      "import": "./dist/services/connection.js",
-      "require": "./dist/services/connection.cjs"
     },
     "./proto/spark": {
       "import": "./dist/proto/spark.js",
@@ -84,10 +56,6 @@
     "./proto/lrc20": {
       "import": "./dist/proto/lrc20.js",
       "require": "./dist/proto/lrc20.cjs"
-    },
-    "./address": {
-      "import": "./dist/address/index.js",
-      "require": "./dist/address/index.cjs"
     },
     "./native": {
       "import": "./dist/native/index.js",

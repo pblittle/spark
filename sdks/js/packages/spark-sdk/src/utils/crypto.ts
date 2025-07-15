@@ -1,12 +1,22 @@
-import nodeCrypto from "crypto";
+export interface SparkCrypto {
+  // Browser
+  getRandomValues<T extends ArrayBufferView | null>(array: T): T;
+  // Node.js
+  getRandomValues<T extends ArrayBuffer | ArrayBufferView>(array: T): T;
+}
 
-export const getCrypto = (): Crypto => {
-  let cryptoImpl: any =
-    typeof window !== "undefined"
-      ? window.crypto
-      : typeof global !== "undefined" && global.crypto
-        ? global.crypto
-        : nodeCrypto;
+let cryptoImpl: SparkCrypto | null = globalThis.crypto ?? null;
 
-  return cryptoImpl as Crypto;
+export const getCrypto = () => {
+  if (!cryptoImpl) {
+    throw new Error(
+      "Crypto implementation is not set. Please set it using setCrypto().",
+    );
+  }
+
+  return cryptoImpl;
+};
+
+export const setCrypto = (cryptoImplParam: SparkCrypto | null): void => {
+  cryptoImpl = cryptoImplParam;
 };

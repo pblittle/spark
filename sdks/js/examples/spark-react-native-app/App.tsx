@@ -5,7 +5,10 @@
  * @format
  */
 
-import { SparkWallet } from '@buildonspark/spark-sdk';
+import {
+  ReactNativeSparkSigner,
+  SparkWallet,
+} from "@buildonspark/spark-sdk/native";
 import { createDummyTx } from '@buildonspark/spark-sdk/native/spark-frost';
 import { useState } from 'react';
 import {
@@ -34,6 +37,7 @@ function App() {
         options: {
           network: 'REGTEST',
         },
+        signer: new ReactNativeSparkSigner(),
       });
       setWallet(wallet);
     } catch (error) {

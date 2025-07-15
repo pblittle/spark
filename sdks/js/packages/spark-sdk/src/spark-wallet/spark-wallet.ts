@@ -99,7 +99,7 @@ import {
   encodeSparkAddress,
   isValidPublicKey,
   SparkAddressFormat,
-} from "../address/index.js";
+} from "../utils/address.js";
 import { isReactNative } from "../constants.js";
 import { Network as NetworkProto, networkToJSON } from "../proto/spark.js";
 import {

@@ -2,11 +2,8 @@ import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { ValidationError } from "../errors/index.js";
 import { NativeSparkFrost } from "../spark_bindings/native/index.js";
 import { IKeyPackage } from "../spark_bindings/types.js";
-import {
-  AggregateFrostParams,
-  DefaultSparkSigner,
-  SignFrostParams,
-} from "./signer.js";
+import { DefaultSparkSigner } from "./signer.js";
+import type { AggregateFrostParams, SignFrostParams } from "./types.js";
 
 export class ReactNativeSparkSigner extends DefaultSparkSigner {
   async signFrost({

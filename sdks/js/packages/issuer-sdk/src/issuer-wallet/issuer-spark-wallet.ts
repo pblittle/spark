@@ -9,13 +9,13 @@ import { isNode } from "@lightsparkdev/core";
 import {
   decodeSparkAddress,
   encodeSparkAddress,
-} from "@buildonspark/spark-sdk/address";
+} from "@buildonspark/spark-sdk";
 import {
   OutputWithPreviousTransactionData,
   TokenTransaction as TokenTransactionV0,
 } from "@buildonspark/spark-sdk/proto/spark";
 import { TokenTransaction } from "@buildonspark/spark-sdk/proto/spark_token";
-import { ConfigOptions } from "@buildonspark/spark-sdk/services/wallet-config";
+import { type ConfigOptions } from "@buildonspark/spark-sdk";
 import {
   bytesToHex,
   bytesToNumberBE,
@@ -31,7 +31,7 @@ import {
   ListAllTokenTransactionsCursor,
   OperationType,
 } from "@buildonspark/spark-sdk/proto/lrc20";
-import { SparkSigner } from "@buildonspark/spark-sdk/signer";
+import { SparkSigner } from "@buildonspark/spark-sdk";
 
 const BURN_ADDRESS = "02".repeat(33);
 

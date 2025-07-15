@@ -1,4 +1,4 @@
-import { encodeSparkAddress, SparkAddressFormat } from "../address/address.js";
+import { encodeSparkAddress, SparkAddressFormat } from "./address.js";
 import * as btc from "@scure/btc-signer";
 import { ValidationError } from "../errors/index.js";
 

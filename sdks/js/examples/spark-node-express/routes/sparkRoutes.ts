@@ -1,7 +1,7 @@
 import { IssuerSparkWallet } from "@buildonspark/issuer-sdk";
 import { SparkWallet } from "@buildonspark/spark-sdk";
 import { Transfer } from "@buildonspark/spark-sdk/proto/spark";
-import { ConfigOptions } from "@buildonspark/spark-sdk/services/wallet-config";
+import { ConfigOptions } from "@buildonspark/spark-sdk";
 import {
   ExitSpeed,
   WalletTransfer,
@@ -9,7 +9,7 @@ import {
   type LightningReceiveRequest,
   type LightningSendRequest,
 } from "@buildonspark/spark-sdk/types";
-import { getLatestDepositTxId } from "@buildonspark/spark-sdk/utils";
+import { getLatestDepositTxId } from "@buildonspark/spark-sdk";
 import { isError } from "@lightsparkdev/core";
 import {
   Router,

@@ -1,3 +1,4 @@
+export * from "./address.js";
 export * from "./adaptor-signature.js";
 export * from "./bitcoin.js";
 export * from "./keys.js";

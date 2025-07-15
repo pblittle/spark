@@ -8,9 +8,7 @@ import { DefaultSparkSigner, SparkSigner } from "../signer/signer.js";
 import { Network, NetworkToProto, NetworkType } from "../utils/network.js";
 import {
   ConfigOptions,
-  LOCAL_WALLET_CONFIG,
-  MAINNET_WALLET_CONFIG,
-  REGTEST_WALLET_CONFIG,
+  WalletConfig,
   SigningOperator,
 } from "./wallet-config.js";
 import { ConfigurationError } from "../errors/types.js";
@@ -39,11 +37,11 @@ export class WalletConfigService
   private getDefaultConfig(network: Network): Required<ConfigOptions> {
     switch (network) {
       case Network.MAINNET:
-        return MAINNET_WALLET_CONFIG;
+        return WalletConfig.MAINNET;
       case Network.REGTEST:
-        return REGTEST_WALLET_CONFIG;
+        return WalletConfig.REGTEST;
       default:
-        return LOCAL_WALLET_CONFIG;
+        return WalletConfig.LOCAL;
     }
   }
 

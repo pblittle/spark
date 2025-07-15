@@ -1,4 +1,4 @@
-import { Network } from "@buildonspark/spark-sdk/utils";
+import { Network } from "@buildonspark/spark-sdk";
 import { networks } from "bitcoinjs-lib";
 import { NetworkType } from "@buildonspark/lrc20-sdk";
 

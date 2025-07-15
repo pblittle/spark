@@ -25,8 +25,6 @@ import { SigningService } from "./signing.js";
 import type { LeafKeyTweak } from "./transfer.js";
 import { decodeInvoice } from "./bolt11-spark.js";
 
-const crypto = getCrypto();
-
 export type CreateLightningInvoiceParams = {
   invoiceCreator: (
     amountSats: number,
@@ -76,6 +74,7 @@ export class LightningService {
     receiverIdentityPubkey,
     descriptionHash,
   }: CreateLightningInvoiceParams): Promise<LightningReceiveRequest> {
+    const crypto = getCrypto();
     const randBytes = crypto.getRandomValues(new Uint8Array(32));
     const preimage = numberToBytesBE(
       bytesToNumberBE(randBytes) % secp256k1.CURVE.n,

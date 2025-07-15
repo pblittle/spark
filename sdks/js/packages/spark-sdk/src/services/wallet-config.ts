@@ -166,7 +166,7 @@ function getLocalFrostSignerAddress(): string {
   return isHermeticTest() ? "localhost:9999" : "unix:///tmp/frost_0.sock";
 }
 
-export const BASE_CONFIG: Required<ConfigOptions> = {
+const BASE_CONFIG: Required<ConfigOptions> = {
   network: "LOCAL",
   lrc20Address: getLrc20Url("LOCAL"),
   coodinatorIdentifier:
@@ -192,23 +192,23 @@ export const BASE_CONFIG: Required<ConfigOptions> = {
   },
 };
 
-export const LOCAL_WALLET_CONFIG: Required<ConfigOptions> = {
+const LOCAL_WALLET_CONFIG: Required<ConfigOptions> = {
   ...BASE_CONFIG,
   threshold: 3,
 };
 
-export const LOCAL_WALLET_CONFIG_SCHNORR: Required<ConfigOptions> = {
+const LOCAL_WALLET_CONFIG_SCHNORR: Required<ConfigOptions> = {
   ...LOCAL_WALLET_CONFIG,
   threshold: 3, // 3 for issuance tests.
 };
 
-export const LOCAL_WALLET_CONFIG_ECDSA: Required<ConfigOptions> = {
+const LOCAL_WALLET_CONFIG_ECDSA: Required<ConfigOptions> = {
   ...LOCAL_WALLET_CONFIG,
   tokenSignatures: "ECDSA",
   threshold: 3, // 3 for issuance tests.
 };
 
-export const REGTEST_WALLET_CONFIG: Required<ConfigOptions> = {
+const REGTEST_WALLET_CONFIG: Required<ConfigOptions> = {
   ...BASE_CONFIG,
   network: "REGTEST",
   lrc20Address: getLrc20Url("REGTEST"),
@@ -227,7 +227,7 @@ export const REGTEST_WALLET_CONFIG: Required<ConfigOptions> = {
   },
 };
 
-export const MAINNET_WALLET_CONFIG: Required<ConfigOptions> = {
+const MAINNET_WALLET_CONFIG: Required<ConfigOptions> = {
   ...BASE_CONFIG,
   network: "MAINNET",
   lrc20Address: getLrc20Url("MAINNET"),
@@ -243,6 +243,14 @@ export const MAINNET_WALLET_CONFIG: Required<ConfigOptions> = {
     baseUrl: getSspUrl("MAINNET"),
     identityPublicKey: getSspIdentityPublicKey("MAINNET"),
   },
+};
+
+export const WalletConfig = {
+  LOCAL: LOCAL_WALLET_CONFIG,
+  LOCAL_SCHNORR: LOCAL_WALLET_CONFIG_SCHNORR,
+  LOCAL_ECDSA: LOCAL_WALLET_CONFIG_ECDSA,
+  REGTEST: REGTEST_WALLET_CONFIG,
+  MAINNET: MAINNET_WALLET_CONFIG,
 };
 
 function getSigningOperators(): Record<string, SigningOperator> {

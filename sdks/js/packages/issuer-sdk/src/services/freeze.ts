@@ -1,12 +1,14 @@
-import { WalletConfigService } from "@buildonspark/spark-sdk/config";
-import { ConnectionManager } from "@buildonspark/spark-sdk/connection";
 import {
   FreezeTokensPayload,
   FreezeTokensResponse,
 } from "@buildonspark/spark-sdk/proto/spark";
-import { collectResponses } from "@buildonspark/spark-sdk/utils";
+import {
+  type ConnectionManager,
+  WalletConfigService,
+  NetworkError,
+  collectResponses,
+} from "@buildonspark/spark-sdk";
 import { hashFreezeTokensPayload } from "../utils/token-hashing.js";
-import { NetworkError } from "@buildonspark/spark-sdk";
 import { hexToBytes } from "@noble/curves/abstract/utils";
 
 export class TokenFreezeService {

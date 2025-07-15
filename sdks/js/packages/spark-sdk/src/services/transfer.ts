@@ -36,7 +36,7 @@ import {
   TransferType,
   TreeNode,
 } from "../proto/spark.js";
-import { SigningCommitment } from "../signer/signer.js";
+import type { SigningCommitment } from "../signer/types.js";
 import {
   getSigHashFromTx,
   getTxFromRawTxBytes,

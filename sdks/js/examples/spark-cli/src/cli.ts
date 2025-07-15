@@ -3,17 +3,12 @@ import { getLatestDepositTxId } from "@buildonspark/spark-sdk";
 import {
   decodeSparkAddress,
   encodeSparkAddress,
-} from "@buildonspark/spark-sdk/address";
+} from "@buildonspark/spark-sdk";
 import {
   TokenTransactionStatus,
   TreeNode,
 } from "@buildonspark/spark-sdk/proto/spark";
-import {
-  ConfigOptions,
-  LOCAL_WALLET_CONFIG,
-  MAINNET_WALLET_CONFIG,
-  REGTEST_WALLET_CONFIG,
-} from "@buildonspark/spark-sdk/services/wallet-config";
+import { ConfigOptions, WalletConfig } from "@buildonspark/spark-sdk";
 import { CoopExitFeeQuote, ExitSpeed } from "@buildonspark/spark-sdk/types";
 import {
   constructUnilateralExitFeeBumpPackages,
@@ -23,7 +18,7 @@ import {
   isEphemeralAnchorOutput,
   Network,
   NetworkType,
-} from "@buildonspark/spark-sdk/utils";
+} from "@buildonspark/spark-sdk";
 import {
   bytesToHex,
   hexToBytes,
@@ -525,13 +520,13 @@ async function runCLI() {
   } else {
     switch (network) {
       case "MAINNET":
-        config = MAINNET_WALLET_CONFIG;
+        config = WalletConfig.MAINNET;
         break;
       case "REGTEST":
-        config = REGTEST_WALLET_CONFIG;
+        config = WalletConfig.REGTEST;
         break;
       default:
-        config = LOCAL_WALLET_CONFIG;
+        config = WalletConfig.LOCAL;
         break;
     }
   }

@@ -16,7 +16,7 @@ import {
   SigningJob,
   TreeNode,
 } from "../proto/spark.js";
-import { SigningCommitment } from "../signer/signer.js";
+import { SigningCommitment } from "../signer/types.js";
 import {
   getP2TRAddressFromPublicKey,
   getSigHashFromTx,
