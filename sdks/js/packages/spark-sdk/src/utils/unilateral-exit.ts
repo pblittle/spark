@@ -493,6 +493,38 @@ export async function constructUnilateralExitFeeBumpPackages(
           undefined,
         );
 
+        const feeBumpTx = btc.Transaction.fromPSBT(
+          hexToBytes(refundFeeBump.feeBumpPsbt),
+        );
+
+        var feeBumpOut: psbt.TransactionOutput | null =
+          feeBumpTx.outputsLength === 1 ? feeBumpTx.getOutput(0) : null;
+        var feeBumpOutPubKey: string | null = null;
+
+        // Remove used UTXOs from the available list
+        for (const usedUtxo of usedUtxos) {
+          if (feeBumpOut && bytesToHex(feeBumpOut.script!) == usedUtxo.script) {
+            feeBumpOutPubKey = usedUtxo.publicKey;
+          }
+          const index = availableUtxos.findIndex(
+            (u) => u.txid === usedUtxo.txid && u.vout === usedUtxo.vout,
+          );
+          if (index !== -1) {
+            availableUtxos.splice(index, 1);
+          }
+        }
+
+        if (feeBumpOut)
+          // Add to end instead of the beginning in case there are other available UTXOs we can use first
+          // We don't want to wait on leaf 1 to be broadcasted to broadcast leaf 2 if we can use a different available UTXO
+          availableUtxos.push({
+            txid: getTxId(feeBumpTx),
+            vout: 0,
+            value: feeBumpOut.amount!,
+            script: bytesToHex(feeBumpOut.script!),
+            publicKey: feeBumpOutPubKey!,
+          });
+
         txPackages.push({
           tx: refundTxHex,
           feeBumpPsbt: refundFeeBump.feeBumpPsbt,

@@ -1,28 +1,27 @@
 import { IssuerSparkWallet } from "@buildonspark/issuer-sdk";
-import { getLatestDepositTxId } from "@buildonspark/spark-sdk";
 import {
+  ConfigOptions,
+  constructUnilateralExitFeeBumpPackages,
   decodeSparkAddress,
   encodeSparkAddress,
-} from "@buildonspark/spark-sdk";
-import {
-  TokenTransactionStatus,
-  TreeNode,
-} from "@buildonspark/spark-sdk/proto/spark";
-import { ConfigOptions, WalletConfig } from "@buildonspark/spark-sdk";
-import { CoopExitFeeQuote, ExitSpeed } from "@buildonspark/spark-sdk/types";
-import {
-  constructUnilateralExitFeeBumpPackages,
+  getLatestDepositTxId,
   getNetwork,
   getP2TRScriptFromPublicKey,
   getP2WPKHAddressFromPublicKey,
   isEphemeralAnchorOutput,
   Network,
   NetworkType,
+  WalletConfig,
 } from "@buildonspark/spark-sdk";
 import {
+  TokenTransactionStatus,
+  TreeNode,
+} from "@buildonspark/spark-sdk/proto/spark";
+import { CoopExitFeeQuote, ExitSpeed } from "@buildonspark/spark-sdk/types";
+import {
   bytesToHex,
-  hexToBytes,
   bytesToNumberBE,
+  hexToBytes,
 } from "@noble/curves/abstract/utils";
 import { schnorr, secp256k1 } from "@noble/curves/secp256k1";
 import { ripemd160 } from "@noble/hashes/legacy";
@@ -347,20 +346,6 @@ const commands = [
 const walletMnemonic =
   "cctypical stereo dose party penalty decline neglect feel harvest abstract stage winter";
 
-// Helper function to get explorer URL for a transaction
-function getExplorerUrl(network: string, txid: string): string {
-  switch (network) {
-    case "MAINNET":
-      return `https://mempool.space/tx/${txid}`;
-    case "REGTEST":
-      return `https://regtest-mempool.us-west-2.sparkinfra.net/tx/${txid}`;
-    case "LOCAL":
-      return `http://127.0.0.1:30000/tx/${txid}`;
-    default:
-      return `Transaction ID: ${txid}`;
-  }
-}
-
 interface QueryTokenTransactionsArgs {
   ownerPublicKeys?: string[];
   issuerPublicKeys?: string[];
@@ -660,17 +645,20 @@ async function runCLI() {
             "bcrt1pzrfhq4gm7kuww875lkj27cx005x08g2jp6qxexnu68gytn7sjqss3s6j2c";
 
           try {
+            const headers: Record<string, string> = {};
+
+            if (network === "REGTEST") {
+              const auth = btoa(
+                `${config.lrc20ApiConfig?.electrsCredentials?.username}:${config.lrc20ApiConfig?.electrsCredentials?.password}`,
+              );
+              headers["Authorization"] = `Basic ${auth}`;
+            }
+
             // Fetch transactions for the address
             const response = await fetch(
               `${config.electrsUrl}/address/${sourceAddress}/txs`,
               {
-                headers: {
-                  Authorization:
-                    "Basic " +
-                    Buffer.from("spark-sdk:mCMk1JqlBNtetUNy").toString(
-                      "base64",
-                    ),
-                },
+                headers,
               },
             );
 
@@ -2097,7 +2085,7 @@ async function runCLI() {
             console.log("");
 
             console.log("📋 Step 2: Converting leaves to hex strings...");
-            const hexStrings: string[] = [];
+            let hexStrings: string[] = [];
             for (const leaf of selectedLeaves) {
               const encodedBytes = TreeNode.encode(leaf).finish();
               const hexString = bytesToHex(encodedBytes);
@@ -2180,8 +2168,31 @@ async function runCLI() {
                     continueRefundRefreshing = false;
                   }
                 }
+                await wallet.getLeaves();
                 console.log("");
               }
+              const refreshedLeaves = await wallet.getLeaves();
+
+              const refreshedSelectedLeaves = selectedLeaves.map(
+                (originalLeaf) => {
+                  const refreshedLeaf = refreshedLeaves.find(
+                    (leaf) => leaf.id === originalLeaf.id,
+                  );
+                  if (!refreshedLeaf) {
+                    console.log(
+                      `⚠️  Warning: Could not find refreshed data for leaf ${originalLeaf.id}`,
+                    );
+                    return originalLeaf;
+                  }
+                  return refreshedLeaf;
+                },
+              );
+
+              selectedLeaves = refreshedSelectedLeaves;
+              hexStrings = selectedLeaves.map((leaf) => {
+                const encodedBytes = TreeNode.encode(leaf).finish();
+                return bytesToHex(encodedBytes);
+              });
             } else {
               console.log(
                 "📋 Step 4: Skipping timelock expiration (normal mode)",
@@ -2211,77 +2222,173 @@ async function runCLI() {
             console.log(`✅ Fee rate: ${feeRate} sat/vbyte`);
             console.log("");
 
-            // Get UTXOs from user
-            console.log("📋 Step 6: UTXO configuration...");
-            console.log(
-              "You need to provide UTXOs to fund the fee bump transactions.",
-            );
-            console.log("Format: txid:vout:value:script:publicKey");
-            console.log("Example: abc123:0:10000:76a914...:02a1b2c3d4e5f6...");
-            console.log("");
+            const electrsUrl = (wallet as any).config.getElectrsUrl();
 
-            const utxoInput = await new Promise<string>((resolve) => {
-              rl.question(
-                "Enter UTXO string(s) separated by spaces: ",
-                resolve,
-              );
-            });
+            let privateKeyHex = "";
+            const utxos: Utxo[] = [];
+            if (isTestMode) {
+              // Generate external wallet and prompt user to fund it
+              console.log("📋 Step 6: Generating external wallet...");
+              const privateKeyBytes = secp256k1.utils.randomPrivateKey();
+              privateKeyHex = bytesToHex(privateKeyBytes);
+              const privateKeyWif = hexToWif(privateKeyHex);
 
-            if (!utxoInput.trim()) {
-              console.log(
-                "❌ No UTXOs provided. Cannot proceed with unilateral exit.",
-              );
-              break;
-            }
+              // Get the public key and address
+              const publicKey = secp256k1.getPublicKey(privateKeyBytes, true);
+              const pubKeyHash = hash160(publicKey);
+              const p2wpkhScript = new Uint8Array([0x00, 0x14, ...pubKeyHash]);
 
-            // Parse UTXOs
-            const utxoStrings = utxoInput.trim().split(/\s+/);
-            const utxos = [];
-            let validationFailed = false;
-
-            for (let i = 0; i < utxoStrings.length; i++) {
-              const utxoString = utxoStrings[i];
-              const parts = utxoString.split(":");
-
-              if (parts.length !== 5) {
-                console.log(`❌ Invalid UTXO format: ${utxoString}`);
-                validationFailed = true;
-                break;
-              }
-
-              const [txid, vout, value, script, publicKey] = parts;
-              const voutNum = parseInt(vout);
-
-              if (isNaN(voutNum)) {
-                console.log(`❌ Invalid vout in UTXO: ${utxoString}`);
-                validationFailed = true;
-                break;
-              }
-
-              let valueNum: bigint;
-              try {
-                valueNum = BigInt(value);
-              } catch (error) {
-                console.log(`❌ Invalid value in UTXO: ${utxoString}`);
-                validationFailed = true;
-                break;
-              }
-
-              utxos.push({
-                txid,
-                vout: voutNum,
-                value: valueNum,
-                script,
+              // Create a regtest P2WPKH address
+              const regtestAddress = getP2WPKHAddressFromPublicKey(
                 publicKey,
+                (wallet as any).config.getNetwork(),
+              );
+
+              console.log(`Generated test wallet:`);
+              console.log(`  Private Key (WIF): ${privateKeyWif}`);
+              console.log(`  Private Key (Hex): ${privateKeyHex}`);
+              console.log(`  Public Key: ${bytesToHex(publicKey)}`);
+              console.log(`  Address: ${regtestAddress}`);
+              console.log("");
+
+              const fundingTxId = await new Promise<string>((resolve) => {
+                rl.question(
+                  "Fund the external wallet and enter the funding txid: ",
+                  resolve,
+                );
               });
-            }
 
-            if (validationFailed) {
-              break;
-            }
+              if (!fundingTxId) {
+                console.log(
+                  "❌ No funding txid provided. Cannot proceed with unilateral exit.",
+                );
+                break;
+              }
 
-            console.log(`✅ Parsed ${utxos.length} UTXO(s)`);
-            console.log("");
+              const headers: Record<string, string> = {};
+
+              if (network === "REGTEST") {
+                const auth = btoa(
+                  `${config.lrc20ApiConfig?.electrsCredentials?.username}:${config.lrc20ApiConfig?.electrsCredentials?.password}`,
+                );
+                headers["Authorization"] = `Basic ${auth}`;
+              }
+
+              const fundingTx = await fetch(`${electrsUrl}/tx/${fundingTxId}`, {
+                headers,
+              });
+              if (!fundingTx.ok) {
+                console.log(
+                  "❌ Funding tx not found. Cannot proceed with unilateral exit.",
+                );
+                break;
+              }
+
+              const fundingTxJson = (await fundingTx.json()) as {
+                vout: {
+                  scriptpubkey_address: string;
+                  value: number;
+                }[];
+              };
+
+              let voutIndex = -1;
+              let value = 0n;
+              for (const [index, output] of fundingTxJson.vout.entries()) {
+                if (output.scriptpubkey_address === regtestAddress) {
+                  voutIndex = index;
+                  value = BigInt(output.value);
+                }
+              }
+
+              if (voutIndex === -1) {
+                console.log(
+                  "❌ Funding tx does not contain the external wallet address. Cannot proceed with unilateral exit.",
+                );
+                break;
+              }
+
+              // Parse UTXOs
+              utxos.push({
+                txid: fundingTxId,
+                vout: voutIndex,
+                value: value,
+                script: bytesToHex(p2wpkhScript),
+                publicKey: bytesToHex(publicKey),
+              });
+            } else {
+              // Get UTXOs from user
+              console.log("📋 Step 6: UTXO configuration...");
+              console.log(
+                "You need to provide UTXOs to fund the fee bump transactions.",
+              );
+              console.log("Format: txid:vout:value:script:publicKey");
+              console.log(
+                "Example: abc123:0:10000:76a914...:02a1b2c3d4e5f6...",
+              );
+              console.log("");
+
+              const utxoInput = await new Promise<string>((resolve) => {
+                rl.question(
+                  "Enter UTXO string(s) separated by spaces: ",
+                  resolve,
+                );
+              });
+
+              if (!utxoInput.trim()) {
+                console.log(
+                  "❌ No UTXOs provided. Cannot proceed with unilateral exit.",
+                );
+                break;
+              }
+
+              // Parse UTXOs
+              const utxoStrings = utxoInput.trim().split(/\s+/);
+              let validationFailed = false;
+
+              for (let i = 0; i < utxoStrings.length; i++) {
+                const utxoString = utxoStrings[i];
+                const parts = utxoString.split(":");
+
+                if (parts.length !== 5) {
+                  console.log(`❌ Invalid UTXO format: ${utxoString}`);
+                  validationFailed = true;
+                  break;
+                }
+
+                const [txid, vout, value, script, publicKey] = parts;
+                const voutNum = parseInt(vout);
+
+                if (isNaN(voutNum)) {
+                  console.log(`❌ Invalid vout in UTXO: ${utxoString}`);
+                  validationFailed = true;
+                  break;
+                }
+
+                let valueNum: bigint;
+                try {
+                  valueNum = BigInt(value);
+                } catch (error) {
+                  console.log(`❌ Invalid value in UTXO: ${utxoString}`);
+                  validationFailed = true;
+                  break;
+                }
+
+                utxos.push({
+                  txid,
+                  vout: voutNum,
+                  value: valueNum,
+                  script,
+                  publicKey,
+                });
+              }
+
+              if (validationFailed) {
+                break;
+              }
+
+              console.log(`✅ Parsed ${utxos.length} UTXO(s)`);
+              console.log("");
+            }
 
             // Generate fee bump packages for all selected leaves
             console.log("📋 Step 7: Generating fee bump packages...");
@@ -2293,28 +2400,20 @@ async function runCLI() {
               (wallet as any).config.getCoordinatorAddress(),
             );
 
-            // Get network from wallet config
-            const network = (wallet as any).config.getNetwork();
-
-            // Get electrs URL from wallet config
-            const electrsUrl = (wallet as any).config.getElectrsUrl();
-
             const feeBumpChains = await constructUnilateralExitFeeBumpPackages(
               hexStrings, // Use all selected leaves
               utxos,
               { satPerVbyte: feeRate },
               electrsUrl,
               sparkClient,
-              network,
+              (wallet as any).config.getNetwork(),
             );
 
             // Display results
             console.log("🎉 Unilateral exit package generated successfully!");
             console.log("");
             console.log("=".repeat(80));
-            console.log(
-              "📦 UNILATERAL EXIT PACKAGE (READY TO SIGN AND BROADCAST)",
-            );
+            console.log("📦 UNILATERAL EXIT PACKAGE (READY TO BROADCAST)");
             console.log("=".repeat(80));
 
             for (const chain of feeBumpChains) {
@@ -2335,9 +2434,17 @@ async function runCLI() {
                 console.log(`  ${label}:`);
                 console.log(`    Original tx: ${pkg.tx}`);
                 if (pkg.feeBumpPsbt) {
-                  console.log(
-                    `    Fee bump psbt (UNSIGNED): ${pkg.feeBumpPsbt}`,
-                  );
+                  if (isTestMode && privateKeyHex !== "") {
+                    const signedTx = await signPsbtWithExternalKey(
+                      pkg.feeBumpPsbt,
+                      privateKeyHex,
+                    );
+                    console.log(`    Fee bump tx: ${signedTx}`);
+                  } else {
+                    console.log(
+                      `    Fee bump psbt (UNSIGNED): ${pkg.feeBumpPsbt}`,
+                    );
+                  }
                 } else {
                   console.log(`    No fee bump needed`);
                 }
@@ -2347,15 +2454,11 @@ async function runCLI() {
             console.log("");
             console.log("=".repeat(80));
             console.log("📋 NEXT STEPS:");
-            console.log("1. Sign the fee bump PSBT using bitcoin-cli:");
+            console.log("1. Broadcast the original transactions");
+            console.log("2. Broadcast the signed fee bump transactions");
             console.log(
-              '   bitcoin-cli walletprocesspsbt "<psbt_hex>" false "[]" false',
+              "🚨 NOTE: For each leaf, you must broadcast from the root down. Start from (1) then you can broadcast (2) and so on. The leaf refund tx must broadcast last.",
             );
-            console.log(
-              '   bitcoin-cli finalizepsbt "<partially_signed_psbt>" false',
-            );
-            console.log("2. Broadcast the original transactions");
-            console.log("3. Broadcast the signed fee bump transactions");
             console.log("=".repeat(80));
           } catch (error) {
             console.error("❌ Error in unilateral exit flow:", error);
