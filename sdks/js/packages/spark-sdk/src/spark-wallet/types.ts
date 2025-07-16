@@ -41,7 +41,7 @@ export type DepositParams = {
  *
  * @example
  * ```typescript
- * const tokenMetadata: TokenMetadata = {
+ * const tokenMetadata: UserTokenMetadata = {
  *   rawTokenIdentifier: new Uint8Array([1, 2, 3]),
  *   tokenPublicKey: "0348fbb...",
  *   tokenName: "SparkToken",
