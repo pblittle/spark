@@ -6,7 +6,7 @@ import { ValidationError } from "../../errors/types.js";
 import { getTxFromRawTxBytes, getTxId } from "../../utils/bitcoin.js";
 import { Network } from "../../utils/network.js";
 import { DEFAULT_FEE_SATS } from "../../utils/transaction.js";
-import { createNewTreeWithLevels } from "../test-util.js";
+import { createNewTreeWithLevels } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 

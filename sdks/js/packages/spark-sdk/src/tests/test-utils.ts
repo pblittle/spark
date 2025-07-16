@@ -12,6 +12,8 @@ import { getNetwork, Network } from "../utils/network.js";
 import { SparkWalletTesting } from "./utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "./utils/test-faucet.js";
 
+export { BitcoinFaucet };
+
 export function getTestWalletConfig() {
   const identityPrivateKey = secp256k1.utils.randomPrivateKey();
   return getTestWalletConfigWithIdentityKey(identityPrivateKey);

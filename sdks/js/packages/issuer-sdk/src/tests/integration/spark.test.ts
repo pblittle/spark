@@ -1,13 +1,15 @@
-import { filterTokenBalanceForTokenPublicKey } from "@buildonspark/spark-sdk";
+import {
+  WalletConfig,
+  ConfigOptions,
+  filterTokenBalanceForTokenPublicKey,
+  encodeSparkAddress,
+} from "@buildonspark/spark-sdk";
 import { jest } from "@jest/globals";
-import { encodeSparkAddress } from "@buildonspark/spark-sdk";
-import { BitcoinFaucet } from "../../../../spark-sdk/src/tests/utils/test-faucet.js";
+import { BitcoinFaucet } from "@buildonspark/spark-sdk/test-utils";
 import { IssuerSparkWalletTesting } from "../utils/issuer-test-wallet.js";
 import { hexToBytes } from "@noble/curves/abstract/utils";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { IssuerSparkWallet } from "../../index.js";
-import { WalletConfig } from "@buildonspark/spark-sdk";
-import { ConfigOptions } from "@buildonspark/spark-sdk";
 
 export const TOKENS_V0_SCHNORR_CONFIG: Required<ConfigOptions> = {
   ...WalletConfig.LOCAL,

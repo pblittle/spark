@@ -18,7 +18,7 @@ import {
   getLocalSigningOperators,
   WalletConfig,
 } from "../../services/wallet-config.js";
-import { createNewTree } from "../../tests/test-util.js";
+import { createNewTree } from "../test-utils.js";
 import { NetworkType } from "../../utils/network.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";

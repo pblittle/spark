@@ -19,9 +19,10 @@ import {
   getTxIdNoReverse,
 } from "../../utils/bitcoin.js";
 import { getNetwork, Network } from "../../utils/network.js";
-import { createNewTree } from "../test-util.js";
+import { createNewTree } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
+
 describe("coop exit", () => {
   const brokenTestFn = process.env.GITHUB_ACTIONS ? it.skip : it;
 

@@ -45,6 +45,10 @@
       "import": "./dist/types/index.js",
       "require": "./dist/types/index.cjs"
     },
+    "./test-utils": {
+      "import": "./dist/tests/test-utils.js",
+      "require": "./dist/tests/test-utils.cjs"
+    },
     "./proto/spark": {
       "import": "./dist/proto/spark.js",
       "require": "./dist/proto/spark.cjs"
@@ -97,8 +101,8 @@
     "postversion": "yarn build",
     "test-cmd": "node --experimental-vm-modules $(yarn bin jest) --no-cache --runInBand --detectOpenHandles --forceExit",
     "test": "yarn test-cmd src/tests/*.test.ts",
-    "test:integration": "yarn test-cmd src/tests/integration/*.test.ts",
-    "test:integration:ssp": "yarn test-cmd src/tests/integration/ssp/*.test.ts",
+    "test:integration": "HERMETIC_TEST=true yarn test-cmd src/tests/integration/*.test.ts",
+    "test:integration:ssp": "HERMETIC_TEST=true yarn test-cmd src/tests/integration/ssp/*.test.ts",
     "types:watch": "tsc-absolute --watch",
     "types": "tsc",
     "patch-wasm": "node ./wasm/patch-wasm.mjs",

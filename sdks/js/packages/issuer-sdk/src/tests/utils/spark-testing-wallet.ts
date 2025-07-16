@@ -1,10 +1,13 @@
-import { SparkWallet, SparkWalletProps } from "@buildonspark/spark-sdk";
 import {
-  QueryTransfersResponse,
-  Transfer,
+  SparkWallet,
+  SparkWalletProps,
+  SparkSigner,
+  ConfigOptions,
+} from "@buildonspark/spark-sdk";
+import {
+  type QueryTransfersResponse,
+  type Transfer,
 } from "@buildonspark/spark-sdk/proto/spark";
-import { ConfigOptions } from "@buildonspark/spark-sdk";
-import { SparkSigner } from "@buildonspark/spark-sdk";
 
 interface ISparkWalletTesting extends SparkWallet {
   getSigner(): SparkSigner;

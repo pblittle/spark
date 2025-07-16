@@ -15,7 +15,7 @@ import {
   CurrencyUnit,
   LightningReceiveRequestStatus,
 } from "../../types/index.js";
-import { createNewTree, getTestWalletConfig } from "../test-util.js";
+import { createNewTree, getTestWalletConfig } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 

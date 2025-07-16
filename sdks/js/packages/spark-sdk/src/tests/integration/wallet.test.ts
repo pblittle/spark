@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import { ConfigOptions } from "../../services/wallet-config.js";
 import { NetworkType } from "../../utils/network.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
+
 describe("wallet", () => {
   it("should initialize a wallet", async () => {
     const seedOrMnemonics = [

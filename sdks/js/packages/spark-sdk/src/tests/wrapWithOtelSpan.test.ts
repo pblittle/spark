@@ -1,6 +1,6 @@
 import { describe, it, expect } from "@jest/globals";
 import { SparkWalletTesting } from "./utils/spark-testing-wallet.js";
-import { getTestWalletConfig } from "./test-util.js";
+import { getTestWalletConfig } from "./test-utils.js";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { trace } from "@opentelemetry/api";
 

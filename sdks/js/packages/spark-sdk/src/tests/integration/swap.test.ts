@@ -16,7 +16,7 @@ import {
   computeTaprootKeyNoScript,
   getSigHashFromTx,
 } from "../../utils/bitcoin.js";
-import { createNewTree } from "../test-util.js";
+import { createNewTree } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 
