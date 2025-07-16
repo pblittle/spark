@@ -54,7 +54,6 @@ import { ConnectionManager } from "../services/connection.js";
 import { CoopExitService } from "../services/coop-exit.js";
 import { DepositService } from "../services/deposit.js";
 import { LightningService } from "../services/lightning.js";
-import { Lrc20ConnectionManager } from "../services/lrc-connection.js";
 import { TokenTransactionService } from "../services/token-transactions.js";
 import type { LeafKeyTweak } from "../services/transfer.js";
 import { TransferService } from "../services/transfer.js";
@@ -124,15 +123,15 @@ import type {
   InitWalletResponse,
   PayLightningInvoiceParams,
   SparkWalletProps,
-  TokenMetadata,
+  UserTokenMetadata,
   TransferParams,
   TokenBalanceMap,
 } from "./types.js";
+import { encodeHumanReadableTokenIdentifier } from "../utils/token-identifier.js";
 import {
-  encodeHumanReadableTokenIdentifier,
-  HumanReadableTokenIdentifier,
-} from "../utils/token-identifier.js";
-import { TokenTransactionWithStatus } from "../proto/spark_token.js";
+  TokenTransactionWithStatus,
+  TokenMetadata,
+} from "../proto/spark_token.js";
 
 /**
  * The SparkWallet class is the primary interface for interacting with the Spark network.
@@ -143,7 +142,6 @@ export class SparkWallet extends EventEmitter {
   protected config: WalletConfigService;
 
   protected connectionManager: ConnectionManager;
-  protected lrc20ConnectionManager: Lrc20ConnectionManager;
   protected lrc20Wallet: LRCWallet | undefined;
   protected transferService: TransferService;
   protected tracerId = "spark-sdk";
@@ -172,7 +170,7 @@ export class SparkWallet extends EventEmitter {
 
   protected tokenOutputs: Map<string, OutputWithPreviousTransactionData[]> =
     new Map();
-  private tokenMetadata: Map<string, TokenMetadata> = new Map();
+  protected tokenMetadata: Map<string, TokenMetadata> = new Map();
 
   // Add this property near the top of the class with other private properties
   private claimTransfersInterval: NodeJS.Timeout | null = null;
@@ -192,7 +190,6 @@ export class SparkWallet extends EventEmitter {
     this.config = new WalletConfigService(options, signer);
     this.connectionManager = new ConnectionManager(this.config);
     this.signingService = new SigningService(this.config);
-    this.lrc20ConnectionManager = new Lrc20ConnectionManager(this.config);
     this.depositService = new DepositService(
       this.config,
       this.connectionManager,
@@ -1218,7 +1215,7 @@ export class SparkWallet extends EventEmitter {
     };
   }
 
-  private async getTokenMetadata(): Promise<Map<string, TokenMetadata>> {
+  private async getTokenMetadata(): Promise<Map<string, UserTokenMetadata>> {
     let metadataToFetch = new Array<string>();
     for (const issuerPublicKey of this.tokenOutputs.keys()) {
       if (!this.tokenMetadata.has(issuerPublicKey)) {
@@ -1238,16 +1235,10 @@ export class SparkWallet extends EventEmitter {
         });
 
         for (const metadata of response.tokenMetadata) {
-          const tokenPublicKey = bytesToHex(metadata.issuerPublicKey);
-
-          this.tokenMetadata.set(tokenPublicKey, {
-            tokenPublicKey: bytesToHex(metadata.issuerPublicKey),
-            rawTokenIdentifier: metadata.tokenIdentifier,
-            tokenName: metadata.tokenName,
-            tokenTicker: metadata.tokenTicker,
-            decimals: metadata.decimals,
-            maxSupply: bytesToNumberBE(metadata.maxSupply),
-          });
+          this.tokenMetadata.set(
+            bytesToHex(metadata.issuerPublicKey),
+            metadata,
+          );
         }
       } catch (error) {
         throw new NetworkError("Failed to fetch token metadata", {
@@ -1257,7 +1248,20 @@ export class SparkWallet extends EventEmitter {
       }
     }
 
-    return this.tokenMetadata;
+    let tokenMetadataMap = new Map<string, UserTokenMetadata>();
+
+    for (const [issuerPublicKey, metadata] of this.tokenMetadata) {
+      tokenMetadataMap.set(issuerPublicKey, {
+        tokenPublicKey: bytesToHex(metadata.issuerPublicKey),
+        rawTokenIdentifier: metadata.tokenIdentifier,
+        tokenName: metadata.tokenName,
+        tokenTicker: metadata.tokenTicker,
+        decimals: metadata.decimals,
+        maxSupply: bytesToNumberBE(metadata.maxSupply),
+      });
+    }
+
+    return tokenMetadataMap;
   }
 
   private async getTokenBalance(): Promise<TokenBalanceMap> {
@@ -3882,7 +3886,6 @@ export class SparkWallet extends EventEmitter {
   public async cleanupConnections() {
     this.cleanup();
     await this.connectionManager.closeConnections();
-    await this.lrc20ConnectionManager.closeConnection();
   }
 
   // Add this new method to start periodic claiming

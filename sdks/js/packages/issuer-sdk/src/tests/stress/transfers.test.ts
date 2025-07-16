@@ -5,6 +5,7 @@ import {
   filterTokenBalanceForTokenPublicKey,
   WalletConfig,
 } from "@buildonspark/spark-sdk";
+import { bytesToHex, hexToBytes } from "@noble/curves/abstract/utils";
 
 const TEST_TIMEOUT = 600_000; // 10 minutes
 const TOKEN_AMOUNT: bigint = 1000n;
@@ -74,7 +75,7 @@ describe("Stress test for token transfers", () => {
 
         // Transfer tokens from user to issuer
         await userWallet.transferTokens({
-          tokenPublicKey,
+          tokenPublicKey: tokenPublicKey,
           tokenAmount: TOKEN_AMOUNT,
           receiverSparkAddress: issuerWalletSparkAddress,
         });

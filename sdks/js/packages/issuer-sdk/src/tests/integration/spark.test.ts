@@ -7,7 +7,7 @@ import {
 import { jest } from "@jest/globals";
 import { BitcoinFaucet } from "@buildonspark/spark-sdk/test-utils";
 import { IssuerSparkWalletTesting } from "../utils/issuer-test-wallet.js";
-import { hexToBytes } from "@noble/curves/abstract/utils";
+import { bytesToHex, hexToBytes } from "@noble/curves/abstract/utils";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { IssuerSparkWallet } from "../../index.js";
 
@@ -115,19 +115,19 @@ describe.each(TEST_CONFIGS)(
     it("should mint tokens successfully", async () => {
       const tokenAmount: bigint = 1000n;
 
-      const publicKeyInfo = await sharedIssuerWallet.getIssuerTokenInfo();
+      const tokenMetadata = await sharedIssuerWallet.getIssuerTokenMetadata();
 
-      // Assert token public key info values
+      // Assert token public key metadata values
       const identityPublicKey = await sharedIssuerWallet.getIdentityPublicKey();
-      expect(publicKeyInfo?.tokenName).toEqual(`${name}Shared`);
-      expect(publicKeyInfo?.tokenSymbol).toEqual("SHR");
-      expect(publicKeyInfo?.tokenDecimals).toEqual(0);
-      expect(publicKeyInfo?.maxSupply).toEqual(1000000n);
-      expect(publicKeyInfo?.isFreezable).toEqual(false);
+      expect(tokenMetadata?.tokenName).toEqual(`${name}Shared`);
+      expect(tokenMetadata?.tokenTicker).toEqual("SHR");
+      expect(tokenMetadata?.decimals).toEqual(0);
+      expect(tokenMetadata?.maxSupply).toEqual(1000000n);
+      expect(tokenMetadata?.isFreezable).toEqual(false);
 
       // Compare the public key using bytesToHex
-      const pubKeyHex = publicKeyInfo?.tokenPublicKey;
-      expect(pubKeyHex).toEqual(identityPublicKey);
+      const metadataPubkey = tokenMetadata?.tokenPublicKey;
+      expect(metadataPubkey).toEqual(identityPublicKey);
 
       await sharedIssuerWallet.mintTokens(tokenAmount);
 
@@ -521,28 +521,6 @@ describe.each(TEST_CONFIGS)(
         issuerTokenBalance - tokenAmount,
       );
     });
-
-    brokenTestFn(
-      "should mint and burn tokens and totalSupply has to be equal amount of token minted minus burned tokens",
-      async () => {
-        const tokenAmount_init: bigint = 2000n;
-        const tokenAmount_burn: bigint = 1000n;
-
-        const existingTotalSupply =
-          (await sharedIssuerWallet.getIssuerTokenInfo())?.totalSupply || 0n;
-
-        await sharedIssuerWallet.mintTokens(tokenAmount_init);
-
-        await sharedIssuerWallet.burnTokens(tokenAmount_burn);
-
-        const newTotalSupply =
-          (await sharedIssuerWallet.getIssuerTokenInfo())?.totalSupply || 0n;
-
-        expect(newTotalSupply).toEqual(
-          existingTotalSupply + tokenAmount_init - tokenAmount_burn,
-        );
-      },
-    );
 
     it("should complete full token lifecycle: announce, mint, transfer, return, burn", async () => {
       const tokenAmount: bigint = 1000n;

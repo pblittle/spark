@@ -51,7 +51,7 @@ export type DepositParams = {
  * };
  * ```
  */
-export type TokenMetadata = {
+export type UserTokenMetadata = {
   /** Raw binary token identifier - This is used to encode the human readable token identifier */
   rawTokenIdentifier: Uint8Array;
   /** Public key of the token issuer - Same as issuerPublicKey */
@@ -70,7 +70,7 @@ export type TokenBalanceMap = Map<
   HumanReadableTokenIdentifier,
   {
     balance: bigint;
-    tokenMetadata: TokenMetadata;
+    tokenMetadata: UserTokenMetadata;
   }
 >;
 

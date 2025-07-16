@@ -577,7 +577,7 @@ async function runCLI() {
   Token Issuer Commands:
   gettokenl1address                                                   - Get the L1 address for on-chain token operations
   getissuertokenbalance                                               - Get the issuer's token balance
-  getissuertokeninfo                                                  - Get the issuer's token information
+  getissuertokenmetadata                                              - Get the issuer's token metadata
   getissuertokenpublickey                                             - Get the issuer's token public key
   minttokens <amount>                                                 - Mint new tokens
   burntokens <amount>                                                 - Burn tokens
@@ -1275,24 +1275,21 @@ async function runCLI() {
           console.log("Issuer Token Balance:", balance.balance.toString());
           break;
         }
-        case "getissuertokeninfo": {
+        case "getissuertokenmetadata": {
           if (!wallet) {
             console.log("Please initialize a wallet first");
             break;
           }
-          const info = await wallet.getIssuerTokenInfo();
-          if (info) {
-            console.log("Token Info:", {
-              tokenPublicKey: info.tokenPublicKey,
-              tokenName: info.tokenName,
-              tokenSymbol: info.tokenSymbol,
-              tokenDecimals: info.tokenDecimals,
-              maxSupply: info.maxSupply.toString(),
-              isFreezable: info.isFreezable,
-            });
-          } else {
-            console.log("No token info found");
-          }
+          const metadata = await wallet.getIssuerTokenMetadata();
+          console.log("Token Metadata:", {
+            tokenIdentifier: metadata.rawTokenIdentifier,
+            tokenPublicKey: metadata.tokenPublicKey,
+            tokenName: metadata.tokenName,
+            tokenTicker: metadata.tokenTicker,
+            decimals: metadata.decimals,
+            maxSupply: metadata.maxSupply.toString(),
+            isFreezable: metadata.isFreezable,
+          });
           break;
         }
         case "getissuertokenpublickey": {

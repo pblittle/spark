@@ -2,7 +2,6 @@ import { IssuerSparkWallet } from "@buildonspark/issuer-sdk";
 
 import { createSparkRouter } from "./sparkRoutes.js";
 import { isError } from "@lightsparkdev/core";
-import { ListAllTokenTransactionsCursor } from "@buildonspark/issuer-sdk/proto/lrc20";
 
 const ISSUER_MNEMONIC_PATH = ".issuer-mnemonic";
 
@@ -38,10 +37,10 @@ router.get(
 
 /**
  * Gets the public key info of the issuer's token
- * @route GET /issuer-wallet/tokens/token-public-key-info
+ * @route GET /issuer-wallet/tokens/token-metadata
  * @returns {Promise<{
  *   data: {
- *     tokenPublicKeyInfo: {
+ *     tokenMetadata: {
  *       announcement: TokenPubkeyAnnouncement,
  *       totalSupply: string,
  *     }
@@ -49,15 +48,15 @@ router.get(
  * }>}
  */
 router.get(
-  "/tokens/token-public-key-info",
+  "/tokens/token-metadata",
   checkWalletInitialized,
   async (req, res) => {
     const wallet = getWallet() as IssuerSparkWallet;
     try {
-      const tokenPublicKeyInfo = await wallet!.getIssuerTokenInfo();
-      console.log("response: ", tokenPublicKeyInfo);
+      const tokenMetadata = await wallet!.getIssuerTokenMetadata();
+      console.log("response: ", tokenMetadata);
       res.json({
-        data: { tokenPublicKeyInfo },
+        data: { tokenMetadata },
       });
     } catch (error) {
       console.error(error);

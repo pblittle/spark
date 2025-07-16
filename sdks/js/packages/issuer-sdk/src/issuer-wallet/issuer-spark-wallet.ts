@@ -23,27 +23,11 @@ import {
 } from "@noble/curves/abstract/utils";
 import { TokenFreezeService } from "../services/freeze.js";
 import { IssuerTokenTransactionService } from "../services/token-transactions.js";
-import { TokenActivityResponse, TokenDistribution } from "../types.js";
-import { convertToTokenActivity } from "../utils/type-mappers.js";
+import { TokenDistribution, IssuerTokenMetadata } from "./types.js";
 import { NotImplementedError } from "@buildonspark/spark-sdk";
-import {
-  Layer,
-  ListAllTokenTransactionsCursor,
-  OperationType,
-} from "@buildonspark/spark-sdk/proto/lrc20";
 import { SparkSigner } from "@buildonspark/spark-sdk";
 
 const BURN_ADDRESS = "02".repeat(33);
-
-export type IssuerTokenInfo = {
-  tokenPublicKey: string;
-  tokenName: string;
-  tokenSymbol: string;
-  tokenDecimals: number;
-  maxSupply: bigint;
-  isFreezable: boolean;
-  totalSupply: bigint;
-};
 
 /**
  * Represents a Spark wallet with minting capabilities.
@@ -85,9 +69,9 @@ export class IssuerSparkWallet extends SparkWallet {
       "SparkIssuerWallet.getIssuerTokenBalance",
       this.getIssuerTokenBalance.bind(this),
     );
-    this.getIssuerTokenInfo = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.getIssuerTokenInfo",
-      this.getIssuerTokenInfo.bind(this),
+    this.getIssuerTokenMetadata = this.wrapWithOtelSpan(
+      "SparkIssuerWallet.getIssuerTokenMetadata",
+      this.getIssuerTokenMetadata.bind(this),
     );
     this.mintTokens = this.wrapWithOtelSpan(
       "SparkIssuerWallet.mintTokens",
@@ -151,31 +135,62 @@ export class IssuerSparkWallet extends SparkWallet {
   }
 
   /**
-   * Retrieves information about the issuer's token.
+   * Retrieves metadata about the issuer's token.
    * @returns An object containing token information including public key, name, symbol, decimals, max supply, and freeze status
-   * @throws {NetworkError} If the token info cannot be retrieved
+   * @throws {NetworkError} If the token metadata cannot be retrieved
    */
-  public async getIssuerTokenInfo(): Promise<IssuerTokenInfo | null> {
-    const lrc20Client = await this.lrc20ConnectionManager.createLrc20Client();
+  public async getIssuerTokenMetadata(): Promise<IssuerTokenMetadata> {
+    const issuerPublicKey = await super.getIdentityPublicKey();
+    if (this.tokenMetadata.has(issuerPublicKey)) {
+      const metadata = this.tokenMetadata.get(issuerPublicKey)!;
 
+      return {
+        tokenPublicKey: bytesToHex(metadata.issuerPublicKey),
+        rawTokenIdentifier: metadata.tokenIdentifier,
+        tokenName: metadata.tokenName,
+        tokenTicker: metadata.tokenTicker,
+        decimals: metadata.decimals,
+        maxSupply: bytesToNumberBE(metadata.maxSupply),
+        isFreezable: metadata.isFreezable,
+      };
+    }
+
+    const sparkTokenClient =
+      await this.connectionManager.createSparkTokenClient(
+        this.config.getCoordinatorAddress(),
+      );
     try {
-      const tokenInfo = await lrc20Client.getTokenPubkeyInfo({
-        publicKeys: [hexToBytes(await super.getIdentityPublicKey())],
+      const response = await sparkTokenClient.query_token_metadata({
+        issuerPublicKeys: Array.of(hexToBytes(issuerPublicKey)),
       });
 
-      const info = tokenInfo.tokenPubkeyInfos[0];
+      if (response.tokenMetadata.length === 0) {
+        throw new ValidationError(
+          "Token metadata not found - If a token has not yet been announced, please announce. If a token was recently announced, it is being confirmed. Try again in a few seconds.",
+          {
+            field: "tokenMetadata",
+            value: response.tokenMetadata,
+            expected: "non-empty array",
+            actualLength: response.tokenMetadata.length,
+            expectedLength: 1,
+          },
+        );
+      }
+
+      const metadata = response.tokenMetadata[0];
+      this.tokenMetadata.set(issuerPublicKey, metadata);
+
       return {
-        tokenPublicKey: bytesToHex(info.announcement!.publicKey!.publicKey),
-        tokenName: info.announcement!.name,
-        tokenSymbol: info.announcement!.symbol,
-        tokenDecimals: Number(bytesToNumberBE(info.announcement!.decimal)),
-        isFreezable: info.announcement!.isFreezable,
-        maxSupply: bytesToNumberBE(info.announcement!.maxSupply),
-        totalSupply: bytesToNumberBE(info.totalSupply),
+        tokenPublicKey: bytesToHex(metadata.issuerPublicKey),
+        rawTokenIdentifier: metadata.tokenIdentifier,
+        tokenName: metadata.tokenName,
+        tokenTicker: metadata.tokenTicker,
+        decimals: metadata.decimals,
+        maxSupply: bytesToNumberBE(metadata.maxSupply),
+        isFreezable: metadata.isFreezable,
       };
     } catch (error) {
-      throw new NetworkError("Failed to get token info", {
-        operation: "getIssuerTokenInfo",
+      throw new NetworkError("Failed to fetch token metadata", {
         errorCount: 1,
         errors: error instanceof Error ? error.message : String(error),
       });
