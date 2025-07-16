@@ -54,7 +54,7 @@ export type DepositParams = {
 export type TokenMetadata = {
   /** Raw binary token identifier - This is used to encode the human readable token identifier */
   rawTokenIdentifier: Uint8Array;
-  /** Hex-encoded public key of the token issuer - Same as issuerPublicKey */
+  /** Public key of the token issuer - Same as issuerPublicKey */
   tokenPublicKey: string;
   /** Human-readable name of the token (e.g., SparkToken)*/
   tokenName: string;

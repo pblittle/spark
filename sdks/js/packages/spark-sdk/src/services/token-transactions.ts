@@ -20,7 +20,7 @@ import {
   hashTokenTransaction,
 } from "../utils/token-hashing.js";
 import {
-  calculateAvailableTokenAmount,
+  sumAvailableTokens,
   checkIfSelectedOutputsAreAvailable,
 } from "../utils/token-transactions.js";
 import {
@@ -142,7 +142,7 @@ export class TokenTransactionService {
 
       // Take only the first MAX_TOKEN_OUTPUTS and calculate their total
       const maxOutputsToUse = sortedOutputs.slice(0, MAX_TOKEN_OUTPUTS);
-      const maxAmount = calculateAvailableTokenAmount(maxOutputsToUse);
+      const maxAmount = sumAvailableTokens(maxOutputsToUse);
 
       throw new ValidationError(
         `Cannot transfer more than ${MAX_TOKEN_OUTPUTS} TTXOs in a single transaction (${outputsToUse.length} selected). Maximum transferable amount is: ${maxAmount}`,
@@ -204,7 +204,7 @@ export class TokenTransactionService {
       (a, b) => a.previousTransactionVout - b.previousTransactionVout,
     );
 
-    const availableTokenAmount = calculateAvailableTokenAmount(selectedOutputs);
+    const availableTokenAmount = sumAvailableTokens(selectedOutputs);
     const totalRequestedAmount = tokenOutputData.reduce(
       (sum, output) => sum + output.tokenAmount,
       0n,
@@ -255,7 +255,7 @@ export class TokenTransactionService {
       (a, b) => a.previousTransactionVout - b.previousTransactionVout,
     );
 
-    const availableTokenAmount = calculateAvailableTokenAmount(selectedOutputs);
+    const availableTokenAmount = sumAvailableTokens(selectedOutputs);
     const totalRequestedAmount = tokenOutputData.reduce(
       (sum, output) => sum + output.tokenAmount,
       0n,
@@ -1106,10 +1106,10 @@ export class TokenTransactionService {
     tokenAmount: bigint,
     strategy: "SMALL_FIRST" | "LARGE_FIRST",
   ): OutputWithPreviousTransactionData[] {
-    if (calculateAvailableTokenAmount(tokenOutputs) < tokenAmount) {
+    if (sumAvailableTokens(tokenOutputs) < tokenAmount) {
       throw new ValidationError("Insufficient token amount", {
         field: "tokenAmount",
-        value: calculateAvailableTokenAmount(tokenOutputs),
+        value: sumAvailableTokens(tokenOutputs),
         expected: tokenAmount,
       });
     }

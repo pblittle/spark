@@ -2,10 +2,10 @@ import { bytesToHex, bytesToNumberBE } from "@noble/curves/abstract/utils";
 import { OutputWithPreviousTransactionData } from "../proto/spark.js";
 import { TokenBalanceMap } from "../spark-wallet/types.js";
 
-export function calculateAvailableTokenAmount(
-  outputLeaves: OutputWithPreviousTransactionData[],
+export function sumAvailableTokens(
+  outputs: OutputWithPreviousTransactionData[],
 ): bigint {
-  return outputLeaves.reduce(
+  return outputs.reduce(
     (sum, output) => sum + BigInt(bytesToNumberBE(output.output!.tokenAmount!)),
     BigInt(0),
   );

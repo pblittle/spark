@@ -88,7 +88,7 @@ import {
   NetworkToProto,
   NetworkType,
 } from "../utils/network.js";
-import { calculateAvailableTokenAmount } from "../utils/token-transactions.js";
+import { sumAvailableTokens } from "../utils/token-transactions.js";
 import { getNextTransactionSequence } from "../utils/transaction.js";
 
 import { LRCWallet } from "@buildonspark/lrc20-sdk";
@@ -128,7 +128,10 @@ import type {
   TransferParams,
   TokenBalanceMap,
 } from "./types.js";
-import { encodeHumanReadableTokenIdentifier } from "../utils/token-identifier.js";
+import {
+  encodeHumanReadableTokenIdentifier,
+  HumanReadableTokenIdentifier,
+} from "../utils/token-identifier.js";
 import { TokenTransactionWithStatus } from "../proto/spark_token.js";
 
 /**
@@ -169,6 +172,7 @@ export class SparkWallet extends EventEmitter {
 
   protected tokenOutputs: Map<string, OutputWithPreviousTransactionData[]> =
     new Map();
+  private tokenMetadata: Map<string, TokenMetadata> = new Map();
 
   // Add this property near the top of the class with other private properties
   private claimTransfersInterval: NodeJS.Timeout | null = null;
@@ -1214,34 +1218,63 @@ export class SparkWallet extends EventEmitter {
     };
   }
 
+  private async getTokenMetadata(): Promise<Map<string, TokenMetadata>> {
+    let metadataToFetch = new Array<string>();
+    for (const issuerPublicKey of this.tokenOutputs.keys()) {
+      if (!this.tokenMetadata.has(issuerPublicKey)) {
+        metadataToFetch.push(issuerPublicKey);
+      }
+    }
+
+    if (metadataToFetch.length > 0) {
+      const sparkTokenClient =
+        await this.connectionManager.createSparkTokenClient(
+          this.config.getCoordinatorAddress(),
+        );
+
+      try {
+        const response = await sparkTokenClient.query_token_metadata({
+          issuerPublicKeys: metadataToFetch.map(hexToBytes),
+        });
+
+        for (const metadata of response.tokenMetadata) {
+          const tokenPublicKey = bytesToHex(metadata.issuerPublicKey);
+
+          this.tokenMetadata.set(tokenPublicKey, {
+            tokenPublicKey: bytesToHex(metadata.issuerPublicKey),
+            rawTokenIdentifier: metadata.tokenIdentifier,
+            tokenName: metadata.tokenName,
+            tokenTicker: metadata.tokenTicker,
+            decimals: metadata.decimals,
+            maxSupply: bytesToNumberBE(metadata.maxSupply),
+          });
+        }
+      } catch (error) {
+        throw new NetworkError("Failed to fetch token metadata", {
+          errorCount: 1,
+          errors: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return this.tokenMetadata;
+  }
+
   private async getTokenBalance(): Promise<TokenBalanceMap> {
-    const sparkTokenClient =
-      await this.connectionManager.createSparkTokenClient(
-        this.config.getCoordinatorAddress(),
-      );
+    const tokenMetadataMap = await this.getTokenMetadata();
 
-    const tokenMetadata = await sparkTokenClient.query_token_metadata({
-      issuerPublicKeys: Array.from(this.tokenOutputs.keys()).map(hexToBytes),
-    });
     const result: TokenBalanceMap = new Map();
+    for (const [issuerPublicKey, tokenMetadata] of tokenMetadataMap) {
+      const outputs = this.tokenOutputs.get(issuerPublicKey);
 
-    for (const metadata of tokenMetadata.tokenMetadata) {
-      const tokenPublicKey = bytesToHex(metadata.issuerPublicKey);
-      const leaves = this.tokenOutputs.get(tokenPublicKey);
       const humanReadableTokenIdentifier = encodeHumanReadableTokenIdentifier({
-        tokenIdentifier: metadata.tokenIdentifier,
+        tokenIdentifier: tokenMetadata.rawTokenIdentifier,
         network: this.config.getNetworkType(),
       });
+
       result.set(humanReadableTokenIdentifier, {
-        balance: leaves ? calculateAvailableTokenAmount(leaves) : BigInt(0),
-        tokenMetadata: {
-          tokenPublicKey,
-          rawTokenIdentifier: metadata.tokenIdentifier,
-          tokenName: metadata.tokenName,
-          tokenTicker: metadata.tokenTicker,
-          decimals: metadata.decimals,
-          maxSupply: bytesToNumberBE(metadata.maxSupply),
-        },
+        balance: outputs ? sumAvailableTokens(outputs) : BigInt(0),
+        tokenMetadata: tokenMetadata,
       });
     }
 
