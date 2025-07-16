@@ -313,7 +313,7 @@ const commands = [
   "transfertokens",
   "gettokenl1address",
   "getissuertokenbalance",
-  "getissuertokeninfo",
+  "getissuertokenmetadata",
   "getissuertokenpublickey",
   "minttokens",
   "burntokens",
@@ -1131,7 +1131,7 @@ async function runCLI() {
           }
           if (args.length < 3) {
             console.log(
-              "Usage: transfertokens <tokenPubKey> <receiverPubKey> <amount>",
+              "Usage: transfertokens <tokenPubKey> <recieverSparkAddress> <amount>",
             );
             break;
           }
