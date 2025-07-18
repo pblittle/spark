@@ -17,6 +17,9 @@ namespace spark_frost {
     TransactionResult construct_refund_tx(bytes tx, u32 vout, bytes pubkey, string network, u16 locktime);
 
     [Throws=Error]
+    TransactionResult construct_direct_refund_tx(bytes tx, u32 vout, bytes pubkey, string network, u16 locktime);
+
+    [Throws=Error]
     TransactionResult construct_split_tx(bytes tx, u32 vout, sequence<string> addresses, u16 locktime);
 
     [Throws=Error]

@@ -590,6 +590,95 @@ pub fn construct_split_tx(
     })
 }
 
+// Construct a tx that pays from the tx.out[vout] to the address, without anchor output and with fee deduction.
+#[wasm_bindgen]
+pub fn construct_direct_refund_tx(
+    tx: Vec<u8>,
+    vout: u32,
+    pubkey: Vec<u8>,
+    network: String,
+    locktime: u16,
+) -> Result<TransactionResult, Error> {
+    // Decode the input transaction
+    let prev_tx: Transaction = deserialize(&tx).map_err(|e| Error::Spark(e.to_string()))?;
+
+    // Verify that vout index is valid
+    if vout as usize >= prev_tx.output.len() {
+        return Err(Error::Spark("Invalid vout index".to_owned()));
+    }
+
+    // Get the previous output we'll be spending
+    let prev_output = &prev_tx.output[vout as usize];
+    let prev_amount = prev_output.value;
+
+    // Calculate fee (191 vbytes * 5 sats/vbyte = 955 sats)
+    let fee = Amount::from_sat(191 * 5);
+
+    // If amount is too small to pay fee, don't deduct it
+    let output_amount = if prev_amount <= fee {
+        prev_amount
+    } else {
+        prev_amount - fee
+    };
+
+    // Create the outpoint (reference to the UTXO we're spending)
+    let outpoint = OutPoint::new(prev_tx.compute_txid(), vout);
+
+    // Create the input
+    let input = TxIn {
+        previous_output: outpoint,
+        script_sig: ScriptBuf::new(), // Empty for now, will be filled by the signing process
+        sequence: Sequence::from_consensus((1 << 31) | u32::from(locktime)), // Set high bit for new sequence format
+        witness: Witness::new(), // Empty witness for now
+    };
+
+    let x_only_key = {
+        let full_key =
+            bitcoin::PublicKey::from_slice(&pubkey).map_err(|e| Error::Spark(e.to_string()))?;
+        full_key.inner.x_only_public_key().0
+    };
+
+    let network = match network.as_str() {
+        "mainnet" => bitcoin::Network::Bitcoin,
+        "testnet" => bitcoin::Network::Testnet,
+        "signet" => bitcoin::Network::Signet,
+        "regtest" => bitcoin::Network::Regtest,
+        _ => return Err(Error::Spark("Invalid network".to_owned())),
+    };
+
+    let secp = Secp256k1::new();
+
+    let p2tr_address = bitcoin::Address::p2tr(&secp, x_only_key, None, network);
+
+    // Create the P2TR output with fee deducted
+    let output = TxOut {
+        value: output_amount,
+        script_pubkey: p2tr_address.script_pubkey(),
+    };
+
+    // Construct the transaction with version 2 for Taproot support
+    let new_tx = Transaction {
+        version: Version::TWO,
+        lock_time: LockTime::ZERO,
+        input: vec![input],
+        output: vec![output], // No ephemeral anchor output
+    };
+
+    let sighash = SighashCache::new(&new_tx)
+        .taproot_key_spend_signature_hash(
+            0,
+            &Prevouts::All(&[prev_output]),
+            TapSighashType::Default,
+        )
+        .unwrap();
+
+    // Serialize the transaction
+    Ok(TransactionResult {
+        tx: bitcoin::consensus::serialize(&new_tx),
+        sighash: sighash.as_raw_hash().to_byte_array().to_vec(),
+    })
+}
+
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct DummyTx {
