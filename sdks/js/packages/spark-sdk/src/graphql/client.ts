@@ -568,7 +568,10 @@ export default class SspClient {
           );
           return;
         } catch (err: unknown) {
-          if (isError(err) && err.message.includes("challenge expired")) {
+          if (
+            isError(err) &&
+            err.message.toLowerCase().includes("challenge expired")
+          ) {
             lastErr = err;
             continue;
           }

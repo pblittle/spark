@@ -459,7 +459,6 @@ export class ConnectionManager {
         .set("Content-Type", "application/grpc-web+proto");
 
       try {
-        // throw new Error("token has expired");
         return yield* call.next(call.request, {
           ...options,
           metadata: metadata.set(
