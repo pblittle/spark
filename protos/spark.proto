@@ -1190,6 +1190,21 @@ message InitiateStaticDepositUtxoRefundRequest {
     // SE consumes it to return SigningResult structure, that is used by the user to
     // construct the final signature for the refund Bitcoin transaction.
     SigningJob refund_tx_signing_job = 3;
+    // Signature of a user statement that authorises the SE to initiate a static
+    // deposit utxo refund to the user.
+    //
+    // The user statement is constructed by concatenating the following fields in order:
+    // 1. Action name: "claim_static_deposit" (UTF-8 string)
+    // 2. Network: lowercase network name (e.g., "bitcoin", "testnet") (UTF-8 string)
+    // 3. Transaction ID: hex-encoded UTXO transaction ID (UTF-8 string)
+    // 4. Output index: UTXO output index (vout) as 4-byte unsigned integer (little-endian)
+    // 5. Request type: 2 for refund (1-byte unsigned integer, little-endian)
+    // 6. Credit amount: amount of satoshis to credit as 8-byte unsigned integer (little-endian)
+    // 7. Signing payload: sighash of spend transaction (UTF-8 string)
+    //
+    // The concatenated payload is then hashed with SHA-256, and the resulting hash
+    // is signed using ECDSA with the user's identity private key to produce this signature.
+    bytes user_signature = 4;
 }
 
 message InitiateStaticDepositUtxoRefundResponse {
