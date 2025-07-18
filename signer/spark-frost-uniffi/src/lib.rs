@@ -392,8 +392,8 @@ pub fn construct_node_tx(
     let input = TxIn {
         previous_output: outpoint,
         script_sig: ScriptBuf::new(), // Empty for now, will be filled by the signing process
-        sequence: Sequence::from_consensus((1 << 31) | u32::from(locktime)), // Set high bit for new sequence format
-        witness: Witness::new(), // Empty witness for now
+        sequence: Sequence::from_consensus(u32::from(locktime)), // Set high bit for new sequence format
+        witness: Witness::new(),                                 // Empty witness for now
     };
 
     let dest_address = Address::from_str(&address)
@@ -465,8 +465,8 @@ pub fn construct_refund_tx(
     let input = TxIn {
         previous_output: outpoint,
         script_sig: ScriptBuf::new(), // Empty for now, will be filled by the signing process
-        sequence: Sequence::from_consensus((1 << 31) | u32::from(locktime)), // Set high bit for new sequence format
-        witness: Witness::new(), // Empty witness for now
+        sequence: Sequence::from_consensus(u32::from(locktime)), // Set high bit for new sequence format
+        witness: Witness::new(),                                 // Empty witness for now
     };
 
     let x_only_key = {
@@ -550,8 +550,8 @@ pub fn construct_split_tx(
     let input = TxIn {
         previous_output: outpoint,
         script_sig: ScriptBuf::new(), // Empty for now, will be filled by the signing process
-        sequence: Sequence::from_consensus((1 << 31) | u32::from(locktime)), // Set high bit for new sequence format
-        witness: Witness::new(), // Empty witness for now
+        sequence: Sequence::from_consensus(u32::from(locktime)), // Set high bit for new sequence format
+        witness: Witness::new(),                                 // Empty witness for now
     };
 
     let mut outputs = vec![];
