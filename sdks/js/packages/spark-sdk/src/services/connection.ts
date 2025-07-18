@@ -247,6 +247,8 @@ export class ConnectionManager {
       const MAX_ATTEMPTS = 3;
       let lastError: Error | undefined;
 
+      /* React Native can cause some outgoing requests to be paused which can result
+         in challenges expiring, so we'll retry any authentication failures: */
       for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         let sparkAuthnClient: SparkAuthnServiceClientWithClose | undefined;
         try {

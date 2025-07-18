@@ -5,6 +5,7 @@ import {
   NodeKeyCache,
   Query,
   Requester,
+  isError,
 } from "@lightsparkdev/core";
 import { sha256 } from "@noble/hashes/sha2";
 import { AuthenticationError, NetworkError } from "../errors/index.js";
@@ -91,6 +92,7 @@ export default class SspClient {
 
   private readonly signer: SparkSigner;
   private readonly authProvider: SparkAuthProvider;
+  private authPromise?: Promise<void>;
 
   constructor(
     config: HasSspClientOptions & {
@@ -525,30 +527,64 @@ export default class SspClient {
   }
 
   async authenticate() {
-    this.authProvider.removeAuth();
-
-    const challenge = await this.getChallenge();
-    if (!challenge) {
-      throw new Error("Failed to get challenge");
+    if (this.authPromise) {
+      return this.authPromise;
     }
 
-    const challengeBytes = Buffer.from(challenge.protectedChallenge, "base64");
-    const signature = await this.signer.signMessageWithIdentityKey(
-      sha256(challengeBytes),
-    );
+    const promise = (async (): Promise<void> => {
+      const MAX_ATTEMPTS = 3;
+      let lastErr: Error | undefined;
 
-    const verifyChallenge = await this.verifyChallenge(
-      Buffer.from(signature).toString("base64"),
-      challenge.protectedChallenge,
-    );
-    if (!verifyChallenge) {
-      throw new Error("Failed to verify challenge");
+      /* React Native can cause some outgoing requests to be paused which can result
+         in challenges expiring, so we'll retry any authentication failures: */
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        try {
+          this.authProvider.removeAuth();
+
+          const challenge = await this.getChallenge();
+          if (!challenge) {
+            throw new Error("Failed to get challenge");
+          }
+
+          const challengeBytes = Buffer.from(
+            challenge.protectedChallenge,
+            "base64",
+          );
+          const signature = await this.signer.signMessageWithIdentityKey(
+            sha256(challengeBytes),
+          );
+
+          const verifyChallenge = await this.verifyChallenge(
+            Buffer.from(signature).toString("base64"),
+            challenge.protectedChallenge,
+          );
+          if (!verifyChallenge) {
+            throw new Error("Failed to verify challenge");
+          }
+
+          this.authProvider.setAuth(
+            verifyChallenge.sessionToken,
+            new Date(verifyChallenge.validUntil),
+          );
+          return;
+        } catch (err: unknown) {
+          if (isError(err) && err.message.includes("challenge expired")) {
+            lastErr = err;
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      throw lastErr ?? new Error("Failed to authenticate after retries");
+    })();
+
+    this.authPromise = promise;
+    try {
+      return await promise;
+    } finally {
+      this.authPromise = undefined;
     }
-
-    this.authProvider.setAuth(
-      verifyChallenge.sessionToken,
-      new Date(verifyChallenge.validUntil),
-    );
   }
 
   async getCoopExitFeeQuote({
