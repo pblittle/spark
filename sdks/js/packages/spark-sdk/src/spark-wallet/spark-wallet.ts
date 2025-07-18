@@ -3350,13 +3350,20 @@ export class SparkWallet extends EventEmitter {
    * @param outputIds - Optional array of output IDs to filter by
    * @returns Promise resolving to array of token transactions with their current status
    */
-  public async queryTokenTransactions(
-    ownerPublicKeys?: string[],
-    issuerPublicKeys?: string[],
-    tokenTransactionHashes?: string[],
-    tokenIdentifiers?: string[],
-    outputIds?: string[],
-  ): Promise<TokenTransactionWithStatus[]> {
+
+  public async queryTokenTransactions({
+    ownerPublicKeys,
+    issuerPublicKeys,
+    tokenTransactionHashes,
+    tokenIdentifiers,
+    outputIds,
+  }: {
+    ownerPublicKeys?: string[];
+    issuerPublicKeys?: string[];
+    tokenTransactionHashes?: string[];
+    tokenIdentifiers?: string[];
+    outputIds?: string[];
+  }): Promise<TokenTransactionWithStatus[]> {
     return this.tokenTransactionService.queryTokenTransactions({
       ownerPublicKeys,
       issuerPublicKeys,

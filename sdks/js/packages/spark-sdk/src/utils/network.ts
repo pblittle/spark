@@ -23,6 +23,23 @@ export const NetworkToProto: Record<Network, NetworkProto> = {
   [Network.LOCAL]: NetworkProto.REGTEST,
 };
 
+export const protoToNetwork = (
+  protoNetwork: NetworkProto,
+): Network | undefined => {
+  switch (protoNetwork) {
+    case NetworkProto.MAINNET:
+      return Network.MAINNET;
+    case NetworkProto.TESTNET:
+      return Network.TESTNET;
+    case NetworkProto.SIGNET:
+      return Network.SIGNET;
+    case NetworkProto.REGTEST:
+      return Network.REGTEST;
+    default:
+      return undefined;
+  }
+};
+
 const NetworkConfig: Record<Network, typeof btc.NETWORK> = {
   [Network.MAINNET]: btc.NETWORK,
   [Network.TESTNET]: btc.TEST_NETWORK,
