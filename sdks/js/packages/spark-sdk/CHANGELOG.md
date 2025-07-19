@@ -1,5 +1,19 @@
 # @buildonspark/spark-sdk
 
+## 0.1.47
+
+### Patch Changes
+
+- - Move some less common imports to root. If you were using these import paths please update them to import the same objects from @buildonspark/spark-sdk instead:
+    - @buildonspark/spark-sdk/address
+    - @buildonspark/spark-sdk/signer
+    - @buildonspark/spark-sdk/services/wallet-config
+    - @buildonspark/spark-sdk/utils
+    - @buildonspark/spark-sdk/token-transactions
+    - @buildonspark/spark-sdk/config
+    - @buildonspark/spark-sdk/lrc-connection
+    - @buildonspark/spark-sdk/connection
+
 ## 0.1.46
 
 ### Patch Changes

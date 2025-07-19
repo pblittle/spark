@@ -1,5 +1,14 @@
 # @buildonspark/issuer-sdk
 
+## 0.0.78
+
+### Patch Changes
+
+- - Renamed getIssuerTokenInfo() to getIssuerTokenMetadata() to better reflect its purpose
+  - Renamed fields to match the new API response (e.g., tokenSymbol → tokenTicker, tokenDecimals → decimals)
+- Updated dependencies
+  - @buildonspark/spark-sdk@0.1.47
+
 ## 0.0.77
 
 ### Patch Changes
