@@ -1,8 +1,8 @@
 import { describe, expect, test } from "@jest/globals";
 import { Network, NetworkType } from "../utils/network.js";
 import {
-  decodeHumanReadableTokenIdentifier,
-  encodeHumanReadableTokenIdentifier,
+  decodeBech32mTokenIdentifier,
+  encodeBech32mTokenIdentifier,
 } from "../utils/token-identifier.js";
 
 const TEST_TOKEN_IDENTIFIER = new Uint8Array([
@@ -26,10 +26,10 @@ const getExpectedTokenIdentifier = (network: NetworkType) => {
 };
 
 describe("token identifier", () => {
-  test("encodeHumanReadableTokenIdentifier", () => {
+  test("encodeBech32mTokenIdentifier", () => {
     const netKeys = Object.values(Network).filter((v) => isNaN(Number(v)));
     for (const network of netKeys) {
-      const tokenIdentifier = encodeHumanReadableTokenIdentifier({
+      const tokenIdentifier = encodeBech32mTokenIdentifier({
         tokenIdentifier: TEST_TOKEN_IDENTIFIER,
         network: network as NetworkType,
       });
@@ -39,11 +39,11 @@ describe("token identifier", () => {
     }
   });
 
-  test("decodeHumanReadableTokenIdentifier", () => {
+  test("decodeBech32mTokenIdentifier", () => {
     const netKeys = Object.values(Network).filter((v) => isNaN(Number(v)));
     for (const network of netKeys) {
       const identifier = getExpectedTokenIdentifier(network as NetworkType);
-      const decoded = decodeHumanReadableTokenIdentifier(
+      const decoded = decodeBech32mTokenIdentifier(
         identifier,
         network as NetworkType,
       );

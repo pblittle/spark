@@ -1,6 +1,11 @@
 import { bytesToHex, bytesToNumberBE } from "@noble/curves/abstract/utils";
 import { OutputWithPreviousTransactionData } from "../proto/spark.js";
-import { TokenBalanceMap } from "../spark-wallet/types.js";
+import {
+  TokenBalanceMap,
+  TokenOutputsMap,
+  RawTokenIdentifierHex,
+} from "../spark-wallet/types.js";
+import { Bech32mTokenIdentifier } from "./token-identifier.js";
 
 export function sumAvailableTokens(
   outputs: OutputWithPreviousTransactionData[],
@@ -13,11 +18,10 @@ export function sumAvailableTokens(
 
 export function checkIfSelectedOutputsAreAvailable(
   selectedOutputs: OutputWithPreviousTransactionData[],
-  tokenOutputs: Map<string, OutputWithPreviousTransactionData[]>,
-  tokenPublicKey: Uint8Array,
+  tokenOutputs: TokenOutputsMap,
+  tokenIdentifier: Bech32mTokenIdentifier,
 ) {
-  const tokenPubKeyHex = bytesToHex(tokenPublicKey);
-  const tokenOutputsAvailable = tokenOutputs.get(tokenPubKeyHex);
+  const tokenOutputsAvailable = tokenOutputs.get(tokenIdentifier);
   if (!tokenOutputsAvailable) {
     return false;
   }

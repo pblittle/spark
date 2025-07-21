@@ -45,6 +45,10 @@ describe("Stress test for token transfers", () => {
     const tokenPublicKey = await issuerWallet.getIdentityPublicKey();
     const userWalletSparkAddress = await userWallet.getSparkAddress();
     const issuerWalletSparkAddress = await issuerWallet.getSparkAddress();
+    const issuerBalanceObj = await issuerWallet.getIssuerTokenBalance();
+    expect(issuerBalanceObj).toBeDefined();
+    expect(issuerBalanceObj.tokenIdentifier).toBeDefined();
+    const tokenIdentifier = issuerBalanceObj.tokenIdentifier!;
 
     for (let i = 0; i < maxTransactionCycles; i++) {
       if (timeoutReached) {
@@ -59,7 +63,7 @@ describe("Stress test for token transfers", () => {
       try {
         // Transfer tokens from issuer to user
         await issuerWallet.transferTokens({
-          tokenPublicKey,
+          tokenIdentifier,
           tokenAmount: TOKEN_AMOUNT,
           receiverSparkAddress: userWalletSparkAddress,
         });
@@ -75,7 +79,7 @@ describe("Stress test for token transfers", () => {
 
         // Transfer tokens from user to issuer
         await userWallet.transferTokens({
-          tokenPublicKey: tokenPublicKey,
+          tokenIdentifier,
           tokenAmount: TOKEN_AMOUNT,
           receiverSparkAddress: issuerWalletSparkAddress,
         });
@@ -126,20 +130,23 @@ describe("Stress test for token transfers", () => {
           });
 
           await issuer.wallet.mintTokens(TOKEN_AMOUNT);
-          const tokenPublicKey = await issuer.wallet.getIdentityPublicKey();
           const userAddress = await user.wallet.getSparkAddress();
+          const issuerBalanceObj = await issuer.wallet.getIssuerTokenBalance();
+          expect(issuerBalanceObj).toBeDefined();
+          expect(issuerBalanceObj.tokenIdentifier).toBeDefined();
+          const tokenIdentifier = issuerBalanceObj.tokenIdentifier!;
 
-          return { issuer, tokenPublicKey, userAddress };
+          return { issuer, tokenIdentifier, userAddress };
         }),
     );
 
     const transactions = walletPairs.map(
-      ({ issuer, tokenPublicKey, userAddress }) =>
+      ({ issuer, tokenIdentifier, userAddress }) =>
         async () => {
           const start_time = Date.now();
           try {
             await issuer.wallet.transferTokens({
-              tokenPublicKey,
+              tokenIdentifier,
               tokenAmount: TOKEN_AMOUNT,
               receiverSparkAddress: userAddress,
             });

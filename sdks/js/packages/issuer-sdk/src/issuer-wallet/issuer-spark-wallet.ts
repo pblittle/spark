@@ -3,6 +3,7 @@ import {
   NetworkError,
   SparkWallet,
   SparkWalletProps,
+  UserTokenMetadata,
   ValidationError,
 } from "@buildonspark/spark-sdk";
 import { isNode } from "@lightsparkdev/core";
@@ -26,6 +27,10 @@ import { IssuerTokenTransactionService } from "../services/token-transactions.js
 import { TokenDistribution, IssuerTokenMetadata } from "./types.js";
 import { NotImplementedError } from "@buildonspark/spark-sdk";
 import { SparkSigner } from "@buildonspark/spark-sdk";
+import {
+  encodeBech32mTokenIdentifier,
+  Bech32mTokenIdentifier,
+} from "@buildonspark/spark-sdk";
 
 const BURN_ADDRESS = "02".repeat(33);
 
@@ -73,6 +78,10 @@ export class IssuerSparkWallet extends SparkWallet {
       "SparkIssuerWallet.getIssuerTokenMetadata",
       this.getIssuerTokenMetadata.bind(this),
     );
+    this.getIssuerTokenIdentifier = this.wrapWithOtelSpan(
+      "SparkIssuerWallet.getIssuerTokenIdentifier",
+      this.getIssuerTokenIdentifier.bind(this),
+    );
     this.mintTokens = this.wrapWithOtelSpan(
       "SparkIssuerWallet.mintTokens",
       this.mintTokens.bind(this),
@@ -116,6 +125,7 @@ export class IssuerSparkWallet extends SparkWallet {
    * @returns An object containing the token balance as a bigint
    */
   public async getIssuerTokenBalance(): Promise<{
+    tokenIdentifier: Bech32mTokenIdentifier | undefined;
     balance: bigint;
   }> {
     const publicKey = await super.getIdentityPublicKey();
@@ -126,24 +136,31 @@ export class IssuerSparkWallet extends SparkWallet {
 
     if (!balanceObj.tokenBalances || issuerBalance === undefined) {
       return {
+        tokenIdentifier: undefined,
         balance: 0n,
       };
     }
     return {
+      tokenIdentifier: issuerBalance[0] ?? undefined,
       balance: issuerBalance[1].balance,
     };
   }
 
   /**
-   * Retrieves metadata about the issuer's token.
+   * Retrieves information about the issuer's token.
    * @returns An object containing token information including public key, name, symbol, decimals, max supply, and freeze status
    * @throws {NetworkError} If the token metadata cannot be retrieved
    */
   public async getIssuerTokenMetadata(): Promise<IssuerTokenMetadata> {
     const issuerPublicKey = await super.getIdentityPublicKey();
-    if (this.tokenMetadata.has(issuerPublicKey)) {
-      const metadata = this.tokenMetadata.get(issuerPublicKey)!;
+    const tokenMetadata = this.tokenMetadata;
 
+    const cachedIssuerTokenMetadata = [...tokenMetadata.entries()].find(
+      ([, metadata]) =>
+        bytesToHex(metadata.issuerPublicKey) === issuerPublicKey,
+    );
+    if (cachedIssuerTokenMetadata !== undefined) {
+      const metadata = cachedIssuerTokenMetadata[1];
       return {
         tokenPublicKey: bytesToHex(metadata.issuerPublicKey),
         rawTokenIdentifier: metadata.tokenIdentifier,
@@ -163,7 +180,6 @@ export class IssuerSparkWallet extends SparkWallet {
       const response = await sparkTokenClient.query_token_metadata({
         issuerPublicKeys: Array.of(hexToBytes(issuerPublicKey)),
       });
-
       if (response.tokenMetadata.length === 0) {
         throw new ValidationError(
           "Token metadata not found - If a token has not yet been announced, please announce. If a token was recently announced, it is being confirmed. Try again in a few seconds.",
@@ -176,9 +192,12 @@ export class IssuerSparkWallet extends SparkWallet {
           },
         );
       }
-
       const metadata = response.tokenMetadata[0];
-      this.tokenMetadata.set(issuerPublicKey, metadata);
+      const tokenIdentifier = encodeBech32mTokenIdentifier({
+        tokenIdentifier: metadata.tokenIdentifier,
+        network: this.config.getNetworkType(),
+      });
+      this.tokenMetadata.set(tokenIdentifier, metadata);
 
       return {
         tokenPublicKey: bytesToHex(metadata.issuerPublicKey),
@@ -198,24 +217,43 @@ export class IssuerSparkWallet extends SparkWallet {
   }
 
   /**
+   * Retrieves the bech32m encoded token identifier for the issuer's token.
+   * @returns The bech32m encoded token identifier for the issuer's token
+   * @throws {NetworkError} If the token identifier cannot be retrieved
+   */
+  public async getIssuerTokenIdentifier(): Promise<Bech32mTokenIdentifier | null> {
+    const tokenMetadata = await this.getIssuerTokenMetadata();
+
+    return encodeBech32mTokenIdentifier({
+      tokenIdentifier: tokenMetadata.rawTokenIdentifier,
+      network: this.config.getNetworkType(),
+    });
+  }
+
+  /**
    * Mints new tokens
    * @param tokenAmount - The amount of tokens to mint
    * @returns The transaction ID of the mint operation
    */
   public async mintTokens(tokenAmount: bigint): Promise<string> {
-    const tokenPublicKey = await super.getIdentityPublicKey();
     let tokenTransaction: TokenTransactionV0 | TokenTransaction;
+    const issuerTokenPublicKey = await super.getIdentityPublicKey();
+    const issuerTokenPublicKeyBytes = hexToBytes(issuerTokenPublicKey);
+
+    const tokenMetadata = await this.getIssuerTokenMetadata();
+    const rawTokenIdentifier: Uint8Array = tokenMetadata.rawTokenIdentifier;
 
     if (this.config.getTokenTransactionVersion() === "V0") {
       tokenTransaction =
         await this.issuerTokenTransactionService.constructMintTokenTransactionV0(
-          hexToBytes(tokenPublicKey),
+          issuerTokenPublicKeyBytes,
           tokenAmount,
         );
     } else {
       tokenTransaction =
         await this.issuerTokenTransactionService.constructMintTokenTransaction(
-          hexToBytes(tokenPublicKey),
+          rawTokenIdentifier,
+          issuerTokenPublicKeyBytes,
           tokenAmount,
         );
     }
@@ -239,8 +277,14 @@ export class IssuerSparkWallet extends SparkWallet {
       identityPublicKey: BURN_ADDRESS,
       network: this.config.getNetworkType(),
     });
+    const issuerTokenIdentifier: Bech32mTokenIdentifier | null =
+      await this.getIssuerTokenIdentifier();
+    if (issuerTokenIdentifier === null) {
+      throw new ValidationError("Issuer token identifier not found");
+    }
+
     return await this.transferTokens({
-      tokenPublicKey: await super.getIdentityPublicKey(),
+      tokenIdentifier: issuerTokenIdentifier,
       tokenAmount,
       receiverSparkAddress: burnAddress,
       selectedOutputs,

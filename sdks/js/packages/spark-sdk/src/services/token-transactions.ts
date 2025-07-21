@@ -33,6 +33,7 @@ import {
   ValidationError,
   NetworkError,
   InternalValidationError,
+  NotImplementedError,
 } from "../errors/types.js";
 import { SigningOperator } from "./wallet-config.js";
 import { hexToBytes } from "@noble/hashes/utils";
@@ -43,6 +44,7 @@ import {
   InputTtxoSignaturesPerOperator,
   QueryTokenTransactionsRequest as QueryTokenTransactionsRequestV1,
   TokenTransactionWithStatus as TokenTransactionWithStatusV1,
+  TokenOutput,
 } from "../proto/spark_token.js";
 import { TokenTransaction as TokenTransactionV0 } from "../proto/spark.js";
 import { collectResponses } from "../utils/response-validation.js";
@@ -50,6 +52,14 @@ import {
   KeyshareWithOperatorIndex,
   recoverRevocationSecretFromKeyshares,
 } from "../utils/token-keyshares.js";
+import {
+  RawTokenIdentifierHex,
+  TokenOutputsMap,
+} from "../spark-wallet/types.js";
+import {
+  Bech32mTokenIdentifier,
+  decodeBech32mTokenIdentifier,
+} from "../utils/token-identifier.js";
 
 const MAX_TOKEN_OUTPUTS = 500;
 
@@ -80,16 +90,16 @@ export class TokenTransactionService {
   }
 
   public async tokenTransfer(
-    tokenOutputs: Map<string, OutputWithPreviousTransactionData[]>,
+    tokenOutputs: TokenOutputsMap,
     receiverOutputs: {
-      tokenPublicKey: string;
+      tokenIdentifier: Bech32mTokenIdentifier;
       tokenAmount: bigint;
       receiverSparkAddress: string;
     }[],
     outputSelectionStrategy: "SMALL_FIRST" | "LARGE_FIRST" = "SMALL_FIRST",
     selectedOutputs?: OutputWithPreviousTransactionData[],
   ): Promise<string> {
-    if (receiverOutputs.length === 0) {
+    if (!Array.isArray(receiverOutputs) || receiverOutputs.length === 0) {
       throw new ValidationError("No receiver outputs provided", {
         field: "receiverOutputs",
         value: receiverOutputs,
@@ -101,8 +111,10 @@ export class TokenTransactionService {
       (sum, transfer) => sum + transfer.tokenAmount,
       0n,
     );
-
     let outputsToUse: OutputWithPreviousTransactionData[];
+
+    const tokenIdentifier: Bech32mTokenIdentifier =
+      receiverOutputs[0]!!.tokenIdentifier;
 
     if (selectedOutputs) {
       outputsToUse = selectedOutputs;
@@ -111,7 +123,7 @@ export class TokenTransactionService {
         !checkIfSelectedOutputsAreAvailable(
           outputsToUse,
           tokenOutputs,
-          hexToBytes(receiverOutputs[0]!!.tokenPublicKey),
+          tokenIdentifier,
         )
       ) {
         throw new ValidationError(
@@ -125,16 +137,14 @@ export class TokenTransactionService {
       }
     } else {
       outputsToUse = this.selectTokenOutputs(
-        tokenOutputs.get(receiverOutputs[0]!!.tokenPublicKey)!!,
+        tokenOutputs.get(tokenIdentifier)!!,
         totalTokenAmount,
         outputSelectionStrategy,
       );
     }
 
     if (outputsToUse.length > MAX_TOKEN_OUTPUTS) {
-      const availableOutputs = tokenOutputs.get(
-        receiverOutputs[0]!!.tokenPublicKey,
-      )!!;
+      const availableOutputs = tokenOutputs.get(tokenIdentifier)!!;
 
       // Sort outputs by the same strategy as in selectTokenOutputs
       const sortedOutputs = [...availableOutputs];
@@ -154,6 +164,23 @@ export class TokenTransactionService {
       );
     }
 
+    const rawTokenIdentifier: Uint8Array = decodeBech32mTokenIdentifier(
+      tokenIdentifier,
+      this.config.getNetworkType(),
+    ).tokenIdentifier;
+
+    // remove for full v0 deprecation
+    let tokenPublicKey: Uint8Array;
+    if (this.config.getTokenTransactionVersion() === "V0") {
+      const tokenClient = await this.connectionManager.createSparkTokenClient(
+        this.config.getCoordinatorAddress(),
+      );
+      const tokenMetadata = await tokenClient.query_token_metadata({
+        tokenIdentifiers: [rawTokenIdentifier],
+      });
+      tokenPublicKey = tokenMetadata.tokenMetadata[0]!.issuerPublicKey;
+    }
+
     const tokenOutputData = receiverOutputs.map((transfer) => {
       const receiverAddress = decodeSparkAddress(
         transfer.receiverSparkAddress,
@@ -161,7 +188,8 @@ export class TokenTransactionService {
       );
       return {
         receiverSparkAddress: hexToBytes(receiverAddress.identityPublicKey),
-        tokenPublicKey: hexToBytes(transfer.tokenPublicKey),
+        rawTokenIdentifier,
+        tokenPublicKey, // Remove for full v0 deprecation
         tokenAmount: transfer.tokenAmount,
       };
     });
@@ -169,6 +197,7 @@ export class TokenTransactionService {
     let tokenTransaction: TokenTransactionV0 | TokenTransaction;
 
     if (this.config.getTokenTransactionVersion() === "V0") {
+      // remove for full v0 deprecation
       tokenTransaction = await this.constructTransferTokenTransactionV0(
         outputsToUse,
         tokenOutputData,
@@ -179,7 +208,6 @@ export class TokenTransactionService {
         tokenOutputData,
       );
     }
-
     const txId = await this.broadcastTokenTransaction(
       tokenTransaction,
       outputsToUse.map((output) => output.output!.ownerPublicKey),
@@ -247,7 +275,7 @@ export class TokenTransactionService {
     selectedOutputs: OutputWithPreviousTransactionData[],
     tokenOutputData: Array<{
       receiverSparkAddress: Uint8Array;
-      tokenPublicKey: Uint8Array;
+      rawTokenIdentifier: Uint8Array;
       tokenAmount: bigint;
     }>,
   ): Promise<TokenTransaction> {
@@ -261,19 +289,21 @@ export class TokenTransactionService {
       0n,
     );
 
-    const tokenOutputs = tokenOutputData.map((output) => ({
-      ownerPublicKey: output.receiverSparkAddress,
-      tokenPublicKey: output.tokenPublicKey,
-      tokenAmount: numberToBytesBE(output.tokenAmount, 16),
-    }));
+    const tokenOutputs: TokenOutput[] = tokenOutputData.map(
+      (output): TokenOutput => ({
+        ownerPublicKey: output.receiverSparkAddress,
+        tokenIdentifier: output.rawTokenIdentifier,
+        tokenAmount: numberToBytesBE(output.tokenAmount, 16),
+      }),
+    );
 
     if (availableTokenAmount > totalRequestedAmount) {
       const changeAmount = availableTokenAmount - totalRequestedAmount;
-      const firstTokenPublicKey = tokenOutputData[0]!!.tokenPublicKey;
+      const firstTokenIdentifierBytes = tokenOutputData[0]!!.rawTokenIdentifier;
 
       tokenOutputs.push({
         ownerPublicKey: await this.config.signer.getIdentityPublicKey(),
-        tokenPublicKey: firstTokenPublicKey,
+        tokenIdentifier: firstTokenIdentifierBytes,
         tokenAmount: numberToBytesBE(changeAmount, 16),
       });
     }
@@ -614,19 +644,27 @@ export class TokenTransactionService {
 
     const ownerSignaturesWithIndex: SignatureWithIndex[] = [];
     if (tokenTransaction.tokenInputs!.$case === "mintInput") {
-      const issuerPublicKey =
-        tokenTransaction.tokenInputs!.mintInput.issuerPublicKey;
-      if (!issuerPublicKey) {
+      const tokenIdentifier =
+        tokenTransaction.tokenInputs!.mintInput.tokenIdentifier;
+      if (!tokenIdentifier) {
         throw new ValidationError("Invalid mint input", {
-          field: "issuerPublicKey",
+          field: "tokenIdentifier",
           value: null,
-          expected: "Non-null issuer public key",
+          expected: "Non-null tokenIdentifier",
+        });
+      }
+      const ownerPubkey = tokenTransaction.tokenOutputs[0]!.ownerPublicKey;
+      if (!ownerPubkey) {
+        throw new ValidationError("Invalid mint input", {
+          field: "ownerPubkey",
+          value: null,
+          expected: "Non-null ownerPubkey",
         });
       }
 
       const ownerSignature = await this.signMessageWithKey(
         partialTokenTransactionHash,
-        issuerPublicKey,
+        ownerPubkey,
       );
 
       ownerSignaturesWithIndex.push({

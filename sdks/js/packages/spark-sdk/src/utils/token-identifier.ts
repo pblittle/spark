@@ -3,7 +3,10 @@ import { bech32m } from "@scure/base";
 import { NetworkType } from "../utils/network.js";
 import { ValidationError } from "../errors/index.js";
 
-const HumanReadableTokenIdentifierNetworkPrefix: Record<NetworkType, string> = {
+const Bech32mTokenIdentifierTokenIdentifierNetworkPrefix: Record<
+  NetworkType,
+  string
+> = {
   MAINNET: "btk",
   REGTEST: "btkrt",
   TESTNET: "btkt",
@@ -11,31 +14,31 @@ const HumanReadableTokenIdentifierNetworkPrefix: Record<NetworkType, string> = {
   LOCAL: "btkl",
 } as const;
 
-export type HumanReadableTokenIdentifier =
+export type Bech32mTokenIdentifier =
   | `btk1${string}`
   | `btkrt1${string}`
   | `btkt1${string}`
   | `btks1${string}`
   | `btkl1${string}`;
 
-export interface HumanReadableTokenIdentifierData {
+export interface Bech32mTokenIdentifierData {
   tokenIdentifier: Uint8Array;
   network: NetworkType;
 }
 
-export function encodeHumanReadableTokenIdentifier(
-  payload: HumanReadableTokenIdentifierData,
-): HumanReadableTokenIdentifier {
+export function encodeBech32mTokenIdentifier(
+  payload: Bech32mTokenIdentifierData,
+): Bech32mTokenIdentifier {
   try {
     const words = bech32m.toWords(payload.tokenIdentifier);
     return bech32m.encode(
-      HumanReadableTokenIdentifierNetworkPrefix[payload.network],
+      Bech32mTokenIdentifierTokenIdentifierNetworkPrefix[payload.network],
       words,
       500,
-    ) as HumanReadableTokenIdentifier;
+    ) as Bech32mTokenIdentifier;
   } catch (error) {
     throw new ValidationError(
-      "Failed to encode human readable token identifier",
+      "Failed to encode bech32m encoded token identifier",
       {
         field: "tokenIdentifier",
         value: payload.tokenIdentifier,
@@ -45,23 +48,26 @@ export function encodeHumanReadableTokenIdentifier(
   }
 }
 
-export function decodeHumanReadableTokenIdentifier(
-  humanReadableTokenIdentifier: HumanReadableTokenIdentifier,
+export function decodeBech32mTokenIdentifier(
+  bech32mTokenIdentifier: Bech32mTokenIdentifier,
   network: NetworkType,
-): HumanReadableTokenIdentifierData {
+): Bech32mTokenIdentifierData {
   try {
     const decoded = bech32m.decode(
-      humanReadableTokenIdentifier as HumanReadableTokenIdentifier,
+      bech32mTokenIdentifier as Bech32mTokenIdentifier,
       500,
     );
 
-    if (decoded.prefix !== HumanReadableTokenIdentifierNetworkPrefix[network]) {
+    if (
+      decoded.prefix !==
+      Bech32mTokenIdentifierTokenIdentifierNetworkPrefix[network]
+    ) {
       throw new ValidationError(
-        "Invalid human readable token identifier prefix",
+        "Invalid bech32m encoded token identifier prefix",
         {
-          field: "humanReadableTokenIdentifier",
-          value: humanReadableTokenIdentifier,
-          expected: `prefix='${HumanReadableTokenIdentifierNetworkPrefix[network]}'`,
+          field: "bech32mTokenIdentifier",
+          value: bech32mTokenIdentifier,
+          expected: `prefix='${Bech32mTokenIdentifierTokenIdentifierNetworkPrefix[network]}'`,
         },
       );
     }
@@ -77,10 +83,10 @@ export function decodeHumanReadableTokenIdentifier(
       throw error;
     }
     throw new ValidationError(
-      "Failed to decode human readable token identifier",
+      "Failed to decode bech32m encoded token identifier",
       {
-        field: "humanReadableTokenIdentifier",
-        value: humanReadableTokenIdentifier,
+        field: "bech32mTokenIdentifier",
+        value: bech32mTokenIdentifier,
       },
       error as Error,
     );

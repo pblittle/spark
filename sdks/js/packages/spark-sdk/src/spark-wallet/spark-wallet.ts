@@ -122,16 +122,20 @@ import type {
   DepositParams,
   InitWalletResponse,
   PayLightningInvoiceParams,
+  RawTokenIdentifierHex,
   SparkWalletProps,
   UserTokenMetadata,
   TransferParams,
   TokenBalanceMap,
+  TokenOutputsMap,
+  TokenMetadataMap,
 } from "./types.js";
-import { encodeHumanReadableTokenIdentifier } from "../utils/token-identifier.js";
+import { TokenTransactionWithStatus } from "../proto/spark_token.js";
 import {
-  TokenTransactionWithStatus,
-  TokenMetadata,
-} from "../proto/spark_token.js";
+  decodeBech32mTokenIdentifier,
+  encodeBech32mTokenIdentifier,
+  Bech32mTokenIdentifier,
+} from "../utils/token-identifier.js";
 
 /**
  * The SparkWallet class is the primary interface for interacting with the Spark network.
@@ -168,9 +172,8 @@ export class SparkWallet extends EventEmitter {
 
   protected leaves: TreeNode[] = [];
 
-  protected tokenOutputs: Map<string, OutputWithPreviousTransactionData[]> =
-    new Map();
-  protected tokenMetadata: Map<string, TokenMetadata> = new Map();
+  protected tokenMetadata: TokenMetadataMap = new Map();
+  protected tokenOutputs: TokenOutputsMap = new Map();
 
   // Add this property near the top of the class with other private properties
   private claimTransfersInterval: NodeJS.Timeout | null = null;
@@ -1192,7 +1195,7 @@ export class SparkWallet extends EventEmitter {
    *
    * @returns {Promise<Object>} Object containing:
    *   - balance: The wallet's current balance in satoshis
-   *   - tokenBalances: Map of the human readable token identifier to token balances and token info
+   *   - tokenBalances: Map of the bech32m encodedtoken identifier to token balances and token info
    */
   public async getBalance(): Promise<{
     balance: bigint;
@@ -1215,11 +1218,13 @@ export class SparkWallet extends EventEmitter {
     };
   }
 
-  private async getTokenMetadata(): Promise<Map<string, UserTokenMetadata>> {
-    let metadataToFetch = new Array<string>();
-    for (const issuerPublicKey of this.tokenOutputs.keys()) {
-      if (!this.tokenMetadata.has(issuerPublicKey)) {
-        metadataToFetch.push(issuerPublicKey);
+  private async getTokenMetadata(): Promise<
+    Map<Bech32mTokenIdentifier, UserTokenMetadata>
+  > {
+    let metadataToFetch = new Array<Bech32mTokenIdentifier>();
+    for (const tokenIdentifier of this.tokenOutputs.keys()) {
+      if (!this.tokenMetadata.has(tokenIdentifier)) {
+        metadataToFetch.push(tokenIdentifier);
       }
     }
 
@@ -1231,14 +1236,22 @@ export class SparkWallet extends EventEmitter {
 
       try {
         const response = await sparkTokenClient.query_token_metadata({
-          issuerPublicKeys: metadataToFetch.map(hexToBytes),
+          tokenIdentifiers: metadataToFetch.map(
+            (tokenIdentifier) =>
+              decodeBech32mTokenIdentifier(
+                tokenIdentifier,
+                this.config.getNetworkType(),
+              ).tokenIdentifier,
+          ),
         });
 
-        for (const metadata of response.tokenMetadata) {
-          this.tokenMetadata.set(
-            bytesToHex(metadata.issuerPublicKey),
-            metadata,
-          );
+        for (const tokenMetadata of response.tokenMetadata) {
+          const tokenIdentifier = encodeBech32mTokenIdentifier({
+            tokenIdentifier: tokenMetadata.tokenIdentifier,
+            network: this.config.getNetworkType(),
+          });
+
+          this.tokenMetadata.set(tokenIdentifier, tokenMetadata);
         }
       } catch (error) {
         throw new NetworkError("Failed to fetch token metadata", {
@@ -1248,10 +1261,10 @@ export class SparkWallet extends EventEmitter {
       }
     }
 
-    let tokenMetadataMap = new Map<string, UserTokenMetadata>();
+    let tokenMetadataMap = new Map<Bech32mTokenIdentifier, UserTokenMetadata>();
 
-    for (const [issuerPublicKey, metadata] of this.tokenMetadata) {
-      tokenMetadataMap.set(issuerPublicKey, {
+    for (const [tokenIdentifier, metadata] of this.tokenMetadata) {
+      tokenMetadataMap.set(tokenIdentifier, {
         tokenPublicKey: bytesToHex(metadata.issuerPublicKey),
         rawTokenIdentifier: metadata.tokenIdentifier,
         tokenName: metadata.tokenName,
@@ -1268,10 +1281,10 @@ export class SparkWallet extends EventEmitter {
     const tokenMetadataMap = await this.getTokenMetadata();
 
     const result: TokenBalanceMap = new Map();
-    for (const [issuerPublicKey, tokenMetadata] of tokenMetadataMap) {
-      const outputs = this.tokenOutputs.get(issuerPublicKey);
+    for (const [tokenIdentifier, tokenMetadata] of tokenMetadataMap) {
+      const outputs = this.tokenOutputs.get(tokenIdentifier);
 
-      const humanReadableTokenIdentifier = encodeHumanReadableTokenIdentifier({
+      const humanReadableTokenIdentifier = encodeBech32mTokenIdentifier({
         tokenIdentifier: tokenMetadata.rawTokenIdentifier,
         network: this.config.getNetworkType(),
       });
@@ -3213,7 +3226,6 @@ export class SparkWallet extends EventEmitter {
       await this.tokenTransactionService.fetchOwnedTokenOutputs({
         ownerPublicKeys: [await this.config.signer.getIdentityPublicKey()],
       });
-
     const filteredTokenOutputs = unsortedTokenOutputs.filter(
       (output) =>
         !this.pendingWithdrawnOutputIds.includes(output.output?.id || ""),
@@ -3226,21 +3238,21 @@ export class SparkWallet extends EventEmitter {
       (id) => fetchedOutputIds.has(id),
     );
 
-    // Group leaves by token key
-    const groupedOutputs = new Map<
-      string,
-      OutputWithPreviousTransactionData[]
-    >();
+    // Group outputs by hex representation of raw token identifier bytes
+    const groupedOutputs: TokenOutputsMap = new Map();
 
     filteredTokenOutputs.forEach((output) => {
-      const tokenKey = bytesToHex(output.output!.tokenPublicKey!);
+      const bech32mTokenIdentifier = encodeBech32mTokenIdentifier({
+        tokenIdentifier: output.output!.tokenIdentifier!,
+        network: this.config.getNetworkType(),
+      });
       const index = output.previousTransactionVout!;
 
-      if (!groupedOutputs.has(tokenKey)) {
-        groupedOutputs.set(tokenKey, []);
+      if (!groupedOutputs.has(bech32mTokenIdentifier)) {
+        groupedOutputs.set(bech32mTokenIdentifier, []);
       }
 
-      groupedOutputs.get(tokenKey)!.push({
+      groupedOutputs.get(bech32mTokenIdentifier)!.push({
         ...output,
         previousTransactionVout: index,
       });
@@ -3260,13 +3272,13 @@ export class SparkWallet extends EventEmitter {
    * @returns {Promise<string>} The transaction ID of the token transfer
    */
   public async transferTokens({
-    tokenPublicKey,
+    tokenIdentifier,
     tokenAmount,
     receiverSparkAddress,
     outputSelectionStrategy,
     selectedOutputs,
   }: {
-    tokenPublicKey: string;
+    tokenIdentifier: Bech32mTokenIdentifier;
     tokenAmount: bigint;
     receiverSparkAddress: string;
     outputSelectionStrategy?: "SMALL_FIRST" | "LARGE_FIRST";
@@ -3278,7 +3290,7 @@ export class SparkWallet extends EventEmitter {
       this.tokenOutputs,
       [
         {
-          tokenPublicKey,
+          tokenIdentifier,
           tokenAmount,
           receiverSparkAddress,
         },
@@ -3300,7 +3312,7 @@ export class SparkWallet extends EventEmitter {
    */
   public async batchTransferTokens(
     receiverOutputs: {
-      tokenPublicKey: string;
+      tokenIdentifier: Bech32mTokenIdentifier;
       tokenAmount: bigint;
       receiverSparkAddress: string;
     }[],
@@ -3314,9 +3326,9 @@ export class SparkWallet extends EventEmitter {
         expected: "Non-empty array",
       });
     }
-    const firstTokenPublicKey = receiverOutputs[0]!.tokenPublicKey;
+    const firstBech32mTokenIdentifier = receiverOutputs[0]!.tokenIdentifier;
     const allSameToken = receiverOutputs.every(
-      (output) => output.tokenPublicKey === firstTokenPublicKey,
+      (output) => output.tokenIdentifier === firstBech32mTokenIdentifier,
     );
     if (!allSameToken) {
       throw new ValidationError(
@@ -3331,9 +3343,16 @@ export class SparkWallet extends EventEmitter {
 
     await this.syncTokenOutputs();
 
+    // replace bech32m encoded token identifier with raw token identifier bytes
+    const transferOutputs = receiverOutputs.map((output) => ({
+      tokenIdentifier: firstBech32mTokenIdentifier,
+      tokenAmount: output.tokenAmount,
+      receiverSparkAddress: output.receiverSparkAddress,
+    }));
+
     return this.tokenTransactionService.tokenTransfer(
       this.tokenOutputs,
-      receiverOutputs,
+      transferOutputs,
       outputSelectionStrategy,
       selectedOutputs,
     );

@@ -39,7 +39,8 @@ export class IssuerTokenTransactionService extends TokenTransactionService {
   }
 
   async constructMintTokenTransaction(
-    tokenPublicKey: Uint8Array,
+    rawTokenIdentifierBytes: Uint8Array,
+    issuerTokenPublicKey: Uint8Array,
     tokenAmount: bigint,
   ): Promise<TokenTransaction> {
     return {
@@ -48,13 +49,14 @@ export class IssuerTokenTransactionService extends TokenTransactionService {
       tokenInputs: {
         $case: "mintInput",
         mintInput: {
-          issuerPublicKey: tokenPublicKey,
+          issuerPublicKey: issuerTokenPublicKey,
+          tokenIdentifier: rawTokenIdentifierBytes,
         },
       },
       tokenOutputs: [
         {
-          ownerPublicKey: tokenPublicKey,
-          tokenPublicKey: tokenPublicKey,
+          ownerPublicKey: issuerTokenPublicKey,
+          tokenIdentifier: rawTokenIdentifierBytes,
           tokenAmount: numberToBytesBE(tokenAmount, 16),
         },
       ],

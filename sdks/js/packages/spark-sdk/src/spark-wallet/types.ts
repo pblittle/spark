@@ -1,7 +1,9 @@
 import type { Transaction } from "@scure/btc-signer";
 import { ConfigOptions } from "../services/wallet-config.js";
 import type { SparkSigner } from "../signer/signer.js";
-import { HumanReadableTokenIdentifier } from "../utils/token-identifier.js";
+import { TokenMetadata } from "../proto/spark_token.js";
+import { Bech32mTokenIdentifier } from "../utils/token-identifier.js";
+import { OutputWithPreviousTransactionData } from "../proto/spark.js";
 
 export type CreateLightningInvoiceParams = {
   amountSats: number;
@@ -35,7 +37,7 @@ export type DepositParams = {
  * Token metadata containing essential information about a token.
  * This is the wallet's internal representation with JavaScript-friendly types.
  *
- * rawTokenIdentifier: This is the raw binary token identifier - This is used to encode the human readable token identifier.
+ * rawTokenIdentifier: This is the raw binary token identifier - This is used to encode the bech32m encoded token identifier.
  *
  * tokenPublicKey: This is the hex-encoded public key of the token issuer - Same as issuerPublicKey.
  *
@@ -67,12 +69,23 @@ export type UserTokenMetadata = {
 };
 
 export type TokenBalanceMap = Map<
-  HumanReadableTokenIdentifier,
+  Bech32mTokenIdentifier,
   {
     balance: bigint;
     tokenMetadata: UserTokenMetadata;
   }
 >;
+
+export type RawTokenIdentifierHex = string & {
+  readonly __brand: "RawTokenIdentifierHex";
+};
+
+export type TokenOutputsMap = Map<
+  Bech32mTokenIdentifier,
+  OutputWithPreviousTransactionData[]
+>;
+
+export type TokenMetadataMap = Map<Bech32mTokenIdentifier, TokenMetadata>;
 
 export type InitWalletResponse = {
   mnemonic?: string | undefined;

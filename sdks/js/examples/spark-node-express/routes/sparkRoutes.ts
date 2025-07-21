@@ -1,6 +1,5 @@
 import { IssuerSparkWallet } from "@buildonspark/issuer-sdk";
 import { SparkWallet } from "@buildonspark/spark-sdk";
-import { Transfer } from "@buildonspark/spark-sdk/proto/spark";
 import { ConfigOptions } from "@buildonspark/spark-sdk";
 import {
   ExitSpeed,
@@ -9,7 +8,10 @@ import {
   type LightningReceiveRequest,
   type LightningSendRequest,
 } from "@buildonspark/spark-sdk/types";
-import { getLatestDepositTxId } from "@buildonspark/spark-sdk";
+import {
+  getLatestDepositTxId,
+  Bech32mTokenIdentifier,
+} from "@buildonspark/spark-sdk";
 import { isError } from "@lightsparkdev/core";
 import {
   Router,
@@ -803,14 +805,14 @@ export const createSparkRouter = (
     async (req, res) => {
       const wallet = getWallet();
       try {
-        const { tokenPublicKey, tokenAmount, receiverSparkAddress } =
+        const { tokenIdentifier, tokenAmount, receiverSparkAddress } =
           req.body as {
-            tokenPublicKey: string;
+            tokenIdentifier: Bech32mTokenIdentifier;
             tokenAmount: number;
             receiverSparkAddress: string;
           };
         const transferTx = await wallet!.transferTokens({
-          tokenPublicKey,
+          tokenIdentifier,
           tokenAmount: BigInt(tokenAmount),
           receiverSparkAddress: receiverSparkAddress,
         });

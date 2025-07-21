@@ -416,6 +416,25 @@ export function validateTokenTransaction(
     const finalMintInput = finalTokenTransaction.tokenInputs.mintInput;
     const partialMintInput = partialTokenTransaction.tokenInputs.mintInput;
 
+    if (!finalMintInput.issuerPublicKey || !partialMintInput.issuerPublicKey) {
+      throw new InternalValidationError(
+        "Issuer public key missing in mint input",
+        {
+          value: finalMintInput.issuerPublicKey,
+          expected: partialMintInput.issuerPublicKey,
+        },
+      );
+    }
+    if (!finalMintInput.tokenIdentifier || !partialMintInput.tokenIdentifier) {
+      throw new InternalValidationError(
+        "Token identifier missing in mint input",
+        {
+          value: finalMintInput.tokenIdentifier,
+          expected: partialMintInput.tokenIdentifier,
+        },
+      );
+    }
+
     if (
       !areByteArraysEqual(
         finalMintInput.issuerPublicKey,
@@ -427,6 +446,21 @@ export function validateTokenTransaction(
         {
           value: finalMintInput.issuerPublicKey.toString(),
           expected: partialMintInput.issuerPublicKey.toString(),
+        },
+      );
+    }
+
+    if (
+      !areByteArraysEqual(
+        finalMintInput.tokenIdentifier,
+        partialMintInput.tokenIdentifier,
+      )
+    ) {
+      throw new InternalValidationError(
+        "Issuer public key mismatch in mint input",
+        {
+          value: finalMintInput.tokenIdentifier.toString(),
+          expected: partialMintInput.tokenIdentifier.toString(),
         },
       );
     }

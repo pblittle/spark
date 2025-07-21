@@ -139,9 +139,14 @@ describe.each(TEST_CONFIGS)(
       const tokenAmount: bigint = 1000n;
 
       await sharedIssuerWallet.mintTokens(tokenAmount);
+
+      const sharedIssuerBalance =
+        await sharedIssuerWallet.getIssuerTokenBalance();
+      expect(sharedIssuerBalance).toBeDefined();
+      expect(sharedIssuerBalance.tokenIdentifier).toBeDefined();
       await sharedIssuerWallet.transferTokens({
         tokenAmount,
-        tokenPublicKey: sharedTokenPublicKey,
+        tokenIdentifier: sharedIssuerBalance.tokenIdentifier!,
         receiverSparkAddress: await sharedUserWallet.getSparkAddress(),
       });
 
@@ -308,24 +313,28 @@ describe.each(TEST_CONFIGS)(
         });
 
       await sharedIssuerWallet.mintTokens(tokenAmount);
-      const sourceBalanceBefore = (
-        await sharedIssuerWallet.getIssuerTokenBalance()
-      ).balance;
+      const sharedIssuerBalance =
+        await sharedIssuerWallet.getIssuerTokenBalance();
+      expect(sharedIssuerBalance).toBeDefined();
+      expect(sharedIssuerBalance.tokenIdentifier).toBeDefined();
+
+      const tokenIdentifier = sharedIssuerBalance.tokenIdentifier!;
+      const sourceBalanceBefore = sharedIssuerBalance.balance;
 
       await sharedIssuerWallet.batchTransferTokens([
         {
           tokenAmount: tokenAmount / 3n,
-          tokenPublicKey: sharedTokenPublicKey,
+          tokenIdentifier,
           receiverSparkAddress: await destinationWallet.getSparkAddress(),
         },
         {
           tokenAmount: tokenAmount / 3n,
-          tokenPublicKey: sharedTokenPublicKey,
+          tokenIdentifier,
           receiverSparkAddress: await destinationWallet2.getSparkAddress(),
         },
         {
           tokenAmount: tokenAmount / 3n,
-          tokenPublicKey: sharedTokenPublicKey,
+          tokenIdentifier,
           receiverSparkAddress: await destinationWallet3.getSparkAddress(),
         },
       ]);
@@ -461,9 +470,14 @@ describe.each(TEST_CONFIGS)(
         await issuerWallet.mintTokens(tokenAmount);
 
         // Check issuer balance after minting
-        const issuerBalanceAfterMint = (
-          await issuerWallet.getIssuerTokenBalance()
-        ).balance;
+        const issuerBalanceObjAfterMint =
+          await issuerWallet.getIssuerTokenBalance();
+        expect(issuerBalanceObjAfterMint).toBeDefined();
+        expect(issuerBalanceObjAfterMint.tokenIdentifier).toBeDefined();
+
+        const issuerBalanceAfterMint = issuerBalanceObjAfterMint.balance;
+        const tokenIdentifier = issuerBalanceObjAfterMint.tokenIdentifier!;
+
         expect(issuerBalanceAfterMint).toEqual(tokenAmount);
 
         const { wallet: userWallet } = await SparkWalletTesting.initialize({
@@ -473,7 +487,7 @@ describe.each(TEST_CONFIGS)(
 
         await issuerWallet.transferTokens({
           tokenAmount,
-          tokenPublicKey: await issuerWallet.getIdentityPublicKey(),
+          tokenIdentifier,
           receiverSparkAddress: userWalletPublicKey,
         });
         const issuerBalanceAfterTransfer = (
@@ -533,17 +547,18 @@ describe.each(TEST_CONFIGS)(
         .balance;
 
       await sharedIssuerWallet.mintTokens(tokenAmount);
-
-      const issuerBalanceAfterMint = (
-        await sharedIssuerWallet.getIssuerTokenBalance()
-      ).balance;
+      const issuerBalanceObjAfterMint =
+        await sharedIssuerWallet.getIssuerTokenBalance();
+      expect(issuerBalanceObjAfterMint).toBeDefined();
+      const issuerBalanceAfterMint = issuerBalanceObjAfterMint.balance;
       expect(issuerBalanceAfterMint).toEqual(initialBalance + tokenAmount);
-
+      expect(issuerBalanceObjAfterMint.tokenIdentifier).toBeDefined();
+      const tokenIdentifier = issuerBalanceObjAfterMint.tokenIdentifier!;
       const userWalletPublicKey = await userWallet.getSparkAddress();
 
       await sharedIssuerWallet.transferTokens({
         tokenAmount,
-        tokenPublicKey: sharedTokenPublicKey,
+        tokenIdentifier,
         receiverSparkAddress: userWalletPublicKey,
       });
 
@@ -560,7 +575,7 @@ describe.each(TEST_CONFIGS)(
       expect(userBalanceAfterTransfer.balance).toEqual(tokenAmount);
 
       await userWallet.transferTokens({
-        tokenPublicKey: sharedTokenPublicKey,
+        tokenIdentifier,
         tokenAmount,
         receiverSparkAddress: await sharedIssuerWallet.getSparkAddress(),
       });
