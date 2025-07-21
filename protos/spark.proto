@@ -49,6 +49,7 @@ service SparkService {
 
     rpc prepare_tree_address(PrepareTreeAddressRequest) returns (PrepareTreeAddressResponse) {}
     rpc create_tree(CreateTreeRequest) returns (CreateTreeResponse) {}
+    rpc create_tree_v2(CreateTreeRequest) returns (CreateTreeResponse) {}
     rpc get_signing_operator_list(google.protobuf.Empty) returns (GetSigningOperatorListResponse) {}
 
     rpc query_nodes(QueryNodesRequest) returns (QueryNodesResponse) {}
