@@ -7,19 +7,19 @@ const Bech32mTokenIdentifierTokenIdentifierNetworkPrefix: Record<
   NetworkType,
   string
 > = {
-  MAINNET: "btk",
-  REGTEST: "btkrt",
-  TESTNET: "btkt",
-  SIGNET: "btks",
-  LOCAL: "btkl",
+  MAINNET: "btkn",
+  REGTEST: "btknrt",
+  TESTNET: "btknt",
+  SIGNET: "btkns",
+  LOCAL: "btknl",
 } as const;
 
 export type Bech32mTokenIdentifier =
-  | `btk1${string}`
-  | `btkrt1${string}`
-  | `btkt1${string}`
-  | `btks1${string}`
-  | `btkl1${string}`;
+  | `btkn1${string}`
+  | `btknrt1${string}`
+  | `btknt1${string}`
+  | `btkns1${string}`
+  | `btknl1${string}`;
 
 export interface Bech32mTokenIdentifierData {
   tokenIdentifier: Uint8Array;
