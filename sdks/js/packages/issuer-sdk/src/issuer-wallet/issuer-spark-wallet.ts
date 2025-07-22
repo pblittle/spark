@@ -3,7 +3,6 @@ import {
   NetworkError,
   SparkWallet,
   SparkWalletProps,
-  UserTokenMetadata,
   ValidationError,
 } from "@buildonspark/spark-sdk";
 import { isNode } from "@lightsparkdev/core";
@@ -27,6 +26,7 @@ import { IssuerTokenTransactionService } from "../services/token-transactions.js
 import { TokenDistribution, IssuerTokenMetadata } from "./types.js";
 import { NotImplementedError } from "@buildonspark/spark-sdk";
 import { SparkSigner } from "@buildonspark/spark-sdk";
+import { validateTokenParameters } from "../utils/create-validation.js";
 import {
   encodeBech32mTokenIdentifier,
   Bech32mTokenIdentifier,
@@ -231,6 +231,53 @@ export class IssuerSparkWallet extends SparkWallet {
   }
 
   /**
+   * Create a new token on Spark.
+   *
+   * @param params - Object containing token creation parameters.
+   * @param params.tokenName - The name of the token.
+   * @param params.tokenTicker - The ticker symbol for the token.
+   * @param params.decimals - The number of decimal places for the token.
+   * @param params.isFreezable - Whether the token can be frozen.
+   * @param [params.maxSupply=0n] - (Optional) The maximum supply of the token. Defaults to <code>0n</code>.
+   *
+   * @returns The transaction ID of the announcement.
+   *
+   * @throws {ValidationError} If `decimals` is not a safe integer or other validation fails.
+   * @throws {NetworkError} If the announcement transaction cannot be broadcast.
+   */
+  public async createToken({
+    tokenName,
+    tokenTicker,
+    decimals,
+    isFreezable,
+    maxSupply = 0n,
+  }: {
+    tokenName: string;
+    tokenTicker: string;
+    decimals: number;
+    isFreezable: boolean;
+    maxSupply?: bigint;
+  }): Promise<string> {
+    validateTokenParameters(tokenName, tokenTicker, decimals, maxSupply);
+
+    const issuerPublicKey = await super.getIdentityPublicKey();
+
+    const tokenTransaction =
+      await this.issuerTokenTransactionService.constructCreateTokenTransaction(
+        hexToBytes(issuerPublicKey),
+        tokenName,
+        tokenTicker,
+        decimals,
+        maxSupply,
+        isFreezable,
+      );
+
+    return await this.issuerTokenTransactionService.broadcastTokenTransaction(
+      tokenTransaction,
+    );
+  }
+
+  /**
    * Mints new tokens
    * @param tokenAmount - The amount of tokens to mint
    * @returns The transaction ID of the mint operation
@@ -373,6 +420,8 @@ export class IssuerSparkWallet extends SparkWallet {
     isFreezable: boolean,
     feeRateSatsPerVb: number = 4.0,
   ): Promise<string> {
+    validateTokenParameters(tokenName, tokenTicker, decimals, maxSupply);
+
     if (!Number.isSafeInteger(decimals)) {
       throw new ValidationError("Decimals must be less than 2^53", {
         field: "decimals",

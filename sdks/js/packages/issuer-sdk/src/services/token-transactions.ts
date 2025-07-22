@@ -66,4 +66,34 @@ export class IssuerTokenTransactionService extends TokenTransactionService {
       expiryTime: undefined,
     };
   }
+
+  async constructCreateTokenTransaction(
+    tokenPublicKey: Uint8Array,
+    tokenName: string,
+    tokenTicker: string,
+    decimals: number,
+    maxSupply: bigint,
+    isFreezable: boolean,
+  ): Promise<TokenTransaction> {
+    return {
+      version: 1,
+      network: this.config.getNetworkProto(),
+      tokenInputs: {
+        $case: "createInput",
+        createInput: {
+          issuerPublicKey: tokenPublicKey,
+          tokenName: tokenName,
+          tokenTicker: tokenTicker,
+          decimals: decimals,
+          maxSupply: numberToBytesBE(maxSupply, 16),
+          isFreezable: isFreezable,
+        },
+      },
+      tokenOutputs: [],
+      clientCreatedTimestamp: new Date(),
+      sparkOperatorIdentityPublicKeys:
+        super.collectOperatorIdentityPublicKeys(),
+      expiryTime: undefined,
+    };
+  }
 }

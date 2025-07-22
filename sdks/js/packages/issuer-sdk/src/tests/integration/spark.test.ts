@@ -675,6 +675,37 @@ describe.each(TEST_CONFIGS)(
     //   expect(transferBackTransaction).toBeDefined();
     //   expect(userBurnTransaction).toBeDefined();
     // });
+
+    (config.tokenTransactionVersion === "V0" ? it.skip : it)(
+      "should create a token using createToken API",
+      async () => {
+        const { wallet: issuerWallet } =
+          await IssuerSparkWalletTesting.initialize({
+            options: config,
+          });
+
+        const tokenName = `${name}Creatable`;
+        const tokenTicker = "CRT";
+        const maxSupply = 5000n;
+        const decimals = 0;
+        const txId = await issuerWallet.createToken({
+          tokenName,
+          tokenTicker,
+          decimals,
+          isFreezable: false,
+          maxSupply,
+        });
+
+        expect(typeof txId).toBe("string");
+        expect(txId.length).toBeGreaterThan(0);
+
+        const metadata = await issuerWallet.getIssuerTokenMetadata();
+        expect(metadata.tokenName).toEqual(tokenName);
+        expect(metadata.tokenTicker).toEqual(tokenTicker);
+        expect(metadata.maxSupply).toEqual(maxSupply);
+        expect(metadata.decimals).toEqual(decimals);
+      },
+    );
   },
 );
 

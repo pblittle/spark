@@ -667,6 +667,26 @@ export class TokenTransactionService {
         signature: ownerSignature,
         inputIndex: 0,
       });
+    } else if (tokenTransaction.tokenInputs!.$case === "createInput") {
+      const issuerPublicKey =
+        tokenTransaction.tokenInputs!.createInput.issuerPublicKey;
+      if (!issuerPublicKey) {
+        throw new ValidationError("Invalid create input", {
+          field: "issuerPublicKey",
+          value: null,
+          expected: "Non-null issuer public key",
+        });
+      }
+
+      const ownerSignature = await this.signMessageWithKey(
+        partialTokenTransactionHash,
+        issuerPublicKey,
+      );
+
+      ownerSignaturesWithIndex.push({
+        signature: ownerSignature,
+        inputIndex: 0,
+      });
     } else if (tokenTransaction.tokenInputs!.$case === "transferInput") {
       if (!outputsToSpendSigningPublicKeys || !outputsToSpendCommitments) {
         throw new ValidationError("Invalid transfer input", {
@@ -1284,6 +1304,34 @@ export class TokenTransactionService {
           finalTokenTransaction.tokenInputs!.mintInput.issuerPublicKey;
         if (!issuerPublicKey) {
           throw new ValidationError("Invalid mint input", {
+            field: "issuerPublicKey",
+            value: null,
+            expected: "Non-null issuer public key",
+          });
+        }
+
+        const payload: OperatorSpecificTokenTransactionSignablePayload = {
+          finalTokenTransactionHash: finalTokenTransactionHash,
+          operatorIdentityPublicKey: hexToBytes(operator.identityPublicKey),
+        };
+
+        const payloadHash =
+          await hashOperatorSpecificTokenTransactionSignablePayload(payload);
+
+        const ownerSignature = await this.signMessageWithKey(
+          payloadHash,
+          issuerPublicKey,
+        );
+
+        ttxoSignatures.push({
+          signature: ownerSignature,
+          inputIndex: 0,
+        });
+      } else if (finalTokenTransaction.tokenInputs!.$case === "createInput") {
+        const issuerPublicKey =
+          finalTokenTransaction.tokenInputs!.createInput.issuerPublicKey;
+        if (!issuerPublicKey) {
+          throw new ValidationError("Invalid create input", {
             field: "issuerPublicKey",
             value: null,
             expected: "Non-null issuer public key",
