@@ -95,6 +95,7 @@ service SparkService {
     // for unilateral exits
     rpc create_tree_v2(CreateTreeRequest) returns (CreateTreeResponse) {}
     rpc cooperative_exit_v2(CooperativeExitRequest) returns (CooperativeExitResponse) {}
+    rpc extend_leaf_v2(ExtendLeafRequest) returns (ExtendLeafResponse) {}
 }
 
 message SubscribeToEventsRequest {
