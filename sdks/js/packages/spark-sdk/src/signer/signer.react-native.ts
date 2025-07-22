@@ -1,4 +1,3 @@
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { ValidationError } from "../errors/index.js";
 import { NativeSparkFrost } from "../spark_bindings/native/index.js";
 import { IKeyPackage } from "../spark_bindings/types.js";
@@ -8,16 +7,15 @@ import type { AggregateFrostParams, SignFrostParams } from "./types.js";
 export class ReactNativeSparkSigner extends DefaultSparkSigner {
   async signFrost({
     message,
-    privateAsPubKey,
+    keyDerivation,
     publicKey,
     verifyingKey,
     selfCommitment,
     statechainCommitments,
     adaptorPubKey,
   }: SignFrostParams): Promise<Uint8Array> {
-    const privateAsPubKeyHex = bytesToHex(privateAsPubKey);
     const signingPrivateKey =
-      this.publicKeyToPrivateKeyMap.get(privateAsPubKeyHex);
+      await this.getSigningPrivateKeyFromDerivation(keyDerivation);
 
     if (!signingPrivateKey) {
       throw new ValidationError("Private key not found for public key", {
@@ -33,7 +31,7 @@ export class ReactNativeSparkSigner extends DefaultSparkSigner {
     }
 
     const keyPackage: IKeyPackage = {
-      secretKey: hexToBytes(signingPrivateKey),
+      secretKey: signingPrivateKey,
       publicKey: publicKey,
       verifyingKey: verifyingKey,
     };

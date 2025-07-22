@@ -1,12 +1,10 @@
-import { TransactionInput } from "@scure/btc-signer/psbt";
 import { hexToBytes } from "@noble/curves/abstract/utils";
+import { TransactionInput } from "@scure/btc-signer/psbt";
 import { ValidationError } from "../errors/types.js";
 import {
   RequestedSigningCommitments,
   UserSignedTxSigningJob,
 } from "../proto/spark.js";
-import type { LeafKeyTweak } from "./transfer.js";
-import { WalletConfigService } from "./config.js";
 import {
   getSigHashFromTx,
   getTxFromRawTxBytes,
@@ -16,6 +14,8 @@ import {
   createRefundTx,
   getNextTransactionSequence,
 } from "../utils/transaction.js";
+import { WalletConfigService } from "./config.js";
+import type { LeafKeyTweak } from "./transfer.js";
 
 export class SigningService {
   private readonly config: WalletConfigService;
@@ -83,8 +83,10 @@ export class SigningService {
       }
       const signingResult = await this.config.signer.signFrost({
         message: sighash,
-        publicKey: leaf.signingPubKey,
-        privateAsPubKey: leaf.signingPubKey,
+        keyDerivation: leaf.keyDerivation,
+        publicKey: await this.config.signer.getPublicKeyFromDerivation(
+          leaf.keyDerivation,
+        ),
         selfCommitment: signingCommitment,
         statechainCommitments: signingNonceCommitments,
         adaptorPubKey: new Uint8Array(),
@@ -93,7 +95,9 @@ export class SigningService {
 
       leafSigningJobs.push({
         leafId: leaf.leaf.id,
-        signingPublicKey: leaf.signingPubKey,
+        signingPublicKey: await this.config.signer.getPublicKeyFromDerivation(
+          leaf.keyDerivation,
+        ),
         rawTx: refundTx.toBytes(),
         signingNonceCommitment: signingCommitment,
         userSignature: signingResult,

@@ -93,14 +93,9 @@ import { getNextTransactionSequence } from "../utils/transaction.js";
 import { LRCWallet } from "@buildonspark/lrc20-sdk";
 import { sha256 } from "@noble/hashes/sha2";
 import { EventEmitter } from "eventemitter3";
-import {
-  decodeSparkAddress,
-  encodeSparkAddress,
-  isValidPublicKey,
-  SparkAddressFormat,
-} from "../utils/address.js";
 import { isReactNative } from "../constants.js";
 import { Network as NetworkProto, networkToJSON } from "../proto/spark.js";
+import { TokenTransactionWithStatus } from "../proto/spark_token.js";
 import {
   decodeInvoice,
   getNetworkFromInvoice,
@@ -108,6 +103,7 @@ import {
 } from "../services/bolt11-spark.js";
 import { SigningService } from "../services/signing.js";
 import { SparkSigner } from "../signer/signer.js";
+import { KeyDerivation, KeyDerivationType } from "../signer/types.js";
 import { BitcoinFaucet } from "../tests/utils/test-faucet.js";
 import {
   mapTransferToWalletTransfer,
@@ -115,27 +111,31 @@ import {
   WalletLeaf,
   WalletTransfer,
 } from "../types/sdk-types.js";
+import {
+  decodeSparkAddress,
+  encodeSparkAddress,
+  isValidPublicKey,
+  SparkAddressFormat,
+} from "../utils/address.js";
 import { chunkArray } from "../utils/chunkArray.js";
 import { addPublicKeys } from "../utils/keys.js";
+import {
+  Bech32mTokenIdentifier,
+  decodeBech32mTokenIdentifier,
+  encodeBech32mTokenIdentifier,
+} from "../utils/token-identifier.js";
 import type {
   CreateLightningInvoiceParams,
   DepositParams,
   InitWalletResponse,
   PayLightningInvoiceParams,
-  RawTokenIdentifierHex,
   SparkWalletProps,
-  UserTokenMetadata,
-  TransferParams,
   TokenBalanceMap,
-  TokenOutputsMap,
   TokenMetadataMap,
+  TokenOutputsMap,
+  TransferParams,
+  UserTokenMetadata,
 } from "./types.js";
-import { TokenTransactionWithStatus } from "../proto/spark_token.js";
-import {
-  decodeBech32mTokenIdentifier,
-  encodeBech32mTokenIdentifier,
-  Bech32mTokenIdentifier,
-} from "../utils/token-identifier.js";
 
 /**
  * The SparkWallet class is the primary interface for interacting with the Spark network.
@@ -282,15 +282,12 @@ export class SparkWallet extends EventEmitter {
         }
       } else if (event?.$case === "deposit" && event.deposit.deposit) {
         const deposit = event.deposit.deposit;
-        const signingKey = await this.config.signer.generatePublicKey(
-          sha256(deposit.id),
-        );
 
-        const newLeaf = await this.transferService.extendTimelock(
-          deposit,
-          signingKey,
-        );
-        await this.transferLeavesToSelf(newLeaf.nodes, signingKey);
+        const newLeaf = await this.transferService.extendTimelock(deposit);
+        await this.transferLeavesToSelf(newLeaf.nodes, {
+          type: KeyDerivationType.LEAF,
+          path: deposit.id,
+        });
         this.emit(
           "deposit:confirmed",
           deposit.id,
@@ -513,7 +510,10 @@ export class SparkWallet extends EventEmitter {
     for (const [id, leaf] of Object.entries(leaves.nodes)) {
       if (
         !verifyKey(
-          await this.config.signer.generatePublicKey(sha256(leaf.id)),
+          await this.config.signer.getPublicKeyFromDerivation({
+            type: KeyDerivationType.LEAF,
+            path: leaf.id,
+          }),
           leaf.signingKeyshare?.publicKey ?? new Uint8Array(),
           leaf.verifyingPublicKey,
         )
@@ -700,7 +700,6 @@ export class SparkWallet extends EventEmitter {
     await this.syncTokenOutputs();
 
     let leaves = await this.getLeaves();
-    await this.config.signer.restoreSigningKeysFromLeafs(leaves);
 
     leaves = await this.checkRefreshTimelockNodes(leaves);
     leaves = await this.checkExtendTimeLockNodes(leaves);
@@ -988,13 +987,16 @@ export class SparkWallet extends EventEmitter {
     leavesBatch: TreeNode[],
     targetAmounts?: number[],
   ): Promise<TreeNode[]> {
-    const leafKeyTweaks = await Promise.all(
+    const leafKeyTweaks: LeafKeyTweak[] = await Promise.all(
       leavesBatch.map(async (leaf) => ({
         leaf,
-        signingPubKey: await this.config.signer.generatePublicKey(
-          sha256(leaf.id),
-        ),
-        newSigningPubKey: await this.config.signer.generatePublicKey(),
+        keyDerivation: {
+          type: KeyDerivationType.LEAF,
+          path: leaf.id,
+        },
+        newKeyDerivation: {
+          type: KeyDerivationType.RANDOM,
+        },
       })),
     );
 
@@ -1353,11 +1355,12 @@ export class SparkWallet extends EventEmitter {
     let signingPubkey: Uint8Array;
     if (isStatic) {
       // TODO: Add support for multiple static deposit addresses
-      signingPubkey = await this.config.signer.generateStaticDepositKey(0);
+      signingPubkey = await this.config.signer.getStaticDepositSigningKey(0);
     } else {
-      signingPubkey = await this.config.signer.generatePublicKey(
-        sha256(leafId),
-      );
+      signingPubkey = await this.config.signer.getPublicKeyFromDerivation({
+        type: KeyDerivationType.LEAF,
+        path: leafId,
+      });
     }
 
     const address = await this.depositService!.generateDepositAddress({
@@ -1626,7 +1629,10 @@ export class SparkWallet extends EventEmitter {
     const userSignature = await this.config.signer.signFrost({
       message: spendTxSighash,
       publicKey: swapResponse.depositAddress!.verifyingPublicKey,
-      privateAsPubKey: await this.config.signer.getStaticDepositSigningKey(0),
+      keyDerivation: {
+        type: KeyDerivationType.STATIC_DEPOSIT,
+        path: 0,
+      },
       selfCommitment: signingNonceCommitment,
       statechainCommitments:
         swapResponse.spendTxSigningResult!.signingNonceCommitments,
@@ -1810,7 +1816,7 @@ export class SparkWallet extends EventEmitter {
    * @private
    */
   private async finalizeDeposit({
-    signingPubKey,
+    keyDerivation,
     verifyingKey,
     depositTx,
     vout,
@@ -1824,7 +1830,7 @@ export class SparkWallet extends EventEmitter {
     }
 
     const res = await this.depositService!.createTreeRoot({
-      signingPubKey,
+      keyDerivation,
       verifyingKey,
       depositTx,
       vout,
@@ -1833,17 +1839,14 @@ export class SparkWallet extends EventEmitter {
     const resultingNodes: TreeNode[] = [];
     for (const node of res.nodes) {
       if (node.status === "AVAILABLE") {
-        const { nodes } = await this.transferService.extendTimelock(
-          node,
-          signingPubKey,
-        );
+        const { nodes } = await this.transferService.extendTimelock(node);
 
         for (const n of nodes) {
           if (n.status === "AVAILABLE") {
-            const transfer = await this.transferLeavesToSelf(
-              [n],
-              signingPubKey,
-            );
+            const transfer = await this.transferLeavesToSelf([n], {
+              type: KeyDerivationType.LEAF,
+              path: node.id,
+            });
             resultingNodes.push(...transfer);
           } else {
             resultingNodes.push(n);
@@ -2007,17 +2010,20 @@ export class SparkWallet extends EventEmitter {
         });
       }
 
-      let signingPubKey: Uint8Array;
+      let keyDerivation: KeyDerivation;
       if (!depositAddress.leafId) {
-        signingPubKey = depositAddress.userSigningPublicKey;
+        keyDerivation = {
+          type: KeyDerivationType.DEPOSIT,
+        };
       } else {
-        signingPubKey = await this.config.signer.generatePublicKey(
-          sha256(depositAddress.leafId),
-        );
+        keyDerivation = {
+          type: KeyDerivationType.LEAF,
+          path: depositAddress.leafId,
+        };
       }
 
       const nodes = await this.finalizeDeposit({
-        signingPubKey,
+        keyDerivation,
         verifyingKey: depositAddress.verifyingPublicKey,
         depositTx,
         vout,
@@ -2066,8 +2072,20 @@ export class SparkWallet extends EventEmitter {
       const unusedDepositAddress = unusedDepositAddresses.get(address);
       if (unusedDepositAddress) {
         vout = i;
+        let keyDerivation: KeyDerivation;
+        if (!unusedDepositAddress.leafId) {
+          keyDerivation = {
+            type: KeyDerivationType.DEPOSIT,
+          };
+        } else {
+          keyDerivation = {
+            type: KeyDerivationType.LEAF,
+            path: unusedDepositAddress.leafId,
+          };
+        }
+
         const response = await this.depositService!.createTreeRoot({
-          signingPubKey: unusedDepositAddress.userSigningPublicKey,
+          keyDerivation,
           verifyingKey: unusedDepositAddress.verifyingPublicKey,
           depositTx,
           vout,
@@ -2094,13 +2112,15 @@ export class SparkWallet extends EventEmitter {
    */
   private async transferLeavesToSelf(
     leaves: TreeNode[],
-    signingPubKey: Uint8Array,
+    keyDerivation: KeyDerivation,
   ): Promise<TreeNode[]> {
-    const leafKeyTweaks = await Promise.all(
+    const leafKeyTweaks: LeafKeyTweak[] = await Promise.all(
       leaves.map(async (leaf) => ({
         leaf,
-        signingPubKey,
-        newSigningPubKey: await this.config.signer.generatePublicKey(),
+        keyDerivation,
+        newKeyDerivation: {
+          type: KeyDerivationType.RANDOM,
+        },
       })),
     );
 
@@ -2181,13 +2201,16 @@ export class SparkWallet extends EventEmitter {
       leavesToSend = await this.checkRefreshTimelockNodes(leavesToSend);
       leavesToSend = await this.checkExtendTimeLockNodes(leavesToSend);
 
-      const leafKeyTweaks = await Promise.all(
+      const leafKeyTweaks: LeafKeyTweak[] = await Promise.all(
         leavesToSend.map(async (leaf) => ({
           leaf,
-          signingPubKey: await this.config.signer.generatePublicKey(
-            sha256(leaf.id),
-          ),
-          newSigningPubKey: await this.config.signer.generatePublicKey(),
+          keyDerivation: {
+            type: KeyDerivationType.LEAF,
+            path: leaf.id,
+          },
+          newKeyDerivation: {
+            type: KeyDerivationType.RANDOM,
+          },
         })),
       );
 
@@ -2245,15 +2268,12 @@ export class SparkWallet extends EventEmitter {
 
     const nodesToAdd: TreeNode[] = [];
     for (const node of nodesToExtend) {
-      const signingPubKey = await this.config.signer.generatePublicKey(
-        sha256(node.id),
-      );
-      const { nodes } = await this.transferService.extendTimelock(
-        node,
-        signingPubKey,
-      );
+      const { nodes } = await this.transferService.extendTimelock(node);
       this.leaves = this.leaves.filter((leaf) => leaf.id !== node.id);
-      const newNodes = await this.transferLeavesToSelf(nodes, signingPubKey);
+      const newNodes = await this.transferLeavesToSelf(nodes, {
+        type: KeyDerivationType.LEAF,
+        path: node.id,
+      });
       nodesToAdd.push(...newNodes);
     }
 
@@ -2325,7 +2345,6 @@ export class SparkWallet extends EventEmitter {
       const { nodes } = await this.transferService.refreshTimelockNodes(
         [node],
         parentNode,
-        await this.config.signer.generatePublicKey(sha256(node.id)),
       );
 
       if (nodes.length !== 1) {
@@ -2390,10 +2409,14 @@ export class SparkWallet extends EventEmitter {
                   ...leaf.leaf,
                   refundTx: leaf.intermediateRefundTx,
                 },
-                signingPubKey: leafPubKey,
-                newSigningPubKey: await this.config.signer.generatePublicKey(
-                  sha256(leaf.leaf.id),
-                ),
+                keyDerivation: {
+                  type: KeyDerivationType.ECIES,
+                  path: leaf.secretCipher,
+                },
+                newKeyDerivation: {
+                  type: KeyDerivationType.LEAF,
+                  path: leaf.leaf.id,
+                },
               });
             }
           }
@@ -2801,13 +2824,16 @@ export class SparkWallet extends EventEmitter {
       leaves = await this.checkRefreshTimelockNodes(leaves);
       leaves = await this.checkExtendTimeLockNodes(leaves);
 
-      const leavesToSend = await Promise.all(
+      const leavesToSend: LeafKeyTweak[] = await Promise.all(
         leaves.map(async (leaf) => ({
           leaf,
-          signingPubKey: await this.config.signer.generatePublicKey(
-            sha256(leaf.id),
-          ),
-          newSigningPubKey: await this.config.signer.generatePublicKey(),
+          keyDerivation: {
+            type: KeyDerivationType.LEAF,
+            path: leaf.id,
+          },
+          newKeyDerivation: {
+            type: KeyDerivationType.RANDOM,
+          },
         })),
       );
 
@@ -3071,13 +3097,16 @@ export class SparkWallet extends EventEmitter {
     leavesToSendToSE = await this.checkRefreshTimelockNodes(leavesToSendToSE);
     leavesToSendToSE = await this.checkExtendTimeLockNodes(leavesToSendToSE);
 
-    const leafKeyTweaks = await Promise.all(
+    const leafKeyTweaks: LeafKeyTweak[] = await Promise.all(
       [...leavesToSendToSE, ...leavesToSendToSsp].map(async (leaf) => ({
         leaf,
-        signingPubKey: await this.config.signer.generatePublicKey(
-          sha256(leaf.id),
-        ),
-        newSigningPubKey: await this.config.signer.generatePublicKey(),
+        keyDerivation: {
+          type: KeyDerivationType.LEAF,
+          path: leaf.id,
+        },
+        newKeyDerivation: {
+          type: KeyDerivationType.RANDOM,
+        },
       })),
     );
 
@@ -3808,16 +3837,10 @@ export class SparkWallet extends EventEmitter {
         });
       }
 
-      // Generate signing public key for this node
-      const signingPubKey = await this.config.signer.generatePublicKey(
-        sha256(node.id),
-      );
-
       // Call the transfer service to refresh the timelock
       const result = await this.transferService.refreshTimelockNodes(
         [node],
         parentNode,
-        signingPubKey,
       );
 
       // Update the local leaves if this node is in our wallet
@@ -3870,16 +3893,8 @@ export class SparkWallet extends EventEmitter {
         });
       }
 
-      // Generate signing public key for this node
-      const signingPubKey = await this.config.signer.generatePublicKey(
-        sha256(node.id),
-      );
-
       // Call the transfer service to refresh the refund timelock
-      const result = await this.transferService.refreshTimelockRefundTx(
-        node,
-        signingPubKey,
-      );
+      const result = await this.transferService.refreshTimelockRefundTx(node);
 
       // Update the local leaves if this node is in our wallet
       const leafIndex = this.leaves.findIndex((leaf) => leaf.id === node.id);

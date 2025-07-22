@@ -1,9 +1,10 @@
 import type { Transaction } from "@scure/btc-signer";
+import { OutputWithPreviousTransactionData } from "../proto/spark.js";
+import { TokenMetadata } from "../proto/spark_token.js";
 import { ConfigOptions } from "../services/wallet-config.js";
 import type { SparkSigner } from "../signer/signer.js";
-import { TokenMetadata } from "../proto/spark_token.js";
+import { KeyDerivation } from "../signer/types.js";
 import { Bech32mTokenIdentifier } from "../utils/token-identifier.js";
-import { OutputWithPreviousTransactionData } from "../proto/spark.js";
 
 export type CreateLightningInvoiceParams = {
   amountSats: number;
@@ -27,7 +28,7 @@ export type TransferParams = {
 };
 
 export type DepositParams = {
-  signingPubKey: Uint8Array;
+  keyDerivation: KeyDerivation;
   verifyingKey: Uint8Array;
   depositTx: Transaction;
   vout: number;

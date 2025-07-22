@@ -21,33 +21,32 @@ describe("adaptor signature", () => {
     const msg = "test";
     const hash = sha256(msg);
     for (let i = 0; i < 1000; i++) {
-      const pubKey = await wallet.getSigner().generatePublicKey();
-      const pubkey = await wallet.getSigner().getSchnorrPublicKey(pubKey);
+      const privateKey = secp256k1.utils.randomPrivateKey();
+      const schnorrPublicKey = schnorr.getPublicKey(privateKey);
+      const signature = schnorr.sign(hash, privateKey);
 
-      const sig = await wallet.getSigner().signSchnorr(hash, pubKey);
-
-      expect(schnorr.verify(sig, hash, pubkey)).toBe(true);
+      expect(schnorr.verify(signature, hash, schnorrPublicKey)).toBe(true);
 
       try {
         const { adaptorPrivateKey, adaptorSignature } =
-          generateAdaptorFromSignature(sig);
+          generateAdaptorFromSignature(signature);
 
         const adaptorPubkey = secp256k1.getPublicKey(adaptorPrivateKey);
         validateOutboundAdaptorSignature(
-          pubkey,
+          schnorrPublicKey,
           hash,
           adaptorSignature,
           adaptorPubkey,
         );
 
         const adapterSig = applyAdaptorToSignature(
-          pubkey,
+          schnorrPublicKey,
           hash,
           adaptorSignature,
           adaptorPrivateKey,
         );
 
-        expect(schnorr.verify(adapterSig, hash, pubkey)).toBe(true);
+        expect(schnorr.verify(adapterSig, hash, schnorrPublicKey)).toBe(true);
       } catch (e) {
         failures++;
       }

@@ -16,8 +16,8 @@ import { getNextTransactionSequence } from "../utils/transaction.js";
 import { WalletConfigService } from "./config.js";
 import { ConnectionManager } from "./connection.js";
 import { SigningService } from "./signing.js";
-import { BaseTransferService, LeafRefundSigningData } from "./transfer.js";
 import type { LeafKeyTweak } from "./transfer.js";
+import { BaseTransferService, LeafRefundSigningData } from "./transfer.js";
 
 export type GetConnectorRefundSignaturesParams = {
   leaves: LeafKeyTweak[];
@@ -50,6 +50,7 @@ export class CoopExitService extends BaseTransferService {
       connectorOutputs,
       receiverPubKey,
     );
+
     const transferTweak = await this.deliverTransferPackage(
       transfer,
       leaves,
@@ -152,7 +153,9 @@ export class CoopExitService extends BaseTransferService {
       const signingJob: LeafRefundTxSigningJob = {
         leafId: leaf.leaf.id,
         refundTxSigningJob: {
-          signingPublicKey: leaf.signingPubKey,
+          signingPublicKey: await this.config.signer.getPublicKeyFromDerivation(
+            leaf.keyDerivation,
+          ),
           rawTx: refundTx.toBytes(),
           signingNonceCommitment: signingNonceCommitment,
         },
@@ -164,7 +167,7 @@ export class CoopExitService extends BaseTransferService {
       signingJobs.push(signingJob);
       const tx = getTxFromRawTxBytes(leaf.leaf.nodeTx);
       leafDataMap.set(leaf.leaf.id, {
-        signingPubKey: leaf.signingPubKey,
+        keyDerivation: leaf.keyDerivation,
         refundTx,
         signingNonceCommitment,
         tx,

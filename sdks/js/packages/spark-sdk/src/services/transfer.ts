@@ -36,7 +36,11 @@ import {
   TransferType,
   TreeNode,
 } from "../proto/spark.js";
-import type { SigningCommitment } from "../signer/types.js";
+import {
+  KeyDerivation,
+  KeyDerivationType,
+  type SigningCommitment,
+} from "../signer/types.js";
 import {
   getSigHashFromTx,
   getTxFromRawTxBytes,
@@ -65,12 +69,12 @@ function initialSequence() {
 
 export type LeafKeyTweak = {
   leaf: TreeNode;
-  signingPubKey: Uint8Array;
-  newSigningPubKey: Uint8Array;
+  keyDerivation: KeyDerivation;
+  newKeyDerivation: KeyDerivation;
 };
 
 export type ClaimLeafData = {
-  signingPubKey: Uint8Array;
+  keyDerivation: KeyDerivation;
   tx?: Transaction;
   refundTx?: Transaction;
   signingNonceCommitment: SigningCommitment;
@@ -78,7 +82,7 @@ export type ClaimLeafData = {
 };
 
 export type LeafRefundSigningData = {
-  signingPubKey: Uint8Array;
+  keyDerivation: KeyDerivation;
   receivingPubkey: Uint8Array;
   tx: Transaction;
   refundTx?: Transaction;
@@ -399,10 +403,13 @@ export class BaseTransferService {
 
       const refundTxSighash = getSigHashFromTx(leafData.refundTx, 0, txOutput);
 
+      const publicKey = await this.config.signer.getPublicKeyFromDerivation(
+        leafData.keyDerivation,
+      );
       const userSignature = await this.config.signer.signFrost({
         message: refundTxSighash,
-        publicKey: leafData.signingPubKey,
-        privateAsPubKey: leafData.signingPubKey,
+        publicKey,
+        keyDerivation: leafData.keyDerivation,
         selfCommitment: leafData.signingNonceCommitment,
         statechainCommitments:
           operatorSigningResult.refundTxSigningResult?.signingNonceCommitments,
@@ -420,7 +427,7 @@ export class BaseTransferService {
         statechainCommitments:
           operatorSigningResult.refundTxSigningResult?.signingNonceCommitments,
         selfCommitment: leafData.signingNonceCommitment,
-        publicKey: leafData.signingPubKey,
+        publicKey,
         selfSignature: userSignature,
         adaptorPubKey: adaptorPubKey,
       });
@@ -476,19 +483,16 @@ export class BaseTransferService {
     refundSignature?: Uint8Array,
   ): Promise<Map<string, SendLeafKeyTweak>> {
     const signingOperators = this.config.getSigningOperators();
-    const pubKeyTweak =
-      await this.config.signer.subtractPrivateKeysGivenPublicKeys(
-        leaf.signingPubKey,
-        leaf.newSigningPubKey,
-      );
 
-    const shares = await this.config.signer.splitSecretWithProofs({
-      secret: pubKeyTweak,
-      curveOrder: secp256k1.CURVE.n,
-      threshold: this.config.getThreshold(),
-      numShares: Object.keys(signingOperators).length,
-      isSecretPubkey: true,
-    });
+    const { shares, secretCipher } =
+      await this.config.signer.subtractSplitAndEncrypt({
+        first: leaf.keyDerivation,
+        second: leaf.newKeyDerivation,
+        receiverPublicKey: receiverEciesPubKey.toBytes(),
+        curveOrder: secp256k1.CURVE.n,
+        threshold: this.config.getThreshold(),
+        numShares: Object.keys(signingOperators).length,
+      });
 
     const pubkeySharesTweak = new Map<string, Uint8Array>();
     for (const [identifier, operator] of Object.entries(signingOperators)) {
@@ -503,11 +507,6 @@ export class BaseTransferService {
       );
       pubkeySharesTweak.set(identifier, pubkeyTweak);
     }
-
-    const secretCipher = await this.config.signer.encryptLeafPrivateKeyEcies(
-      receiverEciesPubKey.toBytes(),
-      leaf.newSigningPubKey,
-    );
 
     const encoder = new TextEncoder();
     const payload = new Uint8Array([
@@ -814,8 +813,9 @@ export class TransferService extends BaseTransferService {
 
       const tx = getTxFromRawTxBytes(leaf.leaf.nodeTx);
       const refundTx = getTxFromRawTxBytes(leaf.leaf.refundTx);
+
       leafDataMap.set(leaf.leaf.id, {
-        signingPubKey: leaf.signingPubKey,
+        keyDerivation: leaf.keyDerivation,
         receivingPubkey: receiverIdentityPubkey,
         signingNonceCommitment,
         tx,
@@ -824,7 +824,10 @@ export class TransferService extends BaseTransferService {
       });
     }
 
-    const signingJobs = this.prepareRefundSoSigningJobs(leaves, leafDataMap);
+    const signingJobs = await this.prepareRefundSoSigningJobs(
+      leaves,
+      leafDataMap,
+    );
 
     const sparkClient = await this.connectionManager.createSparkClient(
       this.config.getCoordinatorAddress(),
@@ -891,11 +894,11 @@ export class TransferService extends BaseTransferService {
     };
   }
 
-  private prepareRefundSoSigningJobs(
+  private async prepareRefundSoSigningJobs(
     leaves: LeafKeyTweak[],
     leafDataMap: Map<string, LeafRefundSigningData>,
     isForClaim?: boolean,
-  ): LeafRefundTxSigningJob[] {
+  ): Promise<LeafRefundTxSigningJob[]> {
     const signingJobs: LeafRefundTxSigningJob[] = [];
     for (const leaf of leaves) {
       const refundSigningData = leafDataMap.get(leaf.leaf.id);
@@ -936,7 +939,9 @@ export class TransferService extends BaseTransferService {
       signingJobs.push({
         leafId: leaf.leaf.id,
         refundTxSigningJob: {
-          signingPublicKey: refundSigningData.signingPubKey,
+          signingPublicKey: await this.config.signer.getPublicKeyFromDerivation(
+            refundSigningData.keyDerivation,
+          ),
           rawTx: refundTx.toBytes(),
           signingNonceCommitment: refundNonceCommitmentProto,
         },
@@ -1042,19 +1047,16 @@ export class TransferService extends BaseTransferService {
   }> {
     const signingOperators = this.config.getSigningOperators();
 
-    const pubKeyTweak =
-      await this.config.signer.subtractPrivateKeysGivenPublicKeys(
-        leaf.signingPubKey,
-        leaf.newSigningPubKey,
+    const shares =
+      await this.config.signer.subtractAndSplitSecretWithProofsGivenDerivations(
+        {
+          first: leaf.keyDerivation,
+          second: leaf.newKeyDerivation,
+          curveOrder: secp256k1.CURVE.n,
+          threshold: this.config.getThreshold(),
+          numShares: Object.keys(signingOperators).length,
+        },
       );
-
-    const shares = await this.config.signer.splitSecretWithProofs({
-      secret: pubKeyTweak,
-      curveOrder: secp256k1.CURVE.n,
-      threshold: this.config.getThreshold(),
-      numShares: Object.keys(signingOperators).length,
-      isSecretPubkey: true,
-    });
 
     const pubkeySharesTweak = new Map<string, Uint8Array>();
 
@@ -1105,8 +1107,10 @@ export class TransferService extends BaseTransferService {
     for (const leafKey of leafKeys) {
       const tx = getTxFromRawTxBytes(leafKey.leaf.nodeTx);
       leafDataMap.set(leafKey.leaf.id, {
-        signingPubKey: leafKey.newSigningPubKey,
-        receivingPubkey: leafKey.newSigningPubKey,
+        keyDerivation: leafKey.newKeyDerivation,
+        receivingPubkey: await this.config.signer.getPublicKeyFromDerivation(
+          leafKey.newKeyDerivation,
+        ),
         signingNonceCommitment:
           await this.config.signer.getRandomSigningCommitment(),
         tx,
@@ -1114,7 +1118,7 @@ export class TransferService extends BaseTransferService {
       });
     }
 
-    const signingJobs = this.prepareRefundSoSigningJobs(
+    const signingJobs = await this.prepareRefundSoSigningJobs(
       leafKeys,
       leafDataMap,
       true,
@@ -1203,11 +1207,7 @@ export class TransferService extends BaseTransferService {
     }
   }
 
-  async refreshTimelockNodes(
-    nodes: TreeNode[],
-    parentNode: TreeNode,
-    signingPubKey: Uint8Array,
-  ) {
+  async refreshTimelockNodes(nodes: TreeNode[], parentNode: TreeNode) {
     if (nodes.length === 0) {
       throw Error("no nodes to refresh");
     }
@@ -1264,7 +1264,10 @@ export class TransferService extends BaseTransferService {
       }
 
       signingJobs.push({
-        signingPublicKey: signingPubKey,
+        signingPublicKey: await this.config.signer.getPublicKeyFromDerivation({
+          type: KeyDerivationType.LEAF,
+          path: node.id,
+        }),
         rawTx: newTx.toBytes(),
         signingNonceCommitment:
           await this.config.signer.getRandomSigningCommitment(),
@@ -1316,7 +1319,10 @@ export class TransferService extends BaseTransferService {
     });
 
     const refundSigningJob = {
-      signingPublicKey: signingPubKey,
+      signingPublicKey: await this.config.signer.getPublicKeyFromDerivation({
+        type: KeyDerivationType.LEAF,
+        path: leaf.id,
+      }),
       rawTx: newRefundTx.toBytes(),
       signingNonceCommitment:
         await this.config.signer.getRandomSigningCommitment(),
@@ -1384,8 +1390,11 @@ export class TransferService extends BaseTransferService {
 
       const userSignature = await this.config.signer.signFrost({
         message: rawTxSighash,
-        privateAsPubKey: signingPubKey,
-        publicKey: signingPubKey,
+        keyDerivation: {
+          type: KeyDerivationType.LEAF,
+          path: nodeId,
+        },
+        publicKey: signingJob.signingPublicKey,
         verifyingKey: signingResult.verifyingKey,
         selfCommitment: signingJob.signingNonceCommitment,
         statechainCommitments:
@@ -1401,7 +1410,7 @@ export class TransferService extends BaseTransferService {
         statechainCommitments:
           signingResult.signingResult?.signingNonceCommitments,
         selfCommitment: signingJob.signingNonceCommitment,
-        publicKey: signingPubKey,
+        publicKey: signingJob.signingPublicKey,
         selfSignature: userSignature,
         adaptorPubKey: new Uint8Array(),
       });
@@ -1446,7 +1455,7 @@ export class TransferService extends BaseTransferService {
     return result;
   }
 
-  async extendTimelock(node: TreeNode, signingPubKey: Uint8Array) {
+  async extendTimelock(node: TreeNode) {
     const nodeTx = getTxFromRawTxBytes(node.nodeTx);
     const refundTx = getTxFromRawTxBytes(node.refundTx);
 
@@ -1487,6 +1496,11 @@ export class TransferService extends BaseTransferService {
     if (amountSats === undefined) {
       throw new Error("Amount not found in extendTimelock");
     }
+
+    const signingPubKey = await this.config.signer.getPublicKeyFromDerivation({
+      type: KeyDerivationType.LEAF,
+      path: node.id,
+    });
 
     // Apply fee to the refund transaction as well
     // const feeReducedRefundAmount = maybeApplyFee(amountSats);
@@ -1536,7 +1550,10 @@ export class TransferService extends BaseTransferService {
 
     const nodeUserSig = await this.config.signer.signFrost({
       message: nodeSighash,
-      privateAsPubKey: signingPubKey,
+      keyDerivation: {
+        type: KeyDerivationType.LEAF,
+        path: node.id,
+      },
       publicKey: signingPubKey,
       verifyingKey: response.nodeTxSigningResult.verifyingKey,
       selfCommitment: newNodeSigningJob.signingNonceCommitment,
@@ -1547,7 +1564,10 @@ export class TransferService extends BaseTransferService {
 
     const refundUserSig = await this.config.signer.signFrost({
       message: refundSighash,
-      privateAsPubKey: signingPubKey,
+      keyDerivation: {
+        type: KeyDerivationType.LEAF,
+        path: node.id,
+      },
       publicKey: signingPubKey,
       verifyingKey: response.refundTxSigningResult.verifyingKey,
       selfCommitment: newRefundSigningJob.signingNonceCommitment,
@@ -1598,12 +1618,17 @@ export class TransferService extends BaseTransferService {
     });
   }
 
-  async refreshTimelockRefundTx(node: TreeNode, signingPubKey: Uint8Array) {
+  async refreshTimelockRefundTx(node: TreeNode) {
     const nodeTx = getTxFromRawTxBytes(node.nodeTx);
     const refundTx = getTxFromRawTxBytes(node.refundTx);
 
     const currSequence = refundTx.getInput(0).sequence || 0;
     const { nextSequence } = getNextTransactionSequence(currSequence);
+
+    const signingPubKey = await this.config.signer.getPublicKeyFromDerivation({
+      type: KeyDerivationType.LEAF,
+      path: node.id,
+    });
 
     const newRefundTx = new Transaction({
       version: 3,
@@ -1674,7 +1699,10 @@ export class TransferService extends BaseTransferService {
 
     const userSignature = await this.config.signer.signFrost({
       message: rawTxSighash,
-      privateAsPubKey: signingPubKey,
+      keyDerivation: {
+        type: KeyDerivationType.LEAF,
+        path: node.id,
+      },
       publicKey: signingPubKey,
       verifyingKey: signingResult.verifyingKey,
       selfCommitment: refundSigningJob.signingNonceCommitment,

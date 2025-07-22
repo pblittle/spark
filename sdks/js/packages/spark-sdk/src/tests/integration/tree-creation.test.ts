@@ -1,14 +1,11 @@
 // @ts-nocheck
 import { describe, expect, it } from "@jest/globals";
 import { bytesToHex } from "@noble/curves/abstract/utils";
-import { secp256k1 } from "@noble/curves/secp256k1";
 import { ValidationError } from "../../errors/types.js";
 import { getTxFromRawTxBytes, getTxId } from "../../utils/bitcoin.js";
 import { Network } from "../../utils/network.js";
 import { DEFAULT_FEE_SATS } from "../../utils/transaction.js";
-import { createNewTreeWithLevels } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
-import { BitcoinFaucet } from "../utils/test-faucet.js";
 
 describe("Tree Creation", () => {
   it.skip("test tree creation address generation", async () => {
@@ -45,7 +42,5 @@ describe("Tree Creation", () => {
     );
 
     const treeNodes = await wallet.createTree(vout, treeResp, true, depositTx);
-
-    console.log("tree nodes:", treeNodes);
   }, 30000);
 });

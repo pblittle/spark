@@ -1,8 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
 import { equalBytes, hexToBytes } from "@noble/curves/abstract/utils";
 import { secp256k1 } from "@noble/curves/secp256k1";
-import { sha256 } from "@noble/hashes/sha2";
+import { uuidv7 } from "uuidv7";
 import { ValidationError } from "../../errors/types.js";
+import { KeyDerivation, KeyDerivationType } from "../../index.js";
 import { WalletConfigService } from "../../services/config.js";
 import { ConnectionManager } from "../../services/connection.js";
 import { SigningService } from "../../services/signing.js";
@@ -71,32 +72,32 @@ describe("swap", () => {
         receiverSigningService,
       );
 
-      const senderLeafPubKey = await senderWallet
-        .getSigner()
-        .generatePublicKey();
+      const senderLeafId = uuidv7();
       const senderRootNode = await createNewTree(
         senderWallet,
-        senderLeafPubKey,
+        senderLeafId,
         faucet,
       );
 
-      const receiverLeafPubKey = await receiverWallet
-        .getSigner()
-        .generatePublicKey();
+      const receiverLeafId = uuidv7();
       const receiverRootNode = await createNewTree(
         receiverWallet,
-        receiverLeafPubKey,
+        receiverLeafId,
         faucet,
       );
 
       // Sender initiates transfer
-      const senderNewLeafPubKey = await senderWallet
-        .getSigner()
-        .generatePublicKey(sha256("1"));
+      const senderNewLeafId = uuidv7();
       const senderTransferNode: LeafKeyTweak = {
         leaf: senderRootNode,
-        signingPubKey: senderLeafPubKey,
-        newSigningPubKey: senderNewLeafPubKey,
+        keyDerivation: {
+          type: KeyDerivationType.LEAF,
+          path: senderLeafId,
+        },
+        newKeyDerivation: {
+          type: KeyDerivationType.LEAF,
+          path: senderNewLeafId,
+        },
       };
       const senderLeavesToTransfer = [senderTransferNode];
 
@@ -120,14 +121,17 @@ describe("swap", () => {
         generateAdaptorFromSignature(senderSignature!);
       const adaptorPubKey = secp256k1.getPublicKey(adaptorPrivateKey);
 
-      const receiverNewLeafPubKey = await receiverWallet
-        .getSigner()
-        .generatePublicKey(sha256("1"));
-
+      const receiverNewLeafDerivation: KeyDerivation = {
+        type: KeyDerivationType.LEAF,
+        path: uuidv7(),
+      };
       const receiverTransferNode: LeafKeyTweak = {
         leaf: receiverRootNode,
-        signingPubKey: receiverLeafPubKey,
-        newSigningPubKey: receiverNewLeafPubKey,
+        keyDerivation: {
+          type: KeyDerivationType.LEAF,
+          path: receiverLeafId,
+        },
+        newKeyDerivation: receiverNewLeafDerivation,
       };
       const receiverLeavesToTransfer = [receiverTransferNode];
 
@@ -197,22 +201,29 @@ describe("swap", () => {
       expect(leafPrivKeyMap.get(senderRootNode.id)).toBeDefined();
       const bytesEqual = equalBytes(
         leafPrivKeyMap.get(senderRootNode.id)!,
-        senderNewLeafPubKey,
+        await senderWallet
+          .getSigner()
+          .getPublicKeyFromDerivation(senderTransferNode.newKeyDerivation),
       );
       expect(bytesEqual).toBe(true);
       expect(receiverPendingTransfer!.leaves[0]!.leaf).toBeDefined();
-      const finalLeafPubKey = await receiverWallet
-        .getSigner()
-        .generatePublicKey(sha256("2"));
-      const claimingNode: LeafKeyTweak = {
-        leaf: receiverPendingTransfer!.leaves[0]!.leaf!,
-        signingPubKey: senderNewLeafPubKey,
-        newSigningPubKey: finalLeafPubKey,
-      };
-      const leavesToClaim = [claimingNode];
+
+      const claimingNodes: LeafKeyTweak[] = receiverPendingTransfer!.leaves.map(
+        (leaf) => ({
+          leaf: leaf.leaf!,
+          keyDerivation: {
+            type: KeyDerivationType.ECIES,
+            path: leaf.secretCipher,
+          },
+          newKeyDerivation: {
+            type: KeyDerivationType.LEAF,
+            path: senderNewLeafId,
+          },
+        }),
+      );
       await receiverTransferService.claimTransfer(
         receiverPendingTransfer!,
-        leavesToClaim,
+        claimingNodes,
       );
       await receiverTransferService.sendTransferTweakKey(
         receiverTransfer,
@@ -234,23 +245,29 @@ describe("swap", () => {
       expect(senderLeafPrivKeyMap.get(receiverRootNode.id)).toBeDefined();
       const bytesEqual_1 = equalBytes(
         senderLeafPrivKeyMap.get(receiverRootNode.id)!,
-        receiverNewLeafPubKey,
+        await receiverWallet
+          .getSigner()
+          .getPublicKeyFromDerivation(receiverNewLeafDerivation),
       );
       expect(bytesEqual_1).toBe(true);
       expect(senderPendingTransfer!.leaves[0]!.leaf).toBeDefined();
 
-      const finalLeafPubKey_1 = await senderWallet
-        .getSigner()
-        .generatePublicKey(sha256("3"));
-      const claimingNode_1: LeafKeyTweak = {
-        leaf: senderPendingTransfer!.leaves[0]!.leaf!,
-        signingPubKey: receiverNewLeafPubKey,
-        newSigningPubKey: finalLeafPubKey_1,
-      };
-      const leavesToClaim_1 = [claimingNode_1];
+      const claimingNodes_1: LeafKeyTweak[] = senderPendingTransfer!.leaves.map(
+        (leaf) => ({
+          leaf: leaf.leaf!,
+          keyDerivation: {
+            type: KeyDerivationType.ECIES,
+            path: leaf.secretCipher,
+          },
+          newKeyDerivation: {
+            type: KeyDerivationType.LEAF,
+            path: leaf.leaf!.id,
+          },
+        }),
+      );
       await senderTransferService.claimTransfer(
         senderPendingTransfer!,
-        leavesToClaim_1,
+        claimingNodes_1,
       );
     },
     30000,
@@ -304,32 +321,32 @@ describe("swap", () => {
         receiverSigningService,
       );
 
-      const senderLeafPubKey = await senderWallet
-        .getSigner()
-        .generatePublicKey();
+      const senderLeafId = uuidv7();
       const senderRootNode = await createNewTree(
         senderWallet,
-        senderLeafPubKey,
+        senderLeafId,
         faucet,
       );
 
-      const receiverLeafPubKey = await receiverWallet
-        .getSigner()
-        .generatePublicKey();
+      const receiverLeafId = uuidv7();
       const receiverRootNode = await createNewTree(
         receiverWallet,
-        receiverLeafPubKey,
+        receiverLeafId,
         faucet,
       );
 
       // Sender initiates transfer
-      const senderNewLeafPubKey = await senderWallet
-        .getSigner()
-        .generatePublicKey(sha256("1"));
+      const senderNewLeafDerivation: KeyDerivation = {
+        type: KeyDerivationType.LEAF,
+        path: uuidv7(),
+      };
       const senderTransferNode: LeafKeyTweak = {
         leaf: senderRootNode,
-        signingPubKey: senderLeafPubKey,
-        newSigningPubKey: senderNewLeafPubKey,
+        keyDerivation: {
+          type: KeyDerivationType.LEAF,
+          path: senderLeafId,
+        },
+        newKeyDerivation: senderNewLeafDerivation,
       };
       const senderLeavesToTransfer = [senderTransferNode];
 
@@ -354,14 +371,17 @@ describe("swap", () => {
       );
       const adaptorPubKey = secp256k1.getPublicKey(adaptorPrivateKey);
 
-      const receiverNewLeafPubKey = await receiverWallet
-        .getSigner()
-        .generatePublicKey(sha256("1"));
-
+      const receiverNewLeafDerivation: KeyDerivation = {
+        type: KeyDerivationType.LEAF,
+        path: uuidv7(),
+      };
       const receiverTransferNode: LeafKeyTweak = {
         leaf: receiverRootNode,
-        signingPubKey: receiverLeafPubKey,
-        newSigningPubKey: receiverNewLeafPubKey,
+        keyDerivation: {
+          type: KeyDerivationType.LEAF,
+          path: receiverLeafId,
+        },
+        newKeyDerivation: receiverNewLeafDerivation,
       };
       const receiverLeavesToTransfer = [receiverTransferNode];
 
@@ -431,22 +451,28 @@ describe("swap", () => {
       expect(leafPrivKeyMap.get(senderRootNode.id)).toBeDefined();
       const bytesEqual = equalBytes(
         leafPrivKeyMap.get(senderRootNode.id)!,
-        senderNewLeafPubKey,
+        await senderWallet
+          .getSigner()
+          .getPublicKeyFromDerivation(senderNewLeafDerivation),
       );
       expect(bytesEqual).toBe(true);
       expect(receiverPendingTransfer!.leaves[0]!.leaf).toBeDefined();
-      const finalLeafPubKey = await receiverWallet
-        .getSigner()
-        .generatePublicKey(sha256("2"));
-      const claimingNode: LeafKeyTweak = {
-        leaf: receiverPendingTransfer!.leaves[0]!.leaf!,
-        signingPubKey: senderNewLeafPubKey,
-        newSigningPubKey: finalLeafPubKey,
-      };
-      const leavesToClaim = [claimingNode];
+      const claimingNodes: LeafKeyTweak[] = receiverPendingTransfer!.leaves.map(
+        (leaf) => ({
+          leaf: leaf.leaf!,
+          keyDerivation: {
+            type: KeyDerivationType.ECIES,
+            path: leaf.secretCipher,
+          },
+          newKeyDerivation: {
+            type: KeyDerivationType.LEAF,
+            path: leaf.leaf!.id,
+          },
+        }),
+      );
       await receiverTransferService.claimTransfer(
         receiverPendingTransfer!,
-        leavesToClaim,
+        claimingNodes,
       );
       await receiverTransferService.deliverTransferPackage(
         receiverTransfer,
@@ -468,23 +494,29 @@ describe("swap", () => {
       expect(senderLeafPrivKeyMap.get(receiverRootNode.id)).toBeDefined();
       const bytesEqual_1 = equalBytes(
         senderLeafPrivKeyMap.get(receiverRootNode.id)!,
-        receiverNewLeafPubKey,
+        await receiverWallet
+          .getSigner()
+          .getPublicKeyFromDerivation(receiverNewLeafDerivation),
       );
       expect(bytesEqual_1).toBe(true);
       expect(senderPendingTransfer!.leaves[0]!.leaf).toBeDefined();
 
-      const finalLeafPubKey_1 = await senderWallet
-        .getSigner()
-        .generatePublicKey(sha256("3"));
-      const claimingNode_1: LeafKeyTweak = {
-        leaf: senderPendingTransfer!.leaves[0]!.leaf!,
-        signingPubKey: receiverNewLeafPubKey,
-        newSigningPubKey: finalLeafPubKey_1,
-      };
-      const leavesToClaim_1 = [claimingNode_1];
+      const claimingNodes_1: LeafKeyTweak[] = senderPendingTransfer!.leaves.map(
+        (leaf) => ({
+          leaf: leaf.leaf!,
+          keyDerivation: {
+            type: KeyDerivationType.ECIES,
+            path: leaf.secretCipher,
+          },
+          newKeyDerivation: {
+            type: KeyDerivationType.LEAF,
+            path: leaf.leaf!.id,
+          },
+        }),
+      );
       await senderTransferService.claimTransfer(
         senderPendingTransfer!,
-        leavesToClaim_1,
+        claimingNodes_1,
       );
     },
     30000,

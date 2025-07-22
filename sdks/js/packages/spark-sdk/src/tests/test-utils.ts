@@ -1,7 +1,7 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { Address, OutScript, Transaction } from "@scure/btc-signer";
-import { uuidv7 } from "uuidv7";
 import { RPCError } from "../errors/types.js";
+import { KeyDerivationType } from "../index.js";
 import { TreeNode } from "../proto/spark.js";
 import { WalletConfigService } from "../services/config.js";
 import { ConnectionManager } from "../services/connection.js";
@@ -30,7 +30,7 @@ export function getTestWalletConfigWithIdentityKey(
 
 export async function createNewTree(
   wallet: SparkWalletTesting,
-  pubKey: Uint8Array,
+  leafId: string,
   faucet: BitcoinFaucet,
   amountSats: bigint = 100_000n,
 ): Promise<TreeNode> {
@@ -45,7 +45,10 @@ export async function createNewTree(
   const connectionManager = new ConnectionManager(configService);
   const depositService = new DepositService(configService, connectionManager);
 
-  const leafId = uuidv7();
+  const pubKey = await wallet.getSigner().getPublicKeyFromDerivation({
+    type: KeyDerivationType.LEAF,
+    path: leafId,
+  });
   const depositResp = await depositService.generateDepositAddress({
     signingPubkey: pubKey,
     leafId,
@@ -69,7 +72,10 @@ export async function createNewTree(
   depositTx.addOutput({ script, amount: amountSats });
 
   const treeResp = await depositService.createTreeRoot({
-    signingPubKey: pubKey,
+    keyDerivation: {
+      type: KeyDerivationType.LEAF,
+      path: leafId,
+    },
     verifyingKey: depositResp.depositAddress.verifyingKey,
     depositTx,
     vout: 0,
