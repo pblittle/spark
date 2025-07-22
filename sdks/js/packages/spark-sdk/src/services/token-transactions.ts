@@ -1066,6 +1066,7 @@ export class TokenTransactionService {
           tokenTransaction: v1TokenTransaction,
           status: tx.status,
           confirmationMetadata: tx.confirmationMetadata,
+          tokenTransactionHash: tx.tokenTransactionHash,
         };
       });
     } catch (error) {

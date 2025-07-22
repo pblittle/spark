@@ -332,7 +332,16 @@ export interface TokenTransactionConfirmationMetadata {
 export interface TokenTransactionWithStatus {
   tokenTransaction: TokenTransaction | undefined;
   status: TokenTransactionStatus;
-  confirmationMetadata: TokenTransactionConfirmationMetadata | undefined;
+  confirmationMetadata:
+    | TokenTransactionConfirmationMetadata
+    | undefined;
+  /**
+   * In rare cases the above reconstructed token transaction may not match the original token transaction due to:
+   * a) a pre-empted transfer transaction having its input TTXOs remapped to the newer transaction
+   * b) proto migrations or field deprecations resulting in missing/swapped fields (eg. token public key -> token identifier)
+   * Include the original hash to ensure clients can reconcile this transaction with the original if needed.
+   */
+  tokenTransactionHash: Uint8Array;
 }
 
 function createBaseTokenOutputToSpend(): TokenOutputToSpend {
@@ -2674,7 +2683,12 @@ export const TokenTransactionConfirmationMetadata: MessageFns<TokenTransactionCo
 };
 
 function createBaseTokenTransactionWithStatus(): TokenTransactionWithStatus {
-  return { tokenTransaction: undefined, status: 0, confirmationMetadata: undefined };
+  return {
+    tokenTransaction: undefined,
+    status: 0,
+    confirmationMetadata: undefined,
+    tokenTransactionHash: new Uint8Array(0),
+  };
 }
 
 export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> = {
@@ -2687,6 +2701,9 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
     }
     if (message.confirmationMetadata !== undefined) {
       TokenTransactionConfirmationMetadata.encode(message.confirmationMetadata, writer.uint32(26).fork()).join();
+    }
+    if (message.tokenTransactionHash.length !== 0) {
+      writer.uint32(34).bytes(message.tokenTransactionHash);
     }
     return writer;
   },
@@ -2722,6 +2739,14 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
           message.confirmationMetadata = TokenTransactionConfirmationMetadata.decode(reader, reader.uint32());
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.tokenTransactionHash = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2738,6 +2763,9 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
       confirmationMetadata: isSet(object.confirmationMetadata)
         ? TokenTransactionConfirmationMetadata.fromJSON(object.confirmationMetadata)
         : undefined,
+      tokenTransactionHash: isSet(object.tokenTransactionHash)
+        ? bytesFromBase64(object.tokenTransactionHash)
+        : new Uint8Array(0),
     };
   },
 
@@ -2751,6 +2779,9 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
     }
     if (message.confirmationMetadata !== undefined) {
       obj.confirmationMetadata = TokenTransactionConfirmationMetadata.toJSON(message.confirmationMetadata);
+    }
+    if (message.tokenTransactionHash.length !== 0) {
+      obj.tokenTransactionHash = base64FromBytes(message.tokenTransactionHash);
     }
     return obj;
   },
@@ -2767,6 +2798,7 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
     message.confirmationMetadata = (object.confirmationMetadata !== undefined && object.confirmationMetadata !== null)
       ? TokenTransactionConfirmationMetadata.fromPartial(object.confirmationMetadata)
       : undefined;
+    message.tokenTransactionHash = object.tokenTransactionHash ?? new Uint8Array(0);
     return message;
   },
 };

@@ -694,6 +694,7 @@ export interface TokenTransactionWithStatus {
   tokenTransaction: TokenTransaction | undefined;
   status: TokenTransactionStatus;
   confirmationMetadata: TokenTransactionConfirmationMetadata | undefined;
+  tokenTransactionHash: Uint8Array;
 }
 
 export interface SignatureWithIndex {
@@ -1142,6 +1143,7 @@ export interface RequestedSigningCommitments_SigningNonceCommitmentsEntry {
 
 export interface GetSigningCommitmentsRequest {
   nodeIds: string[];
+  count: number;
 }
 
 export interface GetSigningCommitmentsResponse {
@@ -1467,6 +1469,8 @@ export interface QueryStaticDepositAddressesRequest {
   network: Network;
   limit: number;
   offset: number;
+  /** Optional filter. When specified, only the DepositAddress with this address is returned. */
+  depositAddress?: string | undefined;
 }
 
 export interface DepositAddressQueryResult {
@@ -1515,6 +1519,43 @@ export interface PaymentIntentFields {
   /** variable length uint128 */
   assetAmount: Uint8Array;
   memo?: string | undefined;
+}
+
+export interface InitiateStaticDepositUtxoRefundRequest {
+  onChainUtxo:
+    | UTXO
+    | undefined;
+  /**
+   * A package that is used for signing L1 Bitcoin transactions using FROST.
+   * SE consumes it to return SigningResult structure, that is used by the user to
+   * construct the final signature for the refund Bitcoin transaction.
+   */
+  refundTxSigningJob:
+    | SigningJob
+    | undefined;
+  /**
+   * Signature of a user statement that authorises the SE to initiate a static
+   * deposit utxo refund to the user.
+   *
+   * The user statement is constructed by concatenating the following fields in order:
+   * 1. Action name: "claim_static_deposit" (UTF-8 string)
+   * 2. Network: lowercase network name (e.g., "bitcoin", "testnet") (UTF-8 string)
+   * 3. Transaction ID: hex-encoded UTXO transaction ID (UTF-8 string)
+   * 4. Output index: UTXO output index (vout) as 4-byte unsigned integer (little-endian)
+   * 5. Request type: 2 for refund (1-byte unsigned integer, little-endian)
+   * 6. Credit amount: amount of satoshis to credit as 8-byte unsigned integer (little-endian)
+   * 7. Signing payload: sighash of spend transaction (UTF-8 string)
+   *
+   * The concatenated payload is then hashed with SHA-256, and the resulting hash
+   * is signed using ECDSA with the user's identity private key to produce this signature.
+   */
+  userSignature: Uint8Array;
+}
+
+export interface InitiateStaticDepositUtxoRefundResponse {
+  /** The FROST signing results which must be aggregated by the user to complete signing */
+  refundTxSigningResult: SigningResult | undefined;
+  depositAddress: DepositAddressQueryResult | undefined;
 }
 
 export interface InitiateUtxoSwapRequest {
@@ -5118,7 +5159,12 @@ export const TokenTransactionConfirmationMetadata: MessageFns<TokenTransactionCo
 };
 
 function createBaseTokenTransactionWithStatus(): TokenTransactionWithStatus {
-  return { tokenTransaction: undefined, status: 0, confirmationMetadata: undefined };
+  return {
+    tokenTransaction: undefined,
+    status: 0,
+    confirmationMetadata: undefined,
+    tokenTransactionHash: new Uint8Array(0),
+  };
 }
 
 export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> = {
@@ -5131,6 +5177,9 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
     }
     if (message.confirmationMetadata !== undefined) {
       TokenTransactionConfirmationMetadata.encode(message.confirmationMetadata, writer.uint32(26).fork()).join();
+    }
+    if (message.tokenTransactionHash.length !== 0) {
+      writer.uint32(34).bytes(message.tokenTransactionHash);
     }
     return writer;
   },
@@ -5166,6 +5215,14 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
           message.confirmationMetadata = TokenTransactionConfirmationMetadata.decode(reader, reader.uint32());
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.tokenTransactionHash = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -5182,6 +5239,9 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
       confirmationMetadata: isSet(object.confirmationMetadata)
         ? TokenTransactionConfirmationMetadata.fromJSON(object.confirmationMetadata)
         : undefined,
+      tokenTransactionHash: isSet(object.tokenTransactionHash)
+        ? bytesFromBase64(object.tokenTransactionHash)
+        : new Uint8Array(0),
     };
   },
 
@@ -5195,6 +5255,9 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
     }
     if (message.confirmationMetadata !== undefined) {
       obj.confirmationMetadata = TokenTransactionConfirmationMetadata.toJSON(message.confirmationMetadata);
+    }
+    if (message.tokenTransactionHash.length !== 0) {
+      obj.tokenTransactionHash = base64FromBytes(message.tokenTransactionHash);
     }
     return obj;
   },
@@ -5211,6 +5274,7 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
     message.confirmationMetadata = (object.confirmationMetadata !== undefined && object.confirmationMetadata !== null)
       ? TokenTransactionConfirmationMetadata.fromPartial(object.confirmationMetadata)
       : undefined;
+    message.tokenTransactionHash = object.tokenTransactionHash ?? new Uint8Array(0);
     return message;
   },
 };
@@ -10842,13 +10906,16 @@ export const RequestedSigningCommitments_SigningNonceCommitmentsEntry: MessageFn
 };
 
 function createBaseGetSigningCommitmentsRequest(): GetSigningCommitmentsRequest {
-  return { nodeIds: [] };
+  return { nodeIds: [], count: 0 };
 }
 
 export const GetSigningCommitmentsRequest: MessageFns<GetSigningCommitmentsRequest> = {
   encode(message: GetSigningCommitmentsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     for (const v of message.nodeIds) {
       writer.uint32(10).string(v!);
+    }
+    if (message.count !== 0) {
+      writer.uint32(16).uint32(message.count);
     }
     return writer;
   },
@@ -10868,6 +10935,14 @@ export const GetSigningCommitmentsRequest: MessageFns<GetSigningCommitmentsReque
           message.nodeIds.push(reader.string());
           continue;
         }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.count = reader.uint32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -10880,6 +10955,7 @@ export const GetSigningCommitmentsRequest: MessageFns<GetSigningCommitmentsReque
   fromJSON(object: any): GetSigningCommitmentsRequest {
     return {
       nodeIds: globalThis.Array.isArray(object?.nodeIds) ? object.nodeIds.map((e: any) => globalThis.String(e)) : [],
+      count: isSet(object.count) ? globalThis.Number(object.count) : 0,
     };
   },
 
@@ -10887,6 +10963,9 @@ export const GetSigningCommitmentsRequest: MessageFns<GetSigningCommitmentsReque
     const obj: any = {};
     if (message.nodeIds?.length) {
       obj.nodeIds = message.nodeIds;
+    }
+    if (message.count !== 0) {
+      obj.count = Math.round(message.count);
     }
     return obj;
   },
@@ -10897,6 +10976,7 @@ export const GetSigningCommitmentsRequest: MessageFns<GetSigningCommitmentsReque
   fromPartial(object: DeepPartial<GetSigningCommitmentsRequest>): GetSigningCommitmentsRequest {
     const message = createBaseGetSigningCommitmentsRequest();
     message.nodeIds = object.nodeIds?.map((e) => e) || [];
+    message.count = object.count ?? 0;
     return message;
   },
 };
@@ -14979,7 +15059,7 @@ export const QueryUnusedDepositAddressesRequest: MessageFns<QueryUnusedDepositAd
 };
 
 function createBaseQueryStaticDepositAddressesRequest(): QueryStaticDepositAddressesRequest {
-  return { identityPublicKey: new Uint8Array(0), network: 0, limit: 0, offset: 0 };
+  return { identityPublicKey: new Uint8Array(0), network: 0, limit: 0, offset: 0, depositAddress: undefined };
 }
 
 export const QueryStaticDepositAddressesRequest: MessageFns<QueryStaticDepositAddressesRequest> = {
@@ -14995,6 +15075,9 @@ export const QueryStaticDepositAddressesRequest: MessageFns<QueryStaticDepositAd
     }
     if (message.offset !== 0) {
       writer.uint32(40).int64(message.offset);
+    }
+    if (message.depositAddress !== undefined) {
+      writer.uint32(50).string(message.depositAddress);
     }
     return writer;
   },
@@ -15038,6 +15121,14 @@ export const QueryStaticDepositAddressesRequest: MessageFns<QueryStaticDepositAd
           message.offset = longToNumber(reader.int64());
           continue;
         }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.depositAddress = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -15055,6 +15146,7 @@ export const QueryStaticDepositAddressesRequest: MessageFns<QueryStaticDepositAd
       network: isSet(object.network) ? networkFromJSON(object.network) : 0,
       limit: isSet(object.limit) ? globalThis.Number(object.limit) : 0,
       offset: isSet(object.offset) ? globalThis.Number(object.offset) : 0,
+      depositAddress: isSet(object.depositAddress) ? globalThis.String(object.depositAddress) : undefined,
     };
   },
 
@@ -15072,6 +15164,9 @@ export const QueryStaticDepositAddressesRequest: MessageFns<QueryStaticDepositAd
     if (message.offset !== 0) {
       obj.offset = Math.round(message.offset);
     }
+    if (message.depositAddress !== undefined) {
+      obj.depositAddress = message.depositAddress;
+    }
     return obj;
   },
 
@@ -15084,6 +15179,7 @@ export const QueryStaticDepositAddressesRequest: MessageFns<QueryStaticDepositAd
     message.network = object.network ?? 0;
     message.limit = object.limit ?? 0;
     message.offset = object.offset ?? 0;
+    message.depositAddress = object.depositAddress ?? undefined;
     return message;
   },
 };
@@ -15783,6 +15879,187 @@ export const PaymentIntentFields: MessageFns<PaymentIntentFields> = {
     message.assetIdentifier = object.assetIdentifier ?? undefined;
     message.assetAmount = object.assetAmount ?? new Uint8Array(0);
     message.memo = object.memo ?? undefined;
+    return message;
+  },
+};
+
+function createBaseInitiateStaticDepositUtxoRefundRequest(): InitiateStaticDepositUtxoRefundRequest {
+  return { onChainUtxo: undefined, refundTxSigningJob: undefined, userSignature: new Uint8Array(0) };
+}
+
+export const InitiateStaticDepositUtxoRefundRequest: MessageFns<InitiateStaticDepositUtxoRefundRequest> = {
+  encode(message: InitiateStaticDepositUtxoRefundRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.onChainUtxo !== undefined) {
+      UTXO.encode(message.onChainUtxo, writer.uint32(10).fork()).join();
+    }
+    if (message.refundTxSigningJob !== undefined) {
+      SigningJob.encode(message.refundTxSigningJob, writer.uint32(26).fork()).join();
+    }
+    if (message.userSignature.length !== 0) {
+      writer.uint32(34).bytes(message.userSignature);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): InitiateStaticDepositUtxoRefundRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseInitiateStaticDepositUtxoRefundRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.onChainUtxo = UTXO.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.refundTxSigningJob = SigningJob.decode(reader, reader.uint32());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.userSignature = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): InitiateStaticDepositUtxoRefundRequest {
+    return {
+      onChainUtxo: isSet(object.onChainUtxo) ? UTXO.fromJSON(object.onChainUtxo) : undefined,
+      refundTxSigningJob: isSet(object.refundTxSigningJob) ? SigningJob.fromJSON(object.refundTxSigningJob) : undefined,
+      userSignature: isSet(object.userSignature) ? bytesFromBase64(object.userSignature) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: InitiateStaticDepositUtxoRefundRequest): unknown {
+    const obj: any = {};
+    if (message.onChainUtxo !== undefined) {
+      obj.onChainUtxo = UTXO.toJSON(message.onChainUtxo);
+    }
+    if (message.refundTxSigningJob !== undefined) {
+      obj.refundTxSigningJob = SigningJob.toJSON(message.refundTxSigningJob);
+    }
+    if (message.userSignature.length !== 0) {
+      obj.userSignature = base64FromBytes(message.userSignature);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<InitiateStaticDepositUtxoRefundRequest>): InitiateStaticDepositUtxoRefundRequest {
+    return InitiateStaticDepositUtxoRefundRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<InitiateStaticDepositUtxoRefundRequest>): InitiateStaticDepositUtxoRefundRequest {
+    const message = createBaseInitiateStaticDepositUtxoRefundRequest();
+    message.onChainUtxo = (object.onChainUtxo !== undefined && object.onChainUtxo !== null)
+      ? UTXO.fromPartial(object.onChainUtxo)
+      : undefined;
+    message.refundTxSigningJob = (object.refundTxSigningJob !== undefined && object.refundTxSigningJob !== null)
+      ? SigningJob.fromPartial(object.refundTxSigningJob)
+      : undefined;
+    message.userSignature = object.userSignature ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseInitiateStaticDepositUtxoRefundResponse(): InitiateStaticDepositUtxoRefundResponse {
+  return { refundTxSigningResult: undefined, depositAddress: undefined };
+}
+
+export const InitiateStaticDepositUtxoRefundResponse: MessageFns<InitiateStaticDepositUtxoRefundResponse> = {
+  encode(message: InitiateStaticDepositUtxoRefundResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.refundTxSigningResult !== undefined) {
+      SigningResult.encode(message.refundTxSigningResult, writer.uint32(10).fork()).join();
+    }
+    if (message.depositAddress !== undefined) {
+      DepositAddressQueryResult.encode(message.depositAddress, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): InitiateStaticDepositUtxoRefundResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseInitiateStaticDepositUtxoRefundResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.refundTxSigningResult = SigningResult.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.depositAddress = DepositAddressQueryResult.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): InitiateStaticDepositUtxoRefundResponse {
+    return {
+      refundTxSigningResult: isSet(object.refundTxSigningResult)
+        ? SigningResult.fromJSON(object.refundTxSigningResult)
+        : undefined,
+      depositAddress: isSet(object.depositAddress)
+        ? DepositAddressQueryResult.fromJSON(object.depositAddress)
+        : undefined,
+    };
+  },
+
+  toJSON(message: InitiateStaticDepositUtxoRefundResponse): unknown {
+    const obj: any = {};
+    if (message.refundTxSigningResult !== undefined) {
+      obj.refundTxSigningResult = SigningResult.toJSON(message.refundTxSigningResult);
+    }
+    if (message.depositAddress !== undefined) {
+      obj.depositAddress = DepositAddressQueryResult.toJSON(message.depositAddress);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<InitiateStaticDepositUtxoRefundResponse>): InitiateStaticDepositUtxoRefundResponse {
+    return InitiateStaticDepositUtxoRefundResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<InitiateStaticDepositUtxoRefundResponse>): InitiateStaticDepositUtxoRefundResponse {
+    const message = createBaseInitiateStaticDepositUtxoRefundResponse();
+    message.refundTxSigningResult =
+      (object.refundTxSigningResult !== undefined && object.refundTxSigningResult !== null)
+        ? SigningResult.fromPartial(object.refundTxSigningResult)
+        : undefined;
+    message.depositAddress = (object.depositAddress !== undefined && object.depositAddress !== null)
+      ? DepositAddressQueryResult.fromPartial(object.depositAddress)
+      : undefined;
     return message;
   },
 };
@@ -17361,6 +17638,14 @@ export const SparkServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    create_tree_v2: {
+      name: "create_tree_v2",
+      requestType: CreateTreeRequest,
+      requestStream: false,
+      responseType: CreateTreeResponse,
+      responseStream: false,
+      options: {},
+    },
     get_signing_operator_list: {
       name: "get_signing_operator_list",
       requestType: Empty,
@@ -17490,7 +17775,28 @@ export const SparkServiceDefinition = {
       responseStream: true,
       options: {},
     },
-    /** Claim a deposit to a static address from SSP side */
+    /**
+     * Signs the provided refund transaction which spends the UTXO from a static
+     * deposit address. If successful, the UTXO will no longer be available to claim on
+     * the Spark network, and the refund transaction must be broadcasted on L1 to claim
+     * the funds. Returns an error if the UTXO has already been claimed.
+     */
+    initiate_static_deposit_utxo_refund: {
+      name: "initiate_static_deposit_utxo_refund",
+      requestType: InitiateStaticDepositUtxoRefundRequest,
+      requestStream: false,
+      responseType: InitiateStaticDepositUtxoRefundResponse,
+      responseStream: false,
+      options: {},
+    },
+    /**
+     * DEPRECATED: This unified method is being split for better clarity and type safety
+     *
+     * For swap operations: Use spark_ssp_internal.initiate_static_deposit_utxo_swap()
+     * For refund operations: Use initiate_static_deposit_utxo_refund()
+     *
+     * @deprecated
+     */
     initiate_utxo_swap: {
       name: "initiate_utxo_swap",
       requestType: InitiateUtxoSwapRequest,
@@ -17630,6 +17936,10 @@ export interface SparkServiceImplementation<CallContextExt = {}> {
     request: CreateTreeRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<CreateTreeResponse>>;
+  create_tree_v2(
+    request: CreateTreeRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<CreateTreeResponse>>;
   get_signing_operator_list(
     request: Empty,
     context: CallContext & CallContextExt,
@@ -17695,7 +18005,24 @@ export interface SparkServiceImplementation<CallContextExt = {}> {
     request: SubscribeToEventsRequest,
     context: CallContext & CallContextExt,
   ): ServerStreamingMethodResult<DeepPartial<SubscribeToEventsResponse>>;
-  /** Claim a deposit to a static address from SSP side */
+  /**
+   * Signs the provided refund transaction which spends the UTXO from a static
+   * deposit address. If successful, the UTXO will no longer be available to claim on
+   * the Spark network, and the refund transaction must be broadcasted on L1 to claim
+   * the funds. Returns an error if the UTXO has already been claimed.
+   */
+  initiate_static_deposit_utxo_refund(
+    request: InitiateStaticDepositUtxoRefundRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<InitiateStaticDepositUtxoRefundResponse>>;
+  /**
+   * DEPRECATED: This unified method is being split for better clarity and type safety
+   *
+   * For swap operations: Use spark_ssp_internal.initiate_static_deposit_utxo_swap()
+   * For refund operations: Use initiate_static_deposit_utxo_refund()
+   *
+   * @deprecated
+   */
   initiate_utxo_swap(
     request: InitiateUtxoSwapRequest,
     context: CallContext & CallContextExt,
@@ -17826,6 +18153,10 @@ export interface SparkServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<CreateTreeRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<CreateTreeResponse>;
+  create_tree_v2(
+    request: DeepPartial<CreateTreeRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<CreateTreeResponse>;
   get_signing_operator_list(
     request: DeepPartial<Empty>,
     options?: CallOptions & CallOptionsExt,
@@ -17891,7 +18222,24 @@ export interface SparkServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<SubscribeToEventsRequest>,
     options?: CallOptions & CallOptionsExt,
   ): AsyncIterable<SubscribeToEventsResponse>;
-  /** Claim a deposit to a static address from SSP side */
+  /**
+   * Signs the provided refund transaction which spends the UTXO from a static
+   * deposit address. If successful, the UTXO will no longer be available to claim on
+   * the Spark network, and the refund transaction must be broadcasted on L1 to claim
+   * the funds. Returns an error if the UTXO has already been claimed.
+   */
+  initiate_static_deposit_utxo_refund(
+    request: DeepPartial<InitiateStaticDepositUtxoRefundRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<InitiateStaticDepositUtxoRefundResponse>;
+  /**
+   * DEPRECATED: This unified method is being split for better clarity and type safety
+   *
+   * For swap operations: Use spark_ssp_internal.initiate_static_deposit_utxo_swap()
+   * For refund operations: Use initiate_static_deposit_utxo_refund()
+   *
+   * @deprecated
+   */
   initiate_utxo_swap(
     request: DeepPartial<InitiateUtxoSwapRequest>,
     options?: CallOptions & CallOptionsExt,

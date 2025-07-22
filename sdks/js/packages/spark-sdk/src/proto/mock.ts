@@ -67,6 +67,11 @@ export interface UpdateNodesStatusRequest {
   status: string;
 }
 
+/** TriggerTaskRequest is used to trigger a scheduled task immediately in hermetic tests. */
+export interface TriggerTaskRequest {
+  taskName: string;
+}
+
 function createBaseCleanUpPreimageShareRequest(): CleanUpPreimageShareRequest {
   return { paymentHash: new Uint8Array(0) };
 }
@@ -261,6 +266,64 @@ export const UpdateNodesStatusRequest: MessageFns<UpdateNodesStatusRequest> = {
   },
 };
 
+function createBaseTriggerTaskRequest(): TriggerTaskRequest {
+  return { taskName: "" };
+}
+
+export const TriggerTaskRequest: MessageFns<TriggerTaskRequest> = {
+  encode(message: TriggerTaskRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.taskName !== "") {
+      writer.uint32(10).string(message.taskName);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TriggerTaskRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTriggerTaskRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.taskName = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): TriggerTaskRequest {
+    return { taskName: isSet(object.taskName) ? globalThis.String(object.taskName) : "" };
+  },
+
+  toJSON(message: TriggerTaskRequest): unknown {
+    const obj: any = {};
+    if (message.taskName !== "") {
+      obj.taskName = message.taskName;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<TriggerTaskRequest>): TriggerTaskRequest {
+    return TriggerTaskRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<TriggerTaskRequest>): TriggerTaskRequest {
+    const message = createBaseTriggerTaskRequest();
+    message.taskName = object.taskName ?? "";
+    return message;
+  },
+};
+
 export type MockServiceDefinition = typeof MockServiceDefinition;
 export const MockServiceDefinition = {
   name: "MockService",
@@ -290,6 +353,15 @@ export const MockServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    /** Triggers the execution of a scheduled task immediately by name. Used by hermetic tests */
+    trigger_task: {
+      name: "trigger_task",
+      requestType: TriggerTaskRequest,
+      requestStream: false,
+      responseType: Empty,
+      responseStream: false,
+      options: {},
+    },
   },
 } as const;
 
@@ -306,6 +378,8 @@ export interface MockServiceImplementation<CallContextExt = {}> {
     request: UpdateNodesStatusRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<Empty>>;
+  /** Triggers the execution of a scheduled task immediately by name. Used by hermetic tests */
+  trigger_task(request: TriggerTaskRequest, context: CallContext & CallContextExt): Promise<DeepPartial<Empty>>;
 }
 
 export interface MockServiceClient<CallOptionsExt = {}> {
@@ -321,6 +395,8 @@ export interface MockServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<UpdateNodesStatusRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<Empty>;
+  /** Triggers the execution of a scheduled task immediately by name. Used by hermetic tests */
+  trigger_task(request: DeepPartial<TriggerTaskRequest>, options?: CallOptions & CallOptionsExt): Promise<Empty>;
 }
 
 function bytesFromBase64(b64: string): Uint8Array {
