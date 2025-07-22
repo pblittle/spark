@@ -442,6 +442,7 @@ message TokenTransactionWithStatus {
     TokenTransaction token_transaction = 1;
     TokenTransactionStatus status = 2;
     TokenTransactionConfirmationMetadata confirmation_metadata = 3;
+    bytes token_transaction_hash = 4 [(validate.rules).bytes.len = 32];
 }
 
 message SignatureWithIndex {
