@@ -3,63 +3,59 @@ import {
   bytesToNumberBE,
   numberToBytesBE,
 } from "@noble/curves/abstract/utils";
-import {
-  OutputWithPreviousTransactionData,
-  OperatorSpecificTokenTransactionSignablePayload,
-  SignTokenTransactionResponse,
-  OperatorSpecificOwnerSignature,
-  RevocationSecretWithIndex,
-  TokenTransactionWithStatus as TokenTransactionWithStatusV0,
-  QueryTokenTransactionsRequest as QueryTokenTransactionsRequestV0,
-} from "../proto/spark.js";
 import { secp256k1 } from "@noble/curves/secp256k1";
-import { SparkCallOptions } from "../types/grpc.js";
-import {
-  hashOperatorSpecificTokenTransactionSignablePayload,
-  hashTokenTransactionV0,
-  hashTokenTransaction,
-} from "../utils/token-hashing.js";
-import {
-  sumAvailableTokens,
-  checkIfSelectedOutputsAreAvailable,
-} from "../utils/token-transactions.js";
-import {
-  validateTokenTransactionV0,
-  validateTokenTransaction,
-} from "../utils/token-transaction-validation.js";
-import { WalletConfigService } from "./config.js";
-import { ConnectionManager } from "./connection.js";
-import {
-  ValidationError,
-  NetworkError,
-  InternalValidationError,
-  NotImplementedError,
-} from "../errors/types.js";
-import { SigningOperator } from "./wallet-config.js";
 import { hexToBytes } from "@noble/hashes/utils";
-import { decodeSparkAddress } from "../utils/address.js";
 import {
-  TokenTransaction,
-  SignatureWithIndex,
+  InternalValidationError,
+  NetworkError,
+  ValidationError,
+} from "../errors/types.js";
+import {
+  OperatorSpecificOwnerSignature,
+  OperatorSpecificTokenTransactionSignablePayload,
+  OutputWithPreviousTransactionData,
+  QueryTokenTransactionsRequest as QueryTokenTransactionsRequestV0,
+  RevocationSecretWithIndex,
+  SignTokenTransactionResponse,
+  TokenTransaction as TokenTransactionV0,
+  TokenTransactionWithStatus as TokenTransactionWithStatusV0,
+} from "../proto/spark.js";
+import {
   InputTtxoSignaturesPerOperator,
   QueryTokenTransactionsRequest as QueryTokenTransactionsRequestV1,
-  TokenTransactionWithStatus as TokenTransactionWithStatusV1,
+  SignatureWithIndex,
   TokenOutput,
+  TokenTransaction,
+  TokenTransactionWithStatus as TokenTransactionWithStatusV1,
 } from "../proto/spark_token.js";
-import { TokenTransaction as TokenTransactionV0 } from "../proto/spark.js";
+import { TokenOutputsMap } from "../spark-wallet/types.js";
+import { SparkCallOptions } from "../types/grpc.js";
+import { decodeSparkAddress } from "../utils/address.js";
 import { collectResponses } from "../utils/response-validation.js";
+import {
+  hashOperatorSpecificTokenTransactionSignablePayload,
+  hashTokenTransaction,
+  hashTokenTransactionV0,
+} from "../utils/token-hashing.js";
+import {
+  Bech32mTokenIdentifier,
+  decodeBech32mTokenIdentifier,
+} from "../utils/token-identifier.js";
 import {
   KeyshareWithOperatorIndex,
   recoverRevocationSecretFromKeyshares,
 } from "../utils/token-keyshares.js";
 import {
-  RawTokenIdentifierHex,
-  TokenOutputsMap,
-} from "../spark-wallet/types.js";
+  validateTokenTransaction,
+  validateTokenTransactionV0,
+} from "../utils/token-transaction-validation.js";
 import {
-  Bech32mTokenIdentifier,
-  decodeBech32mTokenIdentifier,
-} from "../utils/token-identifier.js";
+  checkIfSelectedOutputsAreAvailable,
+  sumAvailableTokens,
+} from "../utils/token-transactions.js";
+import { WalletConfigService } from "./config.js";
+import { ConnectionManager } from "./connection.js";
+import { SigningOperator } from "./wallet-config.js";
 
 const MAX_TOKEN_OUTPUTS = 500;
 
@@ -1123,23 +1119,6 @@ export class TokenTransactionService {
     }
   }
 
-  public async syncTokenOutputs(
-    tokenOutputs: Map<string, OutputWithPreviousTransactionData[]>,
-  ) {
-    const unsortedTokenOutputs = await this.fetchOwnedTokenOutputs({
-      ownerPublicKeys: await this.config.signer.getTrackedPublicKeys(),
-    });
-
-    unsortedTokenOutputs.forEach((output) => {
-      const tokenKey = bytesToHex(output.output!.tokenPublicKey!);
-      const index = output.previousTransactionVout!;
-
-      tokenOutputs.set(tokenKey, [
-        { ...output, previousTransactionVout: index },
-      ]);
-    });
-  }
-
   public selectTokenOutputs(
     tokenOutputs: OutputWithPreviousTransactionData[],
     tokenAmount: bigint,
@@ -1226,14 +1205,11 @@ export class TokenTransactionService {
         return await this.config.signer.signMessageWithIdentityKey(message);
       }
     } else {
-      if (tokenSignatures === "SCHNORR") {
-        return await this.config.signer.signSchnorr(message, publicKey);
-      } else {
-        return await this.config.signer.signMessageWithPublicKey(
-          message,
-          publicKey,
-        );
-      }
+      throw new ValidationError("Invalid public key", {
+        field: "publicKey",
+        value: bytesToHex(publicKey),
+        expected: bytesToHex(await this.config.signer.getIdentityPublicKey()),
+      });
     }
   }
 
