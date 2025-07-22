@@ -1,5 +1,17 @@
 # @buildonspark/spark-sdk
 
+## 0.2.0
+
+### Minor Changes
+
+- Remove key map state from signer interface.
+  - The SDK now passes around the derivation details regarding the signing key instead of forcing the signer to maintain a pubkey to privkey map
+- Parameter changes to transferTokens() and batchTransferTokens()
+- Parameter changes to queryTokenTransactions()
+- Replaced getIssuerTokenInfo() with getIssuerTokenMetadata()
+- Rename HumanReadableTokenIdentifier to Bech32mTokenIdentifier
+  - Bech32mTokenIdentifier must now be passed as tokenIdentifier in transferTokens() batchTransferTokens
+
 ## 0.1.47
 
 ### Patch Changes
