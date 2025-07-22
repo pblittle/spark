@@ -24,6 +24,7 @@ export default defineConfig([
       /* Entrypoints other than index should be static only, i.e. modules that never depend
          on the state of other modules. Everything else should be exported from index. */
       "src/tests/test-utils.ts",
+      "src/debug.ts",
       "src/proto/spark.ts",
       "src/proto/spark_token.ts",
       "src/proto/lrc20.ts",

@@ -49,6 +49,10 @@
       "import": "./dist/tests/test-utils.js",
       "require": "./dist/tests/test-utils.cjs"
     },
+    "./debug": {
+      "import": "./dist/debug.js",
+      "require": "./dist/debug.cjs"
+    },
     "./proto/spark": {
       "import": "./dist/proto/spark.js",
       "require": "./dist/proto/spark.cjs"

@@ -1,4 +1,5 @@
 import { SparkWallet } from "@buildonspark/spark-sdk";
+import "@buildonspark/spark-sdk/debug";
 import { createDummyTx } from "@buildonspark/spark-sdk/spark-frost";
 import { useState } from "react";
 
