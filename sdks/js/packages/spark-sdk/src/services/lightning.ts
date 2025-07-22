@@ -236,7 +236,9 @@ export class LightningService {
         );
       }
 
-      amountSats = isZeroAmountInvoice ? amountSatsToSend! : amountMsats / 1000;
+      amountSats = isZeroAmountInvoice
+        ? amountSatsToSend!
+        : Math.ceil(amountMsats / 1000);
 
       if (isNaN(amountSats) || amountSats <= 0) {
         throw new ValidationError("Invalid amount", {

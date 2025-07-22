@@ -2733,7 +2733,7 @@ export class SparkWallet extends EventEmitter {
 
     const amountSats = isZeroAmountInvoice
       ? amountSatsToSend!
-      : Number(amountMSats / 1000n);
+      : Math.ceil(Number(amountMSats) / 1000);
 
     if (isNaN(amountSats) || amountSats <= 0) {
       throw new ValidationError("Invalid amount", {
