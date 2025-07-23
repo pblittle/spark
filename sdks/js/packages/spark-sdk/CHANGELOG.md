@@ -1,5 +1,11 @@
 # @buildonspark/spark-sdk
 
+## 0.2.2
+
+### Patch Changes
+
+- Export stateless signer from signer.ts
+
 ## 0.2.1
 
 ### Patch Changes
