@@ -1,5 +1,12 @@
 # @buildonspark/lrc20-sdk
 
+## 0.0.60
+
+### Patch Changes
+
+- tokens changes
+  - Bech32mTokenIdentifier prefix change from "btk" -> "btkn"
+
 ## 0.0.59
 
 ### Patch Changes
