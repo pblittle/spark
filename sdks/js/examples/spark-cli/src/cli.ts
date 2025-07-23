@@ -325,6 +325,7 @@ const commands = [
   "unfreezetokens",
   "getissuertokenactivity",
   "announcetoken",
+  "createtoken",
   "nontrustydeposit",
   "querytokentransactions",
   "gettransferfromssp",
@@ -589,6 +590,7 @@ async function runCLI() {
   freezetokens <sparkAddress>                                         - Freeze tokens for a specific address
   unfreezetokens <sparkAddress>                                       - Unfreeze tokens for a specific address
   announcetoken <tokenName> <tokenTicker> <decimals> <maxSupply> <isFreezable> - Announce token on L1
+  createtoken <tokenName> <tokenTicker> <decimals> <maxSupply> <isFreezable> - Create a new token
 
   help                                                                - Show this help message
   exit/quit                                                           - Exit the program
@@ -1357,6 +1359,23 @@ async function runCLI() {
             impactedOutputIds: result.impactedOutputIds,
             impactedTokenAmount: result.impactedTokenAmount.toString(),
           });
+          break;
+        }
+        case "createtoken": {
+          if (!wallet) {
+            console.log("Please initialize a wallet first");
+            break;
+          }
+          const [tokenName, tokenTicker, decimals, maxSupply, isFreezable] =
+            args;
+          const result = await wallet.createToken({
+            tokenName,
+            tokenTicker,
+            decimals: parseInt(decimals),
+            maxSupply: BigInt(maxSupply),
+            isFreezable: isFreezable.toLowerCase() === "true",
+          });
+          console.log("Create Token Transaction ID:", result);
           break;
         }
         case "announcetoken": {
