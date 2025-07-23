@@ -26,6 +26,8 @@ service SparkTokenService {
 
     rpc query_token_outputs(QueryTokenOutputsRequest)
         returns (QueryTokenOutputsResponse) {}
+
+    rpc freeze_tokens(FreezeTokensRequest) returns (FreezeTokensResponse) {}
 }
 
 // This proto is constructed by the wallet to specify leaves it wants to spend
@@ -242,4 +244,27 @@ message TokenTransactionWithStatus {
     // b) proto migrations or field deprecations resulting in missing/swapped fields (eg. token public key -> token identifier) 
     // Include the original hash to ensure clients can reconcile this transaction with the original if needed.
     bytes token_transaction_hash = 4 [(validate.rules).bytes.len = 32];
+}
+
+
+message FreezeTokensPayload {
+    uint32 version = 1;
+    bytes owner_public_key = 2 [(validate.rules).bytes.len = 33];
+    optional bytes token_public_key = 3 [(validate.rules).bytes.len = 33];
+    optional bytes token_identifier = 4 [(validate.rules).bytes.len = 32];
+    uint64 issuer_provided_timestamp = 5;
+    bytes operator_identity_public_key = 6 [(validate.rules).bytes.len = 33];
+    // Set to false when requesting a freeze.
+    bool should_unfreeze = 7;
+}
+
+message FreezeTokensRequest {
+    FreezeTokensPayload freeze_tokens_payload = 1;
+    // This is a Schnorr or ECDSA DER signature which can be between 64 and 73 bytes.
+    bytes issuer_signature = 2 [(validate.rules).bytes.min_len = 64, (validate.rules).bytes.max_len = 73];
+}
+
+message FreezeTokensResponse {
+    repeated string impacted_output_ids = 1 [(validate.rules).repeated.items.string.uuid = true];
+    bytes impacted_token_amount = 2;  // Decoded uint128
 }
