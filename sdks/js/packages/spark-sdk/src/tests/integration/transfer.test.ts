@@ -21,15 +21,15 @@ import {
   WalletConfig,
 } from "../../services/wallet-config.js";
 import { NetworkType } from "../../utils/network.js";
-import { createNewTree } from "../test-utils.js";
+import { createNewTree, signerTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 
 const testLocalOnly = process.env.GITHUB_ACTIONS ? it.skip : it;
 
-describe("Transfer", () => {
+describe.each(signerTypes)("Transfer with name", ({ name, Signer }) => {
   jest.setTimeout(15_000);
-  it("test transfer", async () => {
+  it(`${name} - test transfer`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const options: ConfigOptions = {
@@ -38,6 +38,7 @@ describe("Transfer", () => {
 
     const { wallet: senderWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
 
     const senderConfigService = new WalletConfigService(
@@ -62,6 +63,7 @@ describe("Transfer", () => {
 
     const { wallet: receiverWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
     const receiverPubkey = await receiverWallet.getIdentityPublicKey();
 
@@ -141,7 +143,7 @@ describe("Transfer", () => {
     expect(balance.balance).toBe(1000n);
   }, 30000);
 
-  testLocalOnly("test transfer with separate", async () => {
+  testLocalOnly(`${name} - test transfer with separate`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const options: ConfigOptions = {
@@ -149,6 +151,7 @@ describe("Transfer", () => {
     };
     const { wallet: senderWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
 
     const senderConfigService = new WalletConfigService(
@@ -166,6 +169,7 @@ describe("Transfer", () => {
 
     const { wallet: receiverWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
     const receiverPubkey = await receiverWallet.getIdentityPublicKey();
 
@@ -301,7 +305,7 @@ describe("Transfer", () => {
     );
   });
 
-  testLocalOnly("cancel transfer", async () => {
+  testLocalOnly(`${name} - cancel transfer`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const options: ConfigOptions = {
@@ -309,6 +313,7 @@ describe("Transfer", () => {
     };
     const { wallet: senderWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
     const mnemonic = generateMnemonic(wordlist);
 
@@ -427,7 +432,7 @@ describe("Transfer", () => {
   });
 
   testLocalOnly(
-    "test that when the receiver has tweaked the key on some SOs, we can still claim the transfer",
+    `${name} - test that when the receiver has tweaked the key on some SOs, we can still claim the transfer`,
     async () => {
       const faucet = BitcoinFaucet.getInstance();
 
@@ -437,6 +442,7 @@ describe("Transfer", () => {
 
       const { wallet: senderWallet } = await SparkWalletTesting.initialize({
         options,
+        signer: new Signer(),
       });
 
       const senderConfigService = new WalletConfigService(
@@ -477,6 +483,7 @@ describe("Transfer", () => {
       const { wallet: receiverWallet } = await SparkWalletTesting.initialize({
         options: missingOperatorOptions,
         mnemonicOrSeed: mnemonic,
+        signer: new Signer(),
       });
 
       const receiverPubkey = await receiverWallet.getIdentityPublicKey();
@@ -561,6 +568,7 @@ describe("Transfer", () => {
         await SparkWalletTesting.initialize({
           options: receiverOptions,
           mnemonicOrSeed: mnemonic,
+          signer: new Signer(),
         });
       const receiverConfigServiceWithAllOperators = new WalletConfigService(
         receiverOptions,
@@ -586,6 +594,7 @@ describe("Transfer", () => {
             coodinatorIdentifier: soToRemove,
           },
           mnemonicOrSeed: mnemonic,
+          signer: new Signer(),
         });
 
       const pendingTransferWithMissingOperatorAsCoordinator =
@@ -640,7 +649,7 @@ describe("Transfer", () => {
     },
   );
 
-  it("test incoming transfer rpc stream", async () => {
+  it(`${name} - test incoming transfer rpc stream`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const options: ConfigOptions = {
@@ -649,6 +658,7 @@ describe("Transfer", () => {
 
     const { wallet: senderWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
 
     const depositAddress = await senderWallet.getSingleUseDepositAddress();
@@ -801,9 +811,9 @@ describe("Transfer", () => {
   });
 });
 
-describe("transfer v2", () => {
+describe.each(signerTypes)("transfer v2", ({ name, Signer }) => {
   jest.setTimeout(15_000);
-  it("test transfer with pretweaked package", async () => {
+  it(`${name} - test transfer with pretweaked package`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const options: ConfigOptions = {
@@ -812,6 +822,7 @@ describe("transfer v2", () => {
 
     const { wallet: senderWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
 
     const senderConfigService = new WalletConfigService(
@@ -836,6 +847,7 @@ describe("transfer v2", () => {
 
     const { wallet: receiverWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
     const receiverPubkey = await receiverWallet.getIdentityPublicKey();
 
@@ -919,13 +931,14 @@ describe("transfer v2", () => {
     expect(balance.balance).toBe(1000n);
   }, 30000);
 
-  it("test self transfer with pretweaked package", async () => {
+  it(`${name} - test self transfer with pretweaked package`, async () => {
     const faucet = BitcoinFaucet.getInstance();
     const options: ConfigOptions = {
       network: "LOCAL",
     };
     const { wallet: senderWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
     const senderConfigService = new WalletConfigService(
       options,
@@ -985,13 +998,14 @@ describe("transfer v2", () => {
     expect(balance.balance).toBe(1000n);
   }, 30000);
 
-  it("test transfer with wallet", async () => {
+  it(`${name} - test transfer with wallet`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const { wallet: sdk } = await SparkWalletTesting.initialize({
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     const depositResp = await sdk.getSingleUseDepositAddress();

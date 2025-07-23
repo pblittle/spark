@@ -1577,7 +1577,7 @@ export class SparkWallet extends EventEmitter {
     const signingJob: SigningJob = {
       rawTx: tx.toBytes(),
       signingPublicKey: await this.config.signer.getStaticDepositSigningKey(0),
-      signingNonceCommitment: signingNonceCommitment,
+      signingNonceCommitment: signingNonceCommitment.commitment,
     };
 
     const message = await this.getStaticDepositSigningPayload(

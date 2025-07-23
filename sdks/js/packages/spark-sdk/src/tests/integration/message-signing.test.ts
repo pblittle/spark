@@ -1,6 +1,7 @@
+import { signerTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 
-describe("Message signing", () => {
+describe.each(signerTypes)("Message signing", ({ name, Signer }) => {
   let wallet1: SparkWalletTesting;
   let wallet2: SparkWalletTesting;
 
@@ -9,11 +10,13 @@ describe("Message signing", () => {
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
     const { wallet: newWallet2 } = await SparkWalletTesting.initialize({
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     wallet1 = newWallet;
@@ -25,7 +28,7 @@ describe("Message signing", () => {
     await wallet2?.cleanupConnections();
   });
 
-  it("should sign and validate messages", async () => {
+  it(`${name} - should sign and validate messages`, async () => {
     const message = "Hello, world!";
     const signature = await wallet1.signMessageWithIdentityKey(message);
     const isValid = await wallet1.validateMessageWithIdentityKey(
@@ -35,7 +38,7 @@ describe("Message signing", () => {
     expect(isValid).toBe(true);
   });
 
-  it("should sign and validate messages with compact encoding", async () => {
+  it(`${name} - should sign and validate messages with compact encoding`, async () => {
     const message = "Hello, world!";
     const signature = await wallet1.signMessageWithIdentityKey(message, true);
     const isValid = await wallet1.validateMessageWithIdentityKey(
@@ -45,14 +48,14 @@ describe("Message signing", () => {
     expect(isValid).toBe(true);
   });
 
-  it("compact encoding should be different from non-compact encoding", async () => {
+  it(`${name} - compact encoding should be different from non-compact encoding`, async () => {
     const message = "Hello, world!";
     const signature = await wallet1.signMessageWithIdentityKey(message, true);
     const signature2 = await wallet1.signMessageWithIdentityKey(message);
     expect(signature).not.toBe(signature2);
   });
 
-  it("should not validate messages signed by different keys", async () => {
+  it(`${name} - should not validate messages signed by different keys`, async () => {
     const message = "Hello, world!";
     const signature = await wallet1.signMessageWithIdentityKey(message);
     const isValid = await wallet2.validateMessageWithIdentityKey(
@@ -62,7 +65,7 @@ describe("Message signing", () => {
     expect(isValid).toBe(false);
   });
 
-  it("should not validate messages signed by different keys with compact encoding", async () => {
+  it(`${name} - should not validate messages signed by different keys with compact encoding`, async () => {
     const message = "Hello, world!";
     const signature = await wallet1.signMessageWithIdentityKey(message, true);
     const isValid = await wallet2.validateMessageWithIdentityKey(
@@ -72,7 +75,7 @@ describe("Message signing", () => {
     expect(isValid).toBe(false);
   });
 
-  it("should not validate if message is different", async () => {
+  it(`${name} - should not validate if message is different`, async () => {
     const message = "Hello, world!";
     const message2 = "Hello, world!2";
     const signature = await wallet1.signMessageWithIdentityKey(message);

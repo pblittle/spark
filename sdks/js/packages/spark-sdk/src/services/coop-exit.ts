@@ -157,7 +157,7 @@ export class CoopExitService extends BaseTransferService {
             leaf.keyDerivation,
           ),
           rawTx: refundTx.toBytes(),
-          signingNonceCommitment: signingNonceCommitment,
+          signingNonceCommitment: signingNonceCommitment.commitment,
         },
         // TODO: Add direct refund signature
         directRefundTxSigningJob: undefined,

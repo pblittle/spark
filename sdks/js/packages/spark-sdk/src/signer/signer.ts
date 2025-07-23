@@ -34,6 +34,7 @@ import {
 } from "../utils/signing.js";
 import {
   KeyDerivationType,
+  SigningCommitmentWithOptionalNonce,
   type AggregateFrostParams,
   type DerivedHDKey,
   type KeyDerivation,
@@ -359,7 +360,7 @@ interface SparkSigner extends TokenSigner {
 
   decryptEcies(ciphertext: Uint8Array): Promise<Uint8Array>;
 
-  getRandomSigningCommitment(): Promise<SigningCommitment>;
+  getRandomSigningCommitment(): Promise<SigningCommitmentWithOptionalNonce>;
 
   getDepositSigningKey(): Promise<Uint8Array>;
 }
@@ -624,7 +625,8 @@ class DefaultSparkSigner implements SparkSigner {
       });
     }
 
-    const nonce = this.commitmentToNonceMap.get(selfCommitment);
+    const commitment = selfCommitment.commitment;
+    const nonce = this.commitmentToNonceMap.get(commitment);
     if (!nonce) {
       throw new ValidationError("Nonce not found for commitment", {
         field: "nonce",
@@ -641,7 +643,7 @@ class DefaultSparkSigner implements SparkSigner {
       message,
       keyPackage,
       nonce,
-      selfCommitment,
+      selfCommitment: commitment,
       statechainCommitments,
       adaptorPubKey,
     });
@@ -670,7 +672,7 @@ class DefaultSparkSigner implements SparkSigner {
       statechainPublicKeys,
       verifyingKey,
       statechainCommitments,
-      selfCommitment,
+      selfCommitment: selfCommitment.commitment,
       selfPublicKey: publicKey,
       selfSignature,
       adaptorPubKey,
@@ -734,11 +736,13 @@ class DefaultSparkSigner implements SparkSigner {
     return publicKey;
   }
 
-  async getRandomSigningCommitment(): Promise<SigningCommitment> {
+  async getRandomSigningCommitment(): Promise<SigningCommitmentWithOptionalNonce> {
     const nonce = getRandomSigningNonce();
     const commitment = getSigningCommitmentFromNonce(nonce);
     this.commitmentToNonceMap.set(commitment, nonce);
-    return commitment;
+    return {
+      commitment,
+    };
   }
 
   async validateMessageWithIdentityKey(
@@ -820,6 +824,79 @@ class DefaultSparkSigner implements SparkSigner {
   }
 }
 
+/**
+ * StatelessSparkSigner is different from DefaultSparkSigner in that it does not store
+ * nonces in internal state. StatelessSparkSigner should only be used in a secure environment.
+ *
+ * @extends DefaultSparkSigner
+ */
+class UnsafeStatelessSparkSigner extends DefaultSparkSigner {
+  constructor({
+    sparkKeysGenerator,
+  }: { sparkKeysGenerator?: SparkKeysGenerator } = {}) {
+    super({
+      sparkKeysGenerator,
+    });
+  }
+
+  async getRandomSigningCommitment(): Promise<SigningCommitmentWithOptionalNonce> {
+    const nonce = getRandomSigningNonce();
+    const commitment = getSigningCommitmentFromNonce(nonce);
+    return {
+      commitment,
+      nonce,
+    };
+  }
+
+  async signFrost({
+    message,
+    keyDerivation,
+    publicKey,
+    verifyingKey,
+    selfCommitment,
+    statechainCommitments,
+    adaptorPubKey,
+  }: SignFrostParams): Promise<Uint8Array> {
+    const SparkFrost = await getSparkFrostModule();
+    if (!SparkFrost) {
+      throw new ValidationError("SparkFrost module not found", {
+        field: "SparkFrost",
+      });
+    }
+
+    const signingPrivateKey =
+      await this.getSigningPrivateKeyFromDerivation(keyDerivation);
+
+    if (!signingPrivateKey) {
+      throw new ValidationError("Private key not found for public key", {
+        field: "privateKey",
+      });
+    }
+
+    const { commitment, nonce } = selfCommitment;
+    if (!nonce) {
+      throw new ValidationError("Nonce not found for commitment", {
+        field: "nonce",
+      });
+    }
+
+    const keyPackage: IKeyPackage = {
+      secretKey: signingPrivateKey,
+      publicKey: publicKey,
+      verifyingKey: verifyingKey,
+    };
+
+    return SparkFrost.signFrost({
+      message,
+      keyPackage,
+      nonce,
+      selfCommitment: commitment,
+      statechainCommitments,
+      adaptorPubKey,
+    });
+  }
+}
+
 class TaprootSparkSigner extends DefaultSparkSigner {
   constructor(useAddressIndex = false) {
     super({
@@ -864,6 +941,7 @@ export {
   NativeSegwitSparkSigner,
   TaprootOutputKeysGenerator,
   TaprootSparkSigner,
+  UnsafeStatelessSparkSigner,
   WrappedSegwitSparkSigner,
   type SparkSigner,
   type TokenSigner,

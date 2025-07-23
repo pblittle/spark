@@ -3,15 +3,17 @@ import { Address, OutScript, Transaction } from "@scure/btc-signer";
 import { RPCError } from "../../errors/types.js";
 import { getTxId } from "../../utils/bitcoin.js";
 import { getNetwork, Network } from "../../utils/network.js";
+import { signerTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 
-describe("deposit", () => {
-  it("should generate a deposit address", async () => {
+describe.each(signerTypes)("deposit", ({ name, Signer }) => {
+  it(`${name} - should generate a deposit address`, async () => {
     const { wallet: sdk } = await SparkWalletTesting.initialize({
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     const depositAddress = await sdk.getSingleUseDepositAddress();
@@ -19,11 +21,12 @@ describe("deposit", () => {
     expect(depositAddress).toBeDefined();
   }, 30000);
 
-  it("should should query multiple deposit addresses", async () => {
+  it(`${name} - should should query multiple deposit addresses`, async () => {
     const { wallet: sdk } = await SparkWalletTesting.initialize({
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     for (let i = 0; i < 105; i++) {
@@ -35,11 +38,12 @@ describe("deposit", () => {
     expect(depositAddresses).toHaveLength(105);
   }, 30000);
 
-  it("should generate a staticdeposit address", async () => {
+  it(`${name} - should generate a staticdeposit address`, async () => {
     const { wallet: sdk } = await SparkWalletTesting.initialize({
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     const depositAddress = await sdk.getStaticDepositAddress();
@@ -56,13 +60,14 @@ describe("deposit", () => {
     expect(secondDepositAddress).toEqual(depositAddress);
   }, 30000);
 
-  it("should create a tree root", async () => {
+  it(`${name} - should create a tree root`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const { wallet: sdk } = await SparkWalletTesting.initialize({
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     const depositResp = await sdk.getSingleUseDepositAddress();
@@ -77,13 +82,14 @@ describe("deposit", () => {
     await sdk.claimDeposit(signedTx.id);
   }, 30000);
 
-  it("should restart wallet and recover signing private key", async () => {
+  it(`${name} - should restart wallet and recover signing private key`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const { wallet: sdk, mnemonic } = await SparkWalletTesting.initialize({
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     // Generate deposit address
@@ -102,18 +108,20 @@ describe("deposit", () => {
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     await newSdk.claimDeposit(signedTx.id);
   }, 30000);
 
-  it("should handle non-trusty deposit", async () => {
+  it(`${name} - should handle non-trusty deposit`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const { wallet: sdk } = await SparkWalletTesting.initialize({
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     const coin = await faucet.fund();
@@ -164,13 +172,14 @@ describe("deposit", () => {
     );
   }, 30000);
 
-  it("should handle single tx with multiple outputs to unused deposit addresses", async () => {
+  it(`${name} - should handle single tx with multiple outputs to unused deposit addresses`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const { wallet: sdk } = await SparkWalletTesting.initialize({
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     const coin = await faucet.fund();
@@ -232,8 +241,8 @@ describe("deposit", () => {
   }, 30000);
 });
 
-describe("refund static deposit", () => {
-  it("should refund a static deposit", async () => {
+describe.each(signerTypes)("refund static deposit", ({ name, Signer }) => {
+  it(`${name} - should refund a static deposit`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     await faucet.fund();
@@ -242,6 +251,7 @@ describe("refund static deposit", () => {
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     const depositAddress = await sdk.getStaticDepositAddress();

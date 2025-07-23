@@ -23,7 +23,8 @@ export class ReactNativeSparkSigner extends DefaultSparkSigner {
       });
     }
 
-    const nonce = this.commitmentToNonceMap.get(selfCommitment);
+    const commitment = selfCommitment.commitment;
+    const nonce = this.commitmentToNonceMap.get(commitment);
     if (!nonce) {
       throw new ValidationError("Nonce not found for commitment", {
         field: "nonce",
@@ -40,7 +41,7 @@ export class ReactNativeSparkSigner extends DefaultSparkSigner {
       message,
       keyPackage,
       nonce,
-      selfCommitment,
+      selfCommitment: commitment,
       statechainCommitments,
       adaptorPubKey,
     });
@@ -63,7 +64,7 @@ export class ReactNativeSparkSigner extends DefaultSparkSigner {
       statechainPublicKeys,
       verifyingKey,
       statechainCommitments,
-      selfCommitment,
+      selfCommitment: selfCommitment.commitment,
       selfPublicKey: publicKey,
       selfSignature,
       adaptorPubKey,

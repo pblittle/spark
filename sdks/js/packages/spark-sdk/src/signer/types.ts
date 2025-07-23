@@ -3,6 +3,11 @@ import type { ISigningCommitment } from "../spark_bindings/types.js";
 
 export { MultisigReceiptInput } from "@buildonspark/lrc20-sdk/lrc/types";
 
+export type SigningCommitmentWithOptionalNonce = {
+  commitment: SigningCommitment;
+  nonce?: SigningNonce;
+};
+
 export type SigningNonce = {
   binding: Uint8Array;
   hiding: Uint8Array;
@@ -33,7 +38,8 @@ export type SignFrostParams = {
   keyDerivation: KeyDerivation;
   publicKey: Uint8Array;
   verifyingKey: Uint8Array;
-  selfCommitment: ISigningCommitment;
+
+  selfCommitment: SigningCommitmentWithOptionalNonce;
   statechainCommitments?: { [key: string]: ISigningCommitment } | undefined;
   adaptorPubKey?: Uint8Array | undefined;
 };

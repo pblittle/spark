@@ -99,7 +99,7 @@ export class SigningService {
           leaf.keyDerivation,
         ),
         rawTx: refundTx.toBytes(),
-        signingNonceCommitment: signingCommitment,
+        signingNonceCommitment: signingCommitment.commitment,
         userSignature: signingResult,
         signingCommitments: {
           signingCommitments: signingNonceCommitments,

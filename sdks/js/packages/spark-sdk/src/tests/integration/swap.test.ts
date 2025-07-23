@@ -17,15 +17,15 @@ import {
   computeTaprootKeyNoScript,
   getSigHashFromTx,
 } from "../../utils/bitcoin.js";
-import { createNewTree } from "../test-utils.js";
+import { createNewTree, signerTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 
 const testLocalOnly = process.env.GITHUB_ACTIONS ? it.skip : it;
 
-describe("swap", () => {
+describe.each(signerTypes)("swap", ({ name, Signer }) => {
   testLocalOnly(
-    "test swap",
+    `${name} - test swap`,
     async () => {
       const faucet = BitcoinFaucet.getInstance();
       // Initiate sender
@@ -33,6 +33,7 @@ describe("swap", () => {
         options: {
           network: "LOCAL",
         },
+        signer: new Signer(),
       });
       const senderPubkey = await senderWallet.getIdentityPublicKey();
 
@@ -55,6 +56,7 @@ describe("swap", () => {
         options: {
           network: "LOCAL",
         },
+        signer: new Signer(),
       });
       const receiverPubkey = await receiverWallet.getIdentityPublicKey();
 
@@ -274,7 +276,7 @@ describe("swap", () => {
   );
 
   testLocalOnly(
-    "test swap v2",
+    `${name} - test swap v2`,
     async () => {
       const faucet = BitcoinFaucet.getInstance();
       // Initiate sender
@@ -282,6 +284,7 @@ describe("swap", () => {
         options: {
           network: "LOCAL",
         },
+        signer: new Signer(),
       });
       const senderPubkey = await senderWallet.getIdentityPublicKey();
 
@@ -304,6 +307,7 @@ describe("swap", () => {
         options: {
           network: "LOCAL",
         },
+        signer: new Signer(),
       });
       const receiverPubkey = await receiverWallet.getIdentityPublicKey();
 

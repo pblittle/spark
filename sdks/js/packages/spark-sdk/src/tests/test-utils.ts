@@ -1,7 +1,11 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { Address, OutScript, Transaction } from "@scure/btc-signer";
 import { RPCError } from "../errors/types.js";
-import { KeyDerivationType } from "../index.js";
+import {
+  DefaultSparkSigner,
+  KeyDerivationType,
+  UnsafeStatelessSparkSigner,
+} from "../index.js";
 import { TreeNode } from "../proto/spark.js";
 import { WalletConfigService } from "../services/config.js";
 import { ConnectionManager } from "../services/connection.js";
@@ -102,3 +106,8 @@ export async function createNewTree(
   await new Promise((resolve) => setTimeout(resolve, 100));
   return treeResp.nodes[0]!;
 }
+
+export const signerTypes = [
+  { name: "DefaultSparkSigner", Signer: DefaultSparkSigner },
+  { name: "UnsafeStatelessSparkSigner", Signer: UnsafeStatelessSparkSigner },
+];

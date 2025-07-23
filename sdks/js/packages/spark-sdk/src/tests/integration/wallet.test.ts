@@ -1,10 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
 import { ConfigOptions } from "../../services/wallet-config.js";
 import { NetworkType } from "../../utils/network.js";
+import { signerTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 
-describe("wallet", () => {
-  it("should initialize a wallet", async () => {
+describe.each(signerTypes)("wallet", ({ name, Signer }) => {
+  it(`${name} - should initialize a wallet`, async () => {
     const seedOrMnemonics = [
       "wear cattle behind affair parade error luxury profit just rate arch cigar",
       "logic ripple layer execute smart disease marine hero monster talent crucial unfair horror shadow maze abuse avoid story loop jaguar sphere trap decrease turn",
@@ -21,13 +22,14 @@ describe("wallet", () => {
         const { wallet, ...rest } = await SparkWalletTesting.initialize({
           mnemonicOrSeed: seedOrMnemonic,
           options,
+          signer: new Signer(),
         });
         expect(wallet).toBeDefined();
       }
     }
   }, 30000);
 
-  it("should initialize wallets with different identity keys for different account numbers with the same mnemonic", async () => {
+  it(`${name} - should initialize wallets with different identity keys for different account numbers with the same mnemonic`, async () => {
     const seedOrMnemonics =
       "wear cattle behind affair parade error luxury profit just rate arch cigar";
 
@@ -39,6 +41,7 @@ describe("wallet", () => {
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
     const { wallet: accountEleven } = await SparkWalletTesting.initialize({
       mnemonicOrSeed: seedOrMnemonics,
@@ -46,6 +49,7 @@ describe("wallet", () => {
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     const accountTenIdentityKey = await accountTen.getIdentityPublicKey();
@@ -53,7 +57,7 @@ describe("wallet", () => {
     expect(accountTenIdentityKey).not.toEqual(accountElevenIdentityKey);
   });
 
-  it("should not initialize a wallet with an invalid seed or mnemonic", async () => {
+  it(`${name} - should not initialize a wallet with an invalid seed or mnemonic`, async () => {
     const seedOrMnemonics = [
       "wear cattle behind affair parade error luxury profit just rate arch",
       "jot jot jot jot",
@@ -69,6 +73,7 @@ describe("wallet", () => {
         SparkWalletTesting.initialize({
           mnemonicOrSeed: seedOrMnemonic,
           options,
+          signer: new Signer(),
         }),
       ).rejects.toThrow();
     }

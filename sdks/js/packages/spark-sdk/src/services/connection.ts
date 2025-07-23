@@ -7,7 +7,7 @@ import type {
   Channel as ChannelWeb,
   ClientFactory as ClientFactoryWeb,
 } from "nice-grpc-web";
-import { isBun, isReactNative, clientEnv } from "../constants.js";
+import { clientEnv, isBun, isReactNative } from "../constants.js";
 import { AuthenticationError, NetworkError } from "../errors/types.js";
 import { MockServiceClient, MockServiceDefinition } from "../proto/mock.js";
 import { SparkServiceClient, SparkServiceDefinition } from "../proto/spark.js";
@@ -16,12 +16,12 @@ import {
   SparkAuthnServiceClient,
   SparkAuthnServiceDefinition,
 } from "../proto/spark_authn.js";
-import { RetryOptions, SparkCallOptions } from "../types/grpc.js";
-import { WalletConfigService } from "./config.js";
 import {
   SparkTokenServiceClient,
   SparkTokenServiceDefinition,
 } from "../proto/spark_token.js";
+import { RetryOptions, SparkCallOptions } from "../types/grpc.js";
+import { WalletConfigService } from "./config.js";
 
 type SparkAuthnServiceClientWithClose = SparkAuthnServiceClient & {
   close?: () => void;

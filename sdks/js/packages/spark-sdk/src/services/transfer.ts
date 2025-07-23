@@ -39,7 +39,7 @@ import {
 import {
   KeyDerivation,
   KeyDerivationType,
-  type SigningCommitment,
+  SigningCommitmentWithOptionalNonce,
 } from "../signer/types.js";
 import {
   getSigHashFromTx,
@@ -77,7 +77,7 @@ export type ClaimLeafData = {
   keyDerivation: KeyDerivation;
   tx?: Transaction;
   refundTx?: Transaction;
-  signingNonceCommitment: SigningCommitment;
+  signingNonceCommitment: SigningCommitmentWithOptionalNonce;
   vout?: number;
 };
 
@@ -86,9 +86,25 @@ export type LeafRefundSigningData = {
   receivingPubkey: Uint8Array;
   tx: Transaction;
   refundTx?: Transaction;
-  signingNonceCommitment: SigningCommitment;
+  signingNonceCommitment: SigningCommitmentWithOptionalNonce;
   vout: number;
 };
+
+export type SigningJobWithOptionalNonce = {
+  signingPublicKey: Uint8Array;
+  rawTx: Uint8Array;
+  signingNonceCommitment: SigningCommitmentWithOptionalNonce;
+};
+
+function getSigningJobProto(
+  signingJob: SigningJobWithOptionalNonce,
+): SigningJob {
+  return {
+    signingPublicKey: signingJob.signingPublicKey,
+    rawTx: signingJob.rawTx,
+    signingNonceCommitment: signingJob.signingNonceCommitment.commitment,
+  };
+}
 
 export class BaseTransferService {
   protected readonly config: WalletConfigService;
@@ -943,7 +959,7 @@ export class TransferService extends BaseTransferService {
             refundSigningData.keyDerivation,
           ),
           rawTx: refundTx.toBytes(),
-          signingNonceCommitment: refundNonceCommitmentProto,
+          signingNonceCommitment: refundNonceCommitmentProto.commitment,
         },
         // TODO: Add direct refund signature
         directRefundTxSigningJob: undefined,
@@ -1212,7 +1228,7 @@ export class TransferService extends BaseTransferService {
       throw Error("no nodes to refresh");
     }
 
-    const signingJobs: SigningJob[] = [];
+    const signingJobs: SigningJobWithOptionalNonce[] = [];
     const newNodeTxs: Transaction[] = [];
 
     for (let i = 0; i < nodes.length; i++) {
@@ -1337,7 +1353,7 @@ export class TransferService extends BaseTransferService {
     const response = await sparkClient.refresh_timelock({
       leafId: leaf.id,
       ownerIdentityPublicKey: await this.config.signer.getIdentityPublicKey(),
-      signingJobs,
+      signingJobs: signingJobs.map(getSigningJobProto),
     });
 
     if (signingJobs.length !== response.signingResults.length) {
@@ -1540,8 +1556,8 @@ export class TransferService extends BaseTransferService {
     const response = await sparkClient.extend_leaf({
       leafId: node.id,
       ownerIdentityPublicKey: await this.config.signer.getIdentityPublicKey(),
-      nodeTxSigningJob: newNodeSigningJob,
-      refundTxSigningJob: newRefundSigningJob,
+      nodeTxSigningJob: getSigningJobProto(newNodeSigningJob),
+      refundTxSigningJob: getSigningJobProto(newRefundSigningJob),
     });
 
     if (!response.nodeTxSigningResult || !response.refundTxSigningResult) {
@@ -1678,7 +1694,7 @@ export class TransferService extends BaseTransferService {
     const response = await sparkClient.refresh_timelock({
       leafId: node.id,
       ownerIdentityPublicKey: await this.config.signer.getIdentityPublicKey(),
-      signingJobs: [refundSigningJob],
+      signingJobs: [getSigningJobProto(refundSigningJob)],
     });
 
     if (response.signingResults.length !== 1) {

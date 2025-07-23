@@ -19,14 +19,14 @@ import {
   getTxIdNoReverse,
 } from "../../utils/bitcoin.js";
 import { getNetwork, Network } from "../../utils/network.js";
-import { createNewTree } from "../test-utils.js";
+import { createNewTree, signerTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 
 import { KeyDerivation, KeyDerivationType } from "../../index.js";
 import { TransferStatus } from "../../proto/spark.js";
-describe("coop exit", () => {
-  it("test coop exit", async () => {
+describe.each(signerTypes)("coop exit", ({ name, Signer }) => {
+  it(`${name} - test coop exit`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const faucetCoin = await faucet.fund();
@@ -40,6 +40,7 @@ describe("coop exit", () => {
     // Setup user with leaves
     const { wallet: userWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
 
     const configService = new WalletConfigService(
@@ -65,6 +66,7 @@ describe("coop exit", () => {
     // Setup ssp
     const { wallet: sspWallet } = await SparkWalletTesting.initialize({
       options,
+      signer: new Signer(),
     });
     const sspPubkey = await sspWallet.getIdentityPublicKey();
 

@@ -17,7 +17,11 @@ import {
   CurrencyUnit,
   LightningReceiveRequestStatus,
 } from "../../types/index.js";
-import { createNewTree, getTestWalletConfig } from "../test-utils.js";
+import {
+  createNewTree,
+  getTestWalletConfig,
+  signerTypes,
+} from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 
@@ -68,7 +72,7 @@ const fakeInvoiceCreator = async (): Promise<LightningReceiveRequest> => {
   };
 };
 
-describe("LightningService", () => {
+describe.each(signerTypes)("LightningService", ({ name, Signer }) => {
   let userWallet: SparkWalletTesting;
   let userConfig: WalletConfigService;
   let lightningService: LightningService;
@@ -86,6 +90,7 @@ describe("LightningService", () => {
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     userWallet = wallet1;
@@ -113,6 +118,7 @@ describe("LightningService", () => {
       options: {
         network: "LOCAL",
       },
+      signer: new Signer(),
     });
 
     sspWallet = wallet2;
@@ -140,7 +146,7 @@ describe("LightningService", () => {
     await cleanUp();
   });
 
-  it("should create an invoice", async () => {
+  it(`${name} - should create an invoice`, async () => {
     const preimage = hexToBytes(
       "2d059c3ede82a107aa1452c0bea47759be3c5c6e5342be6a310f6c3a907d9f4c",
     );
@@ -155,7 +161,7 @@ describe("LightningService", () => {
     expect(invoice).toBeDefined();
   });
 
-  it("test receive lightning payment", async () => {
+  it(`${name} - test receive lightning payment`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const preimage = hexToBytes(
@@ -255,7 +261,7 @@ describe("LightningService", () => {
     await transferService.claimTransfer(receiverTransfer!, claimingNodes);
   }, 60000);
 
-  it("test receive lightning v2 payment", async () => {
+  it(`${name} - test receive lightning v2 payment`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const preimage = hexToBytes(
@@ -354,7 +360,7 @@ describe("LightningService", () => {
     await transferService.claimTransfer(receiverTransfer!, claimingNodes);
   }, 60000);
 
-  it("test send lightning payment", async () => {
+  it(`${name} - test send lightning payment`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const preimage = hexToBytes(
@@ -450,7 +456,7 @@ describe("LightningService", () => {
     await sspTransferService.claimTransfer(receiverTransfer, claimingNodes);
   }, 60000);
 
-  it("test send lightning v2 payment", async () => {
+  it(`${name} - test send lightning v2 payment`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const preimage = hexToBytes(

@@ -15,7 +15,10 @@ import {
   SigningJob,
   TreeNode,
 } from "../proto/spark.js";
-import { KeyDerivationType, SigningCommitment } from "../signer/types.js";
+import {
+  KeyDerivationType,
+  SigningCommitmentWithOptionalNonce,
+} from "../signer/types.js";
 import {
   getP2TRAddressFromPublicKey,
   getSigHashFromTx,
@@ -38,8 +41,8 @@ export type DepositAddressTree = {
 };
 
 export type CreationNodeWithNonces = CreationNode & {
-  nodeTxSigningCommitment?: SigningCommitment | undefined;
-  refundTxSigningCommitment?: SigningCommitment | undefined;
+  nodeTxSigningCommitment?: SigningCommitmentWithOptionalNonce | undefined;
+  refundTxSigningCommitment?: SigningCommitmentWithOptionalNonce | undefined;
 };
 
 const INITIAL_TIME_LOCK = 2000;
@@ -345,7 +348,7 @@ export class TreeCreationService {
     const signingJob: SigningJob = {
       signingPublicKey: node.signingPublicKey,
       rawTx: tx.toBytes(),
-      signingNonceCommitment: signingNonceCommitment,
+      signingNonceCommitment: signingNonceCommitment.commitment,
     };
 
     internalCreationNode.nodeTxSigningCommitment = signingNonceCommitment;
@@ -382,7 +385,7 @@ export class TreeCreationService {
     const childSigningJob: SigningJob = {
       signingPublicKey: node.signingPublicKey,
       rawTx: childTx.toBytes(),
-      signingNonceCommitment: childSigningNonceCommitment,
+      signingNonceCommitment: childSigningNonceCommitment.commitment,
     };
 
     childCreationNode.nodeTxSigningCommitment = childSigningNonceCommitment;
@@ -416,7 +419,7 @@ export class TreeCreationService {
     const refundSigningJob: SigningJob = {
       signingPublicKey: node.signingPublicKey,
       rawTx: refundTx.toBytes(),
-      signingNonceCommitment: refundSigningNonceCommitment,
+      signingNonceCommitment: refundSigningNonceCommitment.commitment,
     };
     childCreationNode.refundTxSigningCommitment = refundSigningNonceCommitment;
     childCreationNode.refundTxSigningJob = refundSigningJob;
@@ -466,7 +469,7 @@ export class TreeCreationService {
     const rootNodeSigningJob: SigningJob = {
       signingPublicKey: root.signingPublicKey,
       rawTx: rootNodeTx.toBytes(),
-      signingNonceCommitment: rootNodeSigningCommitment,
+      signingNonceCommitment: rootNodeSigningCommitment.commitment,
     };
     const rootCreationNode: CreationNodeWithNonces = {
       nodeTxSigningJob: rootNodeSigningJob,

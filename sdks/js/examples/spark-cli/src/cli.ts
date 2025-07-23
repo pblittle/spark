@@ -1,5 +1,6 @@
 import { IssuerSparkWallet } from "@buildonspark/issuer-sdk";
 import {
+  Bech32mTokenIdentifier,
   ConfigOptions,
   constructUnilateralExitFeeBumpPackages,
   decodeSparkAddress,
@@ -9,12 +10,11 @@ import {
   getNetwork,
   getP2TRScriptFromPublicKey,
   getP2WPKHAddressFromPublicKey,
-  Bech32mTokenIdentifier,
   isEphemeralAnchorOutput,
   Network,
   NetworkType,
-  WalletConfig,
   protoToNetwork,
+  WalletConfig,
 } from "@buildonspark/spark-sdk";
 import {
   TokenTransactionStatus,
@@ -872,6 +872,7 @@ async function runCLI() {
             ...config,
             network,
           };
+
           try {
             const { wallet: newWallet, mnemonic: newMnemonic } =
               await IssuerSparkWallet.initialize({

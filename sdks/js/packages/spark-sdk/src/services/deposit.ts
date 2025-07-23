@@ -280,12 +280,12 @@ export class DepositService {
         rootTxSigningJob: {
           rawTx: rootTx.toBytes(),
           signingPublicKey: signingPubKey,
-          signingNonceCommitment: rootNonceCommitment,
+          signingNonceCommitment: rootNonceCommitment.commitment,
         },
         refundTxSigningJob: {
           rawTx: refundTx.toBytes(),
           signingPublicKey: signingPubKey,
-          signingNonceCommitment: refundNonceCommitment,
+          signingNonceCommitment: refundNonceCommitment.commitment,
         },
       });
     } catch (error) {
