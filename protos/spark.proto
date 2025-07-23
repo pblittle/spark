@@ -102,6 +102,7 @@ service SparkService {
     rpc start_leaf_swap_v2(StartTransferRequest) returns (StartTransferResponse) {}
     rpc counter_leaf_swap_v2(CounterLeafSwapRequest) returns (CounterLeafSwapResponse) {}
     rpc start_transfer_v2(StartTransferRequest) returns (StartTransferResponse) {}
+    rpc refresh_timelock_v2(RefreshTimelockRequest) returns (RefreshTimelockResponse) {}
 }
 
 message SubscribeToEventsRequest {
