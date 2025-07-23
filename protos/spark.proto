@@ -96,6 +96,7 @@ service SparkService {
     rpc create_tree_v2(CreateTreeRequest) returns (CreateTreeResponse) {}
     rpc cooperative_exit_v2(CooperativeExitRequest) returns (CooperativeExitResponse) {}
     rpc extend_leaf_v2(ExtendLeafRequest) returns (ExtendLeafResponse) {}
+    rpc claim_transfer_sign_refunds_v2(ClaimTransferSignRefundsRequest) returns (ClaimTransferSignRefundsResponse) {}
 }
 
 message SubscribeToEventsRequest {
