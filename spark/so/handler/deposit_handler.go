@@ -24,6 +24,7 @@ import (
 	"github.com/lightsparkdev/spark/so/errors"
 	"github.com/lightsparkdev/spark/so/helper"
 	"github.com/lightsparkdev/spark/so/objects"
+	"github.com/lightsparkdev/spark/so/utils"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 )
@@ -43,6 +44,7 @@ func NewDepositHandler(config *so.Config) *DepositHandler {
 }
 
 // GenerateDepositAddress generates a deposit address for the given public key.
+// The address string is generated using provided network field in the request.
 func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.Config, req *pb.GenerateDepositAddressRequest) (*pb.GenerateDepositAddressResponse, error) {
 	ctx, span := tracer.Start(ctx, "DepositHandler.GenerateDepositAddress")
 	defer span.End()
@@ -59,21 +61,24 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 		return nil, err
 	}
 
-	// TODO(LPT-385): remove when we have a way to support multiple static deposit addresses per identity.
+	// TODO(LIG-8000): remove when we have a way to support multiple static deposit addresses per (identity, network).
 	if req.IsStatic != nil && *req.IsStatic {
 		db, err := ent.GetDbFromContext(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
 		}
-		depositAddress, err := db.DepositAddress.Query().
+		depositAddresses, err := db.DepositAddress.Query().
 			Where(depositaddress.OwnerIdentityPubkey(req.IdentityPublicKey)).
 			Where(depositaddress.IsStatic(true)).
-			Only(ctx)
-		if err != nil && !ent.IsNotFound(err) {
+			All(ctx)
+		if err != nil {
 			return nil, err
 		}
-		if depositAddress != nil {
-			return nil, fmt.Errorf("static deposit address already exists: %s", depositAddress.Address)
+		// Find if there is already a static deposit address for this identity and network.
+		for _, depositAddress := range depositAddresses {
+			if utils.IsBitcoinAddressForNetwork(depositAddress.Address, network) {
+				return nil, fmt.Errorf("static deposit address already exists: %s", depositAddress.Address)
+			}
 		}
 	}
 

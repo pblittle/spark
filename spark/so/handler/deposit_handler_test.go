@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common"
+	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
@@ -155,5 +158,116 @@ func TestVerifiedTargetUtxo(t *testing.T) {
 		_, err = VerifiedTargetUtxo(ctx, config, tx, st.NetworkRegtest, []byte("test_txid2"), 1)
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "deposit tx doesn't have enough confirmations")
+	})
+}
+
+func TestGenerateDepositAddress(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	defer dbCtx.Close()
+
+	// Generate valid secp256k1 keys for testing
+	testIdentityPrivKey, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	testIdentityPubKey := testIdentityPrivKey.PubKey().SerializeCompressed()
+
+	testSigningPrivKey, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	testSigningPubKey := testSigningPrivKey.PubKey().SerializeCompressed()
+
+	// Setup test configuration using supported networks
+	config := &so.Config{
+		SupportedNetworks: []common.Network{
+			common.Regtest,
+			common.Mainnet,
+		},
+		SigningOperatorMap: map[string]*so.SigningOperator{},
+		BitcoindConfigs: map[string]so.BitcoindConfig{
+			"regtest": {
+				DepositConfirmationThreshold: 1,
+			},
+		},
+	}
+
+	handler := NewDepositHandler(config)
+
+	t.Run("prevent duplicate static deposit address for same identity", func(t *testing.T) {
+		tx, err := ent.GetDbFromContext(ctx)
+		require.NoError(t, err)
+
+		// Generate valid secp256k1 operator public key
+		operatorPrivKey2, err := secp256k1.GeneratePrivateKey()
+		require.NoError(t, err)
+		operatorPubKey2 := operatorPrivKey2.PubKey().SerializeCompressed()
+
+		// Create a signing keyshare
+		signingKeyshare, err := tx.SigningKeyshare.Create().
+			SetStatus(st.KeyshareStatusAvailable).
+			SetSecretShare([]byte("test_secret_share_2")).
+			SetPublicShares(map[string][]byte{"test": []byte("test_public_share_2")}).
+			SetPublicKey(operatorPubKey2).
+			SetMinSigners(2).
+			SetCoordinatorIndex(0).
+			Save(ctx)
+		require.NoError(t, err)
+
+		// Create an existing static deposit address
+		existingAddress, err := tx.DepositAddress.Create().
+			SetAddress("bcrt1p52zf7gf7pvhvpsje2z0uzcr8nhdd79lund68qaea54kprnxcsdqqt2jz6e").
+			SetOwnerIdentityPubkey(testIdentityPubKey).
+			SetOwnerSigningPubkey(testSigningPubKey).
+			SetSigningKeyshare(signingKeyshare).
+			SetIsStatic(true).
+			Save(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, existingAddress)
+
+		testConfig := &so.Config{
+			SupportedNetworks: []common.Network{
+				common.Regtest,
+			},
+			SigningOperatorMap: map[string]*so.SigningOperator{},
+		}
+
+		isStatic := true
+		req := &pb.GenerateDepositAddressRequest{
+			SigningPublicKey:  testSigningPubKey,
+			IdentityPublicKey: testIdentityPubKey,
+			Network:           pb.Network_REGTEST,
+			IsStatic:          &isStatic,
+		}
+
+		_, err = handler.GenerateDepositAddress(ctx, testConfig, req)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "static deposit address already exists: bcrt1p")
+		previousError := err.Error()
+		_, err = handler.GenerateDepositAddress(ctx, testConfig, req)
+		require.Error(t, err)
+		require.Equal(t, previousError, err.Error())
+	})
+
+	t.Run("allow static deposit address for same identity on different network", func(t *testing.T) {
+		testConfig := &so.Config{
+			SupportedNetworks: []common.Network{
+				common.Regtest,
+				common.Mainnet,
+			},
+			SigningOperatorMap: map[string]*so.SigningOperator{},
+		}
+
+		isStatic := true
+		req := &pb.GenerateDepositAddressRequest{
+			SigningPublicKey:  testSigningPubKey,
+			IdentityPublicKey: testIdentityPubKey,
+			Network:           pb.Network_MAINNET,
+			IsStatic:          &isStatic,
+		}
+
+		// Testing that the handler tries to create a new address
+		_, err = handler.GenerateDepositAddress(ctx, testConfig, req)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "sql: SELECT .. FOR UPDATE/SHARE not supported in SQLite")
 	})
 }
