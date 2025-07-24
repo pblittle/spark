@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package gossip;
+
+option go_package = "github.com/lightsparkdev/spark/proto/gossip";
+import "spark.proto";
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+import "spark_internal.proto";
+import "google/protobuf/empty.proto";
+
+service GossipService {
+    rpc gossip(GossipMessage) returns (google.protobuf.Empty);
+}
+message GossipMessage {
+    string message_id = 1;
+    reserved 3;
+    oneof message {
+        GossipMessageCancelTransfer cancel_transfer = 2;
+        GossipMessageSettleSenderKeyTweak settle_sender_key_tweak = 4;
+        GossipMessageRollbackTransfer rollback_transfer = 5;
+        GossipMessageMarkTreesExited mark_trees_exited = 6;
+        GossipMessageFinalizeTreeCreation finalize_tree_creation = 7;
+        GossipMessageFinalizeTransfer finalize_transfer = 8;
+        GossipMessageFinalizeRefreshTimelock finalize_refresh_timelock = 9;
+        GossipMessageFinalizeExtendLeaf finalize_extend_leaf = 10;
+    }
+}
+
+message GossipMessageCancelTransfer {
+    string transfer_id = 1;
+}
+
+// Rolling back a transfer reverts it to its initial state. Only transfers that
+// have not been key-tweaked by the sender are eligible for rollback.
+message GossipMessageRollbackTransfer {
+    string transfer_id = 1;
+}
+
+
+message GossipMessageSettleSenderKeyTweak {
+    string transfer_id = 1;
+    // The key tweak proofs for the leaves that this message is to commit.
+    // This is a safe guard to ensure that we can detect mismatch key tweaks, but if the proofs
+    // don't match, there's no way to recover at this point.
+    map<string, spark.SecretProof> sender_key_tweak_proofs = 2;
+}
+
+message GossipMessageMarkTreesExited {
+    repeated string tree_ids = 1;
+}
+
+message GossipMessageFinalizeTreeCreation {
+    repeated spark_internal.TreeNode internal_nodes = 1;
+    spark.Network proto_network = 2;
+}
+
+message GossipMessageFinalizeTransfer {
+    string transfer_id = 1;
+    repeated spark_internal.TreeNode internal_nodes = 2;
+    google.protobuf.Timestamp completion_timestamp = 3;
+}
+
+message GossipMessageFinalizeRefreshTimelock {
+    repeated spark_internal.TreeNode internal_nodes = 1;
+}
+
+message GossipMessageFinalizeExtendLeaf {
+    repeated spark_internal.TreeNode internal_nodes = 1;
+}

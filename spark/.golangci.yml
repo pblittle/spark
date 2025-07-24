@@ -1,0 +1,45 @@
+version: "2"
+linters:
+  enable:
+    - depguard
+    - revive
+    - staticcheck
+    - exhaustive
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+  settings:
+    depguard:
+      rules:
+        logging:
+          list-mode: lax
+          files:
+            - "$all"
+            - "!$test"
+            - "!**/wallet/**.go"
+            - "!**/test_util/**.go"
+          deny:
+            - pkg: "log$"
+              desc: "use logging.GetLoggerFromContext() or slog.Default()"
+    revive:
+      # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#context-as-argument
+      rules:
+        - name: context-as-argument
+          arguments:
+            - allowTypesBefore: "*testing.T,*testing.B,testing.TB,github.com/lightsparkdev/spark/so/ent/enttest.TestingT,enttest.TestingT"
+    errcheck:
+      exclude-functions:
+        - (*google.golang.org/grpc.ClientConn).Close
+        - (*database/sql.DB).Close
+        - (*github.com/lightsparkdev/spark/so/ent.Client).Close
+    staticcheck:
+      checks:
+        - "-SA1019"
+    exhaustive:
+      default-signifies-exhaustive: true
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax

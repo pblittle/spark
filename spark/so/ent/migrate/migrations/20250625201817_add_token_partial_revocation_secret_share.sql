@@ -1,0 +1,4 @@
+-- Create "token_partial_revocation_secret_shares" table
+CREATE TABLE "token_partial_revocation_secret_shares" ("id" uuid NOT NULL, "create_time" timestamptz NOT NULL, "update_time" timestamptz NOT NULL, "operator_identity_public_key" bytea NOT NULL, "secret_share" bytea NOT NULL, "token_output_token_partial_revocation_secret_shares" uuid NOT NULL, PRIMARY KEY ("id"), CONSTRAINT "token_partial_revocation_secre_cc26902a582ad443d7299dc87ee6ac65" FOREIGN KEY ("token_output_token_partial_revocation_secret_shares") REFERENCES "token_outputs" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION);
+-- Create index "tokenpartialrevocationsecretsh_14fd7bd864db07baaaa6ead36b6d5689" to table: "token_partial_revocation_secret_shares"
+CREATE UNIQUE INDEX "tokenpartialrevocationsecretsh_14fd7bd864db07baaaa6ead36b6d5689" ON "token_partial_revocation_secret_shares" ("operator_identity_public_key", "token_output_token_partial_revocation_secret_shares");
