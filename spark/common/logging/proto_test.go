@@ -2,7 +2,7 @@ package logging
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -75,10 +75,10 @@ func TestProtoWithRedactedFields(t *testing.T) {
 	assert.JSONEq(t, expected, formatted)
 }
 
+var seededRand = rand.ChaCha8{}
+
 func randomBytes(n int) []byte {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = byte(rand.Intn(256))
-	}
-	return b
+	bytes := make([]byte, n)
+	_, _ = seededRand.Read(bytes)
+	return bytes
 }
