@@ -481,72 +481,67 @@ describe.each(TEST_CONFIGS)(
       });
     });
 
-    // freeze is hardcoded to mainnet
-    brokenTestFn(
-      "should create, mint, freeze and unfreeze tokens",
-      async () => {
-        const tokenAmount: bigint = 1000n;
-        const { wallet: issuerWallet } =
-          await IssuerSparkWalletTesting.initialize({
-            options: config,
-          });
-
-        await issuerWallet.createToken({
-          tokenName: `${name}FRZ`,
-          tokenTicker: "FRZ",
-          decimals: 0,
-          isFreezable: true,
-          maxSupply: 100000n,
-        });
-        await issuerWallet.mintTokens(tokenAmount);
-
-        // Check issuer balance after minting
-        const issuerBalanceObjAfterMint =
-          await issuerWallet.getIssuerTokenBalance();
-        expect(issuerBalanceObjAfterMint).toBeDefined();
-        expect(issuerBalanceObjAfterMint.tokenIdentifier).toBeDefined();
-
-        const issuerBalanceAfterMint = issuerBalanceObjAfterMint.balance;
-        const tokenIdentifier = issuerBalanceObjAfterMint.tokenIdentifier!;
-
-        expect(issuerBalanceAfterMint).toEqual(tokenAmount);
-
-        const { wallet: userWallet } = await SparkWalletTesting.initialize({
+    it("should create, mint, freeze and unfreeze tokens", async () => {
+      const tokenAmount: bigint = 1000n;
+      const { wallet: issuerWallet } =
+        await IssuerSparkWalletTesting.initialize({
           options: config,
         });
-        const userWalletPublicKey = await userWallet.getSparkAddress();
 
-        await issuerWallet.transferTokens({
-          tokenAmount,
-          tokenIdentifier,
-          receiverSparkAddress: userWalletPublicKey,
-        });
-        const issuerBalanceAfterTransfer = (
-          await issuerWallet.getIssuerTokenBalance()
-        ).balance;
-        expect(issuerBalanceAfterTransfer).toEqual(0n);
+      await issuerWallet.createToken({
+        tokenName: `${name}FRZ`,
+        tokenTicker: "FRZ",
+        decimals: 0,
+        isFreezable: true,
+        maxSupply: 100000n,
+      });
+      await issuerWallet.mintTokens(tokenAmount);
 
-        const tokenPublicKey = await issuerWallet.getIdentityPublicKey();
-        const userBalanceObj = await userWallet.getBalance();
-        const userBalanceAfterTransfer = filterTokenBalanceForTokenPublicKey(
-          userBalanceObj?.tokenBalances,
-          tokenPublicKey,
-        );
-        expect(userBalanceAfterTransfer.balance).toEqual(tokenAmount);
+      // Check issuer balance after minting
+      const issuerBalanceObjAfterMint =
+        await issuerWallet.getIssuerTokenBalance();
+      expect(issuerBalanceObjAfterMint).toBeDefined();
+      expect(issuerBalanceObjAfterMint.tokenIdentifier).toBeDefined();
 
-        // Freeze tokens
-        const freezeResponse =
-          await issuerWallet.freezeTokens(userWalletPublicKey);
-        expect(freezeResponse.impactedOutputIds.length).toBeGreaterThan(0);
-        expect(freezeResponse.impactedTokenAmount).toEqual(tokenAmount);
+      const issuerBalanceAfterMint = issuerBalanceObjAfterMint.balance;
+      const tokenIdentifier = issuerBalanceObjAfterMint.tokenIdentifier!;
 
-        // Unfreeze tokens
-        const unfreezeResponse =
-          await issuerWallet.unfreezeTokens(userWalletPublicKey);
-        expect(unfreezeResponse.impactedOutputIds.length).toBeGreaterThan(0);
-        expect(unfreezeResponse.impactedTokenAmount).toEqual(tokenAmount);
-      },
-    );
+      expect(issuerBalanceAfterMint).toEqual(tokenAmount);
+
+      const { wallet: userWallet } = await SparkWalletTesting.initialize({
+        options: config,
+      });
+      const userSparkAddress = await userWallet.getSparkAddress();
+
+      await issuerWallet.transferTokens({
+        tokenAmount,
+        tokenIdentifier,
+        receiverSparkAddress: userSparkAddress,
+      });
+      const issuerBalanceAfterTransfer = (
+        await issuerWallet.getIssuerTokenBalance()
+      ).balance;
+      expect(issuerBalanceAfterTransfer).toEqual(0n);
+
+      const tokenPublicKey = await issuerWallet.getIdentityPublicKey();
+      const userBalanceObj = await userWallet.getBalance();
+      const userBalanceAfterTransfer = filterTokenBalanceForTokenPublicKey(
+        userBalanceObj?.tokenBalances,
+        tokenPublicKey,
+      );
+      expect(userBalanceAfterTransfer.balance).toEqual(tokenAmount);
+
+      // Freeze tokens
+      const freezeResponse = await issuerWallet.freezeTokens(userSparkAddress);
+      expect(freezeResponse.impactedOutputIds.length).toBeGreaterThan(0);
+      expect(freezeResponse.impactedTokenAmount).toEqual(tokenAmount);
+
+      // Unfreeze tokens
+      const unfreezeResponse =
+        await issuerWallet.unfreezeTokens(userSparkAddress);
+      expect(unfreezeResponse.impactedOutputIds.length).toBeGreaterThan(0);
+      expect(unfreezeResponse.impactedTokenAmount).toEqual(tokenAmount);
+    });
 
     it("should mint and burn tokens", async () => {
       const tokenAmount: bigint = 200n;
@@ -613,12 +608,12 @@ describe.each(TEST_CONFIGS)(
       expect(issuerBalanceAfterMint).toEqual(initialBalance + tokenAmount);
       expect(issuerBalanceObjAfterMint.tokenIdentifier).toBeDefined();
       const tokenIdentifier = issuerBalanceObjAfterMint.tokenIdentifier!;
-      const userWalletPublicKey = await userWallet.getSparkAddress();
+      const userSparkAddress = await userWallet.getSparkAddress();
 
       await sharedIssuerWallet.transferTokens({
         tokenAmount,
         tokenIdentifier,
-        receiverSparkAddress: userWalletPublicKey,
+        receiverSparkAddress: userSparkAddress,
       });
 
       const issuerBalanceAfterTransfer = (

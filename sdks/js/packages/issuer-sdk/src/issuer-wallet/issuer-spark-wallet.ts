@@ -21,6 +21,7 @@ import {
   bytesToNumberBE,
   hexToBytes,
 } from "@noble/curves/abstract/utils";
+import { decodeBech32mTokenIdentifier } from "@buildonspark/spark-sdk";
 import { TokenFreezeService } from "../services/freeze.js";
 import { IssuerTokenTransactionService } from "../services/token-transactions.js";
 import { TokenDistribution, IssuerTokenMetadata } from "./types.js";
@@ -347,15 +348,29 @@ export class IssuerSparkWallet extends SparkWallet {
     sparkAddress: string,
   ): Promise<{ impactedOutputIds: string[]; impactedTokenAmount: bigint }> {
     await this.syncTokenOutputs();
-    const tokenPublicKey = await super.getIdentityPublicKey();
     const decodedOwnerPubkey = decodeSparkAddress(
       sparkAddress,
       this.config.getNetworkType(),
     );
-    const response = await this.tokenFreezeService!.freezeTokens(
-      hexToBytes(decodedOwnerPubkey.identityPublicKey),
-      hexToBytes(tokenPublicKey),
-    );
+
+    const issuerTokenIdentifier = await this.getIssuerTokenIdentifier();
+    if (issuerTokenIdentifier === null) {
+      throw new ValidationError("Issuer token identifier not found", {
+        field: "issuerTokenIdentifier",
+        value: issuerTokenIdentifier,
+        expected: "non-null token identifier",
+      });
+    }
+
+    const rawTokenIdentifier = decodeBech32mTokenIdentifier(
+      issuerTokenIdentifier,
+      this.config.getNetworkType(),
+    ).tokenIdentifier;
+
+    const response = await this.tokenFreezeService!.freezeTokens({
+      ownerPublicKey: hexToBytes(decodedOwnerPubkey.identityPublicKey),
+      tokenIdentifier: rawTokenIdentifier,
+    });
 
     // Convert the Uint8Array to a bigint
     const tokenAmount = bytesToNumberBE(response.impactedTokenAmount);
@@ -375,15 +390,29 @@ export class IssuerSparkWallet extends SparkWallet {
     sparkAddress: string,
   ): Promise<{ impactedOutputIds: string[]; impactedTokenAmount: bigint }> {
     await this.syncTokenOutputs();
-    const tokenPublicKey = await super.getIdentityPublicKey();
     const decodedOwnerPubkey = decodeSparkAddress(
       sparkAddress,
       this.config.getNetworkType(),
     );
-    const response = await this.tokenFreezeService!.unfreezeTokens(
-      hexToBytes(decodedOwnerPubkey.identityPublicKey),
-      hexToBytes(tokenPublicKey),
-    );
+
+    const issuerTokenIdentifier = await this.getIssuerTokenIdentifier();
+    if (issuerTokenIdentifier === null) {
+      throw new ValidationError("Issuer token identifier not found", {
+        field: "issuerTokenIdentifier",
+        value: issuerTokenIdentifier,
+        expected: "non-null token identifier",
+      });
+    }
+
+    const rawTokenIdentifier = decodeBech32mTokenIdentifier(
+      issuerTokenIdentifier,
+      this.config.getNetworkType(),
+    ).tokenIdentifier;
+
+    const response = await this.tokenFreezeService!.unfreezeTokens({
+      ownerPublicKey: hexToBytes(decodedOwnerPubkey.identityPublicKey),
+      tokenIdentifier: rawTokenIdentifier,
+    });
     const tokenAmount = bytesToNumberBE(response.impactedTokenAmount);
 
     return {

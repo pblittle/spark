@@ -1,5 +1,5 @@
 import { sha256 } from "@scure/btc-signer/utils";
-import { FreezeTokensPayload } from "@buildonspark/spark-sdk/proto/spark";
+import { FreezeTokensPayload } from "@buildonspark/spark-sdk/proto/spark_token";
 import { ValidationError } from "@buildonspark/spark-sdk";
 
 export function hashFreezeTokensPayload(
@@ -15,6 +15,17 @@ export function hashFreezeTokensPayload(
 
   let allHashes: Uint8Array[] = [];
 
+  // Hash version
+  const versionHashObj = sha256.create();
+  const versionBytes = new Uint8Array(4);
+  new DataView(versionBytes.buffer).setUint32(
+    0,
+    payload.version,
+    false, // false for big-endian
+  );
+  versionHashObj.update(versionBytes);
+  allHashes.push(versionHashObj.digest());
+
   // Hash owner public key
   const ownerPubKeyHash = sha256.create();
   if (payload.ownerPublicKey) {
@@ -22,12 +33,12 @@ export function hashFreezeTokensPayload(
   }
   allHashes.push(ownerPubKeyHash.digest());
 
-  // Hash token public key
-  const tokenPubKeyHash = sha256.create();
-  if (payload.tokenPublicKey) {
-    tokenPubKeyHash.update(payload.tokenPublicKey);
+  // Hash token identifier
+  const tokenIdentifierHash = sha256.create();
+  if (payload.tokenIdentifier) {
+    tokenIdentifierHash.update(payload.tokenIdentifier);
   }
-  allHashes.push(tokenPubKeyHash.digest());
+  allHashes.push(tokenIdentifierHash.digest());
 
   // Hash shouldUnfreeze
   const shouldUnfreezeHash = sha256.create();

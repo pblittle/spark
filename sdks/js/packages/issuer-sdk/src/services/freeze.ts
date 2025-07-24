@@ -1,7 +1,7 @@
 import {
-  FreezeTokensPayload,
   FreezeTokensResponse,
-} from "@buildonspark/spark-sdk/proto/spark";
+  FreezeTokensPayload,
+} from "@buildonspark/spark-sdk/proto/spark_token";
 import {
   type ConnectionManager,
   WalletConfigService,
@@ -23,24 +23,30 @@ export class TokenFreezeService {
     this.connectionManager = connectionManager;
   }
 
-  async freezeTokens(
-    ownerPublicKey: Uint8Array,
-    tokenPublicKey: Uint8Array,
-  ): Promise<FreezeTokensResponse> {
-    return this.freezeOperation(ownerPublicKey, tokenPublicKey, false);
+  async freezeTokens({
+    ownerPublicKey,
+    tokenIdentifier,
+  }: {
+    ownerPublicKey: Uint8Array;
+    tokenIdentifier?: Uint8Array;
+  }): Promise<FreezeTokensResponse> {
+    return this.freezeOperation(ownerPublicKey, false, tokenIdentifier!);
   }
 
-  async unfreezeTokens(
-    ownerPublicKey: Uint8Array,
-    tokenPublicKey: Uint8Array,
-  ): Promise<FreezeTokensResponse> {
-    return this.freezeOperation(ownerPublicKey, tokenPublicKey, true);
+  async unfreezeTokens({
+    ownerPublicKey,
+    tokenIdentifier,
+  }: {
+    ownerPublicKey: Uint8Array;
+    tokenIdentifier?: Uint8Array;
+  }): Promise<FreezeTokensResponse> {
+    return this.freezeOperation(ownerPublicKey, true, tokenIdentifier!);
   }
 
   private async freezeOperation(
     ownerPublicKey: Uint8Array,
-    tokenPublicKey: Uint8Array,
     shouldUnfreeze: boolean,
+    tokenIdentifier: Uint8Array,
   ): Promise<FreezeTokensResponse> {
     const signingOperators = this.config.getSigningOperators();
     const issuerProvidedTimestamp = Date.now();
@@ -48,12 +54,13 @@ export class TokenFreezeService {
     // Submit freeze_tokens to all SOs in parallel
     const freezeResponses = await Promise.allSettled(
       Object.entries(signingOperators).map(async ([identifier, operator]) => {
-        const internalSparkClient =
-          await this.connectionManager.createSparkClient(operator.address);
+        const sparkTokenClient =
+          await this.connectionManager.createSparkTokenClient(operator.address);
 
         const freezeTokensPayload: FreezeTokensPayload = {
+          version: 1,
           ownerPublicKey,
-          tokenPublicKey,
+          tokenIdentifier,
           shouldUnfreeze,
           issuerProvidedTimestamp,
           operatorIdentityPublicKey: hexToBytes(operator.identityPublicKey),
@@ -66,7 +73,7 @@ export class TokenFreezeService {
           await this.config.signer.signMessageWithIdentityKey(hashedPayload);
 
         try {
-          const response = await internalSparkClient.freeze_tokens({
+          const response = await sparkTokenClient.freeze_tokens({
             freezeTokensPayload,
             issuerSignature,
           });
@@ -77,7 +84,7 @@ export class TokenFreezeService {
           };
         } catch (error) {
           throw new NetworkError(
-            `Failed to send a freeze/unfreeze operation for token: ${tokenPublicKey.toString()} at operator: ${operator.address}`,
+            `Failed to send a freeze/unfreeze operation to operator: ${operator.address}`,
             {
               operation: "freeze_tokens",
               errorCount: 1,

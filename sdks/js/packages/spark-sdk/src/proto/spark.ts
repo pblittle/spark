@@ -17638,14 +17638,6 @@ export const SparkServiceDefinition = {
       responseStream: false,
       options: {},
     },
-    create_tree_v2: {
-      name: "create_tree_v2",
-      requestType: CreateTreeRequest,
-      requestStream: false,
-      responseType: CreateTreeResponse,
-      responseStream: false,
-      options: {},
-    },
     get_signing_operator_list: {
       name: "get_signing_operator_list",
       requestType: Empty,
@@ -17813,6 +17805,90 @@ export const SparkServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    /**
+     * The following endpoints enforce inclusion of Direct Transactions used
+     * for unilateral exits
+     */
+    create_tree_v2: {
+      name: "create_tree_v2",
+      requestType: CreateTreeRequest,
+      requestStream: false,
+      responseType: CreateTreeResponse,
+      responseStream: false,
+      options: {},
+    },
+    cooperative_exit_v2: {
+      name: "cooperative_exit_v2",
+      requestType: CooperativeExitRequest,
+      requestStream: false,
+      responseType: CooperativeExitResponse,
+      responseStream: false,
+      options: {},
+    },
+    extend_leaf_v2: {
+      name: "extend_leaf_v2",
+      requestType: ExtendLeafRequest,
+      requestStream: false,
+      responseType: ExtendLeafResponse,
+      responseStream: false,
+      options: {},
+    },
+    claim_transfer_sign_refunds_v2: {
+      name: "claim_transfer_sign_refunds_v2",
+      requestType: ClaimTransferSignRefundsRequest,
+      requestStream: false,
+      responseType: ClaimTransferSignRefundsResponse,
+      responseStream: false,
+      options: {},
+    },
+    finalize_node_signatures_v2: {
+      name: "finalize_node_signatures_v2",
+      requestType: FinalizeNodeSignaturesRequest,
+      requestStream: false,
+      responseType: FinalizeNodeSignaturesResponse,
+      responseStream: false,
+      options: {},
+    },
+    initiate_preimage_swap_v2: {
+      name: "initiate_preimage_swap_v2",
+      requestType: InitiatePreimageSwapRequest,
+      requestStream: false,
+      responseType: InitiatePreimageSwapResponse,
+      responseStream: false,
+      options: {},
+    },
+    start_leaf_swap_v2: {
+      name: "start_leaf_swap_v2",
+      requestType: StartTransferRequest,
+      requestStream: false,
+      responseType: StartTransferResponse,
+      responseStream: false,
+      options: {},
+    },
+    counter_leaf_swap_v2: {
+      name: "counter_leaf_swap_v2",
+      requestType: CounterLeafSwapRequest,
+      requestStream: false,
+      responseType: CounterLeafSwapResponse,
+      responseStream: false,
+      options: {},
+    },
+    start_transfer_v2: {
+      name: "start_transfer_v2",
+      requestType: StartTransferRequest,
+      requestStream: false,
+      responseType: StartTransferResponse,
+      responseStream: false,
+      options: {},
+    },
+    refresh_timelock_v2: {
+      name: "refresh_timelock_v2",
+      requestType: RefreshTimelockRequest,
+      requestStream: false,
+      responseType: RefreshTimelockResponse,
+      responseStream: false,
+      options: {},
+    },
   },
 } as const;
 
@@ -17936,10 +18012,6 @@ export interface SparkServiceImplementation<CallContextExt = {}> {
     request: CreateTreeRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<CreateTreeResponse>>;
-  create_tree_v2(
-    request: CreateTreeRequest,
-    context: CallContext & CallContextExt,
-  ): Promise<DeepPartial<CreateTreeResponse>>;
   get_signing_operator_list(
     request: Empty,
     context: CallContext & CallContextExt,
@@ -18031,6 +18103,50 @@ export interface SparkServiceImplementation<CallContextExt = {}> {
     request: ExitSingleNodeTreesRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<ExitSingleNodeTreesResponse>>;
+  /**
+   * The following endpoints enforce inclusion of Direct Transactions used
+   * for unilateral exits
+   */
+  create_tree_v2(
+    request: CreateTreeRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<CreateTreeResponse>>;
+  cooperative_exit_v2(
+    request: CooperativeExitRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<CooperativeExitResponse>>;
+  extend_leaf_v2(
+    request: ExtendLeafRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<ExtendLeafResponse>>;
+  claim_transfer_sign_refunds_v2(
+    request: ClaimTransferSignRefundsRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<ClaimTransferSignRefundsResponse>>;
+  finalize_node_signatures_v2(
+    request: FinalizeNodeSignaturesRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<FinalizeNodeSignaturesResponse>>;
+  initiate_preimage_swap_v2(
+    request: InitiatePreimageSwapRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<InitiatePreimageSwapResponse>>;
+  start_leaf_swap_v2(
+    request: StartTransferRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<StartTransferResponse>>;
+  counter_leaf_swap_v2(
+    request: CounterLeafSwapRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<CounterLeafSwapResponse>>;
+  start_transfer_v2(
+    request: StartTransferRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<StartTransferResponse>>;
+  refresh_timelock_v2(
+    request: RefreshTimelockRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<RefreshTimelockResponse>>;
 }
 
 export interface SparkServiceClient<CallOptionsExt = {}> {
@@ -18153,10 +18269,6 @@ export interface SparkServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<CreateTreeRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<CreateTreeResponse>;
-  create_tree_v2(
-    request: DeepPartial<CreateTreeRequest>,
-    options?: CallOptions & CallOptionsExt,
-  ): Promise<CreateTreeResponse>;
   get_signing_operator_list(
     request: DeepPartial<Empty>,
     options?: CallOptions & CallOptionsExt,
@@ -18248,6 +18360,50 @@ export interface SparkServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<ExitSingleNodeTreesRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<ExitSingleNodeTreesResponse>;
+  /**
+   * The following endpoints enforce inclusion of Direct Transactions used
+   * for unilateral exits
+   */
+  create_tree_v2(
+    request: DeepPartial<CreateTreeRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<CreateTreeResponse>;
+  cooperative_exit_v2(
+    request: DeepPartial<CooperativeExitRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<CooperativeExitResponse>;
+  extend_leaf_v2(
+    request: DeepPartial<ExtendLeafRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<ExtendLeafResponse>;
+  claim_transfer_sign_refunds_v2(
+    request: DeepPartial<ClaimTransferSignRefundsRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<ClaimTransferSignRefundsResponse>;
+  finalize_node_signatures_v2(
+    request: DeepPartial<FinalizeNodeSignaturesRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<FinalizeNodeSignaturesResponse>;
+  initiate_preimage_swap_v2(
+    request: DeepPartial<InitiatePreimageSwapRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<InitiatePreimageSwapResponse>;
+  start_leaf_swap_v2(
+    request: DeepPartial<StartTransferRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<StartTransferResponse>;
+  counter_leaf_swap_v2(
+    request: DeepPartial<CounterLeafSwapRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<CounterLeafSwapResponse>;
+  start_transfer_v2(
+    request: DeepPartial<StartTransferRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<StartTransferResponse>;
+  refresh_timelock_v2(
+    request: DeepPartial<RefreshTimelockRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<RefreshTimelockResponse>;
 }
 
 function bytesFromBase64(b64: string): Uint8Array {

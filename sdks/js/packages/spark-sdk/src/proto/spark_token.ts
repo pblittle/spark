@@ -344,6 +344,31 @@ export interface TokenTransactionWithStatus {
   tokenTransactionHash: Uint8Array;
 }
 
+export interface FreezeTokensPayload {
+  version: number;
+  ownerPublicKey: Uint8Array;
+  tokenPublicKey?: Uint8Array | undefined;
+  tokenIdentifier?: Uint8Array | undefined;
+  issuerProvidedTimestamp: number;
+  operatorIdentityPublicKey: Uint8Array;
+  /** Set to false when requesting a freeze. */
+  shouldUnfreeze: boolean;
+}
+
+export interface FreezeTokensRequest {
+  freezeTokensPayload:
+    | FreezeTokensPayload
+    | undefined;
+  /** This is a Schnorr or ECDSA DER signature which can be between 64 and 73 bytes. */
+  issuerSignature: Uint8Array;
+}
+
+export interface FreezeTokensResponse {
+  impactedOutputIds: string[];
+  /** Decoded uint128 */
+  impactedTokenAmount: Uint8Array;
+}
+
 function createBaseTokenOutputToSpend(): TokenOutputToSpend {
   return { prevTokenTransactionHash: new Uint8Array(0), prevTokenTransactionVout: 0 };
 }
@@ -2803,6 +2828,334 @@ export const TokenTransactionWithStatus: MessageFns<TokenTransactionWithStatus> 
   },
 };
 
+function createBaseFreezeTokensPayload(): FreezeTokensPayload {
+  return {
+    version: 0,
+    ownerPublicKey: new Uint8Array(0),
+    tokenPublicKey: undefined,
+    tokenIdentifier: undefined,
+    issuerProvidedTimestamp: 0,
+    operatorIdentityPublicKey: new Uint8Array(0),
+    shouldUnfreeze: false,
+  };
+}
+
+export const FreezeTokensPayload: MessageFns<FreezeTokensPayload> = {
+  encode(message: FreezeTokensPayload, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== 0) {
+      writer.uint32(8).uint32(message.version);
+    }
+    if (message.ownerPublicKey.length !== 0) {
+      writer.uint32(18).bytes(message.ownerPublicKey);
+    }
+    if (message.tokenPublicKey !== undefined) {
+      writer.uint32(26).bytes(message.tokenPublicKey);
+    }
+    if (message.tokenIdentifier !== undefined) {
+      writer.uint32(34).bytes(message.tokenIdentifier);
+    }
+    if (message.issuerProvidedTimestamp !== 0) {
+      writer.uint32(40).uint64(message.issuerProvidedTimestamp);
+    }
+    if (message.operatorIdentityPublicKey.length !== 0) {
+      writer.uint32(50).bytes(message.operatorIdentityPublicKey);
+    }
+    if (message.shouldUnfreeze !== false) {
+      writer.uint32(56).bool(message.shouldUnfreeze);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FreezeTokensPayload {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFreezeTokensPayload();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.version = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.ownerPublicKey = reader.bytes();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.tokenPublicKey = reader.bytes();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.tokenIdentifier = reader.bytes();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.issuerProvidedTimestamp = longToNumber(reader.uint64());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.operatorIdentityPublicKey = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.shouldUnfreeze = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FreezeTokensPayload {
+    return {
+      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
+      ownerPublicKey: isSet(object.ownerPublicKey) ? bytesFromBase64(object.ownerPublicKey) : new Uint8Array(0),
+      tokenPublicKey: isSet(object.tokenPublicKey) ? bytesFromBase64(object.tokenPublicKey) : undefined,
+      tokenIdentifier: isSet(object.tokenIdentifier) ? bytesFromBase64(object.tokenIdentifier) : undefined,
+      issuerProvidedTimestamp: isSet(object.issuerProvidedTimestamp)
+        ? globalThis.Number(object.issuerProvidedTimestamp)
+        : 0,
+      operatorIdentityPublicKey: isSet(object.operatorIdentityPublicKey)
+        ? bytesFromBase64(object.operatorIdentityPublicKey)
+        : new Uint8Array(0),
+      shouldUnfreeze: isSet(object.shouldUnfreeze) ? globalThis.Boolean(object.shouldUnfreeze) : false,
+    };
+  },
+
+  toJSON(message: FreezeTokensPayload): unknown {
+    const obj: any = {};
+    if (message.version !== 0) {
+      obj.version = Math.round(message.version);
+    }
+    if (message.ownerPublicKey.length !== 0) {
+      obj.ownerPublicKey = base64FromBytes(message.ownerPublicKey);
+    }
+    if (message.tokenPublicKey !== undefined) {
+      obj.tokenPublicKey = base64FromBytes(message.tokenPublicKey);
+    }
+    if (message.tokenIdentifier !== undefined) {
+      obj.tokenIdentifier = base64FromBytes(message.tokenIdentifier);
+    }
+    if (message.issuerProvidedTimestamp !== 0) {
+      obj.issuerProvidedTimestamp = Math.round(message.issuerProvidedTimestamp);
+    }
+    if (message.operatorIdentityPublicKey.length !== 0) {
+      obj.operatorIdentityPublicKey = base64FromBytes(message.operatorIdentityPublicKey);
+    }
+    if (message.shouldUnfreeze !== false) {
+      obj.shouldUnfreeze = message.shouldUnfreeze;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FreezeTokensPayload>): FreezeTokensPayload {
+    return FreezeTokensPayload.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FreezeTokensPayload>): FreezeTokensPayload {
+    const message = createBaseFreezeTokensPayload();
+    message.version = object.version ?? 0;
+    message.ownerPublicKey = object.ownerPublicKey ?? new Uint8Array(0);
+    message.tokenPublicKey = object.tokenPublicKey ?? undefined;
+    message.tokenIdentifier = object.tokenIdentifier ?? undefined;
+    message.issuerProvidedTimestamp = object.issuerProvidedTimestamp ?? 0;
+    message.operatorIdentityPublicKey = object.operatorIdentityPublicKey ?? new Uint8Array(0);
+    message.shouldUnfreeze = object.shouldUnfreeze ?? false;
+    return message;
+  },
+};
+
+function createBaseFreezeTokensRequest(): FreezeTokensRequest {
+  return { freezeTokensPayload: undefined, issuerSignature: new Uint8Array(0) };
+}
+
+export const FreezeTokensRequest: MessageFns<FreezeTokensRequest> = {
+  encode(message: FreezeTokensRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.freezeTokensPayload !== undefined) {
+      FreezeTokensPayload.encode(message.freezeTokensPayload, writer.uint32(10).fork()).join();
+    }
+    if (message.issuerSignature.length !== 0) {
+      writer.uint32(18).bytes(message.issuerSignature);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FreezeTokensRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFreezeTokensRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.freezeTokensPayload = FreezeTokensPayload.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.issuerSignature = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FreezeTokensRequest {
+    return {
+      freezeTokensPayload: isSet(object.freezeTokensPayload)
+        ? FreezeTokensPayload.fromJSON(object.freezeTokensPayload)
+        : undefined,
+      issuerSignature: isSet(object.issuerSignature) ? bytesFromBase64(object.issuerSignature) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: FreezeTokensRequest): unknown {
+    const obj: any = {};
+    if (message.freezeTokensPayload !== undefined) {
+      obj.freezeTokensPayload = FreezeTokensPayload.toJSON(message.freezeTokensPayload);
+    }
+    if (message.issuerSignature.length !== 0) {
+      obj.issuerSignature = base64FromBytes(message.issuerSignature);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FreezeTokensRequest>): FreezeTokensRequest {
+    return FreezeTokensRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FreezeTokensRequest>): FreezeTokensRequest {
+    const message = createBaseFreezeTokensRequest();
+    message.freezeTokensPayload = (object.freezeTokensPayload !== undefined && object.freezeTokensPayload !== null)
+      ? FreezeTokensPayload.fromPartial(object.freezeTokensPayload)
+      : undefined;
+    message.issuerSignature = object.issuerSignature ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseFreezeTokensResponse(): FreezeTokensResponse {
+  return { impactedOutputIds: [], impactedTokenAmount: new Uint8Array(0) };
+}
+
+export const FreezeTokensResponse: MessageFns<FreezeTokensResponse> = {
+  encode(message: FreezeTokensResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.impactedOutputIds) {
+      writer.uint32(10).string(v!);
+    }
+    if (message.impactedTokenAmount.length !== 0) {
+      writer.uint32(18).bytes(message.impactedTokenAmount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FreezeTokensResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFreezeTokensResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.impactedOutputIds.push(reader.string());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.impactedTokenAmount = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FreezeTokensResponse {
+    return {
+      impactedOutputIds: globalThis.Array.isArray(object?.impactedOutputIds)
+        ? object.impactedOutputIds.map((e: any) => globalThis.String(e))
+        : [],
+      impactedTokenAmount: isSet(object.impactedTokenAmount)
+        ? bytesFromBase64(object.impactedTokenAmount)
+        : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: FreezeTokensResponse): unknown {
+    const obj: any = {};
+    if (message.impactedOutputIds?.length) {
+      obj.impactedOutputIds = message.impactedOutputIds;
+    }
+    if (message.impactedTokenAmount.length !== 0) {
+      obj.impactedTokenAmount = base64FromBytes(message.impactedTokenAmount);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<FreezeTokensResponse>): FreezeTokensResponse {
+    return FreezeTokensResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<FreezeTokensResponse>): FreezeTokensResponse {
+    const message = createBaseFreezeTokensResponse();
+    message.impactedOutputIds = object.impactedOutputIds?.map((e) => e) || [];
+    message.impactedTokenAmount = object.impactedTokenAmount ?? new Uint8Array(0);
+    return message;
+  },
+};
+
 export type SparkTokenServiceDefinition = typeof SparkTokenServiceDefinition;
 export const SparkTokenServiceDefinition = {
   name: "SparkTokenService",
@@ -2856,6 +3209,14 @@ export const SparkTokenServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    freeze_tokens: {
+      name: "freeze_tokens",
+      requestType: FreezeTokensRequest,
+      requestStream: false,
+      responseType: FreezeTokensResponse,
+      responseStream: false,
+      options: {},
+    },
   },
 } as const;
 
@@ -2888,6 +3249,10 @@ export interface SparkTokenServiceImplementation<CallContextExt = {}> {
     request: QueryTokenOutputsRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<QueryTokenOutputsResponse>>;
+  freeze_tokens(
+    request: FreezeTokensRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<FreezeTokensResponse>>;
 }
 
 export interface SparkTokenServiceClient<CallOptionsExt = {}> {
@@ -2919,6 +3284,10 @@ export interface SparkTokenServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<QueryTokenOutputsRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<QueryTokenOutputsResponse>;
+  freeze_tokens(
+    request: DeepPartial<FreezeTokensRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<FreezeTokensResponse>;
 }
 
 function bytesFromBase64(b64: string): Uint8Array {
