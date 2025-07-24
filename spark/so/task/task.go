@@ -55,7 +55,7 @@ type BaseTask struct {
 	// If true, the task will not run
 	Disabled bool
 	// Task is the function that is run when the task is scheduled.
-	Task func(context.Context, *so.Config, *lrc20.Client, *ent.Client) error
+	Task func(context.Context, *so.Config, *lrc20.Client) error
 }
 
 // ScheduledTask is a task that runs on a schedule.
@@ -83,7 +83,7 @@ func AllScheduledTasks() []ScheduledTask {
 				Name:         "dkg",
 				Timeout:      &dkgTaskTimeout,
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client, _ *ent.Client) error {
+				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
 					return ent.RunDKGIfNeeded(ctx, config)
 				},
 			},
@@ -93,7 +93,7 @@ func AllScheduledTasks() []ScheduledTask {
 			BaseTask: BaseTask{
 				Name:         "cancel_expired_transfers",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client, _ *ent.Client) error {
+				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					h := handler.NewTransferHandler(config)
 
@@ -134,7 +134,7 @@ func AllScheduledTasks() []ScheduledTask {
 				// TODO(LIG-7896): This task keeps on getting stuck on
 				// very large trees. Disabling for now as we investigate
 				Disabled: true,
-				Task: func(ctx context.Context, _ *so.Config, _ *lrc20.Client, _ *ent.Client) error {
+				Task: func(ctx context.Context, _ *so.Config, _ *lrc20.Client) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					tx, err := ent.GetDbFromContext(ctx)
 					if err != nil {
@@ -199,7 +199,7 @@ func AllScheduledTasks() []ScheduledTask {
 			ExecutionInterval: 5 * time.Minute,
 			BaseTask: BaseTask{
 				Name: "resume_send_transfer",
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client, _ *ent.Client) error {
+				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					h := handler.NewTransferHandler(config)
 
@@ -234,7 +234,7 @@ func AllScheduledTasks() []ScheduledTask {
 			BaseTask: BaseTask{
 				Name:         "cancel_or_finalize_expired_token_transactions",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, lrc20Client *lrc20.Client, rootClient *ent.Client) error {
+				Task: func(ctx context.Context, config *so.Config, lrc20Client *lrc20.Client) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					currentTime := time.Now()
 
@@ -306,7 +306,7 @@ func AllScheduledTasks() []ScheduledTask {
 			BaseTask: BaseTask{
 				Name:         "send_gossip",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client, _ *ent.Client) error {
+				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					gossipHandler := handler.NewSendGossipHandler(config)
 					tx, err := ent.GetDbFromContext(ctx)
@@ -334,7 +334,7 @@ func AllScheduledTasks() []ScheduledTask {
 			BaseTask: BaseTask{
 				Name:         "complete_utxo_swap",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client, _ *ent.Client) error {
+				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					tx, err := ent.GetDbFromContext(ctx)
 					if err != nil {
@@ -409,7 +409,7 @@ func AllStartupTasks() []StartupTask {
 				Name:         "maybe_reserve_entity_dkg",
 				RunInTestEnv: true,
 				Timeout:      &entityDkgTaskTimeout,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client, _ *ent.Client) error {
+				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					tx, err := ent.GetDbFromContext(ctx)
 					if err != nil {
@@ -485,7 +485,7 @@ func AllStartupTasks() []StartupTask {
 			BaseTask: BaseTask{
 				Name:         "backfill_token_freezes_token_identifier",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client, _ *ent.Client) error {
+				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					logger.Info("Backfilling token create created_at")
 
@@ -561,7 +561,7 @@ func AllStartupTasks() []StartupTask {
 			BaseTask: BaseTask{
 				Name:         "backfill_token_output_token_identifiers_and_token_create_edges",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client, _ *ent.Client) error {
+				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
 					logger := logging.GetLoggerFromContext(ctx)
 
 					if !config.Token.EnableBackfillTokenOutputTask {
@@ -666,7 +666,7 @@ func (t *BaseTask) createWrappedTask() func(ctx context.Context, cfg *so.Config,
 		inner := func(ctx context.Context, cfg *so.Config, lrc20Client *lrc20.Client, dbClient *ent.Client) error {
 			dbSession := db.NewSession(dbClient, cfg.Database.NewTxTimeout)
 			ctx = ent.Inject(ctx, dbSession)
-			err := t.Task(ctx, cfg, lrc20Client, dbClient)
+			err := t.Task(ctx, cfg, lrc20Client)
 			if err != nil {
 				logger.Error("Task failed!", "error", err)
 
