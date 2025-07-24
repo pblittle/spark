@@ -97,11 +97,13 @@ func validateSendLeafRefundTxs(leaf *ent.TreeNode, rawTx []byte, directTx []byte
 	}
 	var newDirectRefundTx *wire.MsgTx
 	var newDirectFromCpfpRefundTx *wire.MsgTx
+	var oldDirectRefundTx *wire.MsgTx
+	var oldDirectFromCpfpRefundTx *wire.MsgTx
 	leafDirectOutPoint := wire.OutPoint{}
 	leafDirectFromCpfpOutPoint := wire.OutPoint{}
-	var oldDirectRefundTxSequence uint32
-	var oldDirectFromCpfpRefundTxSequence uint32
-	if len(directTx) > 0 && len(directFromCpfpRefundTx) > 0 {
+	var oldDirectRefundTxIn *wire.TxIn
+	var oldDirectFromCpfpRefundTxIn *wire.TxIn
+	if len(directTx) > 0 && len(directFromCpfpRefundTx) > 0 && len(leaf.DirectRefundTx) > 0 && len(leaf.DirectFromCpfpRefundTx) > 0 {
 		newDirectRefundTx, err = common.TxFromRawTxBytes(directTx)
 		if err != nil {
 			return fmt.Errorf("unable to load new direct refund tx: %w", err)
@@ -110,45 +112,29 @@ func validateSendLeafRefundTxs(leaf *ent.TreeNode, rawTx []byte, directTx []byte
 		if err != nil {
 			return fmt.Errorf("unable to load new direct from cpfprefund tx: %w", err)
 		}
-		if len(leaf.DirectRefundTx) > 0 && len(leaf.DirectFromCpfpRefundTx) > 0 {
-			oldDirectRefundTx, err := common.TxFromRawTxBytes(leaf.DirectRefundTx)
-			if err != nil {
-				return fmt.Errorf("unable to load old direct refund tx: %w", err)
-			}
-			oldDirectFromCpfpRefundTx, err := common.TxFromRawTxBytes(leaf.DirectFromCpfpRefundTx)
-			if err != nil {
-				return fmt.Errorf("unable to load old direct from cpfp refund tx: %w", err)
-			}
-			oldDirectRefundTxIn := oldDirectRefundTx.TxIn[0]
-			leafDirectOutPoint = wire.OutPoint{
-				Hash:  oldDirectRefundTxIn.PreviousOutPoint.Hash,
-				Index: oldDirectRefundTxIn.PreviousOutPoint.Index,
-			}
-			oldDirectFromCpfpRefundTxIn := oldDirectFromCpfpRefundTx.TxIn[0]
-			leafDirectFromCpfpOutPoint = wire.OutPoint{
-				Hash:  oldDirectFromCpfpRefundTxIn.PreviousOutPoint.Hash,
-				Index: oldDirectFromCpfpRefundTxIn.PreviousOutPoint.Index,
-			}
-			oldDirectRefundTxSequence = 0xFFFF
-			oldDirectFromCpfpRefundTxSequence = 0xFFFF
-		} else {
-			oldDirectRefundTxSequence = 0xFFFF
-			oldDirectFromCpfpRefundTxSequence = 0xFFFF
-			leafDirectOutPoint = wire.OutPoint{
-				Hash:  newDirectRefundTx.TxIn[0].PreviousOutPoint.Hash,
-				Index: newDirectRefundTx.TxIn[0].PreviousOutPoint.Index,
-			}
-			leafDirectFromCpfpOutPoint = wire.OutPoint{
-				Hash:  newDirectFromCpfpRefundTx.TxIn[0].PreviousOutPoint.Hash,
-				Index: newDirectFromCpfpRefundTx.TxIn[0].PreviousOutPoint.Index,
-			}
+		oldDirectRefundTx, err = common.TxFromRawTxBytes(leaf.DirectRefundTx)
+		if err != nil {
+			return fmt.Errorf("unable to load old direct refund tx: %w", err)
 		}
-
-		err = validateLeafRefundTxInput(newDirectRefundTx, oldDirectRefundTxSequence, &leafDirectOutPoint, expectedInputCount)
+		oldDirectFromCpfpRefundTx, err = common.TxFromRawTxBytes(leaf.DirectFromCpfpRefundTx)
+		if err != nil {
+			return fmt.Errorf("unable to load old direct from cpfp refund tx: %w", err)
+		}
+		oldDirectRefundTxIn = oldDirectRefundTx.TxIn[0]
+		leafDirectOutPoint = wire.OutPoint{
+			Hash:  oldDirectRefundTxIn.PreviousOutPoint.Hash,
+			Index: oldDirectRefundTxIn.PreviousOutPoint.Index,
+		}
+		oldDirectFromCpfpRefundTxIn = oldDirectFromCpfpRefundTx.TxIn[0]
+		leafDirectFromCpfpOutPoint = wire.OutPoint{
+			Hash:  oldDirectFromCpfpRefundTxIn.PreviousOutPoint.Hash,
+			Index: oldDirectFromCpfpRefundTxIn.PreviousOutPoint.Index,
+		}
+		err = validateLeafRefundTxInput(newDirectRefundTx, oldDirectRefundTxIn.Sequence, &leafDirectOutPoint, expectedInputCount)
 		if err != nil {
 			return fmt.Errorf("unable to validate direct refund tx inputs: %w", err)
 		}
-		err = validateLeafRefundTxInput(newDirectFromCpfpRefundTx, oldDirectFromCpfpRefundTxSequence, &leafDirectFromCpfpOutPoint, expectedInputCount)
+		err = validateLeafRefundTxInput(newDirectFromCpfpRefundTx, oldDirectFromCpfpRefundTxIn.Sequence, &leafDirectFromCpfpOutPoint, expectedInputCount)
 		if err != nil {
 			return fmt.Errorf("unable to validate direct from cpfp refund tx inputs: %w", err)
 		}
@@ -279,11 +265,6 @@ func (h *BaseTransferHandler) createTransfer(
 	leafMap := make(map[string]*ent.TreeNode)
 	for _, leaf := range leaves {
 		leafMap[leaf.ID.String()] = leaf
-	}
-
-	err = backfillDirectTxs(ctx, db, leaves, leafMap)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to backfill direct txs: %w", err)
 	}
 
 	return transfer, leafMap, nil
@@ -493,22 +474,6 @@ func lockLeaves(ctx context.Context, db *ent.Tx, leaves []*ent.TreeNode) ([]*ent
 		return nil, fmt.Errorf("some leaves not found")
 	}
 	return updatedLeaves, nil
-}
-
-func backfillDirectTxs(ctx context.Context, db *ent.Tx, leaves []*ent.TreeNode, leafMap map[string]*ent.TreeNode) error {
-	for _, leaf := range leaves {
-		if len(leaf.DirectTx) == 0 {
-			if newLeaf, ok := leafMap[leaf.ID.String()]; ok && len(newLeaf.DirectTx) > 0 {
-				err := db.TreeNode.UpdateOne(leaf).
-					SetDirectTx(newLeaf.DirectTx).
-					Exec(ctx)
-				if err != nil {
-					return fmt.Errorf("unable to update leaf DirectTx: %w", err)
-				}
-			}
-		}
-	}
-	return nil
 }
 
 type CancelTransferIntent int
