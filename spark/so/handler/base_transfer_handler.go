@@ -281,6 +281,11 @@ func (h *BaseTransferHandler) createTransfer(
 		leafMap[leaf.ID.String()] = leaf
 	}
 
+	err = backfillDirectTxs(ctx, db, leaves, leafMap)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to backfill direct txs: %w", err)
+	}
+
 	return transfer, leafMap, nil
 }
 
@@ -488,6 +493,22 @@ func lockLeaves(ctx context.Context, db *ent.Tx, leaves []*ent.TreeNode) ([]*ent
 		return nil, fmt.Errorf("some leaves not found")
 	}
 	return updatedLeaves, nil
+}
+
+func backfillDirectTxs(ctx context.Context, db *ent.Tx, leaves []*ent.TreeNode, leafMap map[string]*ent.TreeNode) error {
+	for _, leaf := range leaves {
+		if len(leaf.DirectTx) == 0 {
+			if newLeaf, ok := leafMap[leaf.ID.String()]; ok && len(newLeaf.DirectTx) > 0 {
+				err := db.TreeNode.UpdateOne(leaf).
+					SetDirectTx(newLeaf.DirectTx).
+					Exec(ctx)
+				if err != nil {
+					return fmt.Errorf("unable to update leaf DirectTx: %w", err)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 type CancelTransferIntent int
