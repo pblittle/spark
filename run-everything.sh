@@ -117,18 +117,18 @@ run_frost_signers_tmux() {
 build_go_operator() {
     local run_dir=$1
     echo "=== Building Go operator ==="
-    
+
     cd spark || {
         echo "Failed to enter spark directory" >&2
         return 1
     }
 
     # Build the operator
-    go build -o "${run_dir}/bin/operator" bin/operator/main.go
+    go build -o "${run_dir}/bin/operator" ./bin/operator
     build_status=$?
-    
+
     cd - > /dev/null
-    
+
     if [ $build_status -eq 0 ]; then
         echo "Go operator built successfully"
         return 0
@@ -136,132 +136,6 @@ build_go_operator() {
         echo "Failed to build Go operator" >&2
         return 1
     fi
-}
-
-clone_or_pull_lrcd() {
-    if [ ! -d "lrc20.dev" ]; then
-        echo "Cloning LRC-20 git repo"
-        git clone git@github.com:lightsparkdev/lrc20.git lrc20.dev 
-    else
-        echo "Entering existing LRC-20 directory and pulling latest changes"
-        cd lrc20.dev || {
-            echo "Failed to enter lrc20 directory" >&2
-            return 1
-        }
-        git pull
-        cd - > /dev/null
-    fi
-}
-
-generate_lrcd_bootnodes() {
-    local skip_port=$1
-    local output=()
-
-    for port in {8000..8004}; do
-        if [ "$port" -ne "$skip_port" ]; then
-            output+=("\"127.0.0.1:$port\"")
-        fi
-    done
-
-    echo "$(IFS=,; echo "${output[*]}")"
-}
-
-run_lrcd_tmux() {
-    local run_dir=$1
-    local session_name="lrcd"
-
-    clone_or_pull_lrcd 
-    
-    # Kill existing session if it exists
-    if tmux has-session -t "$session_name" 2>/dev/null; then
-        echo "Killing existing lrcd session..."
-        tmux kill-session -t "$session_name"
-    fi
-
-    # Create new tmux session
-    tmux new-session -d -s "$session_name"
-
-    for i in {0..4}; do
-        if [ $i -ne 0 ]; then
-            # Split window horizontally for additional panes
-            tmux split-window -t "$session_name" -v
-            # Arrange panes evenly
-            tmux select-layout -t "$session_name" tiled
-        fi
-
-        rpc_address="127.0.0.1:1833${i}"
-        grpc_address="127.0.0.1:1853${i}"
-        p2p_address="0.0.0.0:800${i}"
-        storage_path="./lrc20/node_$i"
-        db="postgresql://127.0.0.1:5432/lrc20_${i}"
-        bootnodes="$(generate_lrcd_bootnodes "800${i}")"
-
-        # Create a temporary config file for this instance
-        local temp_config_file="temp_config_$i.dev.toml"
-        sed -e "s|{RPC_ADDRESS}|$rpc_address|g" \
-            -e "s|{GRPC_ADDRESS}|$grpc_address|g" \
-            -e "s|{P2P_ADDRESS}|$p2p_address|g" \
-            -e "s|{STORAGE_PATH}|$storage_path|g" \
-            -e "s|{POSTGRES}|$db?sslmode=disable|g" \
-            -e "s|{BOOTNODES}|$bootnodes|g" \
-            lrcd.template.config.toml >"$temp_config_file"
-        local log_file="${run_dir}/logs/lrcd_${i}.log"
-
-        local cmd="cd lrc20.dev && sea-orm-cli migrate up -d ./crates/storage/src/migration --database-url $db && cargo run -p lrc20d --release -- run --config ../$temp_config_file 2>&1 | tee '${log_file}'"
-        tmux send-keys -t "$session_name" "$cmd" C-m
-    done
-    
-    echo ""
-    echo "================================================"
-    echo "Started lrcd in tmux session: $session_name"
-    echo "To attach to the session: tmux attach -t $session_name"
-    echo "To detach from session: Press Ctrl-b then d"
-    echo "To kill the session: tmux kill-session -t $session_name"
-    echo "================================================"
-    echo ""
-}
-
-# Function to check if lrc nodes are running by checking log file existence
-check_lrc_nodes_ready() {
-   local run_dir=$1
-   local timeout=30  # Maximum seconds to wait
-   
-   echo "Checking LRC-20 nodes startup status..."
-   
-   # Start timer
-   local start_time=$(date +%s)
-   
-   while true; do
-       local all_ready=true
-       local current_time=$(date +%s)
-       local elapsed=$((current_time - start_time))
-       
-       # Check if we've exceeded timeout
-       if [ $elapsed -gt $timeout ]; then
-           echo "Timeout after ${timeout} seconds waiting for LRC-20 nodes"
-           return 1
-       fi
-       
-       # Check each operator's log file existence
-       for i in {0..4}; do
-           local log_file="${run_dir}/logs/lrcd_${i}.log"
-           
-           if [ ! -f "$log_file" ]; then
-               all_ready=false
-               break
-           fi
-       done
-       
-       # If all log files exist, break the loop
-       if $all_ready; then
-           echo "All LRC-20 log files created!"
-           return 0
-       fi
-       
-       # Wait a bit before next check
-       sleep 1
-       echo -n "."  # Show progress
-   done
 }
 
 clone_electrs() {
@@ -349,18 +223,18 @@ parse_bitcoin_config() {
     local config_file="bitcoin_regtest.conf"
     local rpcuser=""
     local rpcpassword=""
-    
+
     while IFS='=' read -r key value; do
         # Remove leading/trailing whitespace
         key=$(echo "$key" | tr -d '[:space:]')
         value=$(echo "$value" | tr -d '[:space:]')
-        
+
         case "$key" in
             "rpcuser") rpcuser="$value" ;;
             "rpcpassword") rpcpassword="$value" ;;
         esac
     done < "$config_file"
-    
+
     echo "$rpcuser $rpcpassword"
 }
 
@@ -370,13 +244,13 @@ run_bitcoind_tmux() {
     local session_name="bitcoind"
     local datadir="$run_dir/bitcoind"
 
-    
+
     # Read config values
-    read -r bitcoind_username bitcoind_password <<< "$(parse_bitcoin_config)"    
+    read -r bitcoind_username bitcoind_password <<< "$(parse_bitcoin_config)"
     # Ensure data directory exists
     mkdir -p "$datadir"
     cp bitcoin_regtest.conf "$datadir/bitcoin_regtest.conf"
-    
+
     # Kill existing session if it exists
     if tmux has-session -t "$session_name" 2>/dev/null; then
         echo "Killing existing bitcoind session..."
@@ -385,16 +259,16 @@ run_bitcoind_tmux() {
             bitcoin-cli -regtest -rpcuser="$bitcoind_username" -rpcpassword="$bitcoind_password" stop
         fi
     fi
-    
+
     # Create new tmux session
     tmux new-session -d -s "$session_name"
-    
+
     local log_file="$run_dir/logs/bitcoind.log"
     local cmd="bitcoind -regtest -datadir=$datadir -conf=./bitcoin_regtest.conf -debug=1 2>&1 | tee '$log_file'"
-    
+
     # Send the command to tmux
     tmux send-keys -t "$session_name" "$cmd" C-m
-    
+
     echo ""
     echo "================================================"
     echo "Started bitcoind in tmux session: $session_name"
@@ -412,7 +286,7 @@ create_operator_config() {
     shift 2 # Remove first two arguments
     local pub_keys=("$@")  # Get remaining arguments as pub_keys array
     local config_file="${run_dir}/config.json"
-    
+
     # Create JSON array of operators
     local json="["
     for i in {0..4}; do
@@ -449,7 +323,7 @@ EOF
 
     done
     json+="]"
-    
+
     # Write to file
     echo "$json" > "$config_file"
     echo "Created operator config at: $config_file"
@@ -462,17 +336,16 @@ run_operators_tmux() {
    local session_name="operators"
    local operator_config_file="${run_dir}/config.json"
    local tls=$3
-   local disable_tokens=$4
-   
+
    # Kill existing session if it exists
    if tmux has-session -t "$session_name" 2>/dev/null; then
        echo "Killing existing session..."
        tmux kill-session -t "$session_name"
    fi
-   
+
    # Create new tmux session
    tmux new-session -d -s "$session_name"
-   
+
    # Split the window into 5 panes and run operators
    for i in {0..4}; do
        if [ $i -ne 0 ]; then
@@ -481,22 +354,13 @@ run_operators_tmux() {
            # Arrange panes evenly
            tmux select-layout -t "$session_name" tiled
        fi
-       
+
        # Calculate port
        local port=$((8535 + i))
-       local lrc20_address="127.0.0.1:1853${i}"
 
        local temp_config_file="temp_config_operator_$i.dev.yaml"
-       
-       # If tokens are disabled, modify the template to set disablerpcs: true
-       if [ "$disable_tokens" = true ]; then
-           sed -e "s|{LRC20_ADDRESS}|$lrc20_address|g" \
-               -e "s|disablerpcs: false|disablerpcs: true|g" \
-               so.template.config.yaml >"$temp_config_file"
-       else
-           sed -e "s|{LRC20_ADDRESS}|$lrc20_address|g" \
-               so.template.config.yaml >"$temp_config_file"
-       fi
+
+       cp so.template.config.yaml "$temp_config_file"
 
        # Construct paths
        local log_file="${run_dir}/logs/sparkoperator_${i}.log"
@@ -510,7 +374,7 @@ run_operators_tmux() {
        if [ "$tls" = true ]; then
            cert_config="-server-cert '${cert_file}' -server-key '${key_file}'"
        fi
-       
+
        # Construct the command with all parameters
        local cmd="${run_dir}/bin/operator \
            -config '${temp_config_file}' \
@@ -525,11 +389,11 @@ run_operators_tmux() {
            -run-dir '${run_dir}' \
            -local true \
            2>&1 | tee '${log_file}'"
-       
+
        # Send the command to tmux
        tmux send-keys -t "$session_name" "$cmd" C-m
    done
-   
+
    echo ""
    echo "================================================"
    echo "Started all operators in tmux session: $session_name"
@@ -544,39 +408,39 @@ run_operators_tmux() {
 check_operators_ready() {
    local run_dir=$1
    local timeout=30  # Maximum seconds to wait
-   
+
    echo "Checking operators startup status..."
-   
+
    # Start timer
    local start_time=$(date +%s)
-   
+
    while true; do
        local all_ready=true
        local current_time=$(date +%s)
        local elapsed=$((current_time - start_time))
-       
+
        # Check if we've exceeded timeout
        if [ $elapsed -gt $timeout ]; then
            echo "Timeout after ${timeout} seconds waiting for operators"
            return 1
        fi
-       
+
        # Check each operator's log file existence
        for i in {0..4}; do
            local log_file="${run_dir}/logs/sparkoperator_${i}.log"
-           
+
            if [ ! -f "$log_file" ]; then
                all_ready=false
                break
            fi
        done
-       
+
        # If all log files exist, break the loop
        if $all_ready; then
            echo "All operator log files created!"
            return 0
        fi
-       
+
        # Wait a bit before next check
        sleep 1
        echo -n "."  # Show progress
@@ -587,39 +451,39 @@ check_operators_ready() {
 check_signers_ready() {
    local run_dir=$1
    local timeout=30  # Maximum seconds to wait
-   
+
    echo "Checking signers startup status..."
-   
+
    # Start timer
    local start_time=$(date +%s)
-   
+
    while true; do
        local all_ready=true
        local current_time=$(date +%s)
        local elapsed=$((current_time - start_time))
-       
+
        # Check if we've exceeded timeout
        if [ $elapsed -gt $timeout ]; then
            echo "Timeout after ${timeout} seconds waiting for signers"
            return 1
        fi
-       
+
        # Check each signer's log file existence
        for i in {0..4}; do
            local log_file="${run_dir}/logs/signer_${i}.log"
-           
+
            if [ ! -f "$log_file" ]; then
                all_ready=false
                break
            fi
        done
-       
+
        # If all log files exist, break the loop
        if $all_ready; then
            echo "All signer log files created!"
            return 0
        fi
-       
+
        # Wait a bit before next check
        sleep 1
        echo -n "."  # Show progress
@@ -632,17 +496,10 @@ reset_databases() {
 
     if [ "$force_reset" = true ]; then
         echo "Force reset: dropping and recreating all databases (0 to $max_count)..."
-        
+
         # Terminate all relevant connections first
         for i in $(seq 0 $max_count); do
             db="sparkoperator_$i"
-            psql postgres -c "
-            SELECT pg_terminate_backend(pid) 
-            FROM pg_stat_activity 
-            WHERE datname = '$db' 
-            AND pid <> pg_backend_pid();" > /dev/null 2>&1
-
-            db="lrc20_$i"
             psql postgres -c "
             SELECT pg_terminate_backend(pid)
             FROM pg_stat_activity
@@ -656,28 +513,15 @@ reset_databases() {
             echo "Resetting $db..."
             dropdb --if-exists "$db" > /dev/null 2>&1
             createdb "$db" > /dev/null 2>&1
-
-            db="lrc20_$i"
-            echo "Resetting $db..."
-            dropdb --if-exists "$db" > /dev/null 2>&1
-            createdb "$db" > /dev/null 2>&1
         done
     else
         echo "Soft reset: creating databases only if they don't exist (0 to $max_count)..."
-        
+
         for i in $(seq 0 $max_count); do
             db="sparkoperator_$i"
             if ! psql -lqt | cut -d \| -f 1 | grep -qw "$db"; then
                 echo "Creating $db as it doesn't exist..."
                 createdb "$db" > /dev/null 2>&1
-            fi
-
-            db="lrc20_$i"
-            if ! psql -lqt | cut -d \| -f 1 | grep -qw "$db"; then
-                echo "Creating $db as it doesn't exist..."
-                createdb "$db" > /dev/null 2>&1
-            else
-                echo "Database $db already exists, skipping creation..."
             fi
         done
     fi
@@ -711,7 +555,6 @@ create_private_key_files() {
 
 # Initialize flags
 WIPE=false
-DISABLE_TOKENS=false
 TLS=true
 
 # Parse command line arguments
@@ -719,10 +562,6 @@ for arg in "$@"; do
     case $arg in
         --wipe)
             WIPE=true
-            shift
-            ;;
-        --disable-tokens)
-            DISABLE_TOKENS=true
             shift
             ;;
         --disable-tls)
@@ -741,22 +580,11 @@ echo "Working with directory: $run_dir"
 
 run_bitcoind_tmux "$run_dir" $WIPE
 
-if [ "$DISABLE_TOKENS" = false ]; then
-    run_lrcd_tmux "$run_dir"
+run_electrs_tmux "$run_dir"
 
-    if ! check_lrc_nodes_ready "$run_dir"; then
-        echo "Failed to start all LRC-20 nodes"
-        exit 1
-    fi
-
-    run_electrs_tmux "$run_dir"
-
-    if ! check_electrs_ready "$run_dir"; then
-        echo "Failed to start electrs"
-        exit 1
-    fi
-else
-    echo "Skipping LRC-20 node setup (--disable-tokens flag is set)"
+if ! check_electrs_ready "$run_dir"; then
+    echo "Failed to start electrs"
+    exit 1
 fi
 
 # For all 5 instances
@@ -780,7 +608,7 @@ fi
 echo "All signers are ready"
 
 # Run operators
-run_operators_tmux "$run_dir" "$MIN_SIGNERS" "$TLS" "$DISABLE_TOKENS"
+run_operators_tmux "$run_dir" "$MIN_SIGNERS" "$TLS"
 
 if ! check_operators_ready "$run_dir"; then
     echo "Failed to start all operators"
