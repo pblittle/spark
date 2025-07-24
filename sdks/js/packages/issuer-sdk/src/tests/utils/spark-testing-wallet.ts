@@ -1,8 +1,8 @@
 import {
+  ConfigOptions,
+  SparkSigner,
   SparkWallet,
   SparkWalletProps,
-  SparkSigner,
-  ConfigOptions,
 } from "@buildonspark/spark-sdk";
 import {
   type QueryTransfersResponse,

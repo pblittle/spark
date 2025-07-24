@@ -449,6 +449,7 @@ export class SparkWallet extends EventEmitter {
     });
 
     const leavesToIgnore: Set<string> = new Set();
+
     // Query the leaf states from other operators.
     // We'll ignore the leaves that are out of sync for now.
     // Still include the leaves that are out of sync for balance check.
@@ -499,17 +500,30 @@ export class SparkWallet extends EventEmitter {
       }
     }
 
-    const verifyKey = (
-      pubkey1: Uint8Array,
-      pubkey2: Uint8Array,
-      verifyingKey: Uint8Array,
-    ) => {
-      return equalBytes(addPublicKeys(pubkey1, pubkey2), verifyingKey);
-    };
+    const availableLeaves = Object.entries(leaves.nodes).filter(
+      ([_, node]) => node.status === "AVAILABLE",
+    );
 
-    for (const [id, leaf] of Object.entries(leaves.nodes)) {
+    for (const [id, leaf] of availableLeaves) {
       if (
-        !verifyKey(
+        leaf.parentNodeId &&
+        leaf.status === "AVAILABLE" &&
+        this.verifyKey(
+          await this.config.signer.getPublicKeyFromDerivation({
+            type: KeyDerivationType.LEAF,
+            path: leaf.parentNodeId,
+          }),
+          leaf.signingKeyshare?.publicKey ?? new Uint8Array(),
+          leaf.verifyingPublicKey,
+        )
+      ) {
+        this.transferLeavesToSelf([leaf], {
+          type: KeyDerivationType.LEAF,
+          path: leaf.parentNodeId,
+        });
+        leavesToIgnore.add(id);
+      } else if (
+        !this.verifyKey(
           await this.config.signer.getPublicKeyFromDerivation({
             type: KeyDerivationType.LEAF,
             path: leaf.id,
@@ -522,12 +536,31 @@ export class SparkWallet extends EventEmitter {
       }
     }
 
-    return Object.entries(leaves.nodes)
-      .filter(
-        ([_, node]) =>
-          node.status === "AVAILABLE" && !leavesToIgnore.has(node.id),
-      )
+    return availableLeaves
+      .filter(([_, node]) => !leavesToIgnore.has(node.id))
       .map(([_, node]) => node);
+  }
+
+  private async checkExtendLeaves(leaves: TreeNode[]): Promise<void> {
+    await this.withLeaves(async () => {
+      for (const leaf of leaves) {
+        if (!leaf.parentNodeId && leaf.status === "AVAILABLE") {
+          const res = await this.transferService.extendTimelock(leaf);
+          await this.transferLeavesToSelf(res.nodes, {
+            type: KeyDerivationType.LEAF,
+            path: leaf.id,
+          });
+        }
+      }
+    });
+  }
+
+  private verifyKey(
+    pubkey1: Uint8Array,
+    pubkey2: Uint8Array,
+    verifyingKey: Uint8Array,
+  ): boolean {
+    return equalBytes(addPublicKeys(pubkey1, pubkey2), verifyingKey);
   }
 
   private async selectLeaves(
@@ -705,6 +738,8 @@ export class SparkWallet extends EventEmitter {
     leaves = await this.checkExtendTimeLockNodes(leaves);
 
     this.leaves = leaves;
+    this.checkExtendLeaves(leaves);
+
     this.optimizeLeaves().catch((e) => {
       console.error("Failed to optimize leaves", e);
     });
