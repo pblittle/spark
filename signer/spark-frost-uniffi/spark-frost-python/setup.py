@@ -2,11 +2,11 @@ from setuptools import setup
 
 setup(
     name="spark_frost_python",
-    version="0.0.8",
+    version="0.0.9",
     description="The Python language bindings for spark frost signer",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    include_package_data = True,
+    include_package_data=True,
     zip_safe=False,
     packages=["spark_frost"],
     package_dir={"spark_frost": "./src/spark_frost"},
