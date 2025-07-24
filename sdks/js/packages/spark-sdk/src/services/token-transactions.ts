@@ -71,6 +71,8 @@ export interface QueryTokenTransactionsParams {
   tokenTransactionHashes?: string[];
   tokenIdentifiers?: string[];
   outputIds?: string[];
+  pageSize: number;
+  offset: number;
 }
 
 export class TokenTransactionService {
@@ -1107,6 +1109,8 @@ export class TokenTransactionService {
       tokenTransactionHashes,
       tokenIdentifiers,
       outputIds,
+      pageSize,
+      offset,
     } = params;
 
     const tokenClient = await this.connectionManager.createSparkTokenClient(
@@ -1119,8 +1123,8 @@ export class TokenTransactionService {
       tokenIdentifiers: tokenIdentifiers?.map(hexToBytes)!,
       tokenTransactionHashes: tokenTransactionHashes?.map(hexToBytes)!,
       outputIds: outputIds || [],
-      limit: 100,
-      offset: 0,
+      limit: pageSize,
+      offset: offset,
     };
 
     try {
