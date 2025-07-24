@@ -76,6 +76,19 @@ func validateLeafRefundTxOutput(refundTx *wire.MsgTx, receiverIdentityPublicKey 
 }
 
 func validateLeafRefundTxInput(refundTx *wire.MsgTx, oldSequence uint32, leafOutPoint *wire.OutPoint, expectedInputCount uint32) error {
+	if refundTx.Version < 2 {
+		return fmt.Errorf("refund tx must be v2 or above, got v%d", refundTx.Version)
+	}
+	if refundTx.TxIn[0].Sequence&(1<<31) != 0 {
+		return fmt.Errorf("refund tx input 0 sequence must have bit 31 clear to enable relative locktime, got %d", refundTx.TxIn[0].Sequence)
+	}
+	if oldSequence&(1<<22) != 0 {
+		return fmt.Errorf("old sequence must have bit 22 clear to enable block-based relative locktime, got %d", oldSequence)
+	}
+	if refundTx.TxIn[0].Sequence&(1<<22) != 0 {
+		return fmt.Errorf("refund tx input 0 sequence must have bit 22 clear to enable block-based relative locktime, got %d", refundTx.TxIn[0].Sequence)
+	}
+
 	newTimeLock := refundTx.TxIn[0].Sequence & 0xFFFF
 	oldTimeLock := oldSequence & 0xFFFF
 	if newTimeLock+spark.TimeLockInterval > oldTimeLock {
