@@ -1,3 +1,6 @@
+//go:build postgres
+// +build postgres
+
 package task_test
 
 import (

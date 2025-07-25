@@ -36,7 +36,7 @@ func (h *EntityDkgKeyHandler) ReserveEntityDkgKey(ctx context.Context, req *pbin
 	if err != nil {
 		return fmt.Errorf("invalid DKG key ID format: %w", err)
 	}
-	existingEntityDkgKey, err := db.EntityDkgKey.Query().Only(ctx)
+	existingEntityDkgKey, err := db.EntityDkgKey.Query().WithSigningKeyshare().Only(ctx)
 	if err == nil {
 		if existingEntityDkgKey.Edges.SigningKeyshare.ID != dkgKeyUUID {
 			return fmt.Errorf("entity DKG key already reserved with different keyshare ID")
