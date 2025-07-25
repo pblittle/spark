@@ -111,9 +111,11 @@ func prepareLeafSigningJobs(
 		if err != nil {
 			return nil, err
 		}
+		key := secp256k1.PrivKeyFromBytes(leaf.SigningPrivKey)
+		pubkey := key.PubKey()
 		leafSigningJobs = append(leafSigningJobs, &pb.UserSignedTxSigningJob{
 			LeafId:                 leaf.Leaf.Id,
-			SigningPublicKey:       leaf.SigningPrivKey,
+			SigningPublicKey:       pubkey.SerializeCompressed(),
 			RawTx:                  refundTxs[i],
 			SigningNonceCommitment: userCommitmentProto,
 			UserSignature:          signingResults[leaf.Leaf.Id].SignatureShare,
