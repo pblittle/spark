@@ -4,7 +4,10 @@ import { ValidationError } from "../errors/types.js";
 import { getP2TRScriptFromPublicKey } from "./bitcoin.js";
 import { Network } from "./network.js";
 
-const TIME_LOCK_INTERVAL = 100;
+export const TIME_LOCK_INTERVAL = 100;
+
+export const INITIAL_SEQUENCE = (1 << 30) | 2000;
+export const TEST_UNILATERAL_SEQUENCE = (1 << 30) | 100;
 
 // Default fee constants matching Go implementation
 const ESTIMATED_TX_SIZE = 191;
@@ -79,34 +82,41 @@ export function checkIfValidSequence(currSequence?: number) {
   }
 }
 
+export function doesLeafNeedRefresh(currSequence: number, isNodeTx?: boolean) {
+  const currentTimelock = getCurrentTimelock(currSequence);
+
+  if (isNodeTx) {
+    return currentTimelock === 0;
+  }
+  return currentTimelock <= 100;
+}
+
 // make sure that the leaves are ok before sending or else next user could lose funds
 export function getNextTransactionSequence(
-  currSequence?: number,
-  forRefresh?: boolean,
+  currSequence: number,
+  isNodeTx?: boolean,
 ): {
   nextSequence: number;
-  needRefresh: boolean;
 } {
   const currentTimelock = getCurrentTimelock(currSequence);
   const nextTimelock = currentTimelock - TIME_LOCK_INTERVAL;
 
-  if (forRefresh && nextTimelock <= 100 && currentTimelock > 0) {
-    return {
-      nextSequence: (1 << 30) | nextTimelock,
-      needRefresh: true,
-    };
-  }
-
-  if (nextTimelock < 0) {
+  if (isNodeTx && nextTimelock < 0) {
     throw new ValidationError("timelock interval is less than 0", {
       field: "nextTimelock",
       value: nextTimelock,
+      expected: "Non-negative timelock interval",
+    });
+  } else if (!isNodeTx && nextTimelock <= 0) {
+    throw new ValidationError("timelock interval is less than or equal to 0", {
+      field: "nextTimelock",
+      value: nextTimelock,
+      expected: "Timelock greater than 0",
     });
   }
 
   return {
     nextSequence: (1 << 30) | nextTimelock,
-    needRefresh: nextTimelock <= 100,
   };
 }
 

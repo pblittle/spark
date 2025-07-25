@@ -47,9 +47,17 @@ export class SigningService {
       };
 
       const currRefundTx = getTxFromRawTxBytes(leaf.leaf.refundTx);
-      const { nextSequence } = getNextTransactionSequence(
-        currRefundTx.getInput(0).sequence,
-      );
+
+      const sequence = currRefundTx.getInput(0).sequence;
+      if (!sequence) {
+        throw new ValidationError("Invalid refund transaction", {
+          field: "sequence",
+          value: currRefundTx.getInput(0),
+          expected: "Non-null sequence",
+        });
+      }
+      const { nextSequence } = getNextTransactionSequence(sequence);
+
       const amountSats = currRefundTx.getOutput(0).amount;
       if (amountSats === undefined) {
         throw new ValidationError("Invalid refund transaction", {

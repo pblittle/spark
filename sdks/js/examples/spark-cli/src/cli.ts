@@ -341,7 +341,6 @@ const commands = [
   "leafidtohex",
   "testonly_generateutxostring",
   "testonly_expiretimelock",
-  "testonly_expiretimelockrefundtx",
 
   "help",
   "exit",
@@ -566,7 +565,6 @@ async function runCLI() {
   testonly_generateutxostring <txid> <vout> <value> <publicKey>                      - Generate correctly formatted UTXO string from your public key
   checktimelock <leafId>                                              - Get the remaining timelock for a given leaf
   testonly_expiretimelock <leafId>                                            - Refresh the timelock for a given leaf
-  testonly_expiretimelockrefundtx <leafId>                                    - Refresh only the refund transaction timelock for a given leaf
   leafidtohex <leafId1> [leafId2] [leafId3] ...                              - Convert leaf ID to hex string for unilateral exit
   getleaves                                                           - Get all leaves owned by the wallet
 
@@ -1775,68 +1773,16 @@ async function runCLI() {
             break;
           }
 
-          let refreshCount = 0;
-          let continueRefreshing = true;
-
-          console.log(`Starting timelock refresh loop for node: ${args[0]}`);
-
-          while (continueRefreshing) {
-            try {
-              await wallet.testOnly_expireTimelock(args[0]);
-              refreshCount++;
-              console.log(
-                `Successfully refreshed timelock for node: ${args[0]} (refresh #${refreshCount})`,
-              );
-
-              // Add a small delay between refreshes to avoid overwhelming the system
-              await new Promise((resolve) => setTimeout(resolve, 100));
-            } catch (error) {
-              console.log(
-                `Timelock refresh completed after ${refreshCount} refresh(es). Node timelock has expired.`,
-              );
-              console.log("Final error:", error);
-              continueRefreshing = false;
-            }
+          try {
+            await wallet.testOnly_expireTimelock(args[0]);
+            console.log(`Successfully refreshed timelock for node: ${args[0]}`);
+          } catch (error) {
+            console.log("Unable to expire timelock for node: ", args[0]);
+            console.log("Final error:", error);
           }
           break;
         }
-        case "testonly_expiretimelockrefundtx": {
-          if (!wallet) {
-            console.log("Please initialize a wallet first");
-            break;
-          }
-          if (args.length === 0) {
-            console.log("Usage: refreshtimelockrefundtx <leafId>");
-            break;
-          }
 
-          let refreshCount = 0;
-          let continueRefreshing = true;
-
-          console.log(
-            `Starting refund timelock refresh loop for node: ${args[0]}`,
-          );
-
-          while (continueRefreshing) {
-            try {
-              await wallet.testOnly_expireTimelockRefundTx(args[0]);
-              refreshCount++;
-              console.log(
-                `Successfully refreshed refund timelock for node: ${args[0]} (refresh #${refreshCount})`,
-              );
-
-              // Add a small delay between refreshes to avoid overwhelming the system
-              await new Promise((resolve) => setTimeout(resolve, 100));
-            } catch (error) {
-              console.log(
-                `Refund timelock refresh completed after ${refreshCount} refresh(es). Node refund timelock has expired.`,
-              );
-              console.log("Final error:", error);
-              continueRefreshing = false;
-            }
-          }
-          break;
-        }
         case "leafidtohex": {
           if (!wallet) {
             console.log("Please initialize a wallet first");
@@ -2184,45 +2130,12 @@ async function runCLI() {
                 console.log(
                   `  🔄 Expiring node timelock for leaf ${leaf.id}...`,
                 );
-                let nodeRefreshCount = 0;
-                let continueNodeRefreshing = true;
 
-                while (continueNodeRefreshing) {
-                  try {
-                    await wallet.testOnly_expireTimelock(leaf.id);
-                    nodeRefreshCount++;
-                    console.log(
-                      `    ✅ Node timelock refresh #${nodeRefreshCount}`,
-                    );
-                    await new Promise((resolve) => setTimeout(resolve, 100));
-                  } catch (error) {
-                    console.log(
-                      `    ✅ Node timelock expired after ${nodeRefreshCount} refresh(es)`,
-                    );
-                    continueNodeRefreshing = false;
-                  }
-                }
-
-                console.log(
-                  `  🔄 Expiring refund timelock for leaf ${leaf.id}...`,
-                );
-                let refundRefreshCount = 0;
-                let continueRefundRefreshing = true;
-
-                while (continueRefundRefreshing) {
-                  try {
-                    await wallet.testOnly_expireTimelockRefundTx(leaf.id);
-                    refundRefreshCount++;
-                    console.log(
-                      `    ✅ Refund timelock refresh #${refundRefreshCount}`,
-                    );
-                    await new Promise((resolve) => setTimeout(resolve, 100));
-                  } catch (error) {
-                    console.log(
-                      `    ✅ Refund timelock expired after ${refundRefreshCount} refresh(es)`,
-                    );
-                    continueRefundRefreshing = false;
-                  }
+                try {
+                  await wallet.testOnly_expireTimelock(leaf.id);
+                  console.log(`    ✅ Node timelock expired`);
+                } catch (error) {
+                  console.log(`    ❌ Unable to expire timelock`);
                 }
                 await wallet.getLeaves();
                 console.log("");

@@ -88,7 +88,10 @@ import {
   NetworkType,
 } from "../utils/network.js";
 import { sumAvailableTokens } from "../utils/token-transactions.js";
-import { getNextTransactionSequence } from "../utils/transaction.js";
+import {
+  doesLeafNeedRefresh,
+  getCurrentTimelock,
+} from "../utils/transaction.js";
 
 import { LRCWallet } from "@buildonspark/lrc20-sdk";
 import { sha256 } from "@noble/hashes/sha2";
@@ -2291,10 +2294,16 @@ export class SparkWallet extends EventEmitter {
 
     for (const node of nodes) {
       const nodeTx = getTxFromRawTxBytes(node.nodeTx);
-      const { needRefresh } = getNextTransactionSequence(
-        nodeTx.getInput(0).sequence,
-      );
-      if (needRefresh) {
+      const sequence = nodeTx.getInput(0).sequence;
+      if (!sequence) {
+        throw new ValidationError("Invalid node transaction", {
+          field: "sequence",
+          value: nodeTx.getInput(0),
+          expected: "Non-null sequence",
+        });
+      }
+      const needsRefresh = doesLeafNeedRefresh(sequence, true);
+      if (needsRefresh) {
         nodesToExtend.push(node);
         nodeIds.push(node.id);
       } else {
@@ -2339,11 +2348,16 @@ export class SparkWallet extends EventEmitter {
 
     for (const node of nodes) {
       const refundTx = getTxFromRawTxBytes(node.refundTx);
-      const { needRefresh } = getNextTransactionSequence(
-        refundTx.getInput(0).sequence,
-        true,
-      );
-      if (needRefresh) {
+      const sequence = refundTx.getInput(0).sequence;
+      if (!sequence) {
+        throw new ValidationError("Invalid refund transaction", {
+          field: "sequence",
+          value: refundTx.getInput(0),
+          expected: "Non-null sequence",
+        });
+      }
+      const needsRefresh = doesLeafNeedRefresh(sequence);
+      if (needsRefresh) {
         nodesToRefresh.push(node);
         nodeIds.push(node.id);
       } else {
@@ -3860,101 +3874,74 @@ export class SparkWallet extends EventEmitter {
         includeParents: true,
       });
 
-      const node = response.nodes[nodeId];
-      if (!node) {
+      let leaf = response.nodes[nodeId];
+      if (!leaf) {
         throw new ValidationError("Node not found", {
           field: "nodeId",
           value: nodeId,
         });
       }
 
-      if (!node.parentNodeId) {
+      if (!leaf.parentNodeId) {
         throw new ValidationError("Node has no parent", {
           field: "parentNodeId",
-          value: node.parentNodeId,
+          value: leaf.parentNodeId,
         });
       }
 
-      const parentNode = response.nodes[node.parentNodeId];
+      const parentNode = response.nodes[leaf.parentNodeId];
       if (!parentNode) {
         throw new ValidationError("Parent node not found", {
           field: "parentNodeId",
-          value: node.parentNodeId,
+          value: leaf.parentNodeId,
         });
       }
 
-      // Call the transfer service to refresh the timelock
-      const result = await this.transferService.refreshTimelockNodes(
-        [node],
-        parentNode,
-      );
+      const nodeTx = getTxFromRawTxBytes(leaf.nodeTx);
+      const refundTx = getTxFromRawTxBytes(leaf.refundTx);
+
+      const nodeTimelock = getCurrentTimelock(nodeTx.getInput(0).sequence);
+      const refundTimelock = getCurrentTimelock(refundTx.getInput(0).sequence);
+
+      if (nodeTimelock > 100) {
+        const expiredNodeTxLeaf =
+          await this.transferService.testonly_expireTimeLockNodeTx(
+            leaf,
+            parentNode,
+          );
+
+        if (!expiredNodeTxLeaf.nodes[0]) {
+          throw new ValidationError("No expired node tx leaf", {
+            field: "expiredNodeTxLeaf",
+            value: expiredNodeTxLeaf,
+          });
+        }
+        leaf = expiredNodeTxLeaf.nodes[0];
+      }
+
+      if (refundTimelock > 100) {
+        const expiredTxLeaf =
+          await this.transferService.testonly_expireTimeLockRefundtx(leaf);
+
+        if (!expiredTxLeaf.nodes[0]) {
+          throw new ValidationError("No expired tx leaf", {
+            field: "expiredTxLeaf",
+            value: expiredTxLeaf,
+          });
+        }
+        leaf = expiredTxLeaf.nodes[0];
+      }
 
       // Update the local leaves if this node is in our wallet
-      const leafIndex = this.leaves.findIndex((leaf) => leaf.id === node.id);
-      if (leafIndex !== -1 && result.nodes.length > 0) {
-        const newNode = result.nodes[0];
-        if (newNode) {
-          this.leaves[leafIndex] = newNode;
-        }
+      const leafIndex = this.leaves.findIndex((leaf) => leaf.id === leaf.id);
+      if (leafIndex !== -1) {
+        this.leaves[leafIndex] = leaf;
       }
     } catch (error) {
       throw new NetworkError(
         "Failed to refresh timelock",
         {
           method: "refresh_timelock",
-        },
-        error as Error,
-      );
-    }
-  }
-
-  /**
-   * Refresh the timelock of a specific node's refund transaction only.
-   *
-   * @param {string} nodeId - The ID of the node whose refund transaction to refresh
-   * @returns {Promise<void>} Promise that resolves when the refund timelock is refreshed
-   */
-  public async testOnly_expireTimelockRefundTx(nodeId: string): Promise<void> {
-    const sparkClient = await this.connectionManager.createSparkClient(
-      this.config.getCoordinatorAddress(),
-    );
-
-    try {
-      // Get the node
-      const response = await sparkClient.query_nodes({
-        source: {
-          $case: "nodeIds",
-          nodeIds: {
-            nodeIds: [nodeId],
-          },
-        },
-        includeParents: false,
-      });
-
-      const node = response.nodes[nodeId];
-      if (!node) {
-        throw new ValidationError("Node not found", {
-          field: "nodeId",
-          value: nodeId,
-        });
-      }
-
-      // Call the transfer service to refresh the refund timelock
-      const result = await this.transferService.refreshTimelockRefundTx(node);
-
-      // Update the local leaves if this node is in our wallet
-      const leafIndex = this.leaves.findIndex((leaf) => leaf.id === node.id);
-      if (leafIndex !== -1 && result.nodes.length > 0) {
-        const newNode = result.nodes[0];
-        if (newNode) {
-          this.leaves[leafIndex] = newNode;
-        }
-      }
-    } catch (error) {
-      throw new NetworkError(
-        "Failed to refresh refund timelock",
-        {
-          method: "refresh_timelock_refund_tx",
         },
         error as Error,
       );

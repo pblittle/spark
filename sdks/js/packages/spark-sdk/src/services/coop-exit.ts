@@ -136,9 +136,15 @@ export class CoopExitService extends BaseTransferService {
       }
       const currentRefundTx = getTxFromRawTxBytes(leaf.leaf.refundTx);
 
-      const { nextSequence } = getNextTransactionSequence(
-        currentRefundTx.getInput(0).sequence,
-      );
+      const sequence = currentRefundTx.getInput(0).sequence;
+      if (!sequence) {
+        throw new ValidationError("Invalid refund transaction", {
+          field: "sequence",
+          value: currentRefundTx.getInput(0),
+          expected: "Non-null sequence",
+        });
+      }
+      const { nextSequence } = getNextTransactionSequence(sequence);
 
       const refundTx = this.createConnectorRefundTransaction(
         nextSequence,

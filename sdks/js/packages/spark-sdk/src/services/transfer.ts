@@ -50,22 +50,19 @@ import { NetworkToProto } from "../utils/network.js";
 import { VerifiableSecretShare } from "../utils/secret-sharing.js";
 import {
   createRefundTx,
+  getCurrentTimelock,
   getEphemeralAnchorOutput,
   getNextTransactionSequence,
   getTransactionSequence,
+  INITIAL_SEQUENCE,
+  TEST_UNILATERAL_SEQUENCE,
 } from "../utils/transaction.js";
 import { getTransferPackageSigningPayload } from "../utils/transfer_package.js";
 import { WalletConfigService } from "./config.js";
 import { ConnectionManager } from "./connection.js";
 import { SigningService } from "./signing.js";
 import { SigningOperator } from "./wallet-config.js";
-const INITIAL_TIME_LOCK = 2000;
-
 const DEFAULT_EXPIRY_TIME = 10 * 60 * 1000;
-
-function initialSequence() {
-  return (1 << 30) | INITIAL_TIME_LOCK;
-}
 
 export type LeafKeyTweak = {
   leaf: TreeNode;
@@ -929,10 +926,18 @@ export class TransferService extends BaseTransferService {
       };
 
       const currRefundTx = getTxFromRawTxBytes(leaf.leaf.refundTx);
+
+      const sequence = currRefundTx.getInput(0).sequence;
+      if (!sequence) {
+        throw new ValidationError("Invalid refund transaction", {
+          field: "sequence",
+          value: currRefundTx.getInput(0),
+          expected: "Non-null sequence",
+        });
+      }
       const nextSequence = isForClaim
-        ? getTransactionSequence(currRefundTx.getInput(0).sequence)
-        : getNextTransactionSequence(currRefundTx.getInput(0).sequence)
-            .nextSequence;
+        ? getTransactionSequence(sequence)
+        : getNextTransactionSequence(sequence).nextSequence;
 
       const amountSats = currRefundTx.getOutput(0).amount;
       if (amountSats === undefined) {
@@ -1223,7 +1228,11 @@ export class TransferService extends BaseTransferService {
     }
   }
 
-  async refreshTimelockNodes(nodes: TreeNode[], parentNode: TreeNode) {
+  private async refreshTimelockNodesInternal(
+    nodes: TreeNode[],
+    parentNode: TreeNode,
+    useTestUnilateralSequence?: boolean,
+  ) {
     if (nodes.length === 0) {
       throw Error("no nodes to refresh");
     }
@@ -1266,15 +1275,29 @@ export class TransferService extends BaseTransferService {
 
       if (i === 0) {
         const currSequence = input.sequence;
+        if (!currSequence) {
+          throw new ValidationError("Invalid node transaction", {
+            field: "sequence",
+            value: input,
+            expected: "Non-null sequence",
+          });
+        }
+        let { nextSequence } = getNextTransactionSequence(currSequence, true);
 
+        if (
+          useTestUnilateralSequence &&
+          TEST_UNILATERAL_SEQUENCE <= currSequence
+        ) {
+          nextSequence = TEST_UNILATERAL_SEQUENCE;
+        }
         newTx.addInput({
           ...input,
-          sequence: getNextTransactionSequence(currSequence).nextSequence,
+          sequence: nextSequence,
         });
       } else {
         newTx.addInput({
           ...input,
-          sequence: initialSequence(),
+          sequence: INITIAL_SEQUENCE,
           txid: newNodeTxs[i - 1]?.id,
         });
       }
@@ -1330,7 +1353,7 @@ export class TransferService extends BaseTransferService {
     }
     newRefundTx.addInput({
       ...refundTxInput,
-      sequence: initialSequence(),
+      sequence: INITIAL_SEQUENCE,
       txid: getTxId(newNodeTxs[newNodeTxs.length - 1]!),
     });
 
@@ -1471,6 +1494,10 @@ export class TransferService extends BaseTransferService {
     return result;
   }
 
+  async refreshTimelockNodes(nodes: TreeNode[], parentNode: TreeNode) {
+    return await this.refreshTimelockNodesInternal(nodes, parentNode);
+  }
+
   async extendTimelock(node: TreeNode) {
     const nodeTx = getTxFromRawTxBytes(node.nodeTx);
     const refundTx = getTxFromRawTxBytes(node.refundTx);
@@ -1521,7 +1548,7 @@ export class TransferService extends BaseTransferService {
     // Apply fee to the refund transaction as well
     // const feeReducedRefundAmount = maybeApplyFee(amountSats);
     const newRefundTx = createRefundTx(
-      initialSequence(),
+      INITIAL_SEQUENCE,
       newRefundOutPoint,
       amountSats, // feeReducedRefundAmount,
       signingPubKey,
@@ -1634,12 +1661,23 @@ export class TransferService extends BaseTransferService {
     });
   }
 
-  async refreshTimelockRefundTx(node: TreeNode) {
+  async testonly_expireTimeLockNodeTx(node: TreeNode, parentNode: TreeNode) {
+    return await this.refreshTimelockNodesInternal([node], parentNode, true);
+  }
+
+  async testonly_expireTimeLockRefundtx(node: TreeNode) {
     const nodeTx = getTxFromRawTxBytes(node.nodeTx);
     const refundTx = getTxFromRawTxBytes(node.refundTx);
 
     const currSequence = refundTx.getInput(0).sequence || 0;
-    const { nextSequence } = getNextTransactionSequence(currSequence);
+    const currTimelock = getCurrentTimelock(currSequence);
+    if (currTimelock <= 100) {
+      throw new ValidationError("Cannot expire timelock below 100", {
+        field: "currTimelock",
+        value: currTimelock,
+        expected: "Timelock greater than 100",
+      });
+    }
 
     const signingPubKey = await this.config.signer.getPublicKeyFromDerivation({
       type: KeyDerivationType.LEAF,
@@ -1677,7 +1715,7 @@ export class TransferService extends BaseTransferService {
 
     newRefundTx.addInput({
       ...refundTxInput,
-      sequence: nextSequence,
+      sequence: (1 << 30) | 100,
     });
 
     const refundSigningJob = {
