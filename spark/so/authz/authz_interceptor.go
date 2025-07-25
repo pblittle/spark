@@ -100,18 +100,18 @@ func (i *Interceptor) authorizeRequest(ctx context.Context, method string) error
 		}
 	}
 
-	p, ok := peer.FromContext(ctx)
-
-	if !ok {
-		logger.Debug("no peer found in context")
+	var (
+		p        *peer.Peer
+		clientIP string
+		err      error
+		ok       bool
+	)
+	if p, ok = peer.FromContext(ctx); !ok {
 		if i.config.Mode == ModeEnforce {
 			return status.Error(codes.Internal, "failed to get peer information")
-		} else {
-			return nil
 		}
+		return nil
 	}
-	var clientIP string
-	var err error
 	if clientIP, _, err = net.SplitHostPort(p.Addr.String()); err != nil {
 		logger.Error("Failed to split host and port from peer address", "peer_addr", p.Addr.String(), "error", err)
 		if i.config.Mode == ModeEnforce {
@@ -123,12 +123,12 @@ func (i *Interceptor) authorizeRequest(ctx context.Context, method string) error
 	// Internal APIs must only be called from an internal IP on the VPC, even if
 	// that means going through a load balancer.
 	if !strings.HasPrefix(p.Addr.String(), "10.") {
-		logger.Debug("peer address is not internal to VPC, denying request", "peer_addr", p.Addr.String())
+		logger.Warn("internal API call from peer address not internal to VPC", "peer_addr", p.Addr.String())
 		switch i.config.Mode {
 		case ModeEnforce:
 			return status.Error(codes.PermissionDenied, "request not allowed from "+p.Addr.String())
 		case ModeWarn:
-			logger.Warn("warning authz mode - request would be denied - peer address is not internal to VPC", "peer_addr", p.Addr.String())
+			logger.Warn("warn authz mode - request would be denied - peer address is not internal to VPC", "peer_addr", p.Addr.String())
 		default:
 			break
 		}
@@ -142,26 +142,13 @@ func (i *Interceptor) authorizeRequest(ctx context.Context, method string) error
 		clientIP = xffClientIP
 	}
 
-	// TODO: https://linear.app/lightsparkdev/issue/LIG-7837
-	// Remove this after monitoring is complete. This is just for examing all
-	// connectinos and ensuring we have IP allowlist coverage.
-	if i.config.Mode == ModeWarn {
-		logger.Info("authorization check (warn mode)", "client_ip", clientIP, "method", method)
-	} else {
-		logger.Info("authorization check", "client_ip", clientIP, "method", method)
-	}
-
-	// Overall, we only allow requests from internal IPs on the VPC, which are all 10.x.x.x IPs, or allowlisted IPs.
+	// Only allow requests from internal IPs on the VPC, which are all 10.x.x.x IPs, or allowlisted IPs.
 	if !strings.HasPrefix(clientIP, "10.") && i.config.Mode != ModeLogOnly && !slices.Contains(i.config.AllowedIPs, clientIP) {
 		if i.config.Mode == ModeEnforce {
-			logger.Warn("request denied - IP not in allowlist", "client_ip", clientIP, "allowed_ips", i.config.AllowedIPs, "method", method)
+			logger.Warn("internal API call from non-internal or allowlisted IP - request denied", "client_ip", clientIP, "allowed_ips", i.config.AllowedIPs, "method", method)
 			return status.Error(codes.PermissionDenied, "request not allowed from "+clientIP)
 		}
-		logger.Warn("warn authz mode - request would be denied - IP not in allowlist", "client_ip", clientIP, "allowed_ips", i.config.AllowedIPs, "method", method)
-	} else if i.config.Mode == ModeWarn {
-		logger.Debug("authorization successful (warn mode)", "client_ip", clientIP, "method", method)
-	} else {
-		logger.Debug("authorization successful", "client_ip", clientIP, "method", method)
+		logger.Warn("warn authz mode - internal API call from non-internal or allowlisted IP - request would be denied", "client_ip", clientIP, "allowed_ips", i.config.AllowedIPs, "method", method)
 	}
 	return nil
 }
