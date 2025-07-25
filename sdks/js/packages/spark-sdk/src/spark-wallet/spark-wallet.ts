@@ -439,38 +439,43 @@ export class SparkWallet extends EventEmitter {
   }
 
   public async getLeaves(isBalanceCheck: boolean = false): Promise<TreeNode[]> {
-    const leaves = await this.queryNodes({
-      source: {
-        $case: "ownerIdentityPubkey",
-        ownerIdentityPubkey: await this.config.signer.getIdentityPublicKey(),
-      },
-      includeParents: false,
-      network: NetworkToProto[this.config.getNetwork()],
-    });
+    const operatorToLeaves = new Map<string, QueryNodesResponse>();
+    const ownerIdentityPubkey = await this.config.signer.getIdentityPublicKey();
 
-    const leavesToIgnore: Set<string> = new Set();
-
-    // Query the leaf states from other operators.
-    // We'll ignore the leaves that are out of sync for now.
-    // Still include the leaves that are out of sync for balance check.
-    if (!isBalanceCheck) {
-      for (const [id, operator] of Object.entries(
-        this.config.getSigningOperators(),
-      )) {
-        if (id !== this.config.getCoordinatorIdentifier()) {
-          const operatorLeaves = await this.queryNodes(
-            {
-              source: {
-                $case: "ownerIdentityPubkey",
-                ownerIdentityPubkey:
-                  await this.config.signer.getIdentityPublicKey(),
-              },
-              includeParents: false,
-              network: NetworkToProto[this.config.getNetwork()],
+    let signingOperators = Object.entries(this.config.getSigningOperators());
+    if (isBalanceCheck) {
+      // If we're just checking the balance, we can just query the coordinator.
+      signingOperators = signingOperators.filter(
+        ([id, _]) => id === this.config.getCoordinatorIdentifier(),
+      );
+    }
+    await Promise.all(
+      signingOperators.map(async ([id, operator]) => {
+        const leaves = await this.queryNodes(
+          {
+            source: {
+              $case: "ownerIdentityPubkey",
+              ownerIdentityPubkey,
             },
-            operator.address,
-          );
+            includeParents: false,
+            network: NetworkToProto[this.config.getNetwork()],
+          },
+          operator.address,
+        );
+        operatorToLeaves.set(id, leaves);
+      }),
+    );
 
+    const leaves = operatorToLeaves.get(
+      this.config.getCoordinatorIdentifier(),
+    )!;
+    const leavesToIgnore: Set<string> = new Set();
+    if (!isBalanceCheck) {
+      // Query the leaf states from other operators.
+      // We'll ignore the leaves that are out of sync for now.
+      // Still include the leaves that are out of sync for balance check.
+      for (const [id, operatorLeaves] of operatorToLeaves) {
+        if (id !== this.config.getCoordinatorIdentifier()) {
           // Loop over leaves returned by coordinator.
           // If the leaf is not present in the operator's leaves, we'll ignore it.
           // If the leaf is present, we'll check if the leaf is in sync with the operator's leaf.
