@@ -195,7 +195,45 @@ func (h *LightningHandler) GetSigningCommitments(ctx context.Context, req *pb.Ge
 	return &pb.GetSigningCommitmentsResponse{SigningCommitments: requestedCommitments}, nil
 }
 
-func (h *LightningHandler) validateGetPreimageRequest(
+func (h *LightningHandler) ValidateDuplicateLeaves(
+	ctx context.Context,
+	leavesToSend []*pb.UserSignedTxSigningJob,
+	directLeavesToSend []*pb.UserSignedTxSigningJob,
+	directFromCpfpLeavesToSend []*pb.UserSignedTxSigningJob,
+) error {
+	logger := logging.GetLoggerFromContext(ctx)
+	logger.Info("validating duplicate leaves", "leavesToSend", leavesToSend, "directLeavesToSend", directLeavesToSend, "directFromCpfpLeavesToSend", directFromCpfpLeavesToSend)
+	leavesMap := make(map[string]bool)
+	directLeavesMap := make(map[string]bool)
+	directFromCpfpLeavesMap := make(map[string]bool)
+	for _, leaf := range leavesToSend {
+		if leavesMap[leaf.LeafId] {
+			return fmt.Errorf("duplicate leaf id: %s", leaf.LeafId)
+		}
+		leavesMap[leaf.LeafId] = true
+	}
+	for _, leaf := range directLeavesToSend {
+		if directLeavesMap[leaf.LeafId] {
+			return fmt.Errorf("duplicate leaf id: %s", leaf.LeafId)
+		}
+		if !leavesMap[leaf.LeafId] {
+			return fmt.Errorf("leaf id %s not found in leaves to send", leaf.LeafId)
+		}
+		directLeavesMap[leaf.LeafId] = true
+	}
+	for _, leaf := range directFromCpfpLeavesToSend {
+		if directFromCpfpLeavesMap[leaf.LeafId] {
+			return fmt.Errorf("duplicate leaf id: %s", leaf.LeafId)
+		}
+		if !leavesMap[leaf.LeafId] {
+			return fmt.Errorf("leaf id %s not found in leaves to send", leaf.LeafId)
+		}
+		directFromCpfpLeavesMap[leaf.LeafId] = true
+	}
+	return nil
+}
+
+func (h *LightningHandler) ValidateGetPreimageRequest(
 	ctx context.Context,
 	paymentHash []byte,
 	cpfpTransactions []*pb.UserSignedTxSigningJob,
@@ -578,7 +616,12 @@ func (h *LightningHandler) GetPreimageShare(ctx context.Context, req *pb.Initiat
 		}
 	}
 
-	err := h.validateGetPreimageRequest(
+	err := h.ValidateDuplicateLeaves(ctx, req.Transfer.LeavesToSend, req.Transfer.DirectLeavesToSend, req.Transfer.DirectFromCpfpLeavesToSend)
+	if err != nil {
+		return nil, fmt.Errorf("unable to validate duplicate leaves: %w", err)
+	}
+
+	err = h.ValidateGetPreimageRequest(
 		ctx,
 		req.PaymentHash,
 		req.Transfer.LeavesToSend,
@@ -708,7 +751,12 @@ func (h *LightningHandler) initiatePreimageSwap(ctx context.Context, req *pb.Ini
 		}
 	}
 
-	err := h.validateGetPreimageRequest(
+	err := h.ValidateDuplicateLeaves(ctx, req.Transfer.LeavesToSend, req.Transfer.DirectLeavesToSend, req.Transfer.DirectFromCpfpLeavesToSend)
+	if err != nil {
+		return nil, fmt.Errorf("unable to validate duplicate leaves: %w", err)
+	}
+
+	err = h.ValidateGetPreimageRequest(
 		ctx,
 		req.PaymentHash,
 		req.Transfer.LeavesToSend,
