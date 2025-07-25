@@ -50,6 +50,10 @@ export class SparkWallet extends BaseSparkWallet {
   }
 
   private wrapSparkWalletWithTracing() {
+    this.getLeaves = this.wrapWithOtelSpan(
+      "SparkWallet.getLeaves",
+      this.getLeaves.bind(this),
+    );
     this.getIdentityPublicKey = this.wrapWithOtelSpan(
       "SparkWallet.getIdentityPublicKey",
       this.getIdentityPublicKey.bind(this),
@@ -57,6 +61,14 @@ export class SparkWallet extends BaseSparkWallet {
     this.getSparkAddress = this.wrapWithOtelSpan(
       "SparkWallet.getSparkAddress",
       this.getSparkAddress.bind(this),
+    );
+    this.createSparkPaymentIntent = this.wrapWithOtelSpan(
+      "SparkWallet.createSparkPaymentIntent",
+      this.createSparkPaymentIntent.bind(this),
+    );
+    this.initWallet = this.wrapWithOtelSpan(
+      "SparkWallet.initWallet",
+      this.initWallet.bind(this),
     );
     this.getSwapFeeEstimate = this.wrapWithOtelSpan(
       "SparkWallet.getSwapFeeEstimate",
@@ -73,6 +85,26 @@ export class SparkWallet extends BaseSparkWallet {
     this.getSingleUseDepositAddress = this.wrapWithOtelSpan(
       "SparkWallet.getSingleUseDepositAddress",
       this.getSingleUseDepositAddress.bind(this),
+    );
+    this.getStaticDepositAddress = this.wrapWithOtelSpan(
+      "SparkWallet.getStaticDepositAddress",
+      this.getStaticDepositAddress.bind(this),
+    );
+    this.queryStaticDepositAddresses = this.wrapWithOtelSpan(
+      "SparkWallet.queryStaticDepositAddresses",
+      this.queryStaticDepositAddresses.bind(this),
+    );
+    this.getClaimStaticDepositQuote = this.wrapWithOtelSpan(
+      "SparkWallet.getClaimStaticDepositQuote",
+      this.getClaimStaticDepositQuote.bind(this),
+    );
+    this.claimStaticDeposit = this.wrapWithOtelSpan(
+      "SparkWallet.claimStaticDeposit",
+      this.claimStaticDeposit.bind(this),
+    );
+    this.refundStaticDeposit = this.wrapWithOtelSpan(
+      "SparkWallet.refundStaticDeposit",
+      this.refundStaticDeposit.bind(this),
     );
     this.getUnusedDepositAddresses = this.wrapWithOtelSpan(
       "SparkWallet.getUnusedDepositAddresses",
@@ -109,6 +141,46 @@ export class SparkWallet extends BaseSparkWallet {
     this.getWithdrawalFeeQuote = this.wrapWithOtelSpan(
       "SparkWallet.getWithdrawalFeeQuote",
       this.getWithdrawalFeeQuote.bind(this),
+    );
+    this.getTransferFromSsp = this.wrapWithOtelSpan(
+      "SparkWallet.getTransferFromSsp",
+      this.getTransferFromSsp.bind(this),
+    );
+    this.getTransfer = this.wrapWithOtelSpan(
+      "SparkWallet.getTransfer",
+      this.getTransfer.bind(this),
+    );
+    this.transferTokens = this.wrapWithOtelSpan(
+      "SparkWallet.transferTokens",
+      this.transferTokens.bind(this),
+    );
+    this.batchTransferTokens = this.wrapWithOtelSpan(
+      "SparkWallet.batchTransferTokens",
+      this.batchTransferTokens.bind(this),
+    );
+    this.queryTokenTransactions = this.wrapWithOtelSpan(
+      "SparkWallet.queryTokenTransactions",
+      this.queryTokenTransactions.bind(this),
+    );
+    this.getLightningReceiveRequest = this.wrapWithOtelSpan(
+      "SparkWallet.getLightningReceiveRequest",
+      this.getLightningReceiveRequest.bind(this),
+    );
+    this.getLightningSendRequest = this.wrapWithOtelSpan(
+      "SparkWallet.getLightningSendRequest",
+      this.getLightningSendRequest.bind(this),
+    );
+    this.getCoopExitRequest = this.wrapWithOtelSpan(
+      "SparkWallet.getCoopExitRequest",
+      this.getCoopExitRequest.bind(this),
+    );
+    this.checkTimelock = this.wrapWithOtelSpan(
+      "SparkWallet.checkTimelock",
+      this.checkTimelock.bind(this),
+    );
+    this.testOnly_expireTimelock = this.wrapWithOtelSpan(
+      "SparkWallet.testOnly_expireTimelock",
+      this.testOnly_expireTimelock.bind(this),
     );
   }
 

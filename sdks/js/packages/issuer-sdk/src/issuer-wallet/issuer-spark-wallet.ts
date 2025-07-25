@@ -83,6 +83,10 @@ export class IssuerSparkWallet extends SparkWallet {
       "SparkIssuerWallet.getIssuerTokenIdentifier",
       this.getIssuerTokenIdentifier.bind(this),
     );
+    this.createToken = this.wrapWithOtelSpan(
+      "SparkIssuerWallet.createToken",
+      this.createToken.bind(this),
+    );
     this.mintTokens = this.wrapWithOtelSpan(
       "SparkIssuerWallet.mintTokens",
       this.mintTokens.bind(this),
