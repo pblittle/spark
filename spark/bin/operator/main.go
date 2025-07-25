@@ -422,6 +422,7 @@ func main() {
 		grpc.UnaryInterceptor(grpcmiddleware.ChainUnaryServer(
 			sparkerrors.ErrorInterceptor(config.ReturnDetailedErrors),
 			helper.LogInterceptor(args.LogJSON && args.LogRequestStats),
+			sparkgrpc.SparkTokenMetricsInterceptor(),
 			sparkgrpc.PanicRecoveryInterceptor(config.ReturnDetailedPanicErrors),
 			db.SessionMiddleware(dbClient, config.Database.NewTxTimeout),
 			authn.NewInterceptor(sessionTokenCreatorVerifier).AuthnInterceptor,
