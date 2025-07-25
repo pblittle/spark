@@ -1,5 +1,12 @@
 # @buildonspark/spark-sdk
 
+## 0.2.3
+
+### Patch Changes
+
+- -leaf key improvements
+  -token improvements
+
 ## 0.2.2
 
 ### Patch Changes

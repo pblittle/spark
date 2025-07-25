@@ -1,5 +1,14 @@
 # @buildonspark/issuer-sdk
 
+## 0.0.82
+
+### Patch Changes
+
+- -leaf key improvements
+  -token improvements
+- Updated dependencies
+  - @buildonspark/spark-sdk@0.2.3
+
 ## 0.0.81
 
 ### Patch Changes
