@@ -267,9 +267,9 @@ func SignTokenTransaction(
 	}
 
 	for operatorIndex, operator := range operatorsToContact {
-		operatorConn, err := common.NewGRPCConnectionWithTestTLS(operator.Address, nil)
+		operatorConn, err := common.NewGRPCConnectionWithTestTLS(operator.AddressRpc, nil)
 		if err != nil {
-			log.Printf("Error while establishing gRPC connection to operator at %s: %v", operator.Address, err)
+			log.Printf("Error while establishing gRPC connection to operator at %s: %v", operator.AddressRpc, err)
 			return nil, nil, err
 		}
 		defer operatorConn.Close()
@@ -422,9 +422,9 @@ func FinalizeTokenTransaction(
 	}
 
 	for _, operator := range operatorsToContact {
-		operatorConn, err := common.NewGRPCConnectionWithTestTLS(operator.Address, nil)
+		operatorConn, err := common.NewGRPCConnectionWithTestTLS(operator.AddressRpc, nil)
 		if err != nil {
-			log.Printf("Error while establishing gRPC connection to operator at %s: %v", operator.Address, err)
+			log.Printf("Error while establishing gRPC connection to operator at %s: %v", operator.AddressRpc, err)
 			return err
 		}
 		defer operatorConn.Close()
@@ -520,9 +520,9 @@ func FreezeTokens(
 	var lastResponse *pb.FreezeTokensResponse
 	timestamp := uint64(time.Now().UnixMilli())
 	for _, operator := range config.SigningOperators {
-		operatorConn, err := common.NewGRPCConnectionWithTestTLS(operator.Address, nil)
+		operatorConn, err := common.NewGRPCConnectionWithTestTLS(operator.AddressRpc, nil)
 		if err != nil {
-			log.Printf("Error while establishing gRPC connection to coordinator at %s: %v", operator.Address, err)
+			log.Printf("Error while establishing gRPC connection to coordinator at %s: %v", operator.AddressRpc, err)
 			return nil, err
 		}
 		defer operatorConn.Close()

@@ -282,7 +282,7 @@ func NewConfig(
 	identifier := utils.IndexToIdentifier(uint32(index))
 
 	if dkgCoordinatorAddress == "" {
-		dkgCoordinatorAddress = signingOperatorMap[identifier].Address
+		dkgCoordinatorAddress = signingOperatorMap[identifier].AddressDkg
 	}
 
 	if !operatorConfig.ServiceAuthz.Mode.Valid() {

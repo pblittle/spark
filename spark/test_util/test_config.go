@@ -91,7 +91,8 @@ func GetAllSigningOperators() (map[string]*so.SigningOperator, error) {
 		operators[id] = &so.SigningOperator{
 			ID:                uint64(i),
 			Identifier:        id,
-			Address:           fmt.Sprintf("localhost:%d", basePort+i),
+			AddressRpc:        fmt.Sprintf("localhost:%d", basePort+i),
+			AddressDkg:        fmt.Sprintf("localhost:%d", basePort+i),
 			IdentityPublicKey: pubkeyBytesArray[i],
 			CertPath:          &certPath,
 		}
@@ -115,19 +116,22 @@ func GetAllSigningOperatorsDeployed() (map[string]*so.SigningOperator, error) {
 		"0000000000000000000000000000000000000000000000000000000000000001": {
 			ID:                0,
 			Identifier:        "0000000000000000000000000000000000000000000000000000000000000001",
-			Address:           "dns:///0.spark.dev.dev.sparkinfra.net",
+			AddressRpc:        "dns:///0.spark.dev.dev.sparkinfra.net",
+			AddressDkg:        "dns:///0.spark.dev.dev.sparkinfra.net",
 			IdentityPublicKey: pubkeyBytesArray[0],
 		},
 		"0000000000000000000000000000000000000000000000000000000000000002": {
 			ID:                1,
 			Identifier:        "0000000000000000000000000000000000000000000000000000000000000002",
-			Address:           "dns:///1.spark.dev.dev.sparkinfra.net",
+			AddressRpc:        "dns:///1.spark.dev.dev.sparkinfra.net",
+			AddressDkg:        "dns:///1.spark.dev.dev.sparkinfra.net",
 			IdentityPublicKey: pubkeyBytesArray[1],
 		},
 		"0000000000000000000000000000000000000000000000000000000000000003": {
 			ID:                2,
 			Identifier:        "0000000000000000000000000000000000000000000000000000000000000003",
-			Address:           "dns:///2.spark.dev.dev.sparkinfra.net",
+			AddressRpc:        "dns:///2.spark.dev.dev.sparkinfra.net",
+			AddressDkg:        "dns:///2.spark.dev.dev.sparkinfra.net",
 			IdentityPublicKey: pubkeyBytesArray[2],
 		},
 	}, nil
@@ -180,7 +184,7 @@ func SpecificOperatorTestConfig(operatorIndex int) (*so.Config, error) {
 		Threshold:             uint64(threshold),
 		SignerAddress:         getLocalFrostSignerAddress(),
 		DatabasePath:          getTestDatabasePath(operatorIndex),
-		DKGCoordinatorAddress: signingOperators[identifier].Address,
+		DKGCoordinatorAddress: signingOperators[identifier].AddressDkg,
 	}
 	return &config, nil
 }

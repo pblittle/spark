@@ -159,7 +159,7 @@ func (s *Server) Round1Signature(ctx context.Context, req *pbdkg.Round1Signature
 			if err != nil {
 				return
 			}
-		}(identifier, operator.Address)
+		}(identifier, operator.AddressDkg)
 	}
 
 	wg.Wait()

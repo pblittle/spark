@@ -70,7 +70,7 @@ func (f *FakeLightningInvoiceCreator) CreateInvoice(_ common.Network, amountSats
 
 func cleanUp(t *testing.T, config *wallet.Config, paymentHash [32]byte) {
 	for _, operator := range config.SigningOperators {
-		conn, err := common.NewGRPCConnectionWithTestTLS(operator.Address, nil)
+		conn, err := common.NewGRPCConnectionWithTestTLS(operator.AddressRpc, nil)
 		require.NoError(t, err)
 		mockClient := pbmock.NewMockServiceClient(conn)
 		_, err = mockClient.CleanUpPreimageShare(context.Background(), &pbmock.CleanUpPreimageShareRequest{

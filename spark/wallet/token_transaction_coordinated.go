@@ -263,7 +263,7 @@ func SignTokenTransactionFromCoordination(
 		return nil, fmt.Errorf("no signatures found for operator %s: %w", params.Operator.Identifier, err)
 	}
 
-	sparkConn, err := common.NewGRPCConnectionWithTestTLS(params.Operator.Address, nil)
+	sparkConn, err := common.NewGRPCConnectionWithTestTLS(params.Operator.AddressRpc, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -297,9 +297,9 @@ func FreezeTokensV1(
 	var lastResponse *tokenpb.FreezeTokensResponse
 	timestamp := uint64(time.Now().UnixMilli())
 	for _, operator := range config.SigningOperators {
-		operatorConn, err := common.NewGRPCConnectionWithTestTLS(operator.Address, nil)
+		operatorConn, err := common.NewGRPCConnectionWithTestTLS(operator.AddressRpc, nil)
 		if err != nil {
-			log.Printf("Error while establishing gRPC connection to coordinator at %s: %v", operator.Address, err)
+			log.Printf("Error while establishing gRPC connection to coordinator at %s: %v", operator.AddressRpc, err)
 			return nil, err
 		}
 		defer operatorConn.Close()

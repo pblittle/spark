@@ -15,7 +15,7 @@ func GenerateKeys(ctx context.Context, config *so.Config, keyCount uint64) error
 	// Init clients
 	clientMap := make(map[string]pbdkg.DKGServiceClient)
 	for identifier, operator := range config.SigningOperatorMap {
-		connection, err := operator.NewGRPCConnection()
+		connection, err := operator.NewGRPCConnectionForDKG()
 		if err != nil {
 			return err
 		}

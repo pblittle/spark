@@ -18,8 +18,10 @@ type SigningOperator struct {
 	// Identifier is the identifier of the signing operator, which will be index + 1 in 32 bytes big endian hex string.
 	// Used as shamir secret share identifier in DKG key shares.
 	Identifier string
-	// Address is the address of the signing operator.
-	Address string
+	// AddressRpc is the address of the signing operator.
+	AddressRpc string
+	// Address is the address of the signing operator used for serving the DKG service.
+	AddressDkg string
 	// IdentityPublicKey is the identity public key of the signing operator.
 	IdentityPublicKey []byte
 	// ServerCertPath is the path to the server certificate.
@@ -32,6 +34,7 @@ type SigningOperator struct {
 type jsonSigningOperator struct {
 	ID                uint32  `json:"id"`
 	Address           string  `json:"address"`
+	AddressDkg        *string `json:"address_dkg"`
 	IdentityPublicKey string  `json:"identity_public_key"`
 	CertPath          *string `json:"cert_path"`
 	ExternalAddress   string  `json:"external_address"`
@@ -52,7 +55,12 @@ func (s *SigningOperator) UnmarshalJSON(data []byte) error {
 
 	s.ID = uint64(js.ID)
 	s.Identifier = utils.IndexToIdentifier(js.ID)
-	s.Address = js.Address
+	s.AddressRpc = js.Address
+	if js.AddressDkg != nil {
+		s.AddressDkg = *js.AddressDkg
+	} else {
+		s.AddressDkg = js.Address // Use the same address for DKG if not specified
+	}
 	s.IdentityPublicKey = pubKey
 	s.CertPath = js.CertPath
 	s.ExternalAddress = js.ExternalAddress
@@ -71,5 +79,9 @@ func (s *SigningOperator) MarshalProto() *pb.SigningOperatorInfo {
 
 // NewGRPConnection creates a new gRPC connection to the signing operator.
 func (s *SigningOperator) NewGRPCConnection() (*grpc.ClientConn, error) {
-	return common.NewGRPCConnection(s.Address, s.CertPath, nil)
+	return common.NewGRPCConnection(s.AddressRpc, s.CertPath, nil)
+}
+
+func (s *SigningOperator) NewGRPCConnectionForDKG() (*grpc.ClientConn, error) {
+	return common.NewGRPCConnection(s.AddressDkg, s.CertPath, nil)
 }

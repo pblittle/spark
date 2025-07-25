@@ -31,7 +31,7 @@ type Config struct {
 
 // CoodinatorAddress returns coodinator address.
 func (c *Config) CoodinatorAddress() string {
-	return c.SigningOperators[c.CoodinatorIdentifier].Address
+	return c.SigningOperators[c.CoodinatorIdentifier].AddressRpc
 }
 
 // IdentityPublicKey returns the identity public key.

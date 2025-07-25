@@ -99,6 +99,7 @@ func (s *mockSparkInternalServiceServer) ReserveEntityDkgKey(ctx context.Context
 	}
 	return &emptypb.Empty{}, nil
 }
+
 func TestReserveEntityDkg_OperatorDown(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -147,7 +148,7 @@ func TestReserveEntityDkg_OperatorDown(t *testing.T) {
 				}
 				lis, err := net.Listen("tcp", "127.0.0.1:0")
 				require.NoError(t, err)
-				operator.Address = lis.Addr().String()
+				operator.AddressRpc = lis.Addr().String()
 
 				var injectedErr error
 				if tc.failOneOperator && id == failingOperatorID {

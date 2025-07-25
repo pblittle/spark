@@ -2056,7 +2056,7 @@ func testCreateNativeSparkTokenWithParams(config *wallet.Config, issuerPrivateKe
 // triggerTaskOnAllOperators triggers the specified scheduled task immediately on all signing operators via the mock service.
 func triggerTaskOnAllOperators(t *testing.T, config *wallet.Config, taskName string) {
 	for _, operator := range config.SigningOperators {
-		conn, err := common.NewGRPCConnectionWithTestTLS(operator.Address, nil)
+		conn, err := common.NewGRPCConnectionWithTestTLS(operator.AddressRpc, nil)
 		require.NoError(t, err)
 		mockClient := pbmock.NewMockServiceClient(conn)
 		_, err = mockClient.TriggerTask(context.Background(), &pbmock.TriggerTaskRequest{TaskName: taskName})

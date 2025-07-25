@@ -244,7 +244,7 @@ func SendTransferTweakKey(
 		wg.Add(1)
 		go func(identifier string, operator *so.SigningOperator) {
 			defer wg.Done()
-			sparkConn, err := common.NewGRPCConnectionWithTestTLS(operator.Address, nil)
+			sparkConn, err := common.NewGRPCConnectionWithTestTLS(operator.AddressRpc, nil)
 			if err != nil {
 				results <- err
 				return
@@ -666,7 +666,7 @@ func ClaimTransferTweakKeys(
 		wg.Add(1)
 		go func(identifier string, operator *so.SigningOperator) {
 			defer wg.Done()
-			sparkConn, err := common.NewGRPCConnectionWithTestTLS(operator.Address, nil)
+			sparkConn, err := common.NewGRPCConnectionWithTestTLS(operator.AddressRpc, nil)
 			if err != nil {
 				results <- err
 				return

@@ -47,7 +47,7 @@ func CreateLightningInvoiceWithPreimageAndHash(
 		wg.Add(1)
 		go func(operator *so.SigningOperator) {
 			defer wg.Done()
-			sparkConn, err := common.NewGRPCConnectionWithTestTLS(operator.Address, nil)
+			sparkConn, err := common.NewGRPCConnectionWithTestTLS(operator.AddressRpc, nil)
 			if err != nil {
 				results <- err
 				return
