@@ -2285,16 +2285,15 @@ func (h *TransferHandler) SettleReceiverKeyTweak(ctx context.Context, req *pbint
 		return nil
 	}
 
-	leaves, err := transfer.QueryTransferLeaves().All(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to get leaves from transfer %s: %w", req.TransferId, err)
-	}
-
 	switch req.Action {
 	case pbinternal.SettleKeyTweakAction_COMMIT:
+		leaves, err := transfer.QueryTransferLeaves().WithLeaf().All(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to get leaves from transfer %s: %w", req.TransferId, err)
+		}
 		for _, leaf := range leaves {
-			treeNode, err := leaf.QueryLeaf().Only(ctx)
-			if err != nil {
+			treeNode := leaf.Edges.Leaf
+			if treeNode == nil {
 				return fmt.Errorf("unable to get tree node for leaf %s: %w", leaf.ID.String(), err)
 			}
 			if len(leaf.KeyTweak) == 0 {
@@ -2319,6 +2318,10 @@ func (h *TransferHandler) SettleReceiverKeyTweak(ctx context.Context, req *pbint
 			return fmt.Errorf("unable to update transfer status %s: %w", transfer.ID.String(), err)
 		}
 	case pbinternal.SettleKeyTweakAction_ROLLBACK:
+		leaves, err := transfer.QueryTransferLeaves().All(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to get leaves from transfer %s: %w", req.TransferId, err)
+		}
 		err = h.revertClaimTransfer(ctx, transfer, leaves)
 		if err != nil {
 			return fmt.Errorf("unable to revert claim transfer %s: %w", transfer.ID.String(), err)
