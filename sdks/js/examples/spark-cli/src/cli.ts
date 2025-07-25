@@ -330,6 +330,7 @@ const commands = [
   "querytokentransactions",
   "gettransferfromssp",
   "gettransfer",
+  "encodeaddress",
 
   "unilateralexit",
   "generatefeebumppackagetobroadcast",
@@ -540,6 +541,7 @@ async function runCLI() {
   getstaticdepositaddress                                             - Get a static address to deposit funds from L1 to Spark
   identity                                                            - Get the wallet's identity public key
   getsparkaddress                                                     - Get the wallet's spark address
+  encodeaddress <identityPublicKey> <network> (mainnet, regtest, testnet, signet, local) - Encodes a identity public key to a spark address
   decodesparkaddress <sparkAddress> <network(MAINNET|REGTEST|SIGNET|TESTNET|LOCAL))> - Decode a spark address to get the identity public key
   getlatesttx <address>                                               - Get the latest deposit transaction id for an address
   claimdeposit <txid>                                                 - Claim any pending deposits to the wallet
@@ -1065,7 +1067,7 @@ async function runCLI() {
         case "encodeaddress":
           if (args.length !== 2) {
             console.log(
-              "Usage: encodeaddress <sparkAddress> <network> (mainnet, regtest, testnet, signet, local)",
+              "Usage: encodeaddress <identityPublicKey> <network> (mainnet, regtest, testnet, signet, local)",
             );
             break;
           }
