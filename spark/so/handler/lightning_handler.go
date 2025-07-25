@@ -243,6 +243,7 @@ func (h *LightningHandler) ValidateGetPreimageRequest(
 	destinationPubkey []byte,
 	feeSats uint64,
 	reason pb.InitiatePreimageSwapRequest_Reason,
+	validateNodeOwnership bool,
 ) error {
 	logger := logging.GetLoggerFromContext(ctx)
 
@@ -271,6 +272,7 @@ func (h *LightningHandler) ValidateGetPreimageRequest(
 	defer conn.Close()
 
 	client := pbfrost.NewFrostServiceClient(conn)
+	nodes := make([]*ent.TreeNode, 0)
 	for i := range cpfpTransactions {
 		cpfpTransaction := cpfpTransactions[i]
 
@@ -295,6 +297,7 @@ func (h *LightningHandler) ValidateGetPreimageRequest(
 		if err != nil {
 			return fmt.Errorf("unable to get node: %w", err)
 		}
+		nodes = append(nodes, node)
 		if node.Status != st.TreeNodeStatusAvailable {
 			return fmt.Errorf("node %v is not available: %v", node.ID, node.Status)
 		}
@@ -411,6 +414,13 @@ func (h *LightningHandler) ValidateGetPreimageRequest(
 			if err != nil {
 				return fmt.Errorf("unable to validate direct from cpfp signature share: %w, for sighash: %v, user pubkey: %v", err, hex.EncodeToString(cpfpSighash), hex.EncodeToString(node.OwnerSigningPubkey))
 			}
+		}
+	}
+
+	if validateNodeOwnership {
+		err = h.validateNodeOwnership(ctx, nodes)
+		if err != nil {
+			return fmt.Errorf("unable to validate node ownership: %w", err)
 		}
 	}
 
@@ -631,9 +641,10 @@ func (h *LightningHandler) GetPreimageShare(ctx context.Context, req *pb.Initiat
 		req.ReceiverIdentityPublicKey,
 		req.FeeSats,
 		req.Reason,
+		false,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to validate request: %w", err)
+		return nil, fmt.Errorf("unable to validate get preimage request: %w", err)
 	}
 
 	cpfpLeafRefundMap := make(map[string][]byte)
@@ -766,6 +777,7 @@ func (h *LightningHandler) initiatePreimageSwap(ctx context.Context, req *pb.Ini
 		req.ReceiverIdentityPublicKey,
 		req.FeeSats,
 		req.Reason,
+		true,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to validate request: %w", err)
