@@ -151,7 +151,7 @@ func (h *LightningHandler) GetSigningCommitments(ctx context.Context, req *pb.Ge
 		nodeIDs[i] = nodeID
 	}
 
-	nodes, err := tx.TreeNode.Query().Where(treenode.IDIn(nodeIDs...)).All(ctx)
+	nodes, err := tx.TreeNode.Query().WithSigningKeyshare().Where(treenode.IDIn(nodeIDs...)).All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get nodes: %w", err)
 	}
@@ -162,10 +162,10 @@ func (h *LightningHandler) GetSigningCommitments(ctx context.Context, req *pb.Ge
 
 	keyshareIDs := make([]uuid.UUID, len(nodes))
 	for i, node := range nodes {
-		keyshareIDs[i], err = node.QuerySigningKeyshare().OnlyID(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get keyshare id: %w", err)
+		if node.Edges.SigningKeyshare == nil {
+			return nil, fmt.Errorf("node %s has no keyshare", node.ID)
 		}
+		keyshareIDs[i] = node.Edges.SigningKeyshare.ID
 	}
 
 	count := req.Count
