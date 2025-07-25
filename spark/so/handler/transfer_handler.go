@@ -2045,12 +2045,12 @@ func (h *TransferHandler) claimTransferSignRefunds(ctx context.Context, req *pb.
 		directFromCpfpRefundTxSigningJob := (*pb.SigningJob)(nil)
 		if job.DirectRefundTxSigningJob != nil {
 			directRefundTxSigningJob = job.DirectRefundTxSigningJob
-		} else if requireDirectTx {
+		} else if requireDirectTx && len(leaf.DirectTx) > 0 {
 			return nil, fmt.Errorf("DirectRefundTxSigningJob is required. Please upgrade to the latest SDK version")
 		}
 		if job.DirectFromCpfpRefundTxSigningJob != nil {
 			directFromCpfpRefundTxSigningJob = job.DirectFromCpfpRefundTxSigningJob
-		} else if requireDirectTx {
+		} else if requireDirectTx && len(leaf.DirectTx) > 0 {
 			return nil, fmt.Errorf("DirectFromCpfpRefundTxSigningJob is required. Please upgrade to the latest SDK version")
 		}
 		directRefundTx := []byte{}

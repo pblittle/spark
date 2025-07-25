@@ -120,7 +120,7 @@ func (o *FinalizeSignatureHandler) finalizeNodeSignatures(ctx context.Context, r
 		internalNodes = append(internalNodes, internalNode)
 	}
 
-	//Send gossip message to other SOs
+	// Send gossip message to other SOs
 	selection := helper.OperatorSelection{Option: helper.OperatorSelectionOptionExcludeSelf}
 	participants, err := selection.OperatorIdentifierList(o.config)
 	if err != nil {
@@ -134,7 +134,6 @@ func (o *FinalizeSignatureHandler) finalizeNodeSignatures(ctx context.Context, r
 	switch req.Intent {
 	case pbcommon.SignatureIntent_CREATION:
 		protoNetwork, err := common.ProtoNetworkFromNetwork(network)
-
 		if err != nil {
 			return nil, err
 		}
@@ -292,7 +291,7 @@ func (o *FinalizeSignatureHandler) updateNode(ctx context.Context, nodeSignature
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to update direct tx with signature %s: %w", logging.FormatProto("node_signatures", nodeSignatures), err)
 			}
-		} else if len(nodeSignatures.DirectNodeTxSignature) == 0 && requireDirectTx {
+		} else if len(nodeSignatures.DirectNodeTxSignature) == 0 && requireDirectTx && len(node.DirectTx) > 0 {
 			return nil, nil, fmt.Errorf("DirectNodeTxSignature is required. Please upgrade to the latest SDK version")
 		}
 		// Node may not have parent if it is the root node
@@ -385,7 +384,7 @@ func (o *FinalizeSignatureHandler) updateNode(ctx context.Context, nodeSignature
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to verify direct from cpfp refund tx signature: %w", err)
 			}
-		} else if requireDirectTx {
+		} else if requireDirectTx && len(node.DirectTx) > 0 {
 			return nil, nil, fmt.Errorf("DirectRefundTxSignature and DirectFromCpfpRefundTxSignature are required. Please upgrade to the latest SDK version.")
 		}
 	} else {
