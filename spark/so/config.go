@@ -61,8 +61,6 @@ type Config struct {
 	IsRDS bool
 	// authzEnforced determines if client authorization checks are enforced
 	authzEnforced bool
-	// DKGCoordinatorAddress is the address of the DKG coordinator.
-	DKGCoordinatorAddress string
 	// DKGConfig
 	DKGConfig DkgConfig
 	// SupportedNetworks is the list of networks supported by the signing operator.
@@ -238,7 +236,6 @@ func NewConfig(
 	databasePath string,
 	isRDS bool,
 	authzEnforced bool,
-	dkgCoordinatorAddress string,
 	supportedNetworks []common.Network,
 	serverCertPath string,
 	serverKeyPath string,
@@ -281,10 +278,6 @@ func NewConfig(
 	}
 	identifier := utils.IndexToIdentifier(uint32(index))
 
-	if dkgCoordinatorAddress == "" {
-		dkgCoordinatorAddress = signingOperatorMap[identifier].AddressDkg
-	}
-
 	if !operatorConfig.ServiceAuthz.Mode.Valid() {
 		slog.Warn("unset or invalid authz mode - treating authz as disabled", "mode", operatorConfig.ServiceAuthz.Mode)
 		operatorConfig.ServiceAuthz.Mode = authz.ModeLogOnly
@@ -318,7 +311,6 @@ func NewConfig(
 		DatabasePath:                          databasePath,
 		IsRDS:                                 isRDS,
 		authzEnforced:                         authzEnforced,
-		DKGCoordinatorAddress:                 dkgCoordinatorAddress,
 		DKGConfig:                             operatorConfig.Dkg,
 		SupportedNetworks:                     supportedNetworks,
 		BitcoindConfigs:                       operatorConfig.Bitcoind,

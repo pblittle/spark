@@ -69,7 +69,6 @@ type args struct {
 	ChallengeTimeout           time.Duration
 	SessionDuration            time.Duration
 	AuthzEnforced              bool
-	DKGCoordinatorAddress      string
 	DisableDKG                 bool
 	SupportedNetworks          string
 	AWS                        bool
@@ -119,7 +118,6 @@ func loadArgs() (*args, error) {
 	flag.DurationVar(&args.ChallengeTimeout, "challenge-timeout", time.Minute, "Challenge timeout")
 	flag.DurationVar(&args.SessionDuration, "session-duration", time.Minute*15, "Session duration")
 	flag.BoolVar(&args.AuthzEnforced, "authz-enforced", true, "Enforce authorization checks")
-	flag.StringVar(&args.DKGCoordinatorAddress, "dkg-address", "", "DKG coordinator address")
 	flag.BoolVar(&args.DisableDKG, "disable-dkg", false, "Disable DKG")
 	flag.StringVar(&args.SupportedNetworks, "supported-networks", "", "Supported networks")
 	flag.BoolVar(&args.AWS, "aws", false, "Use AWS RDS")
@@ -237,7 +235,6 @@ func main() {
 		args.DatabasePath,
 		args.AWS,
 		args.AuthzEnforced,
-		args.DKGCoordinatorAddress,
 		args.SupportedNetworksList(),
 		args.ServerCertPath,
 		args.ServerKeyPath,

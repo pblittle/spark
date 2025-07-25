@@ -455,7 +455,7 @@ func RunDKG(ctx context.Context, config *so.Config) error {
 	logger := logging.GetLoggerFromContext(ctx)
 
 	connection, err := common.NewGRPCConnection(
-		config.DKGCoordinatorAddress,
+		config.SigningOperatorMap[config.Identifier].AddressDkg,
 		config.SigningOperatorMap[config.Identifier].CertPath,
 		nil,
 	)

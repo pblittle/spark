@@ -177,14 +177,13 @@ func SpecificOperatorTestConfig(operatorIndex int) (*so.Config, error) {
 	opCount := len(signingOperators)
 	threshold := (opCount + 2) / 2 // 1/1, 2/2, 2/3, 3/4, 3/5
 	config := so.Config{
-		Index:                 uint64(operatorIndex),
-		Identifier:            identifier,
-		IdentityPrivateKey:    identityPrivateKeyBytes,
-		SigningOperatorMap:    signingOperators,
-		Threshold:             uint64(threshold),
-		SignerAddress:         getLocalFrostSignerAddress(),
-		DatabasePath:          getTestDatabasePath(operatorIndex),
-		DKGCoordinatorAddress: signingOperators[identifier].AddressDkg,
+		Index:              uint64(operatorIndex),
+		Identifier:         identifier,
+		IdentityPrivateKey: identityPrivateKeyBytes,
+		SigningOperatorMap: signingOperators,
+		Threshold:          uint64(threshold),
+		SignerAddress:      getLocalFrostSignerAddress(),
+		DatabasePath:       getTestDatabasePath(operatorIndex),
 	}
 	return &config, nil
 }
