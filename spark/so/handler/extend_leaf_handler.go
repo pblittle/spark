@@ -190,7 +190,7 @@ func (h *ExtendLeafHandler) extendLeaf(ctx context.Context, req *pb.ExtendLeafRe
 		signingJobs = append(signingJobs, newDirectNodeSigningJob, directRefundSigningJob, newDirectFromCpfpRefundSigningJob)
 	} else if directNodeSigningJob != nil || directRefundSigningJob != nil || directFromCpfpRefundSigningJob != nil {
 		return nil, fmt.Errorf("direct node tx signing job, direct refund tx signing job, and direct from cpfp refund tx signing job must all be provided or none of them")
-	} else if requireDirectTx {
+	} else if requireDirectTx && len(leaf.DirectTx) > 0 {
 		return nil, fmt.Errorf("DirectRefundTxSigningJob and DirectFromCpfpRefundTxSigningJob are required. Please upgrade to the latest SDK version")
 	}
 

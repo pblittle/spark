@@ -96,7 +96,7 @@ func (h *RefreshTimelockHandler) refreshTimelock(ctx context.Context, req *pb.Re
 					rawTxBytes = node.DirectTx
 				}
 			}
-		} else if requireDirectTx {
+		} else if requireDirectTx && len(node.DirectTx) > 0 {
 			if len(req.SigningJobs) != 3 && len(req.SigningJobs) != 5 {
 				return nil, fmt.Errorf("Received %d signing jobs, expected either 3 or 5 to include direct TX signing jobs.", len(req.SigningJobs))
 			} else {

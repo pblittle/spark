@@ -159,7 +159,7 @@ func validateSendLeafRefundTxs(leaf *ent.TreeNode, rawTx []byte, directTx []byte
 		if err != nil {
 			return fmt.Errorf("unable to validate direct from cpfp refund tx output: %w", err)
 		}
-	} else if requireDirectTx {
+	} else if requireDirectTx && len(leaf.DirectTx) > 0 {
 		return fmt.Errorf("DirectNodeTxSignature is required. Please upgrade to the latest SDK version")
 	}
 
