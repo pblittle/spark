@@ -126,26 +126,6 @@ go test $(go list ./... | grep -v -E "so/grpc_test|so/tree")
 
 The E2E test environment can be run locally in minikube via `./scripts/local-test.sh` for hermetic testing (recommended) or run locally via `./run-everything.sh`.
 
-#### Hermetic/Minikube Setup (`./scripts/local-test.sh`)
-
-##### minikube
-
-See: [spark/minikube/README.md](https://github.com/lightsparkdev/spark/blob/main/minikube/README.md)
-
-Please run: `spark/minikube/setup.sh`, then `./scripts/local-test.sh`. If want to make local code changes visible in minikube, you'll need to
-
-```
-# 1. Build the image
-./scripts/build-to-minikube.sh
-# OR
-mise build-to-minikube
-
-# 2. Run minikube with the local image
-./scripts/local-test.sh --dev-spark
-# OR
-mise run-minikube
-```
-
 #### Local Setup (`./run-everything.sh`)
 
 ```
