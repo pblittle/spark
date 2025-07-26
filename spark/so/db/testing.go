@@ -2,12 +2,15 @@ package db
 
 import (
 	"context"
+	"net"
 	"testing"
 
+	epg "github.com/fergusstrange/embedded-postgres"
 	_ "github.com/lib/pq" // postgres driver
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/ent/enttest"
 	_ "github.com/mattn/go-sqlite3" // sqlite3 driver
+	"github.com/stretchr/testify/require"
 )
 
 type TestContext struct {
@@ -62,4 +65,38 @@ func NewTestSQLiteClient(
 	t *testing.T,
 ) *ent.Client {
 	return enttest.Open(t, "sqlite3", "file:ent?mode=memory&_fk=1")
+}
+
+// spinUpPostgres starts an ephemeral postgres and returns a DSN and a stop func.
+func SpinUpPostgres(t *testing.T) (dsn string, stop func()) {
+	// pick a free TCP port for each test
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := l.Addr().(*net.TCPAddr).Port
+	_ = l.Close()
+
+	// give each test its own runtime dir so parallel runs don't clash
+	tmpDir := t.TempDir()
+
+	cfg := epg.DefaultConfig().
+		Username("postgres").
+		Password("postgres").
+		Database("spark_test").
+		RuntimePath(tmpDir). // binaries & data
+		Port(uint32(port))
+
+	pg := epg.NewDatabase(cfg)
+	require.NoError(t, pg.Start())
+	stop = func() { _ = pg.Stop() }
+
+	dsn = cfg.GetConnectionURL() + "?sslmode=disable"
+	return
+}
+
+// newPgTestClient opens an ent Client on the given DSN and ensures the schema exists.
+func NewPgTestClient(t *testing.T, dsn string) *ent.Client {
+	client, err := ent.Open("postgres", dsn)
+	require.NoError(t, err)
+
+	return client
 }

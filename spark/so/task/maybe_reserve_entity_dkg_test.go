@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	epg "github.com/fergusstrange/embedded-postgres"
 	_ "github.com/lib/pq"
 
 	"github.com/stretchr/testify/assert"
@@ -22,48 +21,10 @@ import (
 	"github.com/lightsparkdev/spark/proto/spark_internal"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/db"
-	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
 	"github.com/lightsparkdev/spark/so/task"
 	testutil "github.com/lightsparkdev/spark/test_util"
 )
-
-// newPgTestClient opens an ent Client on the given DSN and ensures the schema exists.
-func newPgTestClient(t *testing.T, dsn string) *ent.Client {
-	client, err := ent.Open("postgres", dsn)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	require.NoError(t, client.Schema.Create(ctx))
-
-	return client
-}
-
-// spinUpPostgres starts an ephemeral postgres and returns a DSN and a stop func.
-func spinUpPostgres(t *testing.T) (dsn string, stop func()) {
-	// pick a free TCP port for each test
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	port := l.Addr().(*net.TCPAddr).Port
-	_ = l.Close()
-
-	// give each test its own runtime dir so parallel runs don’t clash
-	tmpDir := t.TempDir()
-
-	cfg := epg.DefaultConfig().
-		Username("postgres").
-		Password("postgres").
-		Database("spark_test").
-		RuntimePath(tmpDir). // binaries & data
-		Port(uint32(port))
-
-	pg := epg.NewDatabase(cfg)
-	require.NoError(t, pg.Start())
-	stop = func() { _ = pg.Stop() }
-
-	dsn = cfg.GetConnectionURL() + "?sslmode=disable"
-	return
-}
 
 // getReserveEntityDkgTask returns the startup task we are testing.
 func getReserveEntityDkgTask() (task.StartupTask, error) {
@@ -120,10 +81,10 @@ func TestReserveEntityDkg_OperatorDown(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			dsn, stop := spinUpPostgres(t)
+			dsn, stop := db.SpinUpPostgres(t)
 			defer stop()
 
-			client := newPgTestClient(t, dsn)
+			client := db.NewPgTestClient(t, dsn)
 			defer client.Close()
 
 			ctx := context.Background()
@@ -205,10 +166,10 @@ func TestReserveEntityDkg_OperatorDown(t *testing.T) {
 
 // TestReserveEntityDkg_Idempotent ensures running the task twice is safe.
 func TestReserveEntityDkg_Idempotent(t *testing.T) {
-	dsn, stop := spinUpPostgres(t)
+	dsn, stop := db.SpinUpPostgres(t)
 	defer stop()
 
-	client := newPgTestClient(t, dsn)
+	client := db.NewPgTestClient(t, dsn)
 	defer client.Close()
 
 	ctx := context.Background()
@@ -254,10 +215,10 @@ func TestReserveEntityDkg_Idempotent(t *testing.T) {
 // TestReserveEntityDkg_NonCoordinator verifies that non-coordinator operators
 // do not attempt to reserve an entity DKG key.
 func TestReserveEntityDkg_NonCoordinator(t *testing.T) {
-	dsn, stop := spinUpPostgres(t)
+	dsn, stop := db.SpinUpPostgres(t)
 	defer stop()
 
-	client := newPgTestClient(t, dsn)
+	client := db.NewPgTestClient(t, dsn)
 	defer client.Close()
 
 	ctx := context.Background()
