@@ -58,10 +58,7 @@ func SparkTokenMetricsInterceptor() grpc.UnaryServerInterceptor {
 		startTime := time.Now()
 		resp, err := handler(ctx, req)
 		duration := time.Since(startTime).Seconds()
-
-		if err != nil {
-			attrs = append(attrs, attribute.String("grpc_code", status.Code(err).String()))
-		}
+		attrs = append(attrs, attribute.String("grpc_code", status.Code(err).String()))
 
 		sparkTokenTxHandledTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
 		sparkTokenTxDuration.Record(ctx, duration, metric.WithAttributes(attrs...))
