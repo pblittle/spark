@@ -68,7 +68,7 @@ To make a migration, follow these steps:
 
 - Make your change to the schema, run `make ent`
 - Generate migration files by running `./scripts/gen-migration.sh <name>`:
-- When running in minikube or `run-everything.sh`, the migration will be automatically
+- With `run-everything.sh`, the migration will be automatically
   applied to each operator's database. But if you want to apply a migration manually, you can run (e.g. DB name is `sparkoperator_0`):
 
 ```
@@ -124,7 +124,7 @@ go test $(go list ./... | grep -v -E "so/grpc_test|so/tree")
 
 ## E2E tests
 
-The E2E test environment can be run locally in minikube via `./scripts/local-test.sh` for hermetic testing (recommended) or run locally via `./run-everything.sh`.
+The E2E test environment can be run locally via `./run-everything.sh`.
 
 #### Local Setup (`./run-everything.sh`)
 
@@ -171,38 +171,6 @@ JS SDK integration tests are across the different JS packages, but can be run to
 In the root folder, run:
 
 ```
-# Hermetic/Minikube environment
-#
-# Usage:
-#   ./scripts/local-test.sh [--dev-spark] [--dev-lrc20] [--no-spark-debug] [--keep-data]
-#
-# Options:
-#   --dev-spark         - Sets USE_DEV_SPARK=true and SPARK_DEBUG=true to use the locally built dev spark image and enable headless dlv debugging. Requires the image to be built with the debug flag (which is the default from build-to-minikube.sh).
-#   --dev-lrc20         - Sets USE_DEV_LRC20=true to use the locally built dev lrc20 image
-#   --no-spark-debug    - Sets USE_DEV_SPARK=true and SPARK_DEBUG=false to configure the local dev spark container to run without headless dlv debugger. If you are using a local "production" image, you must use this flag.
-#   --keep-data         - Sets RESET_DBS=false to preserve existing test data (databases and blockchain)
-#   --operators|-o      - The number of Spark operators to deploy (default: 5)
-#
-# Environment Variables:
-#   RESET_DBS           - Whether to reset operator databases and bitcoin blockchain (default: true)
-#   USE_DEV_SPARK       - Whether to use the dev spark image built into minikube (default: false)
-#   USE_DEV_LRC20       - Whether to use the dev lrc20 image built into minikube (default: false)
-#   SPARK_DEBUG         - Whether to configure spark to run with headless dlv debugger. If you are using a local "production" image, this must be set to false. (default: false)
-#   SPARK_TAG           - Image tag to use for both Spark operator and signer (default: latest)
-#   LRC20_TAG           - Image tag to use for LRC20 (default: latest)
-#   USE_LIGHTSPARK_HELM_REPO - Whether to fetch helm charts from remote repo (default: false)
-#   OPS_DIR             - Path to the Lightspark ops repository which contains helm charts (auto-detected if not set)
-#   LRC20_REPLICAS      - The number of LRC20 replicas to deploy (default: 1)
-#   NUM_SPARK_OPERATORS - The number of Spark operators to deploy (default: 5)
-
-./scripts/local-test.sh
-
-# CTR-C when done to remove shut down port forwarding
-```
-
-OR
-
-```
 # Local environment
 ./run-everything.sh
 ```
@@ -231,7 +199,7 @@ yarn test:integration
 
 #### Troubleshooting
 
-1. For local testing, operator (go) and signer (rust) logs are found in `_data/run_X/logs`. For minikube, logs are found via kubernetes. [k9s](https://k9scli.io/) is a great tool to investigate your minikube k8 cluster.
+1. For local testing, operator (go) and signer (rust) logs are found in `_data/run_X/logs`.
 2. If you don't want to deal with `tmux` commands yourself, you can easily interact with tmux using the `iterm2` GUI and tmux control mode.
    From within `iterm2`, you can run:
 
