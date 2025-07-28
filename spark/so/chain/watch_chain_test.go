@@ -226,6 +226,9 @@ func TestHandleBlock_MixedTransactions(t *testing.T) {
 	// Reuse the signing key from above because we don't enforce it to be anything specific for this test.
 	treeNode, err := dbTx.TreeNode.Create().
 		SetRawRefundTx(rawRefundTx).
+		SetDirectRefundTx(rawRefundTx).
+		SetDirectTx(rawNodeTx).
+		SetDirectFromCpfpRefundTx(rawRefundTx).
 		SetStatus(schematype.TreeNodeStatusOnChain).
 		SetNodeConfirmationHeight(100).
 		SetOwnerIdentityPubkey([]byte("owner")).

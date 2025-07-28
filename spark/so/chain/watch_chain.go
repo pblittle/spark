@@ -463,31 +463,8 @@ func handleBlock(
 
 	if processNodesForWatchtowers {
 		logger.Info("Started processing nodes for watchtowers", "height", blockHeight)
-		// Fetch nodes with a confirmed parent and unconfirmed node/refund TX
-		nodes, err := dbTx.TreeNode.Query().
-			Where(
-				treenode.Or(
-					// Root nodes that need node confirmation or refund confirmation
-					treenode.And(
-						treenode.Not(treenode.HasParent()),
-						treenode.Or(
-							treenode.NodeConfirmationHeightIsNil(),
-							treenode.RefundConfirmationHeightIsNil(),
-						),
-					),
-					// Child nodes with confirmed parent that need node confirmation
-					treenode.And(
-						treenode.HasParentWith(treenode.NodeConfirmationHeightNotNil()),
-						treenode.NodeConfirmationHeightIsNil(),
-					),
-					// Nodes with confirmed node tx and refund tx that need refund confirmation
-					treenode.And(
-						treenode.NodeConfirmationHeightNotNil(),
-						treenode.RefundConfirmationHeightIsNil(),
-					),
-				),
-			).
-			All(ctx)
+		// Fetch only nodes that could have expired timelocks
+		nodes, err := watchtower.QueryNodesWithExpiredTimeLocks(ctx, dbTx, blockHeight, network)
 		if err != nil {
 			return fmt.Errorf("failed to query nodes: %w", err)
 		}

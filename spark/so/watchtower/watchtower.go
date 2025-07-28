@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
+
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/lightsparkdev/spark"
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/so/ent"
+	"github.com/lightsparkdev/spark/so/ent/treenode"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -79,6 +82,70 @@ func alreadyBroadcasted(err error) bool {
 	var rpcErr *btcjson.RPCError
 
 	return errors.As(err, &rpcErr) && rpcErr.Code == btcjson.ErrRPCVerifyAlreadyInChain
+}
+
+// QueryNodesWithExpiredTimeLocks returns nodes that are eligible for broadcast.
+func QueryNodesWithExpiredTimeLocks(ctx context.Context, dbTx *ent.Tx, blockHeight int64, network common.Network) ([]*ent.TreeNode, error) {
+	var rootNodes, childNodes, refundNodes []*ent.TreeNode
+
+	// 1. Root nodes needing confirmation
+	rootNodes, err := dbTx.TreeNode.Query().
+		Where(
+			treenode.Not(treenode.HasParent()),
+			treenode.Or(
+				treenode.NodeConfirmationHeightIsNil(),
+				treenode.RefundConfirmationHeightIsNil(),
+			),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query root nodes: %w", err)
+	}
+
+	// 2. Child nodes whose parent is confirmed but the node itself is not.
+	childNodes, err = dbTx.TreeNode.Query().
+		Where(
+			treenode.HasParentWith(
+				treenode.And(
+					treenode.NodeConfirmationHeightNotNil(),
+					treenode.NodeConfirmationHeightGT(0),
+				),
+			),
+			treenode.NodeConfirmationHeightIsNil(),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query broadcastable child nodes: %w", err)
+	}
+
+	// 3. Nodes with confirmed node tx but unconfirmed refund tx.
+	refundNodes, err = dbTx.TreeNode.Query().
+		Where(
+			treenode.NodeConfirmationHeightNotNil(),
+			treenode.RefundConfirmationHeightIsNil(),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query refund-pending nodes: %w", err)
+	}
+
+	// Deduplicate nodes.
+	allNodes := make([]*ent.TreeNode, 0, len(rootNodes)+len(childNodes)+len(refundNodes))
+	allNodes = append(allNodes, rootNodes...)
+	allNodes = append(allNodes, childNodes...)
+	allNodes = append(allNodes, refundNodes...)
+
+	uniqueNodes := make([]*ent.TreeNode, 0, len(allNodes))
+	seen := make(map[uuid.UUID]struct{})
+	for _, n := range allNodes {
+		if _, ok := seen[n.ID]; ok {
+			continue
+		}
+		seen[n.ID] = struct{}{}
+		uniqueNodes = append(uniqueNodes, n)
+	}
+
+	return uniqueNodes, nil
 }
 
 // CheckExpiredTimeLocks checks for TXs with expired time locks and broadcasts them if needed.
