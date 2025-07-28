@@ -4,15 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"log/slog"
-	"os"
 	"testing"
 
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -22,8 +19,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/lightsparkdev/spark/so/lrc20"
 )
 
 func TestProcessTransactions(t *testing.T) {
@@ -324,25 +319,38 @@ func TestHandleBlock_MixedTransactions(t *testing.T) {
 		},
 	}
 
-	lrc20Client, err := lrc20.NewClient(&config, slog.New(slog.NewTextHandler(os.Stdout, nil)))
-	require.NoError(t, err)
-
 	connCfg := &rpcclient.ConnConfig{DisableTLS: true, HTTPPostMode: true}
 
 	bitcoinClient, err := rpcclient.New(connCfg, nil)
 	require.NoError(t, err)
 	blockHeight := int64(101)
-	blockHash := chainhash.Hash{}
-	err = handleBlock(ctx, &config, lrc20Client, dbTx, bitcoinClient, txs, blockHeight, &blockHash, common.Testnet)
+	err = handleBlock(ctx, &config, dbTx, bitcoinClient, txs, blockHeight, common.Testnet)
 	require.NoError(t, err)
 
-	// One token should have been created in both L1TokenCreate and TokenCreate
+	// Both token announcements should be created as L1TokenCreate, but only one TokenCreate should be created
 	l1CreatedTokens, err := dbTx.L1TokenCreate.Query().All(ctx)
 	require.NoError(t, err)
-	require.Len(t, l1CreatedTokens, 1)
-	assert.Equal(t, "TestToken", l1CreatedTokens[0].TokenName)
-	assert.Equal(t, "TICK", l1CreatedTokens[0].TokenTicker)
-	assert.Equal(t, validIssuerPubKey, l1CreatedTokens[0].IssuerPublicKey)
+	require.Len(t, l1CreatedTokens, 2)
+
+	// Verify the first token (valid announcement)
+	var validToken, duplicateToken *ent.L1TokenCreate
+	for _, token := range l1CreatedTokens {
+		if token.TokenName == "TestToken" {
+			validToken = token
+		} else if token.TokenName == "DUP1" {
+			duplicateToken = token
+		}
+	}
+	require.NotNil(t, validToken)
+	require.NotNil(t, duplicateToken)
+	assert.Equal(t, "TestToken", validToken.TokenName)
+	assert.Equal(t, "TICK", validToken.TokenTicker)
+	assert.Equal(t, validIssuerPubKey, validToken.IssuerPublicKey)
+	assert.Equal(t, "DUP1", duplicateToken.TokenName)
+	assert.Equal(t, "DUP1", duplicateToken.TokenTicker)
+	assert.Equal(t, validIssuerPubKey, duplicateToken.IssuerPublicKey)
+
+	// Only one TokenCreate should be created (duplicate issuer filtered out)
 	createdTokens, err := dbTx.TokenCreate.Query().All(ctx)
 	require.NoError(t, err)
 	require.Len(t, createdTokens, 1)

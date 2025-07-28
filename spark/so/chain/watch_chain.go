@@ -350,12 +350,10 @@ func connectBlocks(
 		err = handleBlock(
 			ctx,
 			config,
-			lrc20Client,
 			dbTx,
 			bitcoinClient,
 			txs,
 			chainTip.Height,
-			blockHash,
 			network,
 		)
 		if err != nil {
@@ -431,12 +429,10 @@ func processTransactions(txs []wire.MsgTx, networkParams *chaincfg.Params) (map[
 func handleBlock(
 	ctx context.Context,
 	config *so.Config,
-	lrc20Client *lrc20.Client,
 	dbTx *ent.Tx,
 	bitcoinClient *rpcclient.Client,
 	txs []wire.MsgTx,
 	blockHeight int64,
-	blockHash *chainhash.Hash,
 	network common.Network,
 ) error {
 	logger := logging.GetLoggerFromContext(ctx)
@@ -451,7 +447,7 @@ func handleBlock(
 	if err != nil {
 		return err
 	}
-	handleTokenUpdatesForBlock(ctx, config, lrc20Client, dbTx, txs, blockHeight, blockHash, network)
+	handleTokenUpdatesForBlock(ctx, config, dbTx, txs, blockHeight, network)
 
 	confirmedTxHashSet, creditedAddresses, addressToUtxoMap, err := processTransactions(txs, networkParams)
 	if err != nil {
@@ -770,14 +766,6 @@ func handleBlock(
 		}
 	}
 
-	logger.Info("Checking for withdrawn token leaves in block", "height", blockHeight)
-
-	// Use the lrc20 client to sync withdrawn leaves - it will handle all the processing internally
-	err = lrc20Client.MarkWithdrawnTokenOutputs(ctx, network, dbTx, blockHash)
-	if err != nil {
-		logger.Error("Failed to sync withdrawn leaves", "error", err)
-		return err
-	}
 	logger.Info("Finished handling block", "height", blockHeight)
 	blockHeightProcessingTimeHistogram.Record(ctx, int64(time.Since(start).Milliseconds()), metric.WithAttributes(
 		attribute.String("network", network.String()),

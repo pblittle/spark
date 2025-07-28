@@ -7,12 +7,13 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/lightsparkdev/spark/common"
+	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
@@ -25,6 +26,40 @@ var (
 	maxSupply    = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	issuerPubKey = genSeededPubKey()
 )
+
+// setupIsolatedTest creates a fresh database context for a test or subtest with proper cleanup.
+// This ensures complete isolation between test runs without manual cleanup.
+// It also sets up a basic EntityDkgKey required for token operations.
+func setupIsolatedTest(t *testing.T) (context.Context, *ent.Tx) {
+	ctx, dbCtx := db.NewTestSQLiteContext(t, context.Background())
+
+	// Setup automatic cleanup
+	t.Cleanup(func() {
+		dbCtx.Close()
+	})
+
+	dbTx, err := ent.GetDbFromContext(ctx)
+	require.NoError(t, err)
+
+	// Create required EntityDkgKey for token operations
+	entityDkgPublicKey := genSeededPubKey()
+	signingKeyshare, err := dbTx.SigningKeyshare.Create().
+		SetStatus(st.KeyshareStatusAvailable).
+		SetSecretShare([]byte("test_secret")).
+		SetPublicShares(map[string][]byte{}).
+		SetPublicKey(entityDkgPublicKey).
+		SetMinSigners(1).
+		SetCoordinatorIndex(0).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = dbTx.EntityDkgKey.Create().
+		SetSigningKeyshare(signingKeyshare).
+		Save(ctx)
+	require.NoError(t, err)
+
+	return ctx, dbTx
+}
 
 func TestParseTokenAnnouncement(t *testing.T) {
 	tests := []struct {
@@ -380,70 +415,98 @@ func genSeededPubKey() []byte {
 	return key.PubKey().SerializeCompressed()
 }
 
-func TestCreateTokenEntities_L1TokenDuplicateConstraints(t *testing.T) {
+// Helper function to verify entity counts in the database
+func verifyEntityCounts(t *testing.T, ctx context.Context, dbTx *ent.Tx, expectedL1Count, expectedSparkCount int, messagePrefix string) {
+	t.Helper()
+
+	l1TokenCount, err := dbTx.L1TokenCreate.Query().Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, expectedL1Count, l1TokenCount, "%s: Should have exactly %d L1TokenCreate entity/entities", messagePrefix, expectedL1Count)
+
+	sparkTokenCount, err := dbTx.TokenCreate.Query().Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, expectedSparkCount, sparkTokenCount, "%s: Should have exactly %d TokenCreate entity/entities", messagePrefix, expectedSparkCount)
+}
+
+// Helper function to create a transaction with token announcement
+func createTokenTransaction(tokenData []byte, lockTime uint32) wire.MsgTx {
+	txOut := &wire.TxOut{
+		Value:    0,
+		PkScript: directPush(tokenData),
+	}
+	return wire.MsgTx{
+		Version:  2,
+		TxIn:     []*wire.TxIn{},
+		TxOut:    []*wire.TxOut{txOut},
+		LockTime: lockTime,
+	}
+}
+
+// Helper function to create alternative token data with same issuer but different metadata
+func createAlternativeTokenData() []byte {
+	return slices.Concat(
+		[]byte(announcementPrefix),
+		creationAnnouncementKind[:],
+		issuerPubKey,                  // Same issuer public key
+		[]byte{8}, []byte("DiffName"), // Different name
+		[]byte{4}, []byte("DIFF"), // Different ticker
+		[]byte{6}, // Different decimals
+		maxSupply,
+		[]byte{1}, // Different freezable setting
+	)
+}
+
+// Helper function to process token announcements and verify success
+func processTokenAnnouncements(t *testing.T, ctx context.Context, config *so.Config, dbTx *ent.Tx, transactions []wire.MsgTx, messagePrefix string) {
+	t.Helper()
+
+	err := handleTokenAnnouncements(ctx, config, dbTx, transactions, common.Testnet)
+	require.NoError(t, err, "%s should succeed", messagePrefix)
+}
+
+// Helper function to verify token differences
+func verifyTokenDifferences(t *testing.T, ctx context.Context, dbTx *ent.Tx) {
+	t.Helper()
+
+	l1Tokens, err := dbTx.L1TokenCreate.Query().All(ctx)
+	require.NoError(t, err)
+	require.Len(t, l1Tokens, 2)
+
+	// Both should have the same issuer public key
+	assert.Equal(t, l1Tokens[0].IssuerPublicKey, l1Tokens[1].IssuerPublicKey, "Both tokens should have the same issuer public key")
+
+	// But different token identifiers and metadata
+	assert.NotEqual(t, l1Tokens[0].TokenIdentifier, l1Tokens[1].TokenIdentifier, "Tokens should have different token identifiers")
+	assert.NotEqual(t, l1Tokens[0].TokenName, l1Tokens[1].TokenName, "Tokens should have different names")
+	assert.NotEqual(t, l1Tokens[0].TokenTicker, l1Tokens[1].TokenTicker, "Tokens should have different tickers")
+}
+
+func TestHandleTokenAnnouncements_DuplicateConstraints(t *testing.T) {
 	ctx, dbCtx := db.NewTestSQLiteContext(t, context.Background())
 	defer dbCtx.Close()
 
 	config, err := testutil.TestConfig()
 	require.NoError(t, err)
-
-	// Disable Spark token creation to simplify the test setup
-	config.Token.DisableSparkTokenCreationForL1TokenAnnouncements = true
 
 	// Get database transaction from context
 	dbTx, err := ent.GetDbFromContext(ctx)
 	require.NoError(t, err)
 
 	// Create test data
-	issuerPubKey := genSeededPubKey()
-	testTxHash := chainhash.Hash{0x01, 0x02, 0x03}
-
-	// Create L1TokenCreate entity that implements TokenMetadataProvider
-	l1TokenToCreate := &ent.L1TokenCreate{
-		IssuerPublicKey: issuerPubKey,
-		TokenName:       "TestToken",
-		TokenTicker:     "TST",
-		Decimals:        8,
-		MaxSupply:       []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-		IsFreezable:     false,
-		Network:         common.SchemaNetwork(common.Testnet),
+	tokenData := createValidTokenData()
+	txOut := &wire.TxOut{
+		Value:    0,
+		PkScript: directPush(tokenData),
+	}
+	tx := wire.MsgTx{
+		Version:  2,
+		TxIn:     []*wire.TxIn{},
+		TxOut:    []*wire.TxOut{txOut},
+		LockTime: 0,
 	}
 
-	// Test 1: First call should succeed and create L1TokenCreate entity
-	err = createTokenEntities(ctx, config, dbTx, l1TokenToCreate, testTxHash)
-	require.NoError(t, err, "First call to createTokenEntities should succeed")
-
-	// Verify L1TokenCreate entity was created
-	l1TokenCount, err := dbTx.L1TokenCreate.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 1, l1TokenCount, "Should have exactly one L1TokenCreate entity")
-
-	// Test 2: Second call with same issuer public key should not error and not create duplicate
-	err = createTokenEntities(ctx, config, dbTx, l1TokenToCreate, testTxHash)
-	require.NoError(t, err, "Second call to createTokenEntities should not error due to duplicate")
-
-	// Verify no duplicate L1TokenCreate entity was created
-	l1TokenCountAfter, err := dbTx.L1TokenCreate.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 1, l1TokenCountAfter, "Should still have exactly one L1TokenCreate entity")
-}
-
-func TestCreateTokenEntities_SparkTokenDuplicateConstraints(t *testing.T) {
-	ctx, dbCtx := db.NewTestSQLiteContext(t, context.Background())
-	defer dbCtx.Close()
-
-	config, err := testutil.TestConfig()
-	require.NoError(t, err)
-
-	// Enable Spark token creation for this test
-	config.Token.DisableSparkTokenCreationForL1TokenAnnouncements = false
-
-	// Get database transaction from context
-	dbTx, err := ent.GetDbFromContext(ctx)
-	require.NoError(t, err)
-
-	// Create required EntityDkgKey for Spark token creation
-	entityDkgPublicKey := genSeededPubKey() // Generate proper 33-byte public key
+	// Create required EntityDkgKey for Spark token creation (reused across tests)
+	entityDkgPublicKey := genSeededPubKey()
 	signingKeyshare, err := dbTx.SigningKeyshare.Create().
 		SetStatus(st.KeyshareStatusAvailable).
 		SetSecretShare([]byte("test_secret")).
@@ -459,44 +522,110 @@ func TestCreateTokenEntities_SparkTokenDuplicateConstraints(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// Create test data
-	issuerPubKey := genSeededPubKey()
-	testTxHash := chainhash.Hash{0x01, 0x02, 0x03}
-
-	// Create L1TokenCreate entity that implements TokenMetadataProvider
-	l1TokenToCreate := &ent.L1TokenCreate{
-		IssuerPublicKey: issuerPubKey,
-		TokenName:       "TestToken",
-		TokenTicker:     "TST",
-		Decimals:        8,
-		MaxSupply:       make([]byte, 16),
-		IsFreezable:     false,
-		Network:         common.SchemaNetwork(common.Testnet),
+	// Helper function to create a clean subtest context - now uses the reusable helper
+	setupSubtest := func(t *testing.T) (context.Context, *ent.Tx) {
+		return setupIsolatedTest(t)
 	}
 
-	// Test 1: First call should succeed and create both L1TokenCreate and TokenCreate entities
-	err = createTokenEntities(ctx, config, dbTx, l1TokenToCreate, testTxHash)
-	require.NoError(t, err, "First call to createTokenEntities should succeed")
+	t.Run("L1 and spark token creation", func(t *testing.T) {
+		subtestCtx, subtestTx := setupSubtest(t)
 
-	// Verify both entities were created
-	l1TokenCount, err := dbTx.L1TokenCreate.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 1, l1TokenCount, "Should have exactly one L1TokenCreate entity")
+		// Test 1: First call should succeed and create L1TokenCreate and TokenCreate entities
+		config.Token.DisableSparkTokenCreationForL1TokenAnnouncements = false
 
-	sparkTokenCount, err := dbTx.TokenCreate.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 1, sparkTokenCount, "Should have exactly one TokenCreate entity")
+		processTokenAnnouncements(t, subtestCtx, config, subtestTx, []wire.MsgTx{tx}, "First call to handleTokenAnnouncements")
+		verifyEntityCounts(t, subtestCtx, subtestTx, 1, 1, "After first call")
 
-	// Test 2: Second call with same issuer public key should not error and not create duplicates
-	err = createTokenEntities(ctx, config, dbTx, l1TokenToCreate, testTxHash)
-	require.NoError(t, err, "Second call to createTokenEntities should not error due to duplicates")
+		// Test 2: Second call with same issuer public key should not error and not create duplicate
+		processTokenAnnouncements(t, subtestCtx, config, subtestTx, []wire.MsgTx{tx}, "Second call to handleTokenAnnouncements")
+		verifyEntityCounts(t, subtestCtx, subtestTx, 1, 1, "After second call")
+	})
 
-	// Verify no duplicate entities were created
-	l1TokenCountAfter, err := dbTx.L1TokenCreate.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 1, l1TokenCountAfter, "Should still have exactly one L1TokenCreate entity")
+	t.Run("duplicate transactions in same block with spark token creation disabled", func(t *testing.T) {
+		subtestCtx, subtestTx := setupSubtest(t)
 
-	sparkTokenCountAfter, err := dbTx.TokenCreate.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 1, sparkTokenCountAfter, "Should still have exactly one TokenCreate entity")
+		config.Token.DisableSparkTokenCreationForL1TokenAnnouncements = true
+
+		// Create two identical transactions with the same token announcement
+		tx1 := createTokenTransaction(tokenData, 0)
+		tx2 := createTokenTransaction(tokenData, 1) // Different lock time to make it a different transaction
+
+		// Process both transactions in the same block
+		processTokenAnnouncements(t, subtestCtx, config, subtestTx, []wire.MsgTx{tx1, tx2}, "Processing duplicate transactions in same block")
+		verifyEntityCounts(t, subtestCtx, subtestTx, 1, 0, "After processing duplicate transactions")
+	})
+
+	t.Run("duplicate transactions in same block with spark token creation enabled", func(t *testing.T) {
+		subtestCtx, subtestTx := setupSubtest(t)
+
+		config.Token.DisableSparkTokenCreationForL1TokenAnnouncements = false
+
+		// Create two identical transactions with the same token announcement
+		tx1 := createTokenTransaction(tokenData, 0)
+		tx2 := createTokenTransaction(tokenData, 1) // Different lock time to make it a different transaction
+
+		// Process both transactions in the same block
+		processTokenAnnouncements(t, subtestCtx, config, subtestTx, []wire.MsgTx{tx1, tx2}, "Processing duplicate transactions in same block")
+		verifyEntityCounts(t, subtestCtx, subtestTx, 1, 1, "After processing duplicate transactions")
+	})
+
+	t.Run("duplicate transactions across different blocks", func(t *testing.T) {
+		subtestCtx, subtestTx := setupSubtest(t)
+
+		config.Token.DisableSparkTokenCreationForL1TokenAnnouncements = false
+
+		// Create transactions with token announcements for different blocks
+		txBlock1 := createTokenTransaction(tokenData, 0)
+		txBlock2 := createTokenTransaction(tokenData, 100) // Different lock time to make it a different transaction
+
+		// Process first block
+		processTokenAnnouncements(t, subtestCtx, config, subtestTx, []wire.MsgTx{txBlock1}, "Processing first block")
+		verifyEntityCounts(t, subtestCtx, subtestTx, 1, 1, "After first block")
+
+		// Process second block with duplicate announcement
+		processTokenAnnouncements(t, subtestCtx, config, subtestTx, []wire.MsgTx{txBlock2}, "Processing second block with duplicate")
+		verifyEntityCounts(t, subtestCtx, subtestTx, 1, 1, "After second block")
+	})
+
+	t.Run("same issuer different tokens in different blocks", func(t *testing.T) {
+		subtestCtx, subtestTx := setupSubtest(t)
+
+		config.Token.DisableSparkTokenCreationForL1TokenAnnouncements = false
+
+		// Create transactions with different token announcements from same issuer
+		tokenData1 := createValidTokenData()
+		tokenData2 := createAlternativeTokenData()
+		tx1 := createTokenTransaction(tokenData1, 0)
+		tx2 := createTokenTransaction(tokenData2, 1)
+
+		// Process first token
+		processTokenAnnouncements(t, subtestCtx, config, subtestTx, []wire.MsgTx{tx1}, "Processing first token")
+		verifyEntityCounts(t, subtestCtx, subtestTx, 1, 1, "After first token")
+
+		// Process second token with same issuer but different token metadata
+		processTokenAnnouncements(t, subtestCtx, config, subtestTx, []wire.MsgTx{tx2}, "Processing second token")
+		verifyEntityCounts(t, subtestCtx, subtestTx, 2, 1, "After second token (business rule: one Spark token per issuer)")
+
+		// Verify the tokens have different identifiers
+		verifyTokenDifferences(t, subtestCtx, subtestTx)
+	})
+
+	t.Run("same issuer different tokens in same block", func(t *testing.T) {
+		subtestCtx, subtestTx := setupSubtest(t)
+
+		config.Token.DisableSparkTokenCreationForL1TokenAnnouncements = false
+
+		// Create transactions with different token announcements from same issuer
+		tokenData1 := createValidTokenData()
+		tokenData2 := createAlternativeTokenData()
+		tx1 := createTokenTransaction(tokenData1, 0)
+		tx2 := createTokenTransaction(tokenData2, 1)
+
+		// Process both tokens in the same block
+		processTokenAnnouncements(t, subtestCtx, config, subtestTx, []wire.MsgTx{tx1, tx2}, "Processing both different tokens in same block")
+		verifyEntityCounts(t, subtestCtx, subtestTx, 2, 1, "After processing both tokens (business rule: one Spark token per issuer)")
+
+		// Verify the tokens have different identifiers
+		verifyTokenDifferences(t, subtestCtx, subtestTx)
+	})
 }

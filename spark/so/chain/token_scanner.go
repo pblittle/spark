@@ -11,13 +11,13 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/common/logging"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/ent/l1tokencreate"
 	"github.com/lightsparkdev/spark/so/ent/tokencreate"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -209,39 +209,10 @@ func readByte(buf *bytes.Buffer) (byte, error) {
 	return asByte, nil
 }
 
-func createTokenEntities(ctx context.Context, config *so.Config, dbTx *ent.Tx, provider common.TokenMetadataProvider, txid chainhash.Hash) error {
-	logger := logging.GetLoggerFromContext(ctx)
-
-	tokenMetadata, err := provider.ToTokenMetadata()
-	if err != nil {
-		return fmt.Errorf("failed to get token metadata: %w", err)
-	}
-
-	if err := tokenMetadata.Validate(); err != nil {
-		return fmt.Errorf("invalid token metadata: %w", err)
-	}
-
-	exists, err := dbTx.L1TokenCreate.Query().
-		Where(l1tokencreate.IssuerPublicKeyEQ(tokenMetadata.IssuerPublicKey)).
-		Exist(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to query for existing token: %w", err)
-	}
-	if exists {
-		logger.Info("Token with this issuer public key already exists. Ignoring the announcement.",
-			"issuer_public", hex.EncodeToString(tokenMetadata.IssuerPublicKey),
-			"network", tokenMetadata.Network.String(),
-			"txid", txid)
-		return nil
-	}
-
-	tokenIdentifier, err := tokenMetadata.ComputeTokenIdentifierV1()
-	if err != nil {
-		return fmt.Errorf("failed to compute token identifier: %w", err)
-	}
+func createL1TokenEntity(ctx context.Context, dbTx *ent.Tx, tokenMetadata *common.TokenMetadata, txid chainhash.Hash, tokenIdentifier []byte) (*ent.L1TokenCreate, error) {
 	schemaNetwork, err := common.SchemaNetworkFromNetwork(tokenMetadata.Network)
 	if err != nil {
-		return fmt.Errorf("failed to convert network to schema network: %w", err)
+		return nil, fmt.Errorf("failed to convert network to schema network: %w", err)
 	}
 	// This entity represents the raw parsed L1 announcement data.
 	l1TokenCreate, err := dbTx.L1TokenCreate.Create().
@@ -256,62 +227,46 @@ func createTokenEntities(ctx context.Context, config *so.Config, dbTx *ent.Tx, p
 		SetTokenIdentifier(tokenIdentifier).
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create l1 token create entity: %w", err)
+		return nil, fmt.Errorf("failed to create l1 token create entity: %w", err)
+	}
+	return l1TokenCreate, nil
+}
+
+func createNativeSparkTokenEntity(ctx context.Context, dbTx *ent.Tx, tokenMetadata *common.TokenMetadata, l1TokenCreateID uuid.UUID) error {
+	entityDkgKeyPublicKey, err := ent.GetEntityDkgKeyPublicKey(ctx, dbTx.Client())
+	if err != nil {
+		return fmt.Errorf("failed to get entity DKG key public key: %w", err)
+	}
+	// Recompute the token identifier using the Spark creation entity public key.
+	// The token identifier that was computed above corresponds to the L1 announcement
+	// (creation entity key = 0x00..00). For the Spark `token_creates` table we use
+	// the SO entity DKG key as the creation entity key.
+	sparkTokenMetadata := *tokenMetadata
+	sparkTokenMetadata.CreationEntityPublicKey = entityDkgKeyPublicKey
+	sparkTokenIdentifier, err := sparkTokenMetadata.ComputeTokenIdentifierV1()
+	if err != nil {
+		return fmt.Errorf("failed to compute Spark token identifier: %w", err)
+	}
+	schemaNetwork, err := common.SchemaNetworkFromNetwork(tokenMetadata.Network)
+	if err != nil {
+		return fmt.Errorf("failed to convert network to schema network: %w", err)
 	}
 
-	if !config.Token.DisableSparkTokenCreationForL1TokenAnnouncements {
-		sparkTokenExists, err := dbTx.TokenCreate.Query().
-			Where(
-				tokencreate.IssuerPublicKeyEQ(tokenMetadata.IssuerPublicKey),
-			).
-			Exist(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to query for existing spark token: %w", err)
-		}
-		if sparkTokenExists {
-			logger.Info("Spark token with this issuer public key already exists. Skipping Spark token creation.",
-				"issuer_public", hex.EncodeToString(tokenMetadata.IssuerPublicKey),
-				"network", tokenMetadata.Network.String(),
-				"txid", txid)
-		} else {
-			// This entity represents the functional metadata used for spark operations and data fetches.
-			entityDkgKeyPublicKey, err := ent.GetEntityDkgKeyPublicKey(ctx, dbTx.Client())
-			if err != nil {
-				return fmt.Errorf("failed to get entity DKG key public key: %w", err)
-			}
-			// Recompute the token identifier using the Spark creation entity public key.
-			// The token identifier that was computed above corresponds to the L1 announcement
-			// (creation entity key = 0x00..00). For the Spark `token_creates` table we use
-			// the SO entity DKG key as the creation entity key.
-			sparkTokenMetadata := *tokenMetadata
-			sparkTokenMetadata.CreationEntityPublicKey = entityDkgKeyPublicKey
-			sparkTokenIdentifier, err := sparkTokenMetadata.ComputeTokenIdentifierV1()
-			if err != nil {
-				return fmt.Errorf("failed to compute Spark token identifier: %w", err)
-			}
-			_, err = dbTx.TokenCreate.Create().
-				SetIssuerPublicKey(tokenMetadata.IssuerPublicKey).
-				SetTokenName(tokenMetadata.TokenName).
-				SetTokenTicker(tokenMetadata.TokenTicker).
-				SetDecimals(tokenMetadata.Decimals).
-				SetMaxSupply(tokenMetadata.MaxSupply).
-				SetIsFreezable(tokenMetadata.IsFreezable).
-				SetNetwork(schemaNetwork).
-				SetCreationEntityPublicKey(entityDkgKeyPublicKey).
-				SetTokenIdentifier(sparkTokenIdentifier).
-				SetL1TokenCreateID(l1TokenCreate.ID).
-				Save(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to create spark token create entity: %w", err)
-			}
-		}
+	_, err = dbTx.TokenCreate.Create().
+		SetIssuerPublicKey(tokenMetadata.IssuerPublicKey).
+		SetTokenName(tokenMetadata.TokenName).
+		SetTokenTicker(tokenMetadata.TokenTicker).
+		SetDecimals(tokenMetadata.Decimals).
+		SetMaxSupply(tokenMetadata.MaxSupply).
+		SetIsFreezable(tokenMetadata.IsFreezable).
+		SetNetwork(schemaNetwork).
+		SetCreationEntityPublicKey(entityDkgKeyPublicKey).
+		SetTokenIdentifier(sparkTokenIdentifier).
+		SetL1TokenCreateID(l1TokenCreateID).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create spark native token create entity: %w", err)
 	}
-
-	logger.Info("Created new lrc-20 token from l1 announcement",
-		"name", tokenMetadata.TokenName,
-		"ticker", tokenMetadata.TokenTicker,
-		"token_identifier", hex.EncodeToString(tokenIdentifier),
-		"txid", txid)
 	return nil
 }
 
@@ -319,9 +274,12 @@ func createTokenEntities(ctx context.Context, config *so.Config, dbTx *ent.Tx, p
 func handleTokenAnnouncements(ctx context.Context, config *so.Config, dbTx *ent.Tx, txs []wire.MsgTx, network common.Network) error {
 	logger := logging.GetLoggerFromContext(ctx)
 
-	// Track processed issuer public keys within this block to avoid duplicates
-	processedIssuerKeys := make(map[string]bool)
-
+	type parsedAnnouncement struct {
+		l1TokenToCreate *ent.L1TokenCreate
+		txHash          chainhash.Hash
+		outputIdx       int
+	}
+	var announcements []parsedAnnouncement
 	for _, tx := range txs {
 		for txOutIdx, txOut := range tx.TxOut {
 			l1TokenToCreate, err := parseTokenAnnouncement(txOut.PkScript, network)
@@ -335,41 +293,88 @@ func handleTokenAnnouncements(ctx context.Context, config *so.Config, dbTx *ent.
 			}
 
 			if l1TokenToCreate != nil {
-				logger.Info("Successfully parsed token announcement",
-					"txid", tx.TxHash(),
-					"output_idx", txOutIdx,
-					"token_name", l1TokenToCreate.TokenName,
-					"token_ticker", l1TokenToCreate.TokenTicker,
-					"issuer_public_key", hex.EncodeToString(l1TokenToCreate.IssuerPublicKey))
+				announcements = append(announcements, parsedAnnouncement{
+					l1TokenToCreate: l1TokenToCreate,
+					txHash:          tx.TxHash(),
+					outputIdx:       txOutIdx,
+				})
+			}
+		}
+	}
 
-				// Check if we've already processed this issuer key in this block.
-				// The downstream DB check is not sufficient because all token creation
-				// announcements in a block are written to the DB in a single transaction.
-				issuerKeyHex := hex.EncodeToString(l1TokenToCreate.IssuerPublicKey)
-				if processedIssuerKeys[issuerKeyHex] {
-					logger.Info("Token with this issuer public key already processed in this block. Ignoring duplicate announcement.",
-						"issuer_public", issuerKeyHex,
-						"txid", tx.TxHash(),
-						"output_idx", txOutIdx)
-					continue
-				}
+	tokenIdentifiersAnnouncedInBlock := make(map[string]struct{})
+	issuerPublicKeysAnnouncedInBlock := make(map[string]struct{})
+	for _, ann := range announcements {
+		logger.Info("Successfully parsed token announcement",
+			"txid", ann.txHash,
+			"output_idx", ann.outputIdx,
+			"token_name", ann.l1TokenToCreate.TokenName,
+			"token_ticker", ann.l1TokenToCreate.TokenTicker,
+			"issuer_public_key", hex.EncodeToString(ann.l1TokenToCreate.IssuerPublicKey))
 
-				if err := createTokenEntities(ctx, config, dbTx, l1TokenToCreate, tx.TxHash()); err != nil {
-					logger.Error("Failed to create l1 token entity",
-						"error", err,
-						"txid", tx.TxHash(),
-						"output_idx", txOutIdx,
-						"token_name", l1TokenToCreate.TokenName)
-				} else {
-					logger.Info("Successfully created L1 token entity",
-						"txid", tx.TxHash(),
-						"output_idx", txOutIdx,
-						"token_name", l1TokenToCreate.TokenName,
-						"issuer_public", issuerKeyHex)
-					processedIssuerKeys[issuerKeyHex] = true
+		provider := ann.l1TokenToCreate
+		tokenMetadata, err := provider.ToTokenMetadata()
+		if err != nil {
+			logger.Error("failed to get token metadata", "error", err)
+			continue
+		}
+
+		if err := tokenMetadata.Validate(); err != nil {
+			logger.Error("invalid token metadata", "error", err)
+			continue
+		}
+
+		tokenIdentifier, err := tokenMetadata.ComputeTokenIdentifierV1()
+		if err != nil {
+			logger.Error("failed to compute token identifier", "error", err)
+			continue
+		}
+
+		isDuplicate, err := isDuplicateAnnouncement(ctx, dbTx, tokenIdentifier, tokenIdentifiersAnnouncedInBlock)
+		if err != nil {
+			logger.Error("Failed to check for duplicate announcement", "error", err, "txid", ann.txHash)
+			continue
+		}
+		if isDuplicate {
+			logger.Info("Token with this issuer public key already exists. Ignoring the announcement.",
+				"issuer_public", hex.EncodeToString(tokenMetadata.IssuerPublicKey),
+				"network", tokenMetadata.Network.String(),
+				"txid", ann.txHash)
+			continue
+		}
+
+		l1TokenCreate, err := createL1TokenEntity(ctx, dbTx, tokenMetadata, ann.txHash, tokenIdentifier)
+		if err != nil {
+			logger.Error("Failed to create l1 token create entity", "error", err, "txid", ann.txHash)
+			continue
+		}
+		logger.Info("Successfully created L1 token entity",
+			"txid", ann.txHash,
+			"output_idx", ann.outputIdx,
+			"token_name", l1TokenCreate.TokenName,
+			"token_identifier", hex.EncodeToString(l1TokenCreate.TokenIdentifier),
+			"issuer_public_key", hex.EncodeToString(l1TokenCreate.IssuerPublicKey),
+		)
+
+		if !config.Token.DisableSparkTokenCreationForL1TokenAnnouncements {
+			exists, err := issuerAlreadyHasSparkToken(ctx, dbTx, tokenMetadata.IssuerPublicKey, issuerPublicKeysAnnouncedInBlock)
+			if err != nil {
+				logger.Error("failed to check for existing spark token", "error", err)
+				continue
+			}
+			if exists {
+				logger.Info("Issuer already has a Spark token. Not creating a spark native token.",
+					"issuer_public", hex.EncodeToString(tokenMetadata.IssuerPublicKey),
+					"network", tokenMetadata.Network.String(),
+					"txid", ann.txHash)
+			} else {
+				if err := createNativeSparkTokenEntity(ctx, dbTx, tokenMetadata, l1TokenCreate.ID); err != nil {
+					logger.Error("failed to create spark native token create entity", "error", err, "txid", ann.txHash)
 				}
 			}
 		}
+		tokenIdentifiersAnnouncedInBlock[hex.EncodeToString(tokenIdentifier)] = struct{}{}
+		issuerPublicKeysAnnouncedInBlock[hex.EncodeToString(ann.l1TokenToCreate.IssuerPublicKey)] = struct{}{}
 	}
 	return nil
 }
@@ -377,11 +382,9 @@ func handleTokenAnnouncements(ctx context.Context, config *so.Config, dbTx *ent.
 func handleTokenUpdatesForBlock(
 	ctx context.Context,
 	config *so.Config,
-	lrc20Client *lrc20.Client,
 	dbTx *ent.Tx,
 	txs []wire.MsgTx,
 	blockHeight int64,
-	blockHash *chainhash.Hash,
 	network common.Network,
 ) {
 	logger := logging.GetLoggerFromContext(ctx)
@@ -389,10 +392,37 @@ func handleTokenUpdatesForBlock(
 	if err := handleTokenAnnouncements(ctx, config, dbTx, txs, network); err != nil {
 		logger.Error("Failed to handle token announcements", "error", err, "block_height", blockHeight)
 	}
+}
 
-	// Use the lrc20 client to sync withdrawn leaves - it will handle all the processing internally
-	err := lrc20Client.MarkWithdrawnTokenOutputs(ctx, network, dbTx, blockHash)
+func isDuplicateAnnouncement(ctx context.Context, dbTx *ent.Tx, tokenIdentifier []byte, tokenIdentifiersAnnouncedInBlock map[string]struct{}) (bool, error) {
+	exists, err := dbTx.L1TokenCreate.Query().
+		Where(l1tokencreate.TokenIdentifierEQ(tokenIdentifier)).
+		Exist(ctx)
 	if err != nil {
-		logger.Error("Failed to sync withdrawn leaves", "error", err, "block_height", blockHeight)
+		return false, fmt.Errorf("failed to query for existing l1 token create: %w", err)
 	}
+	if exists {
+		return true, nil
+	}
+	if _, ok := tokenIdentifiersAnnouncedInBlock[hex.EncodeToString(tokenIdentifier)]; ok {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func issuerAlreadyHasSparkToken(ctx context.Context, dbTx *ent.Tx, issuerPublicKey []byte, issuerPublicKeysAnnouncedInBlock map[string]struct{}) (bool, error) {
+	exists, err := dbTx.TokenCreate.Query().
+		Where(tokencreate.IssuerPublicKeyEQ(issuerPublicKey)).
+		Exist(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to query for existing spark token: %w", err)
+	}
+	if exists {
+		return true, nil
+	}
+	if _, ok := issuerPublicKeysAnnouncedInBlock[hex.EncodeToString(issuerPublicKey)]; ok {
+		return true, nil
+	}
+	return false, nil
 }

@@ -85,7 +85,9 @@ func (h *InternalSignTokenHandler) SignAndPersistTokenTransaction(
 	}
 	switch txType {
 	case utils.TokenTransactionTypeCreate:
-		// No-op
+		if tokenTransaction.Edges.Create == nil {
+			return nil, tokens.FormatErrorWithTransactionEnt("create input ent not found when attempting to sign create transaction", tokenTransaction, nil)
+		}
 	case utils.TokenTransactionTypeMint:
 		// For mint transactions, validate that the mint does not exceed the max supply.
 		// This is also checked during the Start() step, but we check before signing as well

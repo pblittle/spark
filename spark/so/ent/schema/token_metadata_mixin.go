@@ -15,7 +15,7 @@ type TokenMetadataMixin struct {
 
 func (TokenMetadataMixin) Fields() []ent.Field {
 	return []ent.Field{
-		field.Bytes("issuer_public_key").NotEmpty().Immutable().Unique(),
+		field.Bytes("issuer_public_key").NotEmpty().Immutable(),
 		field.String("token_name").NotEmpty().Immutable(),
 		field.String("token_ticker").NotEmpty().Immutable(),
 		field.Uint8("decimals").Immutable(),
@@ -30,7 +30,7 @@ func (TokenMetadataMixin) Fields() []ent.Field {
 
 func (TokenMetadataMixin) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("issuer_public_key").Unique(),
+		index.Fields("issuer_public_key"),
 		index.Fields("token_identifier").Unique(),
 	}
 }

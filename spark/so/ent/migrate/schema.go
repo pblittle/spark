@@ -160,7 +160,7 @@ var (
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "create_time", Type: field.TypeTime},
 		{Name: "update_time", Type: field.TypeTime},
-		{Name: "issuer_public_key", Type: field.TypeBytes, Unique: true},
+		{Name: "issuer_public_key", Type: field.TypeBytes},
 		{Name: "token_name", Type: field.TypeString},
 		{Name: "token_ticker", Type: field.TypeString},
 		{Name: "decimals", Type: field.TypeUint8},
@@ -178,7 +178,7 @@ var (
 		Indexes: []*schema.Index{
 			{
 				Name:    "l1tokencreate_issuer_public_key",
-				Unique:  true,
+				Unique:  false,
 				Columns: []*schema.Column{L1tokenCreatesColumns[3]},
 			},
 			{
@@ -318,7 +318,7 @@ var (
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "create_time", Type: field.TypeTime},
 		{Name: "update_time", Type: field.TypeTime},
-		{Name: "issuer_public_key", Type: field.TypeBytes, Unique: true},
+		{Name: "issuer_public_key", Type: field.TypeBytes},
 		{Name: "token_name", Type: field.TypeString},
 		{Name: "token_ticker", Type: field.TypeString},
 		{Name: "decimals", Type: field.TypeUint8},
@@ -348,7 +348,7 @@ var (
 		Indexes: []*schema.Index{
 			{
 				Name:    "tokencreate_issuer_public_key",
-				Unique:  true,
+				Unique:  false,
 				Columns: []*schema.Column{TokenCreatesColumns[3]},
 			},
 			{
