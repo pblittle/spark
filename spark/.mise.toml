@@ -10,10 +10,11 @@ test-unit = """
 test-unit-with-postgres = """
   gotestsum \
     --format testname \
+    -- \
+    -tags=postgres
     --junitfile ../test_results/unit-test.xml \
     --jsonfile ../test_results/unit-test.json \
-    $(go list ./... | grep -v -E 'so/grpc_test|so/tree')
-    -tags=postgres
+    $(go list ./... | grep -v -E 'so/grpc_test|so/tree') \
 """
 test-grpc = """
   gotestsum \
@@ -21,6 +22,4 @@ test-grpc = """
     --rerun-fails \
     --rerun-fails-max-failures=1000 \
     --packages=./so/grpc_test/... \
-    -- \
-    -tags=postgres
 """

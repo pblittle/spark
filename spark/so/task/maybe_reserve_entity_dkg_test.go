@@ -1,7 +1,7 @@
 //go:build postgres
 // +build postgres
 
-package task_test
+package task
 
 import (
 	"context"
@@ -22,18 +22,17 @@ import (
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/db"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
-	"github.com/lightsparkdev/spark/so/task"
 	testutil "github.com/lightsparkdev/spark/test_util"
 )
 
 // getReserveEntityDkgTask returns the startup task we are testing.
-func getReserveEntityDkgTask() (task.StartupTask, error) {
-	for _, t := range task.AllStartupTasks() {
+func getReserveEntityDkgTask() (StartupTask, error) {
+	for _, t := range AllStartupTasks() {
 		if t.Name == "maybe_reserve_entity_dkg" {
 			return t, nil
 		}
 	}
-	return task.StartupTask{}, assert.AnError
+	return StartupTask{}, assert.AnError
 }
 
 // pruneOperators keeps only the current operator in the SigningOperatorMap so
