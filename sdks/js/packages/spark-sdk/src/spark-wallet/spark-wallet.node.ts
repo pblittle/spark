@@ -1,15 +1,16 @@
 import { Tracer } from "@opentelemetry/api";
 import { SparkWallet as BaseSparkWallet } from "./spark-wallet.js";
 import type { InitWalletResponse } from "./types.js";
+import { isObject } from "@lightsparkdev/core";
 
 export class SparkWallet extends BaseSparkWallet {
   private tracer: Tracer | null = null;
 
-  protected wrapWithOtelSpan<T>(
+  protected wrapWithOtelSpan<A extends unknown[], R>(
     name: string,
-    fn: (...args: any[]) => Promise<T>,
-  ): (...args: any[]) => Promise<T> {
-    return async (...args: any[]): Promise<T> => {
+    fn: (...args: A) => Promise<R>,
+  ) {
+    return async (...args: A) => {
       if (!this.tracer) {
         throw new Error("Tracer not initialized");
       }
@@ -17,12 +18,13 @@ export class SparkWallet extends BaseSparkWallet {
       return await this.tracer.startActiveSpan(name, async (span) => {
         const traceId = span.spanContext().traceId;
         try {
-          return await fn(...args);
+          const result = await fn(...args);
+          return result;
         } catch (error) {
           if (error instanceof Error) {
             error.message += ` [traceId: ${traceId}]`;
-          } else if (typeof error === "object" && error !== null) {
-            (error as any).traceId = traceId;
+          } else if (isObject(error)) {
+            error["traceId"] = traceId;
           }
           throw error;
         } finally {
@@ -49,138 +51,69 @@ export class SparkWallet extends BaseSparkWallet {
     this.tracer = trace.getTracer(tracerName);
   }
 
+  private getTraceName(methodName: string) {
+    return `SparkWallet.${methodName}`;
+  }
+
+  private wrapPublicMethodsWithOtelSpan<M extends keyof SparkWallet>(
+    methodName: M,
+  ) {
+    const original = this[methodName];
+
+    if (typeof original !== "function") {
+      throw new Error(`Method ${methodName} is not a function on SparkWallet.`);
+    }
+
+    const wrapped = this.wrapWithOtelSpan(
+      this.getTraceName(methodName),
+      original.bind(this) as (...args: unknown[]) => Promise<unknown>,
+    ) as SparkWallet[M];
+
+    (this as SparkWallet)[methodName] = wrapped;
+  }
+
   private wrapSparkWalletWithTracing() {
-    this.getLeaves = this.wrapWithOtelSpan(
-      "SparkWallet.getLeaves",
-      this.getLeaves.bind(this),
-    );
-    this.getIdentityPublicKey = this.wrapWithOtelSpan(
-      "SparkWallet.getIdentityPublicKey",
-      this.getIdentityPublicKey.bind(this),
-    );
-    this.getSparkAddress = this.wrapWithOtelSpan(
-      "SparkWallet.getSparkAddress",
-      this.getSparkAddress.bind(this),
-    );
-    this.createSparkPaymentIntent = this.wrapWithOtelSpan(
-      "SparkWallet.createSparkPaymentIntent",
-      this.createSparkPaymentIntent.bind(this),
-    );
+    const methods = [
+      "getLeaves",
+      "getIdentityPublicKey",
+      "getSparkAddress",
+      "createSparkPaymentIntent",
+      "getSwapFeeEstimate",
+      "getTransfers",
+      "getBalance",
+      "getSingleUseDepositAddress",
+      "getStaticDepositAddress",
+      "queryStaticDepositAddresses",
+      "getClaimStaticDepositQuote",
+      "claimStaticDeposit",
+      "refundStaticDeposit",
+      "getUnusedDepositAddresses",
+      "claimDeposit",
+      "advancedDeposit",
+      "transfer",
+      "createLightningInvoice",
+      "payLightningInvoice",
+      "getLightningSendFeeEstimate",
+      "withdraw",
+      "getWithdrawalFeeQuote",
+      "getTransferFromSsp",
+      "getTransfer",
+      "transferTokens",
+      "batchTransferTokens",
+      "queryTokenTransactions",
+      "getLightningReceiveRequest",
+      "getLightningSendRequest",
+      "getCoopExitRequest",
+      "checkTimelock",
+      "testOnly_expireTimelock",
+    ] as const;
+
+    methods.forEach((m) => this.wrapPublicMethodsWithOtelSpan(m));
+
+    /* Private methods can't be indexed on `this` and need to be wrapped individually: */
     this.initWallet = this.wrapWithOtelSpan(
-      "SparkWallet.initWallet",
+      this.getTraceName("initWallet"),
       this.initWallet.bind(this),
-    );
-    this.getSwapFeeEstimate = this.wrapWithOtelSpan(
-      "SparkWallet.getSwapFeeEstimate",
-      this.getSwapFeeEstimate.bind(this),
-    );
-    this.getTransfers = this.wrapWithOtelSpan(
-      "SparkWallet.getTransfers",
-      this.getTransfers.bind(this),
-    );
-    this.getBalance = this.wrapWithOtelSpan(
-      "SparkWallet.getBalance",
-      this.getBalance.bind(this),
-    );
-    this.getSingleUseDepositAddress = this.wrapWithOtelSpan(
-      "SparkWallet.getSingleUseDepositAddress",
-      this.getSingleUseDepositAddress.bind(this),
-    );
-    this.getStaticDepositAddress = this.wrapWithOtelSpan(
-      "SparkWallet.getStaticDepositAddress",
-      this.getStaticDepositAddress.bind(this),
-    );
-    this.queryStaticDepositAddresses = this.wrapWithOtelSpan(
-      "SparkWallet.queryStaticDepositAddresses",
-      this.queryStaticDepositAddresses.bind(this),
-    );
-    this.getClaimStaticDepositQuote = this.wrapWithOtelSpan(
-      "SparkWallet.getClaimStaticDepositQuote",
-      this.getClaimStaticDepositQuote.bind(this),
-    );
-    this.claimStaticDeposit = this.wrapWithOtelSpan(
-      "SparkWallet.claimStaticDeposit",
-      this.claimStaticDeposit.bind(this),
-    );
-    this.refundStaticDeposit = this.wrapWithOtelSpan(
-      "SparkWallet.refundStaticDeposit",
-      this.refundStaticDeposit.bind(this),
-    );
-    this.getUnusedDepositAddresses = this.wrapWithOtelSpan(
-      "SparkWallet.getUnusedDepositAddresses",
-      this.getUnusedDepositAddresses.bind(this),
-    );
-    this.claimDeposit = this.wrapWithOtelSpan(
-      "SparkWallet.claimDeposit",
-      this.claimDeposit.bind(this),
-    );
-    this.advancedDeposit = this.wrapWithOtelSpan(
-      "SparkWallet.advancedDeposit",
-      this.advancedDeposit.bind(this),
-    );
-    this.transfer = this.wrapWithOtelSpan(
-      "SparkWallet.transfer",
-      this.transfer.bind(this),
-    );
-    this.createLightningInvoice = this.wrapWithOtelSpan(
-      "SparkWallet.createLightningInvoice",
-      this.createLightningInvoice.bind(this),
-    );
-    this.payLightningInvoice = this.wrapWithOtelSpan(
-      "SparkWallet.payLightningInvoice",
-      this.payLightningInvoice.bind(this),
-    );
-    this.getLightningSendFeeEstimate = this.wrapWithOtelSpan(
-      "SparkWallet.getLightningSendFeeEstimate",
-      this.getLightningSendFeeEstimate.bind(this),
-    );
-    this.withdraw = this.wrapWithOtelSpan(
-      "SparkWallet.withdraw",
-      this.withdraw.bind(this),
-    );
-    this.getWithdrawalFeeQuote = this.wrapWithOtelSpan(
-      "SparkWallet.getWithdrawalFeeQuote",
-      this.getWithdrawalFeeQuote.bind(this),
-    );
-    this.getTransferFromSsp = this.wrapWithOtelSpan(
-      "SparkWallet.getTransferFromSsp",
-      this.getTransferFromSsp.bind(this),
-    );
-    this.getTransfer = this.wrapWithOtelSpan(
-      "SparkWallet.getTransfer",
-      this.getTransfer.bind(this),
-    );
-    this.transferTokens = this.wrapWithOtelSpan(
-      "SparkWallet.transferTokens",
-      this.transferTokens.bind(this),
-    );
-    this.batchTransferTokens = this.wrapWithOtelSpan(
-      "SparkWallet.batchTransferTokens",
-      this.batchTransferTokens.bind(this),
-    );
-    this.queryTokenTransactions = this.wrapWithOtelSpan(
-      "SparkWallet.queryTokenTransactions",
-      this.queryTokenTransactions.bind(this),
-    );
-    this.getLightningReceiveRequest = this.wrapWithOtelSpan(
-      "SparkWallet.getLightningReceiveRequest",
-      this.getLightningReceiveRequest.bind(this),
-    );
-    this.getLightningSendRequest = this.wrapWithOtelSpan(
-      "SparkWallet.getLightningSendRequest",
-      this.getLightningSendRequest.bind(this),
-    );
-    this.getCoopExitRequest = this.wrapWithOtelSpan(
-      "SparkWallet.getCoopExitRequest",
-      this.getCoopExitRequest.bind(this),
-    );
-    this.checkTimelock = this.wrapWithOtelSpan(
-      "SparkWallet.checkTimelock",
-      this.checkTimelock.bind(this),
-    );
-    this.testOnly_expireTimelock = this.wrapWithOtelSpan(
-      "SparkWallet.testOnly_expireTimelock",
-      this.testOnly_expireTimelock.bind(this),
     );
   }
 
