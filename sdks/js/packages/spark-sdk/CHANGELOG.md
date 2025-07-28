@@ -1,5 +1,13 @@
 # @buildonspark/spark-sdk
 
+## 0.2.4
+
+### Patch Changes
+
+- Add watchtower supported transactions on leaves
+- Improvements to otel wrapping
+- Fix resoluation of SparkWallet for Node.js
+
 ## 0.2.3
 
 ### Patch Changes
