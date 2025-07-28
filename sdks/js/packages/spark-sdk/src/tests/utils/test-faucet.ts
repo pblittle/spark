@@ -10,6 +10,7 @@ import {
   getP2TRScriptFromPublicKey,
 } from "../../utils/bitcoin.js";
 import { getNetwork, Network } from "../../utils/network.js";
+import { getFetch } from "../../utils/fetch.js";
 
 // Static keys for deterministic testing
 // P2TRAddress: bcrt1p2uy9zw5ltayucsuzl4tet6ckelzawp08qrtunacscsszflye907q62uqhl
@@ -282,12 +283,13 @@ export class BitcoinFaucet {
 
   private async call(method: string, params: any[]) {
     try {
+      const { fetch, Headers } = getFetch();
       const response = await fetch(this.url, {
         method: "POST",
-        headers: {
+        headers: new Headers({
           "Content-Type": "application/json",
           Authorization: "Basic " + btoa(`${this.username}:${this.password}`),
-        },
+        }),
         body: JSON.stringify({
           jsonrpc: "1.0",
           id: "spark-js",
