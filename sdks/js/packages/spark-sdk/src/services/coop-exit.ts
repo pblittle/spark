@@ -12,7 +12,10 @@ import {
   getTxFromRawTxBytes,
 } from "../utils/bitcoin.js";
 import { Network } from "../utils/network.js";
-import { getNextTransactionSequence } from "../utils/transaction.js";
+import {
+  getNextTransactionSequence,
+  maybeApplyFee,
+} from "../utils/transaction.js";
 import { WalletConfigService } from "./config.js";
 import { ConnectionManager } from "./connection.js";
 import { SigningService } from "./signing.js";
@@ -43,8 +46,15 @@ export class CoopExitService extends BaseTransferService {
   }: GetConnectorRefundSignaturesParams): Promise<{
     transfer: Transfer;
     signaturesMap: Map<string, Uint8Array>;
+    directSignaturesMap: Map<string, Uint8Array>;
+    directFromCpfpSignaturesMap: Map<string, Uint8Array>;
   }> {
-    const { transfer, signaturesMap } = await this.signCoopExitRefunds(
+    const {
+      transfer,
+      signaturesMap,
+      directSignaturesMap,
+      directFromCpfpSignaturesMap,
+    } = await this.signCoopExitRefunds(
       leaves,
       exitTxId,
       connectorOutputs,
@@ -55,51 +65,116 @@ export class CoopExitService extends BaseTransferService {
       transfer,
       leaves,
       signaturesMap,
+      directSignaturesMap,
+      directFromCpfpSignaturesMap,
     );
 
-    return { transfer: transferTweak, signaturesMap };
+    return {
+      transfer: transferTweak,
+      signaturesMap,
+      directSignaturesMap,
+      directFromCpfpSignaturesMap,
+    };
   }
 
-  private createConnectorRefundTransaction(
+  private createConnectorRefundTransactions(
     sequence: number,
-    nodeOutPoint: TransactionInput,
+    directSequence: number,
+    cpfpNodeOutPoint: TransactionInput,
+    directNodeOutPoint: TransactionInput | undefined,
     connectorOutput: TransactionInput,
     amountSats: bigint,
     receiverPubKey: Uint8Array,
-  ): Transaction {
-    const refundTx = new Transaction();
-    if (!nodeOutPoint.txid || nodeOutPoint.index === undefined) {
-      throw new ValidationError("Invalid node outpoint", {
-        field: "nodeOutPoint",
-        value: { txid: nodeOutPoint.txid, index: nodeOutPoint.index },
+  ): {
+    cpfpRefundTx: Transaction;
+    directRefundTx?: Transaction;
+    directFromCpfpRefundTx?: Transaction;
+  } {
+    // Create CPFP refund transaction
+    const cpfpRefundTx = new Transaction();
+    if (!cpfpNodeOutPoint.txid || cpfpNodeOutPoint.index === undefined) {
+      throw new ValidationError("Invalid CPFP node outpoint", {
+        field: "cpfpNodeOutPoint",
+        value: { txid: cpfpNodeOutPoint.txid, index: cpfpNodeOutPoint.index },
         expected: "Both txid and index must be defined",
       });
     }
-    refundTx.addInput({
-      txid: nodeOutPoint.txid,
-      index: nodeOutPoint.index,
+    cpfpRefundTx.addInput({
+      txid: cpfpNodeOutPoint.txid,
+      index: cpfpNodeOutPoint.index,
       sequence,
     });
 
-    refundTx.addInput(connectorOutput);
+    cpfpRefundTx.addInput(connectorOutput);
     const receiverScript = getP2TRScriptFromPublicKey(
       receiverPubKey,
       this.config.getNetwork(),
     );
 
-    refundTx.addOutput({
+    cpfpRefundTx.addOutput({
       script: receiverScript,
       amount: amountSats,
     });
 
-    return refundTx;
+    // Create direct refund transaction
+    let directRefundTx: Transaction | undefined;
+    let directFromCpfpRefundTx: Transaction | undefined;
+    if (directNodeOutPoint) {
+      if (!directNodeOutPoint.txid || directNodeOutPoint.index === undefined) {
+        throw new ValidationError("Invalid direct node outpoint", {
+          field: "directNodeOutPoint",
+          value: {
+            txid: directNodeOutPoint.txid,
+            index: directNodeOutPoint.index,
+          },
+          expected: "Both txid and index must be defined",
+        });
+      }
+      directRefundTx = new Transaction();
+      directRefundTx.addInput({
+        txid: directNodeOutPoint.txid,
+        index: directNodeOutPoint.index,
+        sequence: directSequence,
+      });
+
+      directRefundTx.addInput(connectorOutput);
+      directRefundTx.addOutput({
+        script: receiverScript,
+        amount: maybeApplyFee(amountSats),
+      });
+
+      directFromCpfpRefundTx = new Transaction();
+      directFromCpfpRefundTx.addInput({
+        txid: cpfpNodeOutPoint.txid,
+        index: cpfpNodeOutPoint.index,
+        sequence: directSequence,
+      });
+
+      directFromCpfpRefundTx.addInput(connectorOutput);
+      directFromCpfpRefundTx.addOutput({
+        script: receiverScript,
+        amount: maybeApplyFee(amountSats),
+      });
+    }
+
+    return {
+      cpfpRefundTx,
+      directRefundTx,
+      directFromCpfpRefundTx,
+    };
   }
+
   private async signCoopExitRefunds(
     leaves: LeafKeyTweak[],
     exitTxId: Uint8Array,
     connectorOutputs: TransactionInput[],
     receiverPubKey: Uint8Array,
-  ): Promise<{ transfer: Transfer; signaturesMap: Map<string, Uint8Array> }> {
+  ): Promise<{
+    transfer: Transfer;
+    signaturesMap: Map<string, Uint8Array>;
+    directSignaturesMap: Map<string, Uint8Array>;
+    directFromCpfpSignaturesMap: Map<string, Uint8Array>;
+  }> {
     if (leaves.length !== connectorOutputs.length) {
       throw new ValidationError(
         "Mismatch between leaves and connector outputs",
@@ -144,41 +219,80 @@ export class CoopExitService extends BaseTransferService {
           expected: "Non-null sequence",
         });
       }
-      const { nextSequence } = getNextTransactionSequence(sequence);
+      const { nextSequence, nextDirectSequence } =
+        getNextTransactionSequence(sequence);
 
-      const refundTx = this.createConnectorRefundTransaction(
-        nextSequence,
-        currentRefundTx.getInput(0),
-        connectorOutput,
-        BigInt(leaf.leaf.value),
-        receiverPubKey,
-      );
+      let currentDirectRefundTx: Transaction | undefined;
+      if (leaf.leaf.directRefundTx.length > 0) {
+        currentDirectRefundTx = getTxFromRawTxBytes(leaf.leaf.directRefundTx);
+      }
+
+      const { cpfpRefundTx, directRefundTx, directFromCpfpRefundTx } =
+        this.createConnectorRefundTransactions(
+          nextSequence,
+          nextDirectSequence,
+          currentRefundTx.getInput(0),
+          currentDirectRefundTx?.getInput(0),
+          connectorOutput,
+          BigInt(leaf.leaf.value),
+          receiverPubKey,
+        );
 
       const signingNonceCommitment =
         await this.config.signer.getRandomSigningCommitment();
+      const directSigningNonceCommitment =
+        await this.config.signer.getRandomSigningCommitment();
+      const directFromCpfpSigningNonceCommitment =
+        await this.config.signer.getRandomSigningCommitment();
+      const signingPublicKey =
+        await this.config.signer.getPublicKeyFromDerivation(leaf.keyDerivation);
+
       const signingJob: LeafRefundTxSigningJob = {
         leafId: leaf.leaf.id,
         refundTxSigningJob: {
           signingPublicKey: await this.config.signer.getPublicKeyFromDerivation(
             leaf.keyDerivation,
           ),
-          rawTx: refundTx.toBytes(),
+          rawTx: cpfpRefundTx.toBytes(),
           signingNonceCommitment: signingNonceCommitment.commitment,
         },
-        // TODO: Add direct refund signature
-        directRefundTxSigningJob: undefined,
-        directFromCpfpRefundTxSigningJob: undefined,
+        directRefundTxSigningJob: directRefundTx
+          ? {
+              signingPublicKey,
+              rawTx: directRefundTx.toBytes(),
+              signingNonceCommitment: directSigningNonceCommitment.commitment,
+            }
+          : undefined,
+        directFromCpfpRefundTxSigningJob: directFromCpfpRefundTx
+          ? {
+              signingPublicKey,
+              rawTx: directFromCpfpRefundTx.toBytes(),
+              signingNonceCommitment:
+                directFromCpfpSigningNonceCommitment.commitment,
+            }
+          : undefined,
       };
 
       signingJobs.push(signingJob);
       const tx = getTxFromRawTxBytes(leaf.leaf.nodeTx);
+      const directTx =
+        leaf.leaf.directTx.length > 0
+          ? getTxFromRawTxBytes(leaf.leaf.directTx)
+          : undefined;
+
       leafDataMap.set(leaf.leaf.id, {
         keyDerivation: leaf.keyDerivation,
-        refundTx,
-        signingNonceCommitment,
-        tx,
-        vout: leaf.leaf.vout,
         receivingPubkey: receiverPubKey,
+        signingNonceCommitment,
+        directSigningNonceCommitment,
+        tx,
+        directTx,
+        refundTx: cpfpRefundTx,
+        directRefundTx: directRefundTx,
+        directFromCpfpRefundTx: directFromCpfpRefundTx,
+        directFromCpfpRefundSigningNonceCommitment:
+          directFromCpfpSigningNonceCommitment,
+        vout: leaf.leaf.vout,
       });
     }
 
@@ -188,7 +302,7 @@ export class CoopExitService extends BaseTransferService {
 
     let response: CooperativeExitResponse;
     try {
-      response = await sparkClient.cooperative_exit({
+      response = await sparkClient.cooperative_exit_v2({
         transfer: {
           transferId: uuidv7(),
           leavesToSend: signingJobs,
@@ -228,10 +342,25 @@ export class CoopExitService extends BaseTransferService {
     );
 
     const signaturesMap: Map<string, Uint8Array> = new Map();
+    const directSignaturesMap: Map<string, Uint8Array> = new Map();
+    const directFromCpfpSignaturesMap: Map<string, Uint8Array> = new Map();
     for (const signature of signatures) {
       signaturesMap.set(signature.nodeId, signature.refundTxSignature);
+      directSignaturesMap.set(
+        signature.nodeId,
+        signature.directRefundTxSignature,
+      );
+      directFromCpfpSignaturesMap.set(
+        signature.nodeId,
+        signature.directFromCpfpRefundTxSignature,
+      );
     }
 
-    return { transfer: response.transfer, signaturesMap };
+    return {
+      transfer: response.transfer,
+      signaturesMap,
+      directSignaturesMap,
+      directFromCpfpSignaturesMap,
+    };
   }
 }

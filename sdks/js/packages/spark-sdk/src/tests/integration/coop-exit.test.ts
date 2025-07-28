@@ -19,13 +19,13 @@ import {
   getTxIdNoReverse,
 } from "../../utils/bitcoin.js";
 import { getNetwork, Network } from "../../utils/network.js";
-import { createNewTree, signerTypes } from "../test-utils.js";
+import { walletTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 
 import { KeyDerivation, KeyDerivationType } from "../../index.js";
 import { TransferStatus } from "../../proto/spark.js";
-describe.each(signerTypes)("coop exit", ({ name, Signer }) => {
+describe.each(walletTypes)("coop exit", ({ name, Signer, createTree }) => {
   it(`${name} - test coop exit`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 
@@ -56,12 +56,7 @@ describe.each(signerTypes)("coop exit", ({ name, Signer }) => {
     );
 
     const leafId = uuidv7();
-    const rootNode = await createNewTree(
-      userWallet,
-      leafId,
-      faucet,
-      amountSats,
-    );
+    const rootNode = await createTree(userWallet, leafId, faucet, amountSats);
 
     // Setup ssp
     const { wallet: sspWallet } = await SparkWalletTesting.initialize({

@@ -309,6 +309,8 @@ export default class SspClient {
 
   async requestLeaveSwap({
     adaptorPubkey,
+    directAdaptorPubkey,
+    directFromCpfpAdaptorPubkey,
     totalAmountSats,
     targetAmountSats,
     feeSats,
@@ -320,6 +322,8 @@ export default class SspClient {
       queryPayload: RequestSwapLeaves,
       variables: {
         adaptor_pubkey: adaptorPubkey,
+        direct_adaptor_pubkey: directAdaptorPubkey,
+        direct_from_cpfp_adaptor_pubkey: directFromCpfpAdaptorPubkey,
         total_amount_sats: totalAmountSats,
         target_amount_sats: targetAmountSats,
         fee_sats: feeSats,
@@ -340,6 +344,8 @@ export default class SspClient {
 
   async completeLeaveSwap({
     adaptorSecretKey,
+    directAdaptorSecretKey,
+    directFromCpfpAdaptorSecretKey,
     userOutboundTransferExternalId,
     leavesSwapRequestId,
   }: CompleteLeavesSwapInput): Promise<LeavesSwapRequest | null> {
@@ -347,6 +353,8 @@ export default class SspClient {
       queryPayload: CompleteLeavesSwap,
       variables: {
         adaptor_secret_key: adaptorSecretKey,
+        direct_adaptor_secret_key: directAdaptorSecretKey,
+        direct_from_cpfp_adaptor_secret_key: directFromCpfpAdaptorSecretKey,
         user_outbound_transfer_external_id: userOutboundTransferExternalId,
         leaves_swap_request_id: leavesSwapRequestId,
       },

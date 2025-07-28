@@ -19,11 +19,11 @@ import {
 } from "../proto/spark.js";
 import { getTxFromRawTxBytes } from "../utils/bitcoin.js";
 import { getCrypto } from "../utils/crypto.js";
+import { decodeInvoice } from "./bolt11-spark.js";
 import { WalletConfigService } from "./config.js";
 import { ConnectionManager } from "./connection.js";
 import { SigningService } from "./signing.js";
 import type { LeafKeyTweak } from "./transfer.js";
-import { decodeInvoice } from "./bolt11-spark.js";
 
 export type CreateLightningInvoiceParams = {
   invoiceCreator: (
@@ -188,10 +188,12 @@ export class LightningService {
       this.config.getCoordinatorAddress(),
     );
 
+    // Get signing commitments for all transaction types in one coordinated call
     let signingCommitments: GetSigningCommitmentsResponse;
     try {
       signingCommitments = await sparkClient.get_signing_commitments({
         nodeIds: leaves.map((leaf) => leaf.leaf.id),
+        count: 3,
       });
     } catch (error) {
       throw new NetworkError(
@@ -205,10 +207,19 @@ export class LightningService {
       );
     }
 
-    const leafSigningJobs = await this.signingService.signRefunds(
+    const {
+      cpfpLeafSigningJobs,
+      directLeafSigningJobs,
+      directFromCpfpLeafSigningJobs,
+    } = await this.signingService.signRefunds(
       leaves,
-      signingCommitments.signingCommitments,
       receiverIdentityPubkey,
+      signingCommitments.signingCommitments.slice(0, leaves.length),
+      signingCommitments.signingCommitments.slice(
+        leaves.length,
+        2 * leaves.length,
+      ),
+      signingCommitments.signingCommitments.slice(2 * leaves.length),
     );
 
     const transferId = uuidv7();
@@ -257,7 +268,7 @@ export class LightningService {
 
     let response: InitiatePreimageSwapResponse;
     try {
-      response = await sparkClient.initiate_preimage_swap({
+      response = await sparkClient.initiate_preimage_swap_v2({
         paymentHash,
         invoiceAmount: {
           invoiceAmountProof: {
@@ -270,7 +281,9 @@ export class LightningService {
           transferId,
           ownerIdentityPublicKey:
             await this.config.signer.getIdentityPublicKey(),
-          leavesToSend: leafSigningJobs,
+          leavesToSend: cpfpLeafSigningJobs,
+          directLeavesToSend: directLeafSigningJobs,
+          directFromCpfpLeavesToSend: directFromCpfpLeafSigningJobs,
           receiverIdentityPublicKey: receiverIdentityPubkey,
           expiryTime: new Date(Date.now() + 2 * 60 * 1000),
         },

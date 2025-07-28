@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
-import { equalBytes, hexToBytes } from "@noble/curves/abstract/utils";
+import { hexToBytes } from "@noble/curves/abstract/utils";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { uuidv7 } from "uuidv7";
 import { ValidationError } from "../../errors/types.js";
-import { KeyDerivation, KeyDerivationType } from "../../index.js";
+import { KeyDerivationType } from "../../index.js";
 import { WalletConfigService } from "../../services/config.js";
 import { ConnectionManager } from "../../services/connection.js";
 import { SigningService } from "../../services/signing.js";
@@ -12,146 +12,249 @@ import { TransferService } from "../../services/transfer.js";
 import {
   applyAdaptorToSignature,
   generateAdaptorFromSignature,
+  validateOutboundAdaptorSignature,
 } from "../../utils/adaptor-signature.js";
 import {
   computeTaprootKeyNoScript,
   getSigHashFromTx,
 } from "../../utils/bitcoin.js";
-import { createNewTree, signerTypes } from "../test-utils.js";
+import { walletTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 
 const testLocalOnly = process.env.GITHUB_ACTIONS ? it.skip : it;
 
-describe.each(signerTypes)("swap", ({ name, Signer }) => {
+describe.each(walletTypes)("swap", ({ name, Signer, createTree }) => {
+  let aliceWallet: SparkWalletTesting;
+  let aliceTransferService: TransferService;
+
+  let bobWallet: SparkWalletTesting;
+  let bobTransferService: TransferService;
+
+  beforeAll(async () => {
+    const { wallet: alice } = await SparkWalletTesting.initialize({
+      options: {
+        network: "LOCAL",
+      },
+      signer: new Signer(),
+    });
+    aliceWallet = alice;
+    const aliceConfig = new WalletConfigService(
+      {
+        network: "LOCAL",
+      },
+      alice.getSigner(),
+    );
+    const aliceConnectionManager = new ConnectionManager(aliceConfig);
+    const aliceSigningService = new SigningService(aliceConfig);
+    aliceTransferService = new TransferService(
+      aliceConfig,
+      aliceConnectionManager,
+      aliceSigningService,
+    );
+
+    const { wallet: bob } = await SparkWalletTesting.initialize({
+      options: {
+        network: "LOCAL",
+      },
+      signer: new Signer(),
+    });
+    bobWallet = bob;
+    const bobConfig = new WalletConfigService(
+      {
+        network: "LOCAL",
+      },
+      bobWallet.getSigner(),
+    );
+    const bobConnectionManager = new ConnectionManager(bobConfig);
+    const bobSigningService = new SigningService(bobConfig);
+    bobTransferService = new TransferService(
+      bobConfig,
+      bobConnectionManager,
+      bobSigningService,
+    );
+  });
+
   testLocalOnly(
-    `${name} - test swap`,
+    `${name} - test swap v1`,
     async () => {
       const faucet = BitcoinFaucet.getInstance();
-      // Initiate sender
-      const { wallet: senderWallet } = await SparkWalletTesting.initialize({
-        options: {
-          network: "LOCAL",
-        },
-        signer: new Signer(),
-      });
-      const senderPubkey = await senderWallet.getIdentityPublicKey();
 
-      const senderConfig = new WalletConfigService(
-        {
-          network: "LOCAL",
-        },
-        senderWallet.getSigner(),
-      );
-      const senderConnectionManager = new ConnectionManager(senderConfig);
-      const senderSigningService = new SigningService(senderConfig);
-      const senderTransferService = new TransferService(
-        senderConfig,
-        senderConnectionManager,
-        senderSigningService,
-      );
+      const aliceLeafId = uuidv7();
+      const aliceRootNode = await createTree(aliceWallet!, aliceLeafId, faucet);
 
-      // Initiate receiver
-      const { wallet: receiverWallet } = await SparkWalletTesting.initialize({
-        options: {
-          network: "LOCAL",
-        },
-        signer: new Signer(),
-      });
-      const receiverPubkey = await receiverWallet.getIdentityPublicKey();
+      const bobLeafId = uuidv7();
+      const bobRootNode = await createTree(bobWallet!, bobLeafId, faucet);
 
-      const receiverConfig = new WalletConfigService(
-        {
-          network: "LOCAL",
-        },
-        receiverWallet.getSigner(),
-      );
-      const receiverConnectionManager = new ConnectionManager(receiverConfig);
-      const receiverSigningService = new SigningService(receiverConfig);
-      const receiverTransferService = new TransferService(
-        receiverConfig,
-        receiverConnectionManager,
-        receiverSigningService,
-      );
-
-      const senderLeafId = uuidv7();
-      const senderRootNode = await createNewTree(
-        senderWallet,
-        senderLeafId,
-        faucet,
-      );
-
-      const receiverLeafId = uuidv7();
-      const receiverRootNode = await createNewTree(
-        receiverWallet,
-        receiverLeafId,
-        faucet,
-      );
-
-      // Sender initiates transfer
-      const senderNewLeafId = uuidv7();
-      const senderTransferNode: LeafKeyTweak = {
-        leaf: senderRootNode,
+      const aliceTransferNode: LeafKeyTweak = {
+        leaf: aliceRootNode,
         keyDerivation: {
           type: KeyDerivationType.LEAF,
-          path: senderLeafId,
+          path: aliceLeafId,
         },
         newKeyDerivation: {
-          type: KeyDerivationType.LEAF,
-          path: senderNewLeafId,
+          type: KeyDerivationType.RANDOM,
         },
       };
-      const senderLeavesToTransfer = [senderTransferNode];
+      const aliceLeavesToTransfer = [aliceTransferNode];
 
-      // Get signature for refunds (normal flow)
       const {
-        transfer: senderTransfer,
-        signatureMap: senderRefundSignatureMap,
-        leafDataMap: senderLeafDataMap,
-      } = await senderTransferService.startSwapSignRefund(
-        senderLeavesToTransfer,
-        hexToBytes(receiverPubkey),
+        transfer: aliceTransfer,
+        signatureMap: aliceRefundSignatureMap,
+        leafDataMap: aliceLeafDataMap,
+        directSignatureMap: aliceDirectRefundSignatureMap,
+        directFromCpfpSignatureMap: aliceDirectFromCpfpSignatureMap,
+      } = await aliceTransferService!.startSwapSignRefund(
+        aliceLeavesToTransfer,
+        hexToBytes(await bobWallet.getIdentityPublicKey()),
         new Date(Date.now() + 10 * 60 * 1000),
       );
 
-      expect(senderRefundSignatureMap.size).toBe(1);
-      const senderSignature = senderRefundSignatureMap.get(senderRootNode.id);
-      expect(senderSignature).toBeDefined();
-      expect(senderLeafDataMap.size).toBe(1);
+      expect(aliceRefundSignatureMap.size).toBe(1);
+      const aliceSignature = aliceRefundSignatureMap.get(aliceRootNode.id);
 
-      const { adaptorPrivateKey, adaptorSignature } =
-        generateAdaptorFromSignature(senderSignature!);
-      const adaptorPubKey = secp256k1.getPublicKey(adaptorPrivateKey);
+      expect(aliceSignature).toBeDefined();
+      expect(aliceDirectRefundSignatureMap.size).toBe(1);
+      const aliceDirectSignature = aliceDirectRefundSignatureMap.get(
+        aliceRootNode.id,
+      );
+      expect(aliceDirectSignature).toBeDefined();
+      expect(aliceDirectFromCpfpSignatureMap.size).toBe(1);
+      const aliceDirectFromCpfpSignature = aliceDirectFromCpfpSignatureMap.get(
+        aliceRootNode.id,
+      );
+      expect(aliceDirectFromCpfpSignature).toBeDefined();
+      expect(aliceLeafDataMap.size).toBe(1);
+      const aliceLeafData = aliceLeafDataMap.get(aliceRootNode.id);
+      expect(aliceLeafData).toBeDefined();
 
-      const receiverNewLeafDerivation: KeyDerivation = {
-        type: KeyDerivationType.LEAF,
-        path: uuidv7(),
-      };
+      const aliceRefundSighash = getSigHashFromTx(
+        aliceLeafData!.refundTx!,
+        0,
+        aliceLeafData!.tx.getOutput(aliceLeafData!.vout),
+      );
+
+      let aliceDirectSighash: Uint8Array | undefined;
+      let aliceDirectFromCpfpSighash: Uint8Array | undefined;
+      if (aliceLeafData!.directRefundTx) {
+        aliceDirectSighash = getSigHashFromTx(
+          aliceLeafData!.directRefundTx,
+          0,
+          aliceLeafData!.directTx!.getOutput(aliceLeafData!.vout),
+        );
+      }
+      if (aliceLeafData!.directFromCpfpRefundTx) {
+        aliceDirectFromCpfpSighash = getSigHashFromTx(
+          aliceLeafData!.directFromCpfpRefundTx,
+          0,
+          aliceLeafData!.tx.getOutput(aliceLeafData!.vout),
+        );
+      }
+
+      const {
+        adaptorSignature: cpfpAdaptorSignature,
+        adaptorPrivateKey: cpfpAdaptorPrivateKey,
+      } = generateAdaptorFromSignature(aliceSignature!);
+
+      let directAdaptorPrivateKey: Uint8Array | undefined;
+      let directFromCpfpAdaptorPrivateKey: Uint8Array | undefined;
+      let directAdaptorSignature: Uint8Array | undefined;
+      let directFromCpfpAdaptorSignature: Uint8Array | undefined;
+      if (aliceDirectSignature && aliceDirectSignature.length > 0) {
+        const { adaptorSignature, adaptorPrivateKey } =
+          generateAdaptorFromSignature(aliceDirectSignature);
+        directAdaptorPrivateKey = adaptorPrivateKey;
+        directAdaptorSignature = adaptorSignature;
+      }
+      if (
+        aliceDirectFromCpfpSignature &&
+        aliceDirectFromCpfpSignature.length > 0
+      ) {
+        const { adaptorSignature, adaptorPrivateKey } =
+          generateAdaptorFromSignature(aliceDirectFromCpfpSignature);
+        directFromCpfpAdaptorPrivateKey = adaptorPrivateKey;
+        directFromCpfpAdaptorSignature = adaptorSignature;
+      }
+
+      const cpfpAdaptorPubKey = secp256k1.getPublicKey(cpfpAdaptorPrivateKey);
+
+      let directAdaptorPubKey: Uint8Array | undefined;
+      let directFromCpfpAdaptorPubKey: Uint8Array | undefined;
+      if (directAdaptorPrivateKey) {
+        directAdaptorPubKey = secp256k1.getPublicKey(directAdaptorPrivateKey);
+      }
+      if (directFromCpfpAdaptorPrivateKey) {
+        directFromCpfpAdaptorPubKey = secp256k1.getPublicKey(
+          directFromCpfpAdaptorPrivateKey,
+        );
+      }
+
+      const taprootKey = computeTaprootKeyNoScript(
+        aliceRootNode.verifyingPublicKey.slice(1, 33),
+      );
+
+      validateOutboundAdaptorSignature(
+        taprootKey.slice(1, 33),
+        aliceRefundSighash,
+        cpfpAdaptorSignature,
+        cpfpAdaptorPubKey,
+      );
+
+      if (aliceDirectSighash) {
+        validateOutboundAdaptorSignature(
+          taprootKey.slice(1, 33),
+          aliceDirectSighash,
+          directAdaptorSignature!,
+          directAdaptorPubKey!,
+        );
+      }
+
+      if (aliceDirectFromCpfpSighash) {
+        validateOutboundAdaptorSignature(
+          taprootKey.slice(1, 33),
+          aliceDirectFromCpfpSighash,
+          directFromCpfpAdaptorSignature!,
+          directFromCpfpAdaptorPubKey!,
+        );
+      }
+
       const receiverTransferNode: LeafKeyTweak = {
-        leaf: receiverRootNode,
+        leaf: bobRootNode,
         keyDerivation: {
           type: KeyDerivationType.LEAF,
-          path: receiverLeafId,
+          path: bobLeafId,
         },
-        newKeyDerivation: receiverNewLeafDerivation,
+        newKeyDerivation: {
+          type: KeyDerivationType.RANDOM,
+        },
       };
       const receiverLeavesToTransfer = [receiverTransferNode];
 
       const {
-        transfer: receiverTransfer,
-        signatureMap: receiverRefundSignatureMap,
-        leafDataMap: receiverLeafDataMap,
-        signingResults: operatorSigningResults,
-      } = await receiverTransferService.counterSwapSignRefund(
+        transfer: bobTransfer,
+        signatureMap: bobRefundSignatureMap,
+        directSignatureMap: bobDirectRefundSignatureMap,
+        directFromCpfpSignatureMap: bobDirectFromCpfpSignatureMap,
+        leafDataMap: bobLeafDataMap,
+        signingResults: bobSigningResults,
+      } = await bobTransferService.counterSwapSignRefund(
         receiverLeavesToTransfer,
-        hexToBytes(senderPubkey),
+        hexToBytes(await aliceWallet.getIdentityPublicKey()),
         new Date(Date.now() + 10 * 60 * 1000),
-        adaptorPubKey,
+        cpfpAdaptorPubKey,
+        directAdaptorPubKey,
+        directFromCpfpAdaptorPubKey,
       );
 
       const newReceiverRefundSignatureMap = new Map<string, Uint8Array>();
-      for (const [nodeId, signature] of receiverRefundSignatureMap.entries()) {
-        const leafData = receiverLeafDataMap.get(nodeId);
+      const newReceiverDirectRefundSignatureMap = new Map<string, Uint8Array>();
+      const newReceiverDirectFromCpfpRefundSignatureMap = new Map<
+        string,
+        Uint8Array
+      >();
+
+      for (const [nodeId, signature] of bobRefundSignatureMap.entries()) {
+        const leafData = bobLeafDataMap.get(nodeId);
         if (!leafData?.refundTx) {
           throw new ValidationError("Refund transaction not found", {
             field: "refundTx",
@@ -164,7 +267,7 @@ describe.each(signerTypes)("swap", ({ name, Signer }) => {
           leafData.tx.getOutput(leafData.vout),
         );
         let verifyingPubkey: Uint8Array | undefined;
-        for (const signingResult of operatorSigningResults) {
+        for (const signingResult of bobSigningResults) {
           if (signingResult.leafId === nodeId) {
             verifyingPubkey = signingResult.verifyingKey;
           }
@@ -177,89 +280,98 @@ describe.each(signerTypes)("swap", ({ name, Signer }) => {
           taprootKey.slice(1, 33),
           sighash,
           signature,
-          adaptorPrivateKey,
+          cpfpAdaptorPrivateKey,
         );
         newReceiverRefundSignatureMap.set(nodeId, adaptorSig);
       }
+
+      for (const [nodeId, signature] of bobDirectRefundSignatureMap.entries()) {
+        const leafData = bobLeafDataMap.get(nodeId);
+        if (!leafData?.directRefundTx) {
+          continue;
+        }
+        const sighash = getSigHashFromTx(
+          leafData.directRefundTx,
+          0,
+          leafData.directTx!.getOutput(leafData.vout),
+        );
+        let verifyingPubkey: Uint8Array | undefined;
+        for (const signingResult of bobSigningResults) {
+          if (signingResult.leafId === nodeId) {
+            verifyingPubkey = signingResult.verifyingKey;
+          }
+        }
+        expect(verifyingPubkey).toBeDefined();
+        const taprootKey = computeTaprootKeyNoScript(
+          verifyingPubkey!.slice(1, 33),
+        );
+        const adaptorSig = applyAdaptorToSignature(
+          taprootKey.slice(1, 33),
+          sighash,
+          signature,
+          directAdaptorPrivateKey ?? new Uint8Array(),
+        );
+        newReceiverDirectRefundSignatureMap.set(nodeId, adaptorSig);
+      }
+
+      for (const [
+        nodeId,
+        signature,
+      ] of bobDirectFromCpfpSignatureMap.entries()) {
+        const leafData = bobLeafDataMap.get(nodeId);
+        if (!leafData?.directFromCpfpRefundTx) {
+          continue;
+        }
+        const sighash = getSigHashFromTx(
+          leafData.directFromCpfpRefundTx,
+          0,
+          leafData.tx.getOutput(leafData.vout),
+        );
+        let verifyingPubkey: Uint8Array | undefined;
+        for (const signingResult of bobSigningResults) {
+          if (signingResult.leafId === nodeId) {
+            verifyingPubkey = signingResult.verifyingKey;
+          }
+        }
+        expect(verifyingPubkey).toBeDefined();
+        const taprootKey = computeTaprootKeyNoScript(
+          verifyingPubkey!.slice(1, 33),
+        );
+        const adaptorSig = applyAdaptorToSignature(
+          taprootKey.slice(1, 33),
+          sighash,
+          signature,
+          directFromCpfpAdaptorPrivateKey ?? new Uint8Array(),
+        );
+        newReceiverDirectFromCpfpRefundSignatureMap.set(nodeId, adaptorSig);
+      }
+
       const senderTransferTweakKey =
-        await senderTransferService.sendTransferTweakKey(
-          senderTransfer,
-          senderLeavesToTransfer,
-          senderRefundSignatureMap,
+        await aliceTransferService.sendTransferTweakKey(
+          aliceTransfer,
+          aliceLeavesToTransfer,
+          aliceRefundSignatureMap,
+          aliceDirectRefundSignatureMap,
+          aliceDirectFromCpfpSignatureMap,
         );
 
-      const pendingTransfer =
-        await receiverTransferService.queryPendingTransfers();
+      const pendingTransfer = await bobTransferService.queryPendingTransfers();
       expect(pendingTransfer.transfers.length).toBe(1);
-      const receiverPendingTransfer = pendingTransfer.transfers[0];
-      expect(receiverPendingTransfer!.id).toBe(senderTransferTweakKey.id);
+      const bobPendingTransfer = pendingTransfer.transfers[0];
+      expect(bobPendingTransfer!.id).toBe(senderTransferTweakKey.id);
 
-      const leafPrivKeyMap =
-        await receiverTransferService.verifyPendingTransfer(
-          receiverPendingTransfer!,
-        );
-
+      const leafPrivKeyMap = await bobTransferService.verifyPendingTransfer(
+        bobPendingTransfer!,
+      );
       expect(leafPrivKeyMap.size).toBe(1);
-      expect(leafPrivKeyMap.get(senderRootNode.id)).toBeDefined();
-      const bytesEqual = equalBytes(
-        leafPrivKeyMap.get(senderRootNode.id)!,
-        await senderWallet
-          .getSigner()
-          .getPublicKeyFromDerivation(senderTransferNode.newKeyDerivation),
-      );
-      expect(bytesEqual).toBe(true);
-      expect(receiverPendingTransfer!.leaves[0]!.leaf).toBeDefined();
+      expect(leafPrivKeyMap.get(aliceRootNode.id)).toBeDefined();
 
-      const claimingNodes: LeafKeyTweak[] = receiverPendingTransfer!.leaves.map(
+      const claimingNodes: LeafKeyTweak[] = bobPendingTransfer!.leaves.map(
         (leaf) => ({
           leaf: leaf.leaf!,
           keyDerivation: {
             type: KeyDerivationType.ECIES,
-            path: leaf.secretCipher,
-          },
-          newKeyDerivation: {
-            type: KeyDerivationType.LEAF,
-            path: senderNewLeafId,
-          },
-        }),
-      );
-      await receiverTransferService.claimTransfer(
-        receiverPendingTransfer!,
-        claimingNodes,
-      );
-      await receiverTransferService.sendTransferTweakKey(
-        receiverTransfer,
-        receiverLeavesToTransfer,
-        newReceiverRefundSignatureMap,
-      );
-
-      const sPendingTransfer =
-        await senderTransferService.queryPendingTransfers();
-      expect(sPendingTransfer.transfers.length).toBe(1);
-      const senderPendingTransfer = sPendingTransfer.transfers[0];
-      expect(senderPendingTransfer!.id).toBe(receiverTransfer.id);
-
-      const senderLeafPrivKeyMap =
-        await senderTransferService.verifyPendingTransfer(
-          senderPendingTransfer!,
-        );
-      expect(senderLeafPrivKeyMap.size).toBe(1);
-      expect(senderLeafPrivKeyMap.get(receiverRootNode.id)).toBeDefined();
-      const bytesEqual_1 = equalBytes(
-        senderLeafPrivKeyMap.get(receiverRootNode.id)!,
-        await receiverWallet
-          .getSigner()
-          .getPublicKeyFromDerivation(receiverNewLeafDerivation),
-      );
-      expect(bytesEqual_1).toBe(true);
-      expect(senderPendingTransfer!.leaves[0]!.leaf).toBeDefined();
-
-      const claimingNodes_1: LeafKeyTweak[] = senderPendingTransfer!.leaves.map(
-        (leaf) => ({
-          leaf: leaf.leaf!,
-          keyDerivation: {
-            type: KeyDerivationType.ECIES,
-            path: leaf.secretCipher,
+            path: leaf.secretCipher!,
           },
           newKeyDerivation: {
             type: KeyDerivationType.LEAF,
@@ -267,143 +379,235 @@ describe.each(signerTypes)("swap", ({ name, Signer }) => {
           },
         }),
       );
-      await senderTransferService.claimTransfer(
-        senderPendingTransfer!,
-        claimingNodes_1,
+
+      await bobTransferService.claimTransfer(
+        bobPendingTransfer!,
+        claimingNodes,
+      );
+
+      const senderTransferTweakKey2 =
+        await bobTransferService.sendTransferTweakKey(
+          bobTransfer,
+          receiverLeavesToTransfer,
+          newReceiverRefundSignatureMap,
+          newReceiverDirectRefundSignatureMap,
+          newReceiverDirectFromCpfpRefundSignatureMap,
+        );
+
+      const pendingTransfer2 =
+        await aliceTransferService.queryPendingTransfers();
+      expect(pendingTransfer2.transfers.length).toBe(1);
+      const alicePendingTransfer2 = pendingTransfer2.transfers[0];
+      expect(alicePendingTransfer2!.id).toBe(senderTransferTweakKey2.id);
+
+      const leafPrivKeyMap2 = await aliceTransferService.verifyPendingTransfer(
+        alicePendingTransfer2!,
+      );
+      expect(leafPrivKeyMap2.size).toBe(1);
+
+      const claimingNodes2: LeafKeyTweak[] = alicePendingTransfer2!.leaves.map(
+        (leaf) => ({
+          leaf: leaf.leaf!,
+          keyDerivation: {
+            type: KeyDerivationType.ECIES,
+            path: leaf.secretCipher!,
+          },
+          newKeyDerivation: {
+            type: KeyDerivationType.LEAF,
+            path: leaf.leaf!.id,
+          },
+        }),
+      );
+
+      await aliceTransferService.claimTransfer(
+        alicePendingTransfer2!,
+        claimingNodes2,
       );
     },
-    30000,
+    30_000,
   );
 
   testLocalOnly(
     `${name} - test swap v2`,
     async () => {
       const faucet = BitcoinFaucet.getInstance();
-      // Initiate sender
-      const { wallet: senderWallet } = await SparkWalletTesting.initialize({
-        options: {
-          network: "LOCAL",
-        },
-        signer: new Signer(),
-      });
-      const senderPubkey = await senderWallet.getIdentityPublicKey();
 
-      const senderConfig = new WalletConfigService(
-        {
-          network: "LOCAL",
-        },
-        senderWallet.getSigner(),
-      );
-      const senderConnectionManager = new ConnectionManager(senderConfig);
-      const senderSigningService = new SigningService(senderConfig);
-      const senderTransferService = new TransferService(
-        senderConfig,
-        senderConnectionManager,
-        senderSigningService,
-      );
+      const aliceLeafId = uuidv7();
+      const aliceRootNode = await createTree(aliceWallet!, aliceLeafId, faucet);
 
-      // Initiate receiver
-      const { wallet: receiverWallet } = await SparkWalletTesting.initialize({
-        options: {
-          network: "LOCAL",
-        },
-        signer: new Signer(),
-      });
-      const receiverPubkey = await receiverWallet.getIdentityPublicKey();
+      const bobLeafId = uuidv7();
+      const bobRootNode = await createTree(bobWallet!, bobLeafId, faucet);
 
-      const receiverConfig = new WalletConfigService(
-        {
-          network: "LOCAL",
-        },
-        receiverWallet.getSigner(),
-      );
-      const receiverConnectionManager = new ConnectionManager(receiverConfig);
-      const receiverSigningService = new SigningService(receiverConfig);
-      const receiverTransferService = new TransferService(
-        receiverConfig,
-        receiverConnectionManager,
-        receiverSigningService,
-      );
-
-      const senderLeafId = uuidv7();
-      const senderRootNode = await createNewTree(
-        senderWallet,
-        senderLeafId,
-        faucet,
-      );
-
-      const receiverLeafId = uuidv7();
-      const receiverRootNode = await createNewTree(
-        receiverWallet,
-        receiverLeafId,
-        faucet,
-      );
-
-      // Sender initiates transfer
-      const senderNewLeafDerivation: KeyDerivation = {
-        type: KeyDerivationType.LEAF,
-        path: uuidv7(),
-      };
-      const senderTransferNode: LeafKeyTweak = {
-        leaf: senderRootNode,
+      const aliceTransferNode: LeafKeyTweak = {
+        leaf: aliceRootNode,
         keyDerivation: {
           type: KeyDerivationType.LEAF,
-          path: senderLeafId,
+          path: aliceLeafId,
         },
-        newKeyDerivation: senderNewLeafDerivation,
+        newKeyDerivation: {
+          type: KeyDerivationType.RANDOM,
+        },
       };
-      const senderLeavesToTransfer = [senderTransferNode];
+      const aliceLeavesToTransfer = [aliceTransferNode];
 
-      // Get signature for refunds (normal flow)
       const {
-        transfer: senderTransfer,
-        signatureMap: senderRefundSignatureMap,
-        leafDataMap: senderLeafDataMap,
-      } = await senderTransferService.startSwapSignRefund(
-        senderLeavesToTransfer,
-        hexToBytes(receiverPubkey),
+        transfer: aliceTransfer,
+        signatureMap: aliceRefundSignatureMap,
+        directSignatureMap: aliceDirectRefundSignatureMap,
+        directFromCpfpSignatureMap: aliceDirectFromCpfpSignatureMap,
+        leafDataMap: aliceLeafDataMap,
+      } = await aliceTransferService.startSwapSignRefund(
+        aliceLeavesToTransfer,
+        hexToBytes(await bobWallet.getIdentityPublicKey()),
         new Date(Date.now() + 10 * 60 * 1000),
       );
 
-      expect(senderRefundSignatureMap.size).toBe(1);
-      const senderSignature = senderRefundSignatureMap.get(senderRootNode.id);
-      expect(senderSignature).toBeDefined();
-      expect(senderLeafDataMap.size).toBe(1);
+      expect(aliceRefundSignatureMap.size).toBe(1);
+      const aliceSignature = aliceRefundSignatureMap.get(aliceRootNode.id);
+      expect(aliceSignature).toBeDefined();
 
-      const { adaptorPrivateKey } = generateAdaptorFromSignature(
-        senderSignature!,
+      expect(aliceDirectRefundSignatureMap.size).toBe(1);
+      const aliceDirectSignature = aliceDirectRefundSignatureMap.get(
+        aliceRootNode.id,
       );
-      const adaptorPubKey = secp256k1.getPublicKey(adaptorPrivateKey);
+      expect(aliceDirectSignature).toBeDefined();
 
-      const receiverNewLeafDerivation: KeyDerivation = {
-        type: KeyDerivationType.LEAF,
-        path: uuidv7(),
-      };
+      expect(aliceDirectFromCpfpSignatureMap.size).toBe(1);
+      const aliceDirectFromCpfpSignature = aliceDirectFromCpfpSignatureMap.get(
+        aliceRootNode.id,
+      );
+      expect(aliceDirectFromCpfpSignature).toBeDefined();
+
+      expect(aliceLeafDataMap.size).toBe(1);
+      const aliceLeafData = aliceLeafDataMap.get(aliceRootNode.id);
+      expect(aliceLeafData).toBeDefined();
+
+      const aliceRefundSighash = getSigHashFromTx(
+        aliceLeafData!.refundTx!,
+        0,
+        aliceLeafData!.tx.getOutput(aliceLeafData!.vout),
+      );
+
+      let aliceDirectSighash: Uint8Array | undefined;
+      let aliceDirectFromCpfpSighash: Uint8Array | undefined;
+      if (aliceLeafData!.directRefundTx) {
+        aliceDirectSighash = getSigHashFromTx(
+          aliceLeafData!.directRefundTx,
+          0,
+          aliceLeafData!.directTx!.getOutput(aliceLeafData!.vout),
+        );
+      }
+      if (aliceLeafData!.directFromCpfpRefundTx) {
+        aliceDirectFromCpfpSighash = getSigHashFromTx(
+          aliceLeafData!.directFromCpfpRefundTx,
+          0,
+          aliceLeafData!.tx.getOutput(aliceLeafData!.vout),
+        );
+      }
+
+      const {
+        adaptorSignature: cpfpAdaptorSignature,
+        adaptorPrivateKey: cpfpAdaptorPrivateKey,
+      } = generateAdaptorFromSignature(aliceSignature!);
+
+      let directAdaptorPrivateKey: Uint8Array | undefined;
+      let directFromCpfpAdaptorPrivateKey: Uint8Array | undefined;
+      let directAdaptorSignature: Uint8Array | undefined;
+      let directFromCpfpAdaptorSignature: Uint8Array | undefined;
+      if (aliceDirectSignature && aliceDirectSignature.length > 0) {
+        const { adaptorSignature, adaptorPrivateKey } =
+          generateAdaptorFromSignature(aliceDirectSignature);
+        directAdaptorPrivateKey = adaptorPrivateKey;
+        directAdaptorSignature = adaptorSignature;
+      }
+      if (
+        aliceDirectFromCpfpSignature &&
+        aliceDirectFromCpfpSignature.length > 0
+      ) {
+        const { adaptorSignature, adaptorPrivateKey } =
+          generateAdaptorFromSignature(aliceDirectFromCpfpSignature);
+        directFromCpfpAdaptorPrivateKey = adaptorPrivateKey;
+        directFromCpfpAdaptorSignature = adaptorSignature;
+      }
+
+      const cpfpAdaptorPubKey = secp256k1.getPublicKey(cpfpAdaptorPrivateKey);
+
+      let directAdaptorPubKey: Uint8Array | undefined;
+      let directFromCpfpAdaptorPubKey: Uint8Array | undefined;
+      if (directAdaptorPrivateKey) {
+        directAdaptorPubKey = secp256k1.getPublicKey(directAdaptorPrivateKey);
+      }
+      if (directFromCpfpAdaptorPrivateKey) {
+        directFromCpfpAdaptorPubKey = secp256k1.getPublicKey(
+          directFromCpfpAdaptorPrivateKey,
+        );
+      }
+
+      const taprootKey = computeTaprootKeyNoScript(
+        aliceRootNode.verifyingPublicKey.slice(1, 33),
+      );
+
+      validateOutboundAdaptorSignature(
+        taprootKey.slice(1, 33),
+        aliceRefundSighash,
+        cpfpAdaptorSignature,
+        cpfpAdaptorPubKey,
+      );
+
+      if (aliceDirectSighash) {
+        validateOutboundAdaptorSignature(
+          taprootKey.slice(1, 33),
+          aliceDirectSighash,
+          directAdaptorSignature!,
+          directAdaptorPubKey!,
+        );
+      }
+
+      if (aliceDirectFromCpfpSighash) {
+        validateOutboundAdaptorSignature(
+          taprootKey.slice(1, 33),
+          aliceDirectFromCpfpSighash,
+          directFromCpfpAdaptorSignature!,
+          directFromCpfpAdaptorPubKey!,
+        );
+      }
+
       const receiverTransferNode: LeafKeyTweak = {
-        leaf: receiverRootNode,
+        leaf: bobRootNode,
         keyDerivation: {
           type: KeyDerivationType.LEAF,
-          path: receiverLeafId,
+          path: bobLeafId,
         },
-        newKeyDerivation: receiverNewLeafDerivation,
+        newKeyDerivation: {
+          type: KeyDerivationType.RANDOM,
+        },
       };
       const receiverLeavesToTransfer = [receiverTransferNode];
 
       const {
-        transfer: receiverTransfer,
-        signatureMap: receiverRefundSignatureMap,
-        leafDataMap: receiverLeafDataMap,
-        signingResults: operatorSigningResults,
-      } = await receiverTransferService.counterSwapSignRefund(
+        transfer: bobTransfer,
+        signatureMap: bobRefundSignatureMap,
+        directSignatureMap: bobDirectRefundSignatureMap,
+        directFromCpfpSignatureMap: bobDirectFromCpfpSignatureMap,
+        leafDataMap: bobLeafDataMap,
+        signingResults: bobSigningResults,
+      } = await bobTransferService.counterSwapSignRefund(
         receiverLeavesToTransfer,
-        hexToBytes(senderPubkey),
+        hexToBytes(await aliceWallet.getIdentityPublicKey()),
         new Date(Date.now() + 10 * 60 * 1000),
-        adaptorPubKey,
+        cpfpAdaptorPubKey,
+        directAdaptorPubKey,
+        directFromCpfpAdaptorPubKey,
       );
 
       const newReceiverRefundSignatureMap = new Map<string, Uint8Array>();
-      for (const [nodeId, signature] of receiverRefundSignatureMap.entries()) {
-        const leafData = receiverLeafDataMap.get(nodeId);
+      const newReceiverDirectRefundSignatureMap = new Map<string, Uint8Array>();
+      const newReceiverDirectFromCpfpRefundSignatureMap = new Map<
+        string,
+        Uint8Array
+      >();
+      for (const [nodeId, signature] of bobRefundSignatureMap.entries()) {
+        const leafData = bobLeafDataMap.get(nodeId);
         if (!leafData?.refundTx) {
           throw new ValidationError("Refund transaction not found", {
             field: "refundTx",
@@ -416,7 +620,7 @@ describe.each(signerTypes)("swap", ({ name, Signer }) => {
           leafData.tx.getOutput(leafData.vout),
         );
         let verifyingPubkey: Uint8Array | undefined;
-        for (const signingResult of operatorSigningResults) {
+        for (const signingResult of bobSigningResults) {
           if (signingResult.leafId === nodeId) {
             verifyingPubkey = signingResult.verifyingKey;
           }
@@ -429,44 +633,97 @@ describe.each(signerTypes)("swap", ({ name, Signer }) => {
           taprootKey.slice(1, 33),
           sighash,
           signature,
-          adaptorPrivateKey,
+          cpfpAdaptorPrivateKey,
         );
         newReceiverRefundSignatureMap.set(nodeId, adaptorSig);
       }
+
+      for (const [nodeId, signature] of bobDirectRefundSignatureMap.entries()) {
+        const leafData = bobLeafDataMap.get(nodeId);
+        if (!leafData?.directRefundTx) {
+          continue;
+        }
+        const sighash = getSigHashFromTx(
+          leafData.directRefundTx,
+          0,
+          leafData.directTx!.getOutput(leafData.vout),
+        );
+        let verifyingPubkey: Uint8Array | undefined;
+        for (const signingResult of bobSigningResults) {
+          if (signingResult.leafId === nodeId) {
+            verifyingPubkey = signingResult.verifyingKey;
+          }
+        }
+        expect(verifyingPubkey).toBeDefined();
+        const taprootKey = computeTaprootKeyNoScript(
+          verifyingPubkey!.slice(1, 33),
+        );
+        const adaptorSig = applyAdaptorToSignature(
+          taprootKey.slice(1, 33),
+          sighash,
+          signature,
+          directAdaptorPrivateKey ?? new Uint8Array(),
+        );
+        newReceiverDirectRefundSignatureMap.set(nodeId, adaptorSig);
+      }
+
+      for (const [
+        nodeId,
+        signature,
+      ] of bobDirectFromCpfpSignatureMap.entries()) {
+        const leafData = bobLeafDataMap.get(nodeId);
+        if (!leafData?.directFromCpfpRefundTx) {
+          continue;
+        }
+        const sighash = getSigHashFromTx(
+          leafData.directFromCpfpRefundTx,
+          0,
+          leafData.tx.getOutput(leafData.vout),
+        );
+        let verifyingPubkey: Uint8Array | undefined;
+        for (const signingResult of bobSigningResults) {
+          if (signingResult.leafId === nodeId) {
+            verifyingPubkey = signingResult.verifyingKey;
+          }
+        }
+        expect(verifyingPubkey).toBeDefined();
+        const taprootKey = computeTaprootKeyNoScript(
+          verifyingPubkey!.slice(1, 33),
+        );
+        const adaptorSig = applyAdaptorToSignature(
+          taprootKey.slice(1, 33),
+          sighash,
+          signature,
+          directFromCpfpAdaptorPrivateKey ?? new Uint8Array(),
+        );
+        newReceiverDirectFromCpfpRefundSignatureMap.set(nodeId, adaptorSig);
+      }
+
       const senderTransferTweakKey =
-        await senderTransferService.deliverTransferPackage(
-          senderTransfer,
-          senderLeavesToTransfer,
-          senderRefundSignatureMap,
+        await aliceTransferService.deliverTransferPackage(
+          aliceTransfer,
+          aliceLeavesToTransfer,
+          aliceRefundSignatureMap,
+          aliceDirectRefundSignatureMap,
+          aliceDirectFromCpfpSignatureMap,
         );
 
-      const pendingTransfer =
-        await receiverTransferService.queryPendingTransfers();
+      const pendingTransfer = await bobTransferService.queryPendingTransfers();
       expect(pendingTransfer.transfers.length).toBe(1);
-      const receiverPendingTransfer = pendingTransfer.transfers[0];
-      expect(receiverPendingTransfer!.id).toBe(senderTransferTweakKey.id);
+      const bobPendingTransfer = pendingTransfer.transfers[0];
+      expect(bobPendingTransfer!.id).toBe(senderTransferTweakKey.id);
 
-      const leafPrivKeyMap =
-        await receiverTransferService.verifyPendingTransfer(
-          receiverPendingTransfer!,
-        );
-
-      expect(leafPrivKeyMap.size).toBe(1);
-      expect(leafPrivKeyMap.get(senderRootNode.id)).toBeDefined();
-      const bytesEqual = equalBytes(
-        leafPrivKeyMap.get(senderRootNode.id)!,
-        await senderWallet
-          .getSigner()
-          .getPublicKeyFromDerivation(senderNewLeafDerivation),
+      const leafPrivKeyMap = await bobTransferService.verifyPendingTransfer(
+        bobPendingTransfer!,
       );
-      expect(bytesEqual).toBe(true);
-      expect(receiverPendingTransfer!.leaves[0]!.leaf).toBeDefined();
-      const claimingNodes: LeafKeyTweak[] = receiverPendingTransfer!.leaves.map(
+      expect(leafPrivKeyMap.size).toBe(1);
+
+      const claimingNodes: LeafKeyTweak[] = bobPendingTransfer!.leaves.map(
         (leaf) => ({
           leaf: leaf.leaf!,
           keyDerivation: {
             type: KeyDerivationType.ECIES,
-            path: leaf.secretCipher,
+            path: leaf.secretCipher!,
           },
           newKeyDerivation: {
             type: KeyDerivationType.LEAF,
@@ -474,43 +731,37 @@ describe.each(signerTypes)("swap", ({ name, Signer }) => {
           },
         }),
       );
-      await receiverTransferService.claimTransfer(
-        receiverPendingTransfer!,
+
+      await bobTransferService.claimTransfer(
+        bobPendingTransfer!,
         claimingNodes,
       );
-      await receiverTransferService.deliverTransferPackage(
-        receiverTransfer,
+
+      await bobTransferService.deliverTransferPackage(
+        bobTransfer,
         receiverLeavesToTransfer,
         newReceiverRefundSignatureMap,
+        newReceiverDirectRefundSignatureMap,
+        newReceiverDirectFromCpfpRefundSignatureMap,
       );
 
-      const sPendingTransfer =
-        await senderTransferService.queryPendingTransfers();
-      expect(sPendingTransfer.transfers.length).toBe(1);
-      const senderPendingTransfer = sPendingTransfer.transfers[0];
-      expect(senderPendingTransfer!.id).toBe(receiverTransfer.id);
+      const pendingTransfer1 =
+        await aliceTransferService.queryPendingTransfers();
+      expect(pendingTransfer1.transfers.length).toBe(1);
+      const alicePendingTransfer = pendingTransfer1.transfers[0];
+      expect(alicePendingTransfer!.id).toBe(bobTransfer.id);
 
-      const senderLeafPrivKeyMap =
-        await senderTransferService.verifyPendingTransfer(
-          senderPendingTransfer!,
-        );
-      expect(senderLeafPrivKeyMap.size).toBe(1);
-      expect(senderLeafPrivKeyMap.get(receiverRootNode.id)).toBeDefined();
-      const bytesEqual_1 = equalBytes(
-        senderLeafPrivKeyMap.get(receiverRootNode.id)!,
-        await receiverWallet
-          .getSigner()
-          .getPublicKeyFromDerivation(receiverNewLeafDerivation),
+      const leafPrivKeyMap1 = await aliceTransferService.verifyPendingTransfer(
+        alicePendingTransfer!,
       );
-      expect(bytesEqual_1).toBe(true);
-      expect(senderPendingTransfer!.leaves[0]!.leaf).toBeDefined();
+      expect(leafPrivKeyMap1.size).toBe(1);
 
-      const claimingNodes_1: LeafKeyTweak[] = senderPendingTransfer!.leaves.map(
+      const claimingNodes1: LeafKeyTweak[] = alicePendingTransfer!.leaves.map(
         (leaf) => ({
           leaf: leaf.leaf!,
           keyDerivation: {
             type: KeyDerivationType.ECIES,
-            path: leaf.secretCipher,
+            path: leaf.secretCipher!,
           },
           newKeyDerivation: {
             type: KeyDerivationType.LEAF,
@@ -518,11 +769,12 @@ describe.each(signerTypes)("swap", ({ name, Signer }) => {
           },
         }),
       );
-      await senderTransferService.claimTransfer(
-        senderPendingTransfer!,
-        claimingNodes_1,
+
+      await aliceTransferService.claimTransfer(
+        alicePendingTransfer!,
+        claimingNodes1,
       );
     },
-    30000,
+    30_000,
   );
 });

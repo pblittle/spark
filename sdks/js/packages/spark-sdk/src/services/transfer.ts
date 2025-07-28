@@ -7,7 +7,7 @@ import {
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha2";
 import { Transaction } from "@scure/btc-signer";
-import { TransactionInput } from "@scure/btc-signer/psbt";
+import { TransactionInput, TransactionOutput } from "@scure/btc-signer/psbt";
 import * as ecies from "eciesjs";
 import { uuidv7 } from "uuidv7";
 import {
@@ -49,12 +49,17 @@ import {
 import { NetworkToProto } from "../utils/network.js";
 import { VerifiableSecretShare } from "../utils/secret-sharing.js";
 import {
-  createRefundTx,
+  createNodeTxs,
+  createRefundTxs,
+  DIRECT_TIMELOCK_OFFSET,
   getCurrentTimelock,
   getEphemeralAnchorOutput,
   getNextTransactionSequence,
   getTransactionSequence,
+  INITIAL_DIRECT_SEQUENCE,
   INITIAL_SEQUENCE,
+  maybeApplyFee,
+  TEST_UNILATERAL_DIRECT_SEQUENCE,
   TEST_UNILATERAL_SEQUENCE,
 } from "../utils/transaction.js";
 import { getTransferPackageSigningPayload } from "../utils/transfer_package.js";
@@ -81,9 +86,14 @@ export type ClaimLeafData = {
 export type LeafRefundSigningData = {
   keyDerivation: KeyDerivation;
   receivingPubkey: Uint8Array;
-  tx: Transaction;
-  refundTx?: Transaction;
   signingNonceCommitment: SigningCommitmentWithOptionalNonce;
+  directSigningNonceCommitment: SigningCommitmentWithOptionalNonce;
+  tx: Transaction;
+  directTx?: Transaction;
+  refundTx?: Transaction;
+  directRefundTx?: Transaction;
+  directFromCpfpRefundTx?: Transaction;
+  directFromCpfpRefundSigningNonceCommitment: SigningCommitmentWithOptionalNonce;
   vout: number;
 };
 
@@ -121,13 +131,17 @@ export class BaseTransferService {
   async sendTransferTweakKey(
     transfer: Transfer,
     leaves: LeafKeyTweak[],
-    refundSignatureMap: Map<string, Uint8Array>,
+    cpfpRefundSignatureMap: Map<string, Uint8Array>,
+    directRefundSignatureMap: Map<string, Uint8Array>,
+    directFromCpfpRefundSignatureMap: Map<string, Uint8Array>,
   ): Promise<Transfer> {
     const keyTweakInputMap = await this.prepareSendTransferKeyTweaks(
       transfer.id,
       transfer.receiverIdentityPublicKey,
       leaves,
-      refundSignatureMap,
+      cpfpRefundSignatureMap,
+      directRefundSignatureMap,
+      directFromCpfpRefundSignatureMap,
     );
 
     let updatedTransfer: Transfer | undefined;
@@ -176,14 +190,30 @@ export class BaseTransferService {
   async deliverTransferPackage(
     transfer: Transfer,
     leaves: LeafKeyTweak[],
-    refundSignatureMap: Map<string, Uint8Array>,
+    cpfpRefundSignatureMap: Map<string, Uint8Array>,
+    directRefundSignatureMap: Map<string, Uint8Array>,
+    directFromCpfpRefundSignatureMap: Map<string, Uint8Array>,
   ): Promise<Transfer> {
     const keyTweakInputMap = await this.prepareSendTransferKeyTweaks(
       transfer.id,
       transfer.receiverIdentityPublicKey,
       leaves,
-      refundSignatureMap,
+      cpfpRefundSignatureMap,
+      directRefundSignatureMap,
+      directFromCpfpRefundSignatureMap,
     );
+
+    for (const [key, operator] of Object.entries(
+      this.config.getSigningOperators(),
+    )) {
+      const tweaks = keyTweakInputMap.get(key);
+      if (!tweaks) {
+        throw new ValidationError("No tweaks for operator", {
+          field: "operator",
+          value: key,
+        });
+      }
+    }
 
     const transferPackage = await this.prepareTransferPackage(
       transfer.id,
@@ -220,6 +250,8 @@ export class BaseTransferService {
       receiverIdentityPubkey,
       leaves,
       new Map<string, Uint8Array>(),
+      new Map<string, Uint8Array>(),
+      new Map<string, Uint8Array>(),
     );
 
     const transferPackage = await this.prepareTransferPackage(
@@ -236,7 +268,7 @@ export class BaseTransferService {
     let response: StartTransferResponse;
 
     try {
-      response = await sparkClient.start_transfer({
+      response = await sparkClient.start_transfer_v2({
         transferId: transferID,
         ownerIdentityPublicKey: await this.config.signer.getIdentityPublicKey(),
         receiverIdentityPublicKey: receiverIdentityPubkey,
@@ -274,15 +306,24 @@ export class BaseTransferService {
     for (const leaf of leaves) {
       nodes.push(leaf.leaf.id);
     }
-
     const signingCommitments = await sparkClient.get_signing_commitments({
       nodeIds: nodes,
+      count: 3,
     });
 
-    const leafSigningJobs = await this.signingService.signRefunds(
+    const {
+      cpfpLeafSigningJobs,
+      directLeafSigningJobs,
+      directFromCpfpLeafSigningJobs,
+    } = await this.signingService.signRefunds(
       leaves,
-      signingCommitments.signingCommitments,
       receiverIdentityPubkey,
+      signingCommitments.signingCommitments.slice(0, leaves.length),
+      signingCommitments.signingCommitments.slice(
+        leaves.length,
+        2 * leaves.length,
+      ),
+      signingCommitments.signingCommitments.slice(2 * leaves.length),
     );
 
     const encryptedKeyTweaks: { [key: string]: Uint8Array } = {};
@@ -309,12 +350,11 @@ export class BaseTransferService {
     }
 
     const transferPackage: TransferPackage = {
-      leavesToSend: leafSigningJobs,
+      leavesToSend: cpfpLeafSigningJobs,
       keyTweakPackage: encryptedKeyTweaks,
       userSignature: new Uint8Array(),
-      // TODO: Add direct refund signature
-      directLeavesToSend: [],
-      directFromCpfpLeavesToSend: [],
+      directLeavesToSend: directLeafSigningJobs,
+      directFromCpfpLeavesToSend: directFromCpfpLeafSigningJobs,
     };
 
     const transferPackageSigningPayload = getTransferPackageSigningPayload(
@@ -348,6 +388,7 @@ export class BaseTransferService {
       });
     }
     let transferResp: FinalizeTransferResponse;
+
     try {
       transferResp = await sparkClient.finalize_transfer({
         transferId: transfer.id,
@@ -389,9 +430,11 @@ export class BaseTransferService {
   }
 
   async signRefunds(
-    leafDataMap: Map<string, ClaimLeafData>,
+    leafDataMap: Map<string, LeafRefundSigningData>,
     operatorSigningResults: LeafRefundTxSigningResult[],
-    adaptorPubKey?: Uint8Array,
+    cpfpAdaptorPubKey?: Uint8Array,
+    directAdaptorPubKey?: Uint8Array,
+    directFromCpfpAdaptorPubKey?: Uint8Array,
   ): Promise<NodeSignatures[]> {
     const nodeSignatures: NodeSignatures[] = [];
     for (const operatorSigningResult of operatorSigningResults) {
@@ -414,24 +457,28 @@ export class BaseTransferService {
         );
       }
 
-      const refundTxSighash = getSigHashFromTx(leafData.refundTx, 0, txOutput);
-
+      // Sign CPFP refund transaction
+      const cpfpRefundTxSighash = getSigHashFromTx(
+        leafData.refundTx,
+        0,
+        txOutput,
+      );
       const publicKey = await this.config.signer.getPublicKeyFromDerivation(
         leafData.keyDerivation,
       );
-      const userSignature = await this.config.signer.signFrost({
-        message: refundTxSighash,
+      const cpfpUserSignature = await this.config.signer.signFrost({
+        message: cpfpRefundTxSighash,
         publicKey,
         keyDerivation: leafData.keyDerivation,
         selfCommitment: leafData.signingNonceCommitment,
         statechainCommitments:
           operatorSigningResult.refundTxSigningResult?.signingNonceCommitments,
-        adaptorPubKey: adaptorPubKey,
+        adaptorPubKey: cpfpAdaptorPubKey,
         verifyingKey: operatorSigningResult.verifyingKey,
       });
 
-      const refundAggregate = await this.config.signer.aggregateFrost({
-        message: refundTxSighash,
+      const cpfpRefundAggregate = await this.config.signer.aggregateFrost({
+        message: cpfpRefundTxSighash,
         statechainSignatures:
           operatorSigningResult.refundTxSigningResult?.signatureShares,
         statechainPublicKeys:
@@ -441,18 +488,105 @@ export class BaseTransferService {
           operatorSigningResult.refundTxSigningResult?.signingNonceCommitments,
         selfCommitment: leafData.signingNonceCommitment,
         publicKey,
-        selfSignature: userSignature,
-        adaptorPubKey: adaptorPubKey,
+        selfSignature: cpfpUserSignature,
+        adaptorPubKey: cpfpAdaptorPubKey,
       });
+
+      // Sign direct refund transaction
+
+      let directRefundAggregate: Uint8Array | undefined;
+      let directFromCpfpRefundAggregate: Uint8Array | undefined;
+      if (leafData.directTx) {
+        const directTxOutput = leafData.directTx.getOutput(0);
+
+        if (leafData.directRefundTx) {
+          const directRefundTxSighash = getSigHashFromTx(
+            leafData.directRefundTx,
+            0,
+            directTxOutput,
+          );
+
+          const directUserSignature = await this.config.signer.signFrost({
+            message: directRefundTxSighash,
+            publicKey,
+            keyDerivation: leafData.keyDerivation,
+            selfCommitment: leafData.directSigningNonceCommitment,
+            statechainCommitments:
+              operatorSigningResult.directRefundTxSigningResult
+                ?.signingNonceCommitments,
+            adaptorPubKey: directAdaptorPubKey,
+            verifyingKey: operatorSigningResult.verifyingKey,
+          });
+
+          directRefundAggregate = await this.config.signer.aggregateFrost({
+            message: directRefundTxSighash,
+            statechainSignatures:
+              operatorSigningResult.directRefundTxSigningResult
+                ?.signatureShares,
+            statechainPublicKeys:
+              operatorSigningResult.directRefundTxSigningResult?.publicKeys,
+            verifyingKey: operatorSigningResult.verifyingKey,
+            statechainCommitments:
+              operatorSigningResult.directRefundTxSigningResult
+                ?.signingNonceCommitments,
+            selfCommitment: leafData.directSigningNonceCommitment,
+            publicKey,
+            selfSignature: directUserSignature,
+            adaptorPubKey: directAdaptorPubKey,
+          });
+        }
+
+        if (leafData.directFromCpfpRefundTx) {
+          const directFromCpfpRefundTxSighash = getSigHashFromTx(
+            leafData.directFromCpfpRefundTx,
+            0,
+            txOutput,
+          );
+
+          const directFromCpfpUserSignature =
+            await this.config.signer.signFrost({
+              message: directFromCpfpRefundTxSighash,
+              publicKey,
+              keyDerivation: leafData.keyDerivation,
+              selfCommitment:
+                leafData.directFromCpfpRefundSigningNonceCommitment,
+              statechainCommitments:
+                operatorSigningResult.directFromCpfpRefundTxSigningResult
+                  ?.signingNonceCommitments,
+              adaptorPubKey: directFromCpfpAdaptorPubKey,
+              verifyingKey: operatorSigningResult.verifyingKey,
+            });
+
+          directFromCpfpRefundAggregate =
+            await this.config.signer.aggregateFrost({
+              message: directFromCpfpRefundTxSighash,
+              statechainSignatures:
+                operatorSigningResult.directFromCpfpRefundTxSigningResult
+                  ?.signatureShares,
+              statechainPublicKeys:
+                operatorSigningResult.directFromCpfpRefundTxSigningResult
+                  ?.publicKeys,
+              verifyingKey: operatorSigningResult.verifyingKey,
+              statechainCommitments:
+                operatorSigningResult.directFromCpfpRefundTxSigningResult
+                  ?.signingNonceCommitments,
+              selfCommitment:
+                leafData.directFromCpfpRefundSigningNonceCommitment,
+              publicKey,
+              selfSignature: directFromCpfpUserSignature,
+              adaptorPubKey: directFromCpfpAdaptorPubKey,
+            });
+        }
+      }
 
       nodeSignatures.push({
         nodeId: operatorSigningResult.leafId,
-        refundTxSignature: refundAggregate,
         nodeTxSignature: new Uint8Array(),
-        // TODO: Add direct refund signature
         directNodeTxSignature: new Uint8Array(),
-        directRefundTxSignature: new Uint8Array(),
-        directFromCpfpRefundTxSignature: new Uint8Array(),
+        refundTxSignature: cpfpRefundAggregate,
+        directRefundTxSignature: directRefundAggregate ?? new Uint8Array(),
+        directFromCpfpRefundTxSignature:
+          directFromCpfpRefundAggregate ?? new Uint8Array(),
       });
     }
     return nodeSignatures;
@@ -462,7 +596,9 @@ export class BaseTransferService {
     transferID: string,
     receiverIdentityPubkey: Uint8Array,
     leaves: LeafKeyTweak[],
-    refundSignatureMap: Map<string, Uint8Array>,
+    cpfpRefundSignatureMap: Map<string, Uint8Array>,
+    directRefundSignatureMap: Map<string, Uint8Array>,
+    directFromCpfpRefundSignatureMap: Map<string, Uint8Array>,
   ): Promise<Map<string, SendLeafKeyTweak[]>> {
     const receiverEciesPubKey = ecies.PublicKey.fromHex(
       bytesToHex(receiverIdentityPubkey),
@@ -471,12 +607,18 @@ export class BaseTransferService {
     const leavesTweaksMap = new Map<string, SendLeafKeyTweak[]>();
 
     for (const leaf of leaves) {
-      const refundSignature = refundSignatureMap.get(leaf.leaf.id);
+      const cpfpRefundSignature = cpfpRefundSignatureMap.get(leaf.leaf.id);
+      const directRefundSignature = directRefundSignatureMap.get(leaf.leaf.id);
+      const directFromCpfpRefundSignature =
+        directFromCpfpRefundSignatureMap.get(leaf.leaf.id);
+
       const leafTweaksMap = await this.prepareSingleSendTransferKeyTweak(
         transferID,
         leaf,
         receiverEciesPubKey,
-        refundSignature,
+        cpfpRefundSignature,
+        directRefundSignature,
+        directFromCpfpRefundSignature,
       );
       for (const [identifier, leafTweak] of leafTweaksMap) {
         leavesTweaksMap.set(identifier, [
@@ -493,7 +635,9 @@ export class BaseTransferService {
     transferID: string,
     leaf: LeafKeyTweak,
     receiverEciesPubKey: ecies.PublicKey,
-    refundSignature?: Uint8Array,
+    cpfpRefundSignature?: Uint8Array,
+    directRefundSignature?: Uint8Array,
+    directFromCpfpRefundSignature?: Uint8Array,
   ): Promise<Map<string, SendLeafKeyTweak>> {
     const signingOperators = this.config.getSigningOperators();
 
@@ -550,10 +694,10 @@ export class BaseTransferService {
         pubkeySharesTweak: Object.fromEntries(pubkeySharesTweak),
         secretCipher,
         signature,
-        refundSignature: refundSignature ?? new Uint8Array(),
-        // TODO: Add direct refund signature
-        directRefundSignature: new Uint8Array(),
-        directFromCpfpRefundSignature: new Uint8Array(),
+        refundSignature: cpfpRefundSignature ?? new Uint8Array(),
+        directRefundSignature: directRefundSignature ?? new Uint8Array(),
+        directFromCpfpRefundSignature:
+          directFromCpfpRefundSignature ?? new Uint8Array(),
       });
     }
 
@@ -602,7 +746,12 @@ export class TransferService extends BaseTransferService {
     leaves: LeafKeyTweak[],
     receiverIdentityPubkey: Uint8Array,
   ): Promise<Transfer> {
-    const { transfer, signatureMap } = await this.sendTransferSignRefund(
+    const {
+      transfer,
+      signatureMap,
+      directSignatureMap,
+      directFromCpfpSignatureMap,
+    } = await this.sendTransferSignRefund(
       leaves,
       receiverIdentityPubkey,
       new Date(Date.now() + DEFAULT_EXPIRY_TIME),
@@ -612,6 +761,8 @@ export class TransferService extends BaseTransferService {
       transfer,
       leaves,
       signatureMap,
+      directSignatureMap,
+      directFromCpfpSignatureMap,
     );
 
     return transferWithTweakedKeys;
@@ -745,19 +896,28 @@ export class TransferService extends BaseTransferService {
   ): Promise<{
     transfer: Transfer;
     signatureMap: Map<string, Uint8Array>;
+    directSignatureMap: Map<string, Uint8Array>;
+    directFromCpfpSignatureMap: Map<string, Uint8Array>;
     leafDataMap: Map<string, LeafRefundSigningData>;
   }> {
-    const { transfer, signatureMap, leafDataMap } =
-      await this.sendTransferSignRefundInternal(
-        leaves,
-        receiverIdentityPubkey,
-        expiryTime,
-        false,
-      );
+    const {
+      transfer,
+      signatureMap,
+      directSignatureMap,
+      directFromCpfpSignatureMap,
+      leafDataMap,
+    } = await this.sendTransferSignRefundInternal(
+      leaves,
+      receiverIdentityPubkey,
+      expiryTime,
+      false,
+    );
 
     return {
       transfer,
       signatureMap,
+      directSignatureMap,
+      directFromCpfpSignatureMap,
       leafDataMap,
     };
   }
@@ -769,19 +929,28 @@ export class TransferService extends BaseTransferService {
   ): Promise<{
     transfer: Transfer;
     signatureMap: Map<string, Uint8Array>;
+    directSignatureMap: Map<string, Uint8Array>;
+    directFromCpfpSignatureMap: Map<string, Uint8Array>;
     leafDataMap: Map<string, LeafRefundSigningData>;
   }> {
-    const { transfer, signatureMap, leafDataMap } =
-      await this.sendTransferSignRefundInternal(
-        leaves,
-        receiverIdentityPubkey,
-        expiryTime,
-        true,
-      );
+    const {
+      transfer,
+      signatureMap,
+      directSignatureMap,
+      directFromCpfpSignatureMap,
+      leafDataMap,
+    } = await this.sendTransferSignRefundInternal(
+      leaves,
+      receiverIdentityPubkey,
+      expiryTime,
+      true,
+    );
 
     return {
       transfer,
       signatureMap,
+      directSignatureMap,
+      directFromCpfpSignatureMap,
       leafDataMap,
     };
   }
@@ -790,10 +959,14 @@ export class TransferService extends BaseTransferService {
     leaves: LeafKeyTweak[],
     receiverIdentityPubkey: Uint8Array,
     expiryTime: Date,
-    adaptorPubKey?: Uint8Array,
+    cpfpAdaptorPubKey?: Uint8Array,
+    directAdaptorPubKey?: Uint8Array,
+    directFromCpfpAdaptorPubKey?: Uint8Array,
   ): Promise<{
     transfer: Transfer;
     signatureMap: Map<string, Uint8Array>;
+    directSignatureMap: Map<string, Uint8Array>;
+    directFromCpfpSignatureMap: Map<string, Uint8Array>;
     leafDataMap: Map<string, LeafRefundSigningData>;
     signingResults: LeafRefundTxSigningResult[];
   }> {
@@ -802,7 +975,9 @@ export class TransferService extends BaseTransferService {
       receiverIdentityPubkey,
       expiryTime,
       true,
-      adaptorPubKey,
+      cpfpAdaptorPubKey,
+      directAdaptorPubKey,
+      directFromCpfpAdaptorPubKey,
     );
   }
 
@@ -811,10 +986,14 @@ export class TransferService extends BaseTransferService {
     receiverIdentityPubkey: Uint8Array,
     expiryTime: Date,
     forSwap: boolean,
-    adaptorPubKey?: Uint8Array,
+    cpfpAdaptorPubKey?: Uint8Array,
+    directAdaptorPubKey?: Uint8Array,
+    directFromCpfpAdaptorPubKey?: Uint8Array,
   ): Promise<{
     transfer: Transfer;
     signatureMap: Map<string, Uint8Array>;
+    directSignatureMap: Map<string, Uint8Array>;
+    directFromCpfpSignatureMap: Map<string, Uint8Array>;
     leafDataMap: Map<string, LeafRefundSigningData>;
     signingResults: LeafRefundTxSigningResult[];
   }> {
@@ -823,16 +1002,39 @@ export class TransferService extends BaseTransferService {
     for (const leaf of leaves) {
       const signingNonceCommitment =
         await this.config.signer.getRandomSigningCommitment();
+      const directSigningNonceCommitment =
+        await this.config.signer.getRandomSigningCommitment();
+      const directFromCpfpRefundSigningNonceCommitment =
+        await this.config.signer.getRandomSigningCommitment();
 
       const tx = getTxFromRawTxBytes(leaf.leaf.nodeTx);
       const refundTx = getTxFromRawTxBytes(leaf.leaf.refundTx);
+
+      const directTx =
+        leaf.leaf.directTx.length > 0
+          ? getTxFromRawTxBytes(leaf.leaf.directTx)
+          : undefined;
+
+      const directRefundTx =
+        leaf.leaf.directRefundTx.length > 0
+          ? getTxFromRawTxBytes(leaf.leaf.directRefundTx)
+          : undefined;
+      const directFromCpfpRefundTx =
+        leaf.leaf.directFromCpfpRefundTx.length > 0
+          ? getTxFromRawTxBytes(leaf.leaf.directFromCpfpRefundTx)
+          : undefined;
 
       leafDataMap.set(leaf.leaf.id, {
         keyDerivation: leaf.keyDerivation,
         receivingPubkey: receiverIdentityPubkey,
         signingNonceCommitment,
+        directSigningNonceCommitment,
         tx,
+        directTx,
         refundTx,
+        directRefundTx,
+        directFromCpfpRefundTx,
+        directFromCpfpRefundSigningNonceCommitment,
         vout: leaf.leaf.vout,
       });
     }
@@ -841,15 +1043,19 @@ export class TransferService extends BaseTransferService {
       leaves,
       leafDataMap,
     );
-
+    // 0197d19f-7419-7d51-9d2b-247127b5ab0a
     const sparkClient = await this.connectionManager.createSparkClient(
       this.config.getCoordinatorAddress(),
     );
 
     let response: CounterLeafSwapResponse;
     try {
-      if (adaptorPubKey !== undefined) {
-        response = await sparkClient.counter_leaf_swap({
+      if (
+        cpfpAdaptorPubKey !== undefined ||
+        directAdaptorPubKey !== undefined ||
+        directFromCpfpAdaptorPubKey !== undefined
+      ) {
+        response = await sparkClient.counter_leaf_swap_v2({
           transfer: {
             transferId,
             leavesToSend: signingJobs,
@@ -859,10 +1065,12 @@ export class TransferService extends BaseTransferService {
             expiryTime: expiryTime,
           },
           swapId: uuidv7(),
-          adaptorPublicKey: adaptorPubKey || new Uint8Array(),
+          adaptorPublicKey: cpfpAdaptorPubKey,
+          directAdaptorPublicKey: directAdaptorPubKey,
+          directFromCpfpAdaptorPublicKey: directFromCpfpAdaptorPubKey,
         });
       } else if (forSwap) {
-        response = await sparkClient.start_leaf_swap({
+        response = await sparkClient.start_leaf_swap_v2({
           transferId,
           leavesToSend: signingJobs,
           ownerIdentityPublicKey:
@@ -871,7 +1079,7 @@ export class TransferService extends BaseTransferService {
           expiryTime: expiryTime,
         });
       } else {
-        response = await sparkClient.start_transfer({
+        response = await sparkClient.start_transfer_v2({
           transferId,
           leavesToSend: signingJobs,
           ownerIdentityPublicKey:
@@ -891,17 +1099,31 @@ export class TransferService extends BaseTransferService {
     const signatures = await this.signRefunds(
       leafDataMap,
       response.signingResults,
-      adaptorPubKey,
+      cpfpAdaptorPubKey,
+      directAdaptorPubKey,
+      directFromCpfpAdaptorPubKey,
     );
 
-    const signatureMap = new Map<string, Uint8Array>();
+    const cpfpSignatureMap = new Map<string, Uint8Array>();
+    const directSignatureMap = new Map<string, Uint8Array>();
+    const directFromCpfpSignatureMap = new Map<string, Uint8Array>();
     for (const signature of signatures) {
-      signatureMap.set(signature.nodeId, signature.refundTxSignature);
+      cpfpSignatureMap.set(signature.nodeId, signature.refundTxSignature);
+      directSignatureMap.set(
+        signature.nodeId,
+        signature.directRefundTxSignature,
+      );
+      directFromCpfpSignatureMap.set(
+        signature.nodeId,
+        signature.directFromCpfpRefundTxSignature,
+      );
     }
 
     return {
       transfer: response.transfer,
-      signatureMap,
+      signatureMap: cpfpSignatureMap,
+      directSignatureMap: directSignatureMap,
+      directFromCpfpSignatureMap: directFromCpfpSignatureMap,
       leafDataMap,
       signingResults: response.signingResults,
     };
@@ -920,10 +1142,20 @@ export class TransferService extends BaseTransferService {
       }
 
       const nodeTx = getTxFromRawTxBytes(leaf.leaf.nodeTx);
-      const nodeOutPoint: TransactionInput = {
+      const cpfpNodeOutPoint: TransactionInput = {
         txid: hexToBytes(getTxId(nodeTx)),
         index: 0,
       };
+
+      let directNodeTx: Transaction | undefined;
+      let directNodeOutPoint: TransactionInput | undefined;
+      if (leaf.leaf.directTx.length > 0) {
+        directNodeTx = getTxFromRawTxBytes(leaf.leaf.directTx);
+        directNodeOutPoint = {
+          txid: hexToBytes(getTxId(directNodeTx)),
+          index: 0,
+        };
+      }
 
       const currRefundTx = getTxFromRawTxBytes(leaf.leaf.refundTx);
 
@@ -935,41 +1167,64 @@ export class TransferService extends BaseTransferService {
           expected: "Non-null sequence",
         });
       }
-      const nextSequence = isForClaim
+      const { nextSequence, nextDirectSequence } = isForClaim
         ? getTransactionSequence(sequence)
-        : getNextTransactionSequence(sequence).nextSequence;
+        : getNextTransactionSequence(sequence);
 
       const amountSats = currRefundTx.getOutput(0).amount;
       if (amountSats === undefined) {
         throw new Error("Amount not found in signRefunds");
       }
 
-      const refundTx = createRefundTx(
-        nextSequence,
-        nodeOutPoint,
-        amountSats,
-        refundSigningData.receivingPubkey,
-        this.config.getNetwork(),
-      );
+      const { cpfpRefundTx, directRefundTx, directFromCpfpRefundTx } =
+        createRefundTxs({
+          sequence: nextSequence,
+          directSequence: nextDirectSequence,
+          input: cpfpNodeOutPoint,
+          directInput: directNodeOutPoint,
+          amountSats,
+          receivingPubkey: refundSigningData.receivingPubkey,
+          network: this.config.getNetwork(),
+        });
 
-      refundSigningData.refundTx = refundTx;
+      refundSigningData.refundTx = cpfpRefundTx;
+      refundSigningData.directRefundTx = directRefundTx;
+      refundSigningData.directFromCpfpRefundTx = directFromCpfpRefundTx;
 
-      const refundNonceCommitmentProto =
+      const cpfpRefundNonceCommitmentProto =
         refundSigningData.signingNonceCommitment;
+      const directRefundNonceCommitmentProto =
+        refundSigningData.directSigningNonceCommitment;
+      const directFromCpfpRefundNonceCommitmentProto =
+        refundSigningData.directFromCpfpRefundSigningNonceCommitment;
 
+      const signingPublicKey =
+        await this.config.signer.getPublicKeyFromDerivation(
+          refundSigningData.keyDerivation,
+        );
       signingJobs.push({
         leafId: leaf.leaf.id,
         refundTxSigningJob: {
-          signingPublicKey: await this.config.signer.getPublicKeyFromDerivation(
-            refundSigningData.keyDerivation,
-          ),
-          rawTx: refundTx.toBytes(),
-          signingNonceCommitment: refundNonceCommitmentProto.commitment,
+          signingPublicKey,
+          rawTx: cpfpRefundTx.toBytes(),
+          signingNonceCommitment: cpfpRefundNonceCommitmentProto.commitment,
         },
-        // TODO: Add direct refund signature
-        directRefundTxSigningJob: undefined,
-        // TODO: Add direct refund signature
-        directFromCpfpRefundTxSigningJob: undefined,
+        directRefundTxSigningJob: directRefundTx
+          ? {
+              signingPublicKey,
+              rawTx: directRefundTx.toBytes(),
+              signingNonceCommitment:
+                directRefundNonceCommitmentProto.commitment,
+            }
+          : undefined,
+        directFromCpfpRefundTxSigningJob: directFromCpfpRefundTx
+          ? {
+              signingPublicKey,
+              rawTx: directFromCpfpRefundTx.toBytes(),
+              signingNonceCommitment:
+                directFromCpfpRefundNonceCommitmentProto.commitment,
+            }
+          : undefined,
       });
     }
 
@@ -1127,6 +1382,11 @@ export class TransferService extends BaseTransferService {
     const leafDataMap: Map<string, LeafRefundSigningData> = new Map();
     for (const leafKey of leafKeys) {
       const tx = getTxFromRawTxBytes(leafKey.leaf.nodeTx);
+      const directTx =
+        leafKey.leaf.directTx.length > 0
+          ? getTxFromRawTxBytes(leafKey.leaf.directTx)
+          : undefined;
+
       leafDataMap.set(leafKey.leaf.id, {
         keyDerivation: leafKey.newKeyDerivation,
         receivingPubkey: await this.config.signer.getPublicKeyFromDerivation(
@@ -1134,7 +1394,12 @@ export class TransferService extends BaseTransferService {
         ),
         signingNonceCommitment:
           await this.config.signer.getRandomSigningCommitment(),
+        directSigningNonceCommitment:
+          await this.config.signer.getRandomSigningCommitment(),
+        directFromCpfpRefundSigningNonceCommitment:
+          await this.config.signer.getRandomSigningCommitment(),
         tx,
+        directTx,
         vout: leafKey.leaf.vout,
       });
     }
@@ -1159,7 +1424,7 @@ export class TransferService extends BaseTransferService {
       }
     }
     try {
-      resp = await sparkClient.claim_transfer_sign_refunds({
+      resp = await sparkClient.claim_transfer_sign_refunds_v2({
         transferId: transfer.id,
         ownerIdentityPublicKey: await this.config.signer.getIdentityPublicKey(),
         signingJobs,
@@ -1175,7 +1440,7 @@ export class TransferService extends BaseTransferService {
       this.config.getCoordinatorAddress(),
     );
     try {
-      return await sparkClient.finalize_node_signatures({
+      return await sparkClient.finalize_node_signatures_v2({
         intent: SignatureIntent.TRANSFER,
         nodeSignatures,
       });
@@ -1229,152 +1494,179 @@ export class TransferService extends BaseTransferService {
   }
 
   private async refreshTimelockNodesInternal(
-    nodes: TreeNode[],
+    node: TreeNode,
     parentNode: TreeNode,
     useTestUnilateralSequence?: boolean,
   ) {
-    if (nodes.length === 0) {
-      throw Error("no nodes to refresh");
+    const signingJobs: (SigningJobWithOptionalNonce & {
+      type: "node" | "directNode" | "cpfp" | "direct" | "directFromCpfp";
+      parentTxOut: TransactionOutput;
+    })[] = [];
+
+    const parentNodeTx = getTxFromRawTxBytes(parentNode.nodeTx);
+    const parentNodeOutput: TransactionOutput = parentNodeTx.getOutput(0);
+    if (!parentNodeOutput) {
+      throw Error("Could not get parent node output");
     }
 
-    const signingJobs: SigningJobWithOptionalNonce[] = [];
-    const newNodeTxs: Transaction[] = [];
+    const nodeTx = getTxFromRawTxBytes(node.nodeTx);
+    const nodeInput = nodeTx.getInput(0);
 
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-      if (!node) {
-        throw Error("could not get node");
-      }
-      const nodeTx = getTxFromRawTxBytes(node?.nodeTx);
-      const input = nodeTx.getInput(0);
+    const nodeOutput = nodeTx.getOutput(0);
+    if (!nodeOutput) {
+      throw Error("Could not get node output");
+    }
 
-      if (!input) {
-        throw Error("Could not fetch tx input");
-      }
+    let directNodeTx: Transaction | undefined;
+    let directNodeInput: TransactionInput | undefined;
+    if (node.directTx.length > 0) {
+      directNodeTx = getTxFromRawTxBytes(node.directTx);
+      directNodeInput = directNodeTx.getInput(0);
+    }
 
-      const newTx = new Transaction({ version: 3, allowUnknownOutputs: true });
+    const currSequence = nodeInput.sequence;
 
-      // Apply fee to the main output
-      const originalOutput = nodeTx.getOutput(0);
-      if (!originalOutput) {
-        throw Error("Could not get original output");
-      }
+    if (!currSequence) {
+      throw new ValidationError("Invalid node transaction", {
+        field: "sequence",
+        value: nodeInput,
+        expected: "Non-null sequence",
+      });
+    }
 
-      newTx.addOutput({
-        script: originalOutput.script!,
-        amount: originalOutput.amount!,
+    let { nextSequence, nextDirectSequence } = getNextTransactionSequence(
+      currSequence,
+      true,
+    );
+
+    const output = {
+      script: parentNodeOutput.script!,
+      amount: parentNodeOutput.amount!,
+    };
+
+    const newNodeInput: TransactionInput = {
+      txid: nodeInput.txid,
+      index: nodeInput.index,
+      sequence: useTestUnilateralSequence
+        ? TEST_UNILATERAL_SEQUENCE
+        : nextSequence,
+    };
+
+    const newDirectInput: TransactionInput | undefined =
+      directNodeTx && directNodeInput
+        ? {
+            txid: directNodeInput.txid,
+            index: directNodeInput.index,
+            sequence: useTestUnilateralSequence
+              ? TEST_UNILATERAL_DIRECT_SEQUENCE
+              : nextDirectSequence,
+          }
+        : undefined;
+
+    const { cpfpNodeTx, directNodeTx: newDirectNodeTx } = createNodeTxs(
+      output,
+      newNodeInput,
+      newDirectInput,
+    );
+
+    const newCpfpNodeOutput: TransactionOutput = cpfpNodeTx.getOutput(0);
+    if (!newCpfpNodeOutput) {
+      throw Error("Could not get new cpfp node output");
+    }
+
+    const newDirectNodeOutput: TransactionOutput | undefined =
+      newDirectNodeTx?.getOutput(0);
+
+    const signingPublicKey =
+      await this.config.signer.getPublicKeyFromDerivation({
+        type: KeyDerivationType.LEAF,
+        path: node.id,
       });
 
-      // Copy any additional outputs (like ephemeral anchors) without fee reduction
-      for (let j = 1; j < nodeTx.outputsLength; j++) {
-        const additionalOutput = nodeTx.getOutput(j);
-        if (additionalOutput) {
-          newTx.addOutput(additionalOutput);
-        }
-      }
+    signingJobs.push({
+      signingPublicKey,
+      rawTx: cpfpNodeTx.toBytes(),
+      signingNonceCommitment:
+        await this.config.signer.getRandomSigningCommitment(),
+      type: "node",
+      parentTxOut: parentNodeOutput,
+    });
 
-      if (i === 0) {
-        const currSequence = input.sequence;
-        if (!currSequence) {
-          throw new ValidationError("Invalid node transaction", {
-            field: "sequence",
-            value: input,
-            expected: "Non-null sequence",
-          });
-        }
-        let { nextSequence } = getNextTransactionSequence(currSequence, true);
-
-        if (
-          useTestUnilateralSequence &&
-          TEST_UNILATERAL_SEQUENCE <= currSequence
-        ) {
-          nextSequence = TEST_UNILATERAL_SEQUENCE;
-        }
-        newTx.addInput({
-          ...input,
-          sequence: nextSequence,
-        });
-      } else {
-        newTx.addInput({
-          ...input,
-          sequence: INITIAL_SEQUENCE,
-          txid: newNodeTxs[i - 1]?.id,
-        });
-      }
-
+    if (newDirectNodeTx) {
       signingJobs.push({
-        signingPublicKey: await this.config.signer.getPublicKeyFromDerivation({
+        signingPublicKey,
+        rawTx: newDirectNodeTx.toBytes(),
+        signingNonceCommitment:
+          await this.config.signer.getRandomSigningCommitment(),
+        type: "directNode",
+        parentTxOut: parentNodeOutput,
+      });
+    }
+
+    const newCpfpRefundOutPoint: TransactionInput = {
+      txid: hexToBytes(getTxId(cpfpNodeTx)!),
+      index: 0,
+    };
+
+    let newDirectRefundOutPoint: TransactionInput | undefined;
+    if (newDirectNodeTx) {
+      newDirectRefundOutPoint = {
+        txid: hexToBytes(getTxId(newDirectNodeTx)!),
+        index: 0,
+      };
+    }
+
+    const { cpfpRefundTx, directRefundTx, directFromCpfpRefundTx } =
+      createRefundTxs({
+        sequence: INITIAL_SEQUENCE,
+        directSequence: INITIAL_DIRECT_SEQUENCE,
+        input: newCpfpRefundOutPoint,
+        directInput: newDirectRefundOutPoint,
+        amountSats: nodeOutput.amount!,
+        receivingPubkey: await this.config.signer.getPublicKeyFromDerivation({
           type: KeyDerivationType.LEAF,
           path: node.id,
         }),
-        rawTx: newTx.toBytes(),
-        signingNonceCommitment:
-          await this.config.signer.getRandomSigningCommitment(),
+        network: this.config.getNetwork(),
       });
-      newNodeTxs[i] = newTx;
-    }
 
-    const leaf = nodes[nodes.length - 1];
-    if (!leaf?.refundTx) {
-      throw Error("leaf does not have refund tx");
-    }
-    const refundTx = getTxFromRawTxBytes(leaf?.refundTx);
-    const newRefundTx = new Transaction({
-      version: 3,
-      allowUnknownOutputs: true,
-    });
-
-    // Apply fee to the refund output
-    const originalRefundOutput = refundTx.getOutput(0);
-    if (!originalRefundOutput) {
-      throw Error("Could not get original refund output");
-    }
-
-    newRefundTx.addOutput({
-      script: originalRefundOutput.script!,
-      amount: originalRefundOutput.amount!,
-    });
-
-    // Copy any additional outputs (like ephemeral anchors) without fee reduction
-    for (let j = 1; j < refundTx.outputsLength; j++) {
-      const additionalOutput = refundTx.getOutput(j);
-      if (additionalOutput) {
-        newRefundTx.addOutput(additionalOutput);
-      }
-    }
-
-    const refundTxInput = refundTx.getInput(0);
-    if (!refundTxInput) {
-      throw Error("refund tx doesn't have input");
-    }
-
-    if (!newNodeTxs[newNodeTxs.length - 1]) {
-      throw Error("Could not get last node tx");
-    }
-    newRefundTx.addInput({
-      ...refundTxInput,
-      sequence: INITIAL_SEQUENCE,
-      txid: getTxId(newNodeTxs[newNodeTxs.length - 1]!),
-    });
-
-    const refundSigningJob = {
-      signingPublicKey: await this.config.signer.getPublicKeyFromDerivation({
-        type: KeyDerivationType.LEAF,
-        path: leaf.id,
-      }),
-      rawTx: newRefundTx.toBytes(),
+    signingJobs.push({
+      signingPublicKey,
+      rawTx: cpfpRefundTx.toBytes(),
       signingNonceCommitment:
         await this.config.signer.getRandomSigningCommitment(),
-    };
+      type: "cpfp",
+      parentTxOut: newCpfpNodeOutput,
+    });
 
-    signingJobs.push(refundSigningJob);
+    if (directRefundTx && newDirectNodeOutput) {
+      signingJobs.push({
+        signingPublicKey,
+        rawTx: directRefundTx.toBytes(),
+        signingNonceCommitment:
+          await this.config.signer.getRandomSigningCommitment(),
+        type: "direct",
+        parentTxOut: newDirectNodeOutput,
+      });
+    }
+
+    if (directFromCpfpRefundTx && newCpfpNodeOutput) {
+      signingJobs.push({
+        signingPublicKey,
+        rawTx: directFromCpfpRefundTx.toBytes(),
+        signingNonceCommitment:
+          await this.config.signer.getRandomSigningCommitment(),
+        type: "directFromCpfp",
+        parentTxOut: newCpfpNodeOutput,
+      });
+    }
 
     const sparkClient = await this.connectionManager.createSparkClient(
       this.config.getCoordinatorAddress(),
     );
 
-    const response = await sparkClient.refresh_timelock({
-      leafId: leaf.id,
+    const response = await sparkClient.refresh_timelock_v2({
+      leafId: node.id,
       ownerIdentityPublicKey: await this.config.signer.getIdentityPublicKey(),
       signingJobs: signingJobs.map(getSigningJobProto),
     });
@@ -1386,44 +1678,23 @@ export class TransferService extends BaseTransferService {
     }
 
     let nodeSignatures: NodeSignatures[] = [];
-    let leafSignature: Uint8Array | undefined;
-    let refundSignature: Uint8Array | undefined;
-    let leafNodeId: string | undefined;
-    for (let i = 0; i < response.signingResults.length; i++) {
-      const signingResult = response.signingResults[i];
+    let leafCpfpSignature: Uint8Array | undefined;
+    let leafDirectSignature: Uint8Array | undefined;
+    let cpfpRefundSignature: Uint8Array | undefined;
+    let directRefundSignature: Uint8Array | undefined;
+    let directFromCpfpRefundSignature: Uint8Array | undefined;
+
+    for (const [i, signingResult] of response.signingResults.entries()) {
       const signingJob = signingJobs[i];
       if (!signingJob || !signingResult) {
         throw Error("Signing job does not exist");
       }
 
-      if (!signingJob.signingNonceCommitment) {
-        throw Error("nonce commitment does not exist");
-      }
       const rawTx = getTxFromRawTxBytes(signingJob.rawTx);
-
-      let parentTx: Transaction | undefined;
-      let nodeId: string | undefined;
-      let vout: number | undefined;
-
-      if (i === nodes.length) {
-        nodeId = nodes[i - 1]?.id;
-        parentTx = newNodeTxs[i - 1];
-        vout = 0;
-      } else if (i === 0) {
-        nodeId = nodes[i]?.id;
-        parentTx = getTxFromRawTxBytes(parentNode.nodeTx);
-        vout = nodes[i]?.vout;
-      } else {
-        nodeId = nodes[i]?.id;
-        parentTx = newNodeTxs[i - 1];
-        vout = nodes[i]?.vout;
+      const txOut = signingJob.parentTxOut;
+      if (!txOut) {
+        throw Error("Could not get tx out");
       }
-
-      if (!parentTx || !nodeId || vout === undefined) {
-        throw Error("Could not parse signing results");
-      }
-
-      const txOut = parentTx.getOutput(vout);
 
       const rawTxSighash = getSigHashFromTx(rawTx, 0, txOut);
 
@@ -1431,7 +1702,7 @@ export class TransferService extends BaseTransferService {
         message: rawTxSighash,
         keyDerivation: {
           type: KeyDerivationType.LEAF,
-          path: nodeId,
+          path: node.id,
         },
         publicKey: signingJob.signingPublicKey,
         verifyingKey: signingResult.verifyingKey,
@@ -1454,39 +1725,30 @@ export class TransferService extends BaseTransferService {
         adaptorPubKey: new Uint8Array(),
       });
 
-      if (i !== nodes.length && i !== nodes.length - 1) {
-        nodeSignatures.push({
-          nodeId: nodeId,
-          nodeTxSignature: signature,
-          refundTxSignature: new Uint8Array(),
-          // TODO: Add direct refund signature
-          directNodeTxSignature: new Uint8Array(),
-          directRefundTxSignature: new Uint8Array(),
-          directFromCpfpRefundTxSignature: new Uint8Array(),
-        });
-      } else if (i === nodes.length) {
-        refundSignature = signature;
-      } else if (i === nodes.length - 1) {
-        leafNodeId = nodeId;
-        leafSignature = signature;
+      if (signingJob.type === "node") {
+        leafCpfpSignature = signature;
+      } else if (signingJob.type === "directNode") {
+        leafDirectSignature = signature;
+      } else if (signingJob.type === "cpfp") {
+        cpfpRefundSignature = signature;
+      } else if (signingJob.type === "direct") {
+        directRefundSignature = signature;
+      } else if (signingJob.type === "directFromCpfp") {
+        directFromCpfpRefundSignature = signature;
       }
     }
 
-    if (!leafSignature || !refundSignature || !leafNodeId) {
-      throw Error("leaf or refund signature does not exist");
-    }
-
     nodeSignatures.push({
-      nodeId: leafNodeId,
-      nodeTxSignature: leafSignature,
-      refundTxSignature: refundSignature,
-      // TODO: Add direct refund signature
-      directNodeTxSignature: new Uint8Array(),
-      directRefundTxSignature: new Uint8Array(),
-      directFromCpfpRefundTxSignature: new Uint8Array(),
+      nodeId: node.id,
+      nodeTxSignature: leafCpfpSignature || new Uint8Array(),
+      directNodeTxSignature: leafDirectSignature || new Uint8Array(),
+      refundTxSignature: cpfpRefundSignature || new Uint8Array(),
+      directRefundTxSignature: directRefundSignature || new Uint8Array(),
+      directFromCpfpRefundTxSignature:
+        directFromCpfpRefundSignature || new Uint8Array(),
     });
 
-    const result = await sparkClient.finalize_node_signatures({
+    const result = await sparkClient.finalize_node_signatures_v2({
       intent: SignatureIntent.REFRESH,
       nodeSignatures,
     });
@@ -1494,8 +1756,8 @@ export class TransferService extends BaseTransferService {
     return result;
   }
 
-  async refreshTimelockNodes(nodes: TreeNode[], parentNode: TreeNode) {
-    return await this.refreshTimelockNodesInternal(nodes, parentNode);
+  async refreshTimelockNodes(node: TreeNode, parentNode: TreeNode) {
+    return await this.refreshTimelockNodesInternal(node, parentNode);
   }
 
   async extendTimelock(node: TreeNode) {
@@ -1508,8 +1770,12 @@ export class TransferService extends BaseTransferService {
       index: 0,
     };
 
-    const { nextSequence: newNodeSequence } =
-      getNextTransactionSequence(refundSequence);
+    const {
+      nextSequence: newNodeSequence,
+      nextDirectSequence: newDirectNodeSequence,
+    } = getNextTransactionSequence(refundSequence);
+
+    // Create new CPFP node tx
     const newNodeTx = new Transaction({
       version: 3,
       allowUnknownOutputs: true,
@@ -1522,82 +1788,177 @@ export class TransferService extends BaseTransferService {
       throw Error("Could not get original node output");
     }
 
-    // const feeReducedAmount = maybeApplyFee(originalOutput.amount!);
     newNodeTx.addOutput({
       script: originalOutput.script!,
-      amount: originalOutput.amount!, // feeReducedAmount,
+      amount: originalOutput.amount!,
     });
 
     newNodeTx.addOutput(getEphemeralAnchorOutput());
 
-    const newRefundOutPoint: TransactionInput = {
+    // Create new direct node tx
+
+    let newDirectNodeTx: Transaction | undefined;
+    if (node.directTx.length > 0) {
+      newDirectNodeTx = new Transaction({
+        version: 3,
+        allowUnknownOutputs: true,
+      });
+
+      newDirectNodeTx.addInput({
+        ...newNodeOutPoint,
+        sequence: newDirectNodeSequence,
+      });
+
+      newDirectNodeTx.addOutput({
+        script: originalOutput.script!,
+        amount: maybeApplyFee(originalOutput.amount!),
+      });
+    }
+
+    const newCpfpRefundOutPoint: TransactionInput = {
       txid: hexToBytes(getTxId(newNodeTx)!),
       index: 0,
     };
+
+    let newDirectRefundOutPoint: TransactionInput | undefined;
+    if (newDirectNodeTx) {
+      newDirectRefundOutPoint = {
+        txid: hexToBytes(getTxId(newDirectNodeTx)!),
+        index: 0,
+      };
+    }
 
     const amountSats = refundTx.getOutput(0).amount;
     if (amountSats === undefined) {
       throw new Error("Amount not found in extendTimelock");
     }
 
-    const signingPubKey = await this.config.signer.getPublicKeyFromDerivation({
-      type: KeyDerivationType.LEAF,
-      path: node.id,
+    const signingPublicKey =
+      await this.config.signer.getPublicKeyFromDerivation({
+        type: KeyDerivationType.LEAF,
+        path: node.id,
+      });
+    // Create both CPFP and direct refund transactions
+
+    const {
+      cpfpRefundTx: newCpfpRefundTx,
+      directRefundTx: newDirectRefundTx,
+      directFromCpfpRefundTx: newDirectFromCpfpRefundTx,
+    } = createRefundTxs({
+      sequence: INITIAL_SEQUENCE,
+      directSequence: INITIAL_DIRECT_SEQUENCE,
+      input: newCpfpRefundOutPoint,
+      directInput: newDirectRefundOutPoint,
+      amountSats,
+      receivingPubkey: signingPublicKey,
+      network: this.config.getNetwork(),
     });
 
-    // Apply fee to the refund transaction as well
-    // const feeReducedRefundAmount = maybeApplyFee(amountSats);
-    const newRefundTx = createRefundTx(
-      INITIAL_SEQUENCE,
-      newRefundOutPoint,
-      amountSats, // feeReducedRefundAmount,
-      signingPubKey,
-      this.config.getNetwork(),
-    );
+    if (!newCpfpRefundTx) {
+      throw new ValidationError(
+        "Failed to create refund transactions in extendTimelock",
+      );
+    }
 
     const nodeSighash = getSigHashFromTx(newNodeTx, 0, nodeTx.getOutput(0));
-    const refundSighash = getSigHashFromTx(
-      newRefundTx,
+
+    const directNodeSighash = newDirectNodeTx
+      ? getSigHashFromTx(newDirectNodeTx, 0, nodeTx.getOutput(0))
+      : undefined;
+
+    const cpfpRefundSighash = getSigHashFromTx(
+      newCpfpRefundTx,
       0,
       newNodeTx.getOutput(0),
     );
+    const directRefundSighash =
+      newDirectNodeTx && newDirectRefundTx
+        ? getSigHashFromTx(newDirectRefundTx, 0, newDirectNodeTx.getOutput(0))
+        : undefined;
+
+    const directFromCpfpRefundSighash = newDirectFromCpfpRefundTx
+      ? getSigHashFromTx(newDirectFromCpfpRefundTx, 0, newNodeTx.getOutput(0))
+      : undefined;
 
     const newNodeSigningJob = {
-      signingPublicKey: signingPubKey,
+      signingPublicKey,
       rawTx: newNodeTx.toBytes(),
       signingNonceCommitment:
         await this.config.signer.getRandomSigningCommitment(),
     };
 
-    const newRefundSigningJob = {
-      signingPublicKey: signingPubKey,
-      rawTx: newRefundTx.toBytes(),
+    const newDirectNodeSigningJob: SigningJobWithOptionalNonce | undefined =
+      newDirectNodeTx
+        ? {
+            signingPublicKey,
+            rawTx: newDirectNodeTx.toBytes(),
+            signingNonceCommitment:
+              await this.config.signer.getRandomSigningCommitment(),
+          }
+        : undefined;
+
+    const newCpfpRefundSigningJob = {
+      signingPublicKey,
+      rawTx: newCpfpRefundTx.toBytes(),
       signingNonceCommitment:
         await this.config.signer.getRandomSigningCommitment(),
     };
+
+    const newDirectRefundSigningJob: SigningJobWithOptionalNonce | undefined =
+      newDirectRefundTx
+        ? {
+            signingPublicKey,
+            rawTx: newDirectRefundTx.toBytes(),
+            signingNonceCommitment:
+              await this.config.signer.getRandomSigningCommitment(),
+          }
+        : undefined;
+
+    const newDirectFromCpfpRefundSigningJob:
+      | SigningJobWithOptionalNonce
+      | undefined = newDirectFromCpfpRefundTx
+      ? {
+          signingPublicKey,
+          rawTx: newDirectFromCpfpRefundTx.toBytes(),
+          signingNonceCommitment:
+            await this.config.signer.getRandomSigningCommitment(),
+        }
+      : undefined;
 
     const sparkClient = await this.connectionManager.createSparkClient(
       this.config.getCoordinatorAddress(),
     );
 
-    const response = await sparkClient.extend_leaf({
+    const response = await sparkClient.extend_leaf_v2({
       leafId: node.id,
       ownerIdentityPublicKey: await this.config.signer.getIdentityPublicKey(),
       nodeTxSigningJob: getSigningJobProto(newNodeSigningJob),
-      refundTxSigningJob: getSigningJobProto(newRefundSigningJob),
+      directNodeTxSigningJob: newDirectNodeSigningJob
+        ? getSigningJobProto(newDirectNodeSigningJob)
+        : undefined,
+      refundTxSigningJob: getSigningJobProto(newCpfpRefundSigningJob),
+      directRefundTxSigningJob: newDirectRefundSigningJob
+        ? getSigningJobProto(newDirectRefundSigningJob)
+        : undefined,
+      directFromCpfpRefundTxSigningJob: newDirectFromCpfpRefundSigningJob
+        ? getSigningJobProto(newDirectFromCpfpRefundSigningJob)
+        : undefined,
     });
 
     if (!response.nodeTxSigningResult || !response.refundTxSigningResult) {
       throw new Error("Signing result does not exist");
     }
 
+    const keyDerivation: KeyDerivation = {
+      type: KeyDerivationType.LEAF,
+      path: node.id,
+    };
+
+    // Sign CPFP node transaction
     const nodeUserSig = await this.config.signer.signFrost({
       message: nodeSighash,
-      keyDerivation: {
-        type: KeyDerivationType.LEAF,
-        path: node.id,
-      },
-      publicKey: signingPubKey,
+      keyDerivation,
+      publicKey: signingPublicKey,
       verifyingKey: response.nodeTxSigningResult.verifyingKey,
       selfCommitment: newNodeSigningJob.signingNonceCommitment,
       statechainCommitments:
@@ -1605,20 +1966,7 @@ export class TransferService extends BaseTransferService {
       adaptorPubKey: new Uint8Array(),
     });
 
-    const refundUserSig = await this.config.signer.signFrost({
-      message: refundSighash,
-      keyDerivation: {
-        type: KeyDerivationType.LEAF,
-        path: node.id,
-      },
-      publicKey: signingPubKey,
-      verifyingKey: response.refundTxSigningResult.verifyingKey,
-      selfCommitment: newRefundSigningJob.signingNonceCommitment,
-      statechainCommitments:
-        response.refundTxSigningResult.signingResult?.signingNonceCommitments,
-      adaptorPubKey: new Uint8Array(),
-    });
-
+    // Aggregate CPFP node signature
     const nodeSig = await this.config.signer.aggregateFrost({
       message: nodeSighash,
       statechainSignatures:
@@ -1629,13 +1977,63 @@ export class TransferService extends BaseTransferService {
       statechainCommitments:
         response.nodeTxSigningResult.signingResult?.signingNonceCommitments,
       selfCommitment: newNodeSigningJob.signingNonceCommitment,
-      publicKey: signingPubKey,
+      publicKey: signingPublicKey,
       selfSignature: nodeUserSig,
       adaptorPubKey: new Uint8Array(),
     });
 
-    const refundSig = await this.config.signer.aggregateFrost({
-      message: refundSighash,
+    let directNodeSig: Uint8Array | undefined;
+    if (
+      directNodeSighash &&
+      newDirectNodeSigningJob &&
+      response.directNodeTxSigningResult
+    ) {
+      // Sign direct node transaction
+      const directNodeUserSig = await this.config.signer.signFrost({
+        message: directNodeSighash,
+        keyDerivation,
+        publicKey: signingPublicKey,
+        verifyingKey: response.directNodeTxSigningResult.verifyingKey,
+        selfCommitment: newDirectNodeSigningJob.signingNonceCommitment,
+        statechainCommitments:
+          response.directNodeTxSigningResult.signingResult
+            ?.signingNonceCommitments,
+        adaptorPubKey: new Uint8Array(),
+      });
+
+      // Aggregate direct node signature
+      directNodeSig = await this.config.signer.aggregateFrost({
+        message: directNodeSighash,
+        statechainSignatures:
+          response.directNodeTxSigningResult.signingResult?.signatureShares,
+        statechainPublicKeys:
+          response.directNodeTxSigningResult.signingResult?.publicKeys,
+        verifyingKey: response.directNodeTxSigningResult.verifyingKey,
+        statechainCommitments:
+          response.directNodeTxSigningResult.signingResult
+            ?.signingNonceCommitments,
+        selfCommitment: newDirectNodeSigningJob.signingNonceCommitment,
+        publicKey: signingPublicKey,
+        selfSignature: directNodeUserSig,
+        adaptorPubKey: new Uint8Array(),
+      });
+    }
+
+    // Sign CPFP refund transaction
+    const cpfpRefundUserSig = await this.config.signer.signFrost({
+      message: cpfpRefundSighash,
+      keyDerivation,
+      publicKey: signingPublicKey,
+      verifyingKey: response.refundTxSigningResult.verifyingKey,
+      selfCommitment: newCpfpRefundSigningJob.signingNonceCommitment,
+      statechainCommitments:
+        response.refundTxSigningResult.signingResult?.signingNonceCommitments,
+      adaptorPubKey: new Uint8Array(),
+    });
+
+    // Aggregate CPFP refund signature
+    const cpfpRefundSig = await this.config.signer.aggregateFrost({
+      message: cpfpRefundSighash,
       statechainSignatures:
         response.refundTxSigningResult.signingResult?.signatureShares,
       statechainPublicKeys:
@@ -1643,33 +2041,117 @@ export class TransferService extends BaseTransferService {
       verifyingKey: response.refundTxSigningResult.verifyingKey,
       statechainCommitments:
         response.refundTxSigningResult.signingResult?.signingNonceCommitments,
-      selfCommitment: newRefundSigningJob.signingNonceCommitment,
-      publicKey: signingPubKey,
-      selfSignature: refundUserSig,
+      selfCommitment: newCpfpRefundSigningJob.signingNonceCommitment,
+      publicKey: signingPublicKey,
+      selfSignature: cpfpRefundUserSig,
       adaptorPubKey: new Uint8Array(),
     });
 
-    return await sparkClient.finalize_node_signatures({
+    let directRefundSig: Uint8Array | undefined;
+    if (
+      directRefundSighash &&
+      newDirectRefundSigningJob &&
+      response.directRefundTxSigningResult
+    ) {
+      // Sign direct refund transaction
+      const directRefundUserSig = await this.config.signer.signFrost({
+        message: directRefundSighash,
+        keyDerivation,
+        publicKey: signingPublicKey,
+        verifyingKey: response.directRefundTxSigningResult.verifyingKey,
+        selfCommitment: newDirectRefundSigningJob.signingNonceCommitment,
+        statechainCommitments:
+          response.directRefundTxSigningResult.signingResult
+            ?.signingNonceCommitments,
+        adaptorPubKey: new Uint8Array(),
+      });
+
+      // Aggregate direct refund signature
+      directRefundSig = await this.config.signer.aggregateFrost({
+        message: directRefundSighash,
+        statechainSignatures:
+          response.directRefundTxSigningResult.signingResult?.signatureShares,
+        statechainPublicKeys:
+          response.directRefundTxSigningResult.signingResult?.publicKeys,
+        verifyingKey: response.directRefundTxSigningResult.verifyingKey,
+        statechainCommitments:
+          response.directRefundTxSigningResult.signingResult
+            ?.signingNonceCommitments,
+        selfCommitment: newDirectRefundSigningJob.signingNonceCommitment,
+        publicKey: signingPublicKey,
+        selfSignature: directRefundUserSig,
+        adaptorPubKey: new Uint8Array(),
+      });
+    }
+
+    let directFromCpfpRefundSig: Uint8Array | undefined;
+    if (
+      directFromCpfpRefundSighash &&
+      newDirectFromCpfpRefundSigningJob &&
+      response.directFromCpfpRefundTxSigningResult
+    ) {
+      // Sign direct from CPFP refund transaction
+      const directFromCpfpRefundUserSig = await this.config.signer.signFrost({
+        message: directFromCpfpRefundSighash,
+        keyDerivation,
+        publicKey: signingPublicKey,
+        verifyingKey: response.directFromCpfpRefundTxSigningResult.verifyingKey,
+        selfCommitment:
+          newDirectFromCpfpRefundSigningJob.signingNonceCommitment,
+        statechainCommitments:
+          response.directFromCpfpRefundTxSigningResult.signingResult
+            ?.signingNonceCommitments,
+        adaptorPubKey: new Uint8Array(),
+      });
+
+      // Aggregate direct from CPFP refund signature
+      directFromCpfpRefundSig = await this.config.signer.aggregateFrost({
+        message: directFromCpfpRefundSighash,
+        statechainSignatures:
+          response.directFromCpfpRefundTxSigningResult.signingResult
+            ?.signatureShares,
+        statechainPublicKeys:
+          response.directFromCpfpRefundTxSigningResult.signingResult
+            ?.publicKeys,
+        verifyingKey: response.directFromCpfpRefundTxSigningResult.verifyingKey,
+        statechainCommitments:
+          response.directFromCpfpRefundTxSigningResult.signingResult
+            ?.signingNonceCommitments,
+        selfCommitment:
+          newDirectFromCpfpRefundSigningJob.signingNonceCommitment,
+        publicKey: signingPublicKey,
+        selfSignature: directFromCpfpRefundUserSig,
+        adaptorPubKey: new Uint8Array(),
+      });
+    }
+
+    return await sparkClient.finalize_node_signatures_v2({
       intent: SignatureIntent.EXTEND,
       nodeSignatures: [
         {
           nodeId: response.leafId,
           nodeTxSignature: nodeSig,
-          refundTxSignature: refundSig,
+          directNodeTxSignature: directNodeSig,
+          refundTxSignature: cpfpRefundSig,
+          directRefundTxSignature: directRefundSig,
+          directFromCpfpRefundTxSignature: directFromCpfpRefundSig,
         },
       ],
     });
   }
 
   async testonly_expireTimeLockNodeTx(node: TreeNode, parentNode: TreeNode) {
-    return await this.refreshTimelockNodesInternal([node], parentNode, true);
+    return await this.refreshTimelockNodesInternal(node, parentNode, true);
   }
 
   async testonly_expireTimeLockRefundtx(node: TreeNode) {
     const nodeTx = getTxFromRawTxBytes(node.nodeTx);
-    const refundTx = getTxFromRawTxBytes(node.refundTx);
+    const directNodeTx =
+      node.directTx.length > 0 ? getTxFromRawTxBytes(node.directTx) : undefined;
 
-    const currSequence = refundTx.getInput(0).sequence || 0;
+    const cpfpRefundTx = getTxFromRawTxBytes(node.refundTx);
+
+    const currSequence = cpfpRefundTx.getInput(0).sequence || 0;
     const currTimelock = getCurrentTimelock(currSequence);
     if (currTimelock <= 100) {
       throw new ValidationError("Cannot expire timelock below 100", {
@@ -1678,113 +2160,159 @@ export class TransferService extends BaseTransferService {
         expected: "Timelock greater than 100",
       });
     }
+    const nextSequence = TEST_UNILATERAL_SEQUENCE;
+    const nextDirectSequence =
+      TEST_UNILATERAL_SEQUENCE + DIRECT_TIMELOCK_OFFSET;
 
-    const signingPubKey = await this.config.signer.getPublicKeyFromDerivation({
+    const nodeOutput = nodeTx.getOutput(0);
+    if (!nodeOutput) {
+      throw Error("Could not get node output");
+    }
+
+    const keyDerivation: KeyDerivation = {
       type: KeyDerivationType.LEAF,
       path: node.id,
-    });
+    };
+    const signingPublicKey =
+      await this.config.signer.getPublicKeyFromDerivation(keyDerivation);
 
-    const newRefundTx = new Transaction({
-      version: 3,
-      allowUnknownOutputs: true,
-    });
+    const cpfpRefundOutPoint: TransactionInput = {
+      txid: hexToBytes(getTxId(nodeTx)!),
+      index: 0,
+    };
 
-    // Apply fee to the refund output
-    const originalRefundOutput = refundTx.getOutput(0);
-    if (!originalRefundOutput) {
-      throw Error("Could not get original refund output");
+    let directRefundOutPoint: TransactionInput | undefined;
+    if (directNodeTx) {
+      directRefundOutPoint = {
+        txid: hexToBytes(getTxId(directNodeTx)!),
+        index: 0,
+      };
     }
 
-    newRefundTx.addOutput({
-      script: originalRefundOutput.script!,
-      amount: originalRefundOutput.amount!,
+    const {
+      cpfpRefundTx: newCpfpRefundTx,
+      directRefundTx: newDirectRefundTx,
+      directFromCpfpRefundTx: newDirectFromCpfpRefundTx,
+    } = createRefundTxs({
+      sequence: nextSequence,
+      directSequence: nextDirectSequence,
+      input: cpfpRefundOutPoint,
+      directInput: directRefundOutPoint,
+      amountSats: nodeOutput.amount!,
+      receivingPubkey: signingPublicKey,
+      network: this.config.getNetwork(),
     });
 
-    // Copy any additional outputs (like ephemeral anchors) without fee reduction
-    for (let j = 1; j < refundTx.outputsLength; j++) {
-      const additionalOutput = refundTx.getOutput(j);
-      if (additionalOutput) {
-        newRefundTx.addOutput(additionalOutput);
-      }
-    }
+    const signingJobs: (SigningJobWithOptionalNonce & {
+      type: "cpfp" | "direct" | "directFromCpfp";
+      parentTxOut: TransactionOutput;
+    })[] = [];
 
-    const refundTxInput = refundTx.getInput(0);
-    if (!refundTxInput) {
-      throw Error("refund tx doesn't have input");
-    }
-
-    newRefundTx.addInput({
-      ...refundTxInput,
-      sequence: (1 << 30) | 100,
-    });
-
-    const refundSigningJob = {
-      signingPublicKey: signingPubKey,
-      rawTx: newRefundTx.toBytes(),
+    signingJobs.push({
+      signingPublicKey,
+      rawTx: newCpfpRefundTx.toBytes(),
       signingNonceCommitment:
         await this.config.signer.getRandomSigningCommitment(),
-    };
+      type: "cpfp",
+      parentTxOut: nodeOutput,
+    });
+
+    const directNodeTxOut = directNodeTx?.getOutput(0);
+    if (newDirectRefundTx && directNodeTxOut) {
+      signingJobs.push({
+        signingPublicKey,
+        rawTx: newDirectRefundTx.toBytes(),
+        signingNonceCommitment:
+          await this.config.signer.getRandomSigningCommitment(),
+        type: "direct",
+        parentTxOut: directNodeTxOut,
+      });
+    }
+
+    if (newDirectFromCpfpRefundTx) {
+      signingJobs.push({
+        signingPublicKey,
+        rawTx: newDirectFromCpfpRefundTx.toBytes(),
+        signingNonceCommitment:
+          await this.config.signer.getRandomSigningCommitment(),
+        type: "directFromCpfp",
+        parentTxOut: nodeOutput,
+      });
+    }
 
     const sparkClient = await this.connectionManager.createSparkClient(
       this.config.getCoordinatorAddress(),
     );
 
-    const response = await sparkClient.refresh_timelock({
+    const response = await sparkClient.refresh_timelock_v2({
       leafId: node.id,
       ownerIdentityPublicKey: await this.config.signer.getIdentityPublicKey(),
-      signingJobs: [getSigningJobProto(refundSigningJob)],
+      signingJobs: signingJobs.map(getSigningJobProto),
     });
 
-    if (response.signingResults.length !== 1) {
+    if (response.signingResults.length !== signingJobs.length) {
       throw Error(
-        `Expected 1 signing result, got ${response.signingResults.length}`,
+        `Expected ${signingJobs.length} signing results, got ${response.signingResults.length}`,
       );
     }
 
-    const signingResult = response.signingResults[0];
-    if (!signingResult || !refundSigningJob.signingNonceCommitment) {
-      throw Error("Signing result or nonce commitment does not exist");
+    let cpfpRefundSignature: Uint8Array | undefined;
+    let directRefundSignature: Uint8Array | undefined;
+    let directFromCpfpRefundSignature: Uint8Array | undefined;
+
+    for (const [i, signingJob] of signingJobs.entries()) {
+      const signingResult = response.signingResults[i];
+      if (!signingResult) {
+        throw Error("Signing result does not exist");
+      }
+
+      const rawTx = getTxFromRawTxBytes(signingJob.rawTx);
+      const txOut = signingJob.parentTxOut;
+      const rawTxSighash = getSigHashFromTx(rawTx, 0, txOut);
+
+      const userSignature = await this.config.signer.signFrost({
+        message: rawTxSighash,
+        keyDerivation,
+        publicKey: signingPublicKey,
+        verifyingKey: signingResult.verifyingKey,
+        selfCommitment: signingJob.signingNonceCommitment,
+        statechainCommitments:
+          signingResult.signingResult?.signingNonceCommitments,
+        adaptorPubKey: new Uint8Array(),
+      });
+
+      const signature = await this.config.signer.aggregateFrost({
+        message: rawTxSighash,
+        statechainSignatures: signingResult.signingResult?.signatureShares,
+        statechainPublicKeys: signingResult.signingResult?.publicKeys,
+        verifyingKey: signingResult.verifyingKey,
+        statechainCommitments:
+          signingResult.signingResult?.signingNonceCommitments,
+        selfCommitment: signingJob.signingNonceCommitment,
+        publicKey: signingPublicKey,
+        selfSignature: userSignature,
+        adaptorPubKey: new Uint8Array(),
+      });
+
+      if (signingJob.type === "cpfp") {
+        cpfpRefundSignature = signature;
+      } else if (signingJob.type === "direct") {
+        directRefundSignature = signature;
+      } else if (signingJob.type === "directFromCpfp") {
+        directFromCpfpRefundSignature = signature;
+      }
     }
 
-    const rawTx = getTxFromRawTxBytes(refundSigningJob.rawTx);
-    const txOut = nodeTx.getOutput(0);
-
-    const rawTxSighash = getSigHashFromTx(rawTx, 0, txOut);
-
-    const userSignature = await this.config.signer.signFrost({
-      message: rawTxSighash,
-      keyDerivation: {
-        type: KeyDerivationType.LEAF,
-        path: node.id,
-      },
-      publicKey: signingPubKey,
-      verifyingKey: signingResult.verifyingKey,
-      selfCommitment: refundSigningJob.signingNonceCommitment,
-      statechainCommitments:
-        signingResult.signingResult?.signingNonceCommitments,
-      adaptorPubKey: new Uint8Array(),
-    });
-
-    const signature = await this.config.signer.aggregateFrost({
-      message: rawTxSighash,
-      statechainSignatures: signingResult.signingResult?.signatureShares,
-      statechainPublicKeys: signingResult.signingResult?.publicKeys,
-      verifyingKey: signingResult.verifyingKey,
-      statechainCommitments:
-        signingResult.signingResult?.signingNonceCommitments,
-      selfCommitment: refundSigningJob.signingNonceCommitment,
-      publicKey: signingPubKey,
-      selfSignature: userSignature,
-      adaptorPubKey: new Uint8Array(),
-    });
-
-    const result = await sparkClient.finalize_node_signatures({
+    const result = await sparkClient.finalize_node_signatures_v2({
       intent: SignatureIntent.REFRESH,
       nodeSignatures: [
         {
           nodeId: node.id,
           nodeTxSignature: new Uint8Array(),
-          refundTxSignature: signature,
+          directNodeTxSignature: new Uint8Array(),
+          refundTxSignature: cpfpRefundSignature,
+          directRefundTxSignature: directRefundSignature,
+          directFromCpfpRefundTxSignature: directFromCpfpRefundSignature,
         },
       ],
     });

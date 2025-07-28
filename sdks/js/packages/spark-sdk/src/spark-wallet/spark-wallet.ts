@@ -1047,26 +1047,80 @@ export class SparkWallet extends EventEmitter {
       })),
     );
 
-    const { transfer, signatureMap } =
-      await this.transferService.startSwapSignRefund(
-        leafKeyTweaks,
-        hexToBytes(this.config.getSspIdentityPublicKey()),
-        new Date(Date.now() + 2 * 60 * 1000),
-      );
+    const {
+      transfer,
+      signatureMap,
+      directSignatureMap,
+      directFromCpfpSignatureMap,
+    } = await this.transferService.startSwapSignRefund(
+      leafKeyTweaks,
+      hexToBytes(this.config.getSspIdentityPublicKey()),
+      new Date(Date.now() + 2 * 60 * 1000),
+    );
+
     try {
       if (!transfer.leaves[0]?.leaf) {
+        console.error("[processSwapBatch] First leaf is missing");
         throw new Error("Failed to get leaf");
       }
 
-      const refundSignature = signatureMap.get(transfer.leaves[0].leaf.id);
-      if (!refundSignature) {
-        throw new Error("Failed to get refund signature");
+      const cpfpRefundSignature = signatureMap.get(transfer.leaves[0].leaf.id);
+      if (!cpfpRefundSignature) {
+        console.error(
+          "[processSwapBatch] Missing CPFP refund signature for first leaf",
+        );
+        throw new Error("Failed to get CPFP refund signature");
       }
 
-      const { adaptorPrivateKey, adaptorSignature } =
-        generateAdaptorFromSignature(refundSignature);
+      const directRefundSignature = directSignatureMap.get(
+        transfer.leaves[0].leaf.id,
+      );
+      if (!directRefundSignature) {
+        console.error(
+          "[processSwapBatch] Missing direct refund signature for first leaf",
+        );
+        throw new Error("Failed to get direct refund signature");
+      }
+
+      const directFromCpfpRefundSignature = directFromCpfpSignatureMap.get(
+        transfer.leaves[0].leaf.id,
+      );
+      if (!directFromCpfpRefundSignature) {
+        console.error(
+          "[processSwapBatch] Missing direct from CPFP refund signature for first leaf",
+        );
+        throw new Error("Failed to get direct from CPFP refund signature");
+      }
+
+      const {
+        adaptorPrivateKey: cpfpAdaptorPrivateKey,
+        adaptorSignature: cpfpAdaptorSignature,
+      } = generateAdaptorFromSignature(cpfpRefundSignature);
+
+      let directAdaptorPrivateKey: Uint8Array = new Uint8Array();
+      let directAdaptorSignature: Uint8Array = new Uint8Array();
+      let directFromCpfpAdaptorPrivateKey: Uint8Array = new Uint8Array();
+      let directFromCpfpAdaptorSignature: Uint8Array = new Uint8Array();
+
+      if (directRefundSignature.length > 0) {
+        const { adaptorPrivateKey, adaptorSignature } =
+          generateAdaptorFromSignature(directRefundSignature);
+
+        directAdaptorPrivateKey = adaptorPrivateKey;
+        directAdaptorSignature = adaptorSignature;
+      }
+
+      if (directFromCpfpRefundSignature.length > 0) {
+        const { adaptorPrivateKey, adaptorSignature } =
+          generateAdaptorFromSignature(directFromCpfpRefundSignature);
+        directFromCpfpAdaptorPrivateKey = adaptorPrivateKey;
+        directFromCpfpAdaptorSignature = adaptorSignature;
+      }
 
       if (!transfer.leaves[0].leaf) {
+        console.error(
+          "[processSwapBatch] First leaf missing when preparing user leaves",
+        );
         throw new Error("Failed to get leaf");
       }
 
@@ -1076,42 +1130,128 @@ export class SparkWallet extends EventEmitter {
         raw_unsigned_refund_transaction: bytesToHex(
           transfer.leaves[0].intermediateRefundTx,
         ),
-        adaptor_added_signature: bytesToHex(adaptorSignature),
+        direct_raw_unsigned_refund_transaction: bytesToHex(
+          transfer.leaves[0].intermediateDirectRefundTx,
+        ),
+        direct_from_cpfp_raw_unsigned_refund_transaction: bytesToHex(
+          transfer.leaves[0].intermediateDirectFromCpfpRefundTx,
+        ),
+        adaptor_added_signature: bytesToHex(cpfpAdaptorSignature),
+        direct_adaptor_added_signature: bytesToHex(directAdaptorSignature),
+        direct_from_cpfp_adaptor_added_signature: bytesToHex(
+          directFromCpfpAdaptorSignature,
+        ),
       });
 
       for (let i = 1; i < transfer.leaves.length; i++) {
         const leaf = transfer.leaves[i];
         if (!leaf?.leaf) {
+          console.error(`[processSwapBatch] Leaf ${i + 1} is missing`);
           throw new Error("Failed to get leaf");
         }
 
-        const refundSignature = signatureMap.get(leaf.leaf.id);
-        if (!refundSignature) {
-          throw new Error("Failed to get refund signature");
+        const cpfpRefundSignature = signatureMap.get(leaf.leaf.id);
+        if (!cpfpRefundSignature) {
+          console.error(
+            `[processSwapBatch] Missing CPFP refund signature for leaf ${i + 1}`,
+          );
+          throw new Error("Failed to get CPFP refund signature");
         }
 
-        const signature = generateSignatureFromExistingAdaptor(
-          refundSignature,
-          adaptorPrivateKey,
+        const directRefundSignature = directSignatureMap.get(leaf.leaf.id);
+        if (!directRefundSignature) {
+          console.error(
+            `[processSwapBatch] Missing direct refund signature for leaf ${i + 1}`,
+          );
+          throw new Error("Failed to get direct refund signature");
+        }
+
+        const directFromCpfpRefundSignature = directFromCpfpSignatureMap.get(
+          leaf.leaf.id,
         );
+        if (!directFromCpfpRefundSignature) {
+          console.error(
+            `[processSwapBatch] Missing direct from CPFP refund signature for leaf ${i + 1}`,
+          );
+          throw new Error("Failed to get direct from CPFP refund signature");
+        }
+
+        const cpfpSignature = generateSignatureFromExistingAdaptor(
+          cpfpRefundSignature,
+          cpfpAdaptorPrivateKey,
+        );
+
+        let directSignature: Uint8Array = new Uint8Array();
+        if (directRefundSignature.length > 0) {
+          directSignature = generateSignatureFromExistingAdaptor(
+            directRefundSignature,
+            directAdaptorPrivateKey,
+          );
+        }
+
+        let directFromCpfpSignature: Uint8Array = new Uint8Array();
+        if (directFromCpfpRefundSignature.length > 0) {
+          directFromCpfpSignature = generateSignatureFromExistingAdaptor(
+            directFromCpfpRefundSignature,
+            directFromCpfpAdaptorPrivateKey,
+          );
+        }
 
         userLeaves.push({
           leaf_id: leaf.leaf.id,
           raw_unsigned_refund_transaction: bytesToHex(
             leaf.intermediateRefundTx,
           ),
-          adaptor_added_signature: bytesToHex(signature),
+          direct_raw_unsigned_refund_transaction: bytesToHex(
+            leaf.intermediateDirectRefundTx,
+          ),
+          direct_from_cpfp_raw_unsigned_refund_transaction: bytesToHex(
+            leaf.intermediateDirectFromCpfpRefundTx,
+          ),
+          adaptor_added_signature: bytesToHex(cpfpSignature),
+          direct_adaptor_added_signature: bytesToHex(directSignature),
+          direct_from_cpfp_adaptor_added_signature: bytesToHex(
+            directFromCpfpSignature,
+          ),
         });
       }
 
       const sspClient = this.getSspClient();
-      const adaptorPubkey = bytesToHex(
-        secp256k1.getPublicKey(adaptorPrivateKey),
+      const cpfpAdaptorPubkey = bytesToHex(
+        secp256k1.getPublicKey(cpfpAdaptorPrivateKey),
       );
+      if (!cpfpAdaptorPubkey) {
+        throw new Error("Failed to generate CPFP adaptor pubkey");
+      }
+
+      let directAdaptorPubkey: string | undefined;
+      if (directAdaptorPrivateKey.length > 0) {
+        directAdaptorPubkey = bytesToHex(
+          secp256k1.getPublicKey(directAdaptorPrivateKey),
+        );
+      }
+
+      let directFromCpfpAdaptorPubkey: string | undefined;
+      if (directFromCpfpAdaptorPrivateKey.length > 0) {
+        directFromCpfpAdaptorPubkey = bytesToHex(
+          secp256k1.getPublicKey(directFromCpfpAdaptorPrivateKey),
+        );
+      }
+
       let request: LeavesSwapRequest | null | undefined = null;
+      const targetAmountSats =
+        targetAmounts?.reduce((acc, amount) => acc + amount, 0) ||
+        leavesBatch.reduce((acc, leaf) => acc + leaf.value, 0);
+      const totalAmountSats = leavesBatch.reduce(
+        (acc, leaf) => acc + leaf.value,
+        0,
+      );
+
       request = await sspClient.requestLeaveSwap({
         userLeaves,
-        adaptorPubkey,
+        adaptorPubkey: cpfpAdaptorPubkey,
+        directAdaptorPubkey: directAdaptorPubkey,
+        directFromCpfpAdaptorPubkey: directFromCpfpAdaptorPubkey,
         targetAmountSats:
           targetAmounts?.reduce((acc, amount) => acc + amount, 0) ||
           leavesBatch.reduce((acc, leaf) => acc + leaf.value, 0),
@@ -1123,6 +1263,7 @@ export class SparkWallet extends EventEmitter {
       });
 
       if (!request) {
+        console.error("[processSwapBatch] Leave swap request returned null");
         throw new Error("Failed to request leaves swap. No response returned.");
       }
 
@@ -1138,37 +1279,127 @@ export class SparkWallet extends EventEmitter {
       });
 
       if (Object.values(nodes.nodes).length !== request.swapLeaves.length) {
+        console.error("[processSwapBatch] Node count mismatch:", {
+          actual: Object.values(nodes.nodes).length,
+          expected: request.swapLeaves.length,
+        });
         throw new Error("Expected same number of nodes as swapLeaves");
       }
 
       for (const [nodeId, node] of Object.entries(nodes.nodes)) {
         if (!node.nodeTx) {
+          console.error(`[processSwapBatch] Node tx missing for ${nodeId}`);
           throw new Error(`Node tx not found for leaf ${nodeId}`);
         }
 
         if (!node.verifyingPublicKey) {
+          console.error(
+            `[processSwapBatch] Verifying public key missing for ${nodeId}`,
+          );
           throw new Error(`Node public key not found for leaf ${nodeId}`);
         }
 
         const leaf = request.swapLeaves.find((leaf) => leaf.leafId === nodeId);
         if (!leaf) {
+          console.error(`[processSwapBatch] Leaf not found for node ${nodeId}`);
           throw new Error(`Leaf not found for node ${nodeId}`);
         }
-
-        const nodeTx = getTxFromRawTxBytes(node.nodeTx);
-        const refundTxBytes = hexToBytes(leaf.rawUnsignedRefundTransaction);
-        const refundTx = getTxFromRawTxBytes(refundTxBytes);
-        const sighash = getSigHashFromTx(refundTx, 0, nodeTx.getOutput(0));
+        // Apply CPFP adaptor signature
+        const cpfpNodeTx = getTxFromRawTxBytes(node.nodeTx);
+        const cpfpRefundTxBytes = hexToBytes(leaf.rawUnsignedRefundTransaction);
+        const cpfpRefundTx = getTxFromRawTxBytes(cpfpRefundTxBytes);
+        const cpfpSighash = getSigHashFromTx(
+          cpfpRefundTx,
+          0,
+          cpfpNodeTx.getOutput(0),
+        );
 
         const nodePublicKey = node.verifyingPublicKey;
-
         const taprootKey = computeTaprootKeyNoScript(nodePublicKey.slice(1));
-        const adaptorSignatureBytes = hexToBytes(leaf.adaptorSignedSignature);
+        const cpfpAdaptorSignatureBytes = hexToBytes(
+          leaf.adaptorSignedSignature,
+        );
         applyAdaptorToSignature(
           taprootKey.slice(1),
-          sighash,
-          adaptorSignatureBytes,
-          adaptorPrivateKey,
+          cpfpSighash,
+          cpfpAdaptorSignatureBytes,
+          cpfpAdaptorPrivateKey,
+        );
+
+        // Apply direct adaptor signature
+
+        if (!leaf.directRawUnsignedRefundTransaction) {
+          throw new Error(
+            `Direct raw unsigned refund transaction missing for node ${nodeId}`,
+          );
+        }
+        if (!leaf.directAdaptorSignedSignature) {
+          throw new Error(
+            `Direct adaptor signed signature missing for node ${nodeId}`,
+          );
+        }
+
+        const directNodeTx = getTxFromRawTxBytes(node.directTx);
+
+        const directRefundTxBytes = hexToBytes(
+          leaf.directRawUnsignedRefundTransaction,
+        );
+
+        const directRefundTx = getTxFromRawTxBytes(directRefundTxBytes);
+
+        const directSighash = getSigHashFromTx(
+          directRefundTx,
+          0,
+          directNodeTx.getOutput(0),
+        );
+
+        if (!leaf.directFromCpfpAdaptorSignedSignature) {
+          throw new Error(
+            `Direct adaptor signed signature missing for node ${nodeId}`,
+          );
+        }
+
+        const directAdaptorSignatureBytes = hexToBytes(
+          leaf.directAdaptorSignedSignature,
+        );
+
+        applyAdaptorToSignature(
+          taprootKey.slice(1),
+          directSighash,
+          directAdaptorSignatureBytes,
+          directAdaptorPrivateKey,
+        );
+
+        if (!leaf.directRawUnsignedRefundTransaction) {
+          throw new Error(
+            `Direct raw unsigned refund transaction missing for node ${nodeId}`,
+          );
+        }
+        if (!leaf.directFromCpfpRawUnsignedRefundTransaction) {
+          throw new Error(
+            `Direct raw unsigned refund transaction missing for node ${nodeId}`,
+          );
+        }
+
+        const directFromCpfpRefundTxBytes = hexToBytes(
+          leaf.directFromCpfpRawUnsignedRefundTransaction,
+        );
+        const directFromCpfpRefundTx = getTxFromRawTxBytes(
+          directFromCpfpRefundTxBytes,
+        );
+        const directFromCpfpSighash = getSigHashFromTx(
+          directFromCpfpRefundTx,
+          0,
+          cpfpNodeTx.getOutput(0),
+        );
+        const directFromCpfpAdaptorSignatureBytes = hexToBytes(
+          leaf.directFromCpfpAdaptorSignedSignature,
+        );
+        applyAdaptorToSignature(
+          taprootKey.slice(1),
+          directFromCpfpSighash,
+          directFromCpfpAdaptorSignatureBytes,
+          directFromCpfpAdaptorPrivateKey,
         );
       }
 
@@ -1176,15 +1407,24 @@ export class SparkWallet extends EventEmitter {
         transfer,
         leafKeyTweaks,
         signatureMap,
+        directSignatureMap,
+        directFromCpfpSignatureMap,
       );
-
       const completeResponse = await sspClient.completeLeaveSwap({
-        adaptorSecretKey: bytesToHex(adaptorPrivateKey),
+        adaptorSecretKey: bytesToHex(cpfpAdaptorPrivateKey),
+        directAdaptorSecretKey: bytesToHex(directAdaptorPrivateKey),
+        directFromCpfpAdaptorSecretKey: bytesToHex(
+          directFromCpfpAdaptorPrivateKey,
+        ),
         userOutboundTransferExternalId: transfer.id,
         leavesSwapRequestId: request.id,
       });
 
       if (!completeResponse || !completeResponse.inboundTransfer?.sparkId) {
+        console.error(
+          "[processSwapBatch] Invalid complete response:",
+          completeResponse,
+        );
         throw new Error("Failed to complete leaves swap");
       }
 
@@ -1193,6 +1433,7 @@ export class SparkWallet extends EventEmitter {
       );
 
       if (!incomingTransfer) {
+        console.error("[processSwapBatch] No incoming transfer found");
         throw new Error("Failed to get incoming transfer");
       }
 
@@ -1203,6 +1444,11 @@ export class SparkWallet extends EventEmitter {
         optimize: false,
       });
     } catch (e) {
+      console.error("[processSwapBatch] Error details:", {
+        error: e,
+        message: (e as Error).message,
+        stack: (e as Error).stack,
+      });
       await this.cancelAllSenderInitiatedTransfers();
       throw new Error(`Failed to request leaves swap: ${e}`);
     }
@@ -2403,7 +2649,7 @@ export class SparkWallet extends EventEmitter {
       }
 
       const { nodes } = await this.transferService.refreshTimelockNodes(
-        [node],
+        node,
         parentNode,
       );
 
@@ -2468,6 +2714,9 @@ export class SparkWallet extends EventEmitter {
                 leaf: {
                   ...leaf.leaf,
                   refundTx: leaf.intermediateRefundTx,
+                  directRefundTx: leaf.intermediateDirectRefundTx,
+                  directFromCpfpRefundTx:
+                    leaf.intermediateDirectFromCpfpRefundTx,
                 },
                 keyDerivation: {
                   type: KeyDerivationType.ECIES,
@@ -2918,6 +3167,8 @@ export class SparkWallet extends EventEmitter {
       await this.transferService.deliverTransferPackage(
         swapResponse.transfer,
         leavesToSend,
+        new Map(),
+        new Map(),
         new Map(),
       );
 
@@ -3890,42 +4141,43 @@ export class SparkWallet extends EventEmitter {
         });
       }
 
+      let parentNode;
+      let hasParentNode = false;
       if (!leaf.parentNodeId) {
-        throw new ValidationError("Node has no parent", {
-          field: "parentNodeId",
-          value: leaf.parentNodeId,
-        });
-      }
-
-      const parentNode = response.nodes[leaf.parentNodeId];
-      if (!parentNode) {
-        throw new ValidationError("Parent node not found", {
-          field: "parentNodeId",
-          value: leaf.parentNodeId,
-        });
+        // skip node timelock check
+      } else {
+        hasParentNode = true;
+        parentNode = response.nodes[leaf.parentNodeId];
+        if (!parentNode) {
+          throw new ValidationError("Parent node not found", {
+            field: "parentNodeId",
+            value: leaf.parentNodeId,
+          });
+        }
       }
 
       const nodeTx = getTxFromRawTxBytes(leaf.nodeTx);
       const refundTx = getTxFromRawTxBytes(leaf.refundTx);
 
-      const nodeTimelock = getCurrentTimelock(nodeTx.getInput(0).sequence);
-      const refundTimelock = getCurrentTimelock(refundTx.getInput(0).sequence);
+      if (hasParentNode) {
+        const nodeTimelock = getCurrentTimelock(nodeTx.getInput(0).sequence);
+        if (nodeTimelock > 100) {
+          const expiredNodeTxLeaf =
+            await this.transferService.testonly_expireTimeLockNodeTx(
+              leaf,
+              parentNode,
+            );
 
-      if (nodeTimelock > 100) {
-        const expiredNodeTxLeaf =
-          await this.transferService.testonly_expireTimeLockNodeTx(
-            leaf,
-            parentNode,
-          );
-
-        if (!expiredNodeTxLeaf.nodes[0]) {
-          throw new ValidationError("No expired node tx leaf", {
-            field: "expiredNodeTxLeaf",
-            value: expiredNodeTxLeaf,
-          });
+          if (!expiredNodeTxLeaf.nodes[0]) {
+            throw new ValidationError("No expired node tx leaf", {
+              field: "expiredNodeTxLeaf",
+              value: expiredNodeTxLeaf,
+            });
+          }
+          leaf = expiredNodeTxLeaf.nodes[0];
         }
-        leaf = expiredNodeTxLeaf.nodes[0];
       }
+      const refundTimelock = getCurrentTimelock(refundTx.getInput(0).sequence);
 
       if (refundTimelock > 100) {
         const expiredTxLeaf =

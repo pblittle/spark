@@ -448,6 +448,10 @@ fragment UserRequestFragment on UserRequest {
             swap_leaf_leaf_id: leaf_id
             swap_leaf_raw_unsigned_refund_transaction: raw_unsigned_refund_transaction
             swap_leaf_adaptor_signed_signature: adaptor_signed_signature
+            swap_leaf_direct_raw_unsigned_refund_transaction: direct_raw_unsigned_refund_transaction
+            swap_leaf_direct_adaptor_signed_signature: direct_adaptor_signed_signature
+            swap_leaf_direct_from_cpfp_raw_unsigned_refund_transaction: direct_from_cpfp_raw_unsigned_refund_transaction
+            swap_leaf_direct_from_cpfp_adaptor_signed_signature: direct_from_cpfp_adaptor_signed_signature
         }
     }
     ... on LightningReceiveRequest {

@@ -3,11 +3,11 @@ import { Address, OutScript, Transaction } from "@scure/btc-signer";
 import { RPCError } from "../../errors/types.js";
 import { getTxId } from "../../utils/bitcoin.js";
 import { getNetwork, Network } from "../../utils/network.js";
-import { signerTypes } from "../test-utils.js";
+import { walletTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "../utils/test-faucet.js";
 
-describe.each(signerTypes)("deposit", ({ name, Signer }) => {
+describe.each(walletTypes)("deposit", ({ name, Signer, createTree }) => {
   it(`${name} - should generate a deposit address`, async () => {
     const { wallet: sdk } = await SparkWalletTesting.initialize({
       options: {
@@ -241,7 +241,7 @@ describe.each(signerTypes)("deposit", ({ name, Signer }) => {
   }, 30000);
 });
 
-describe.each(signerTypes)("refund static deposit", ({ name, Signer }) => {
+describe.each(walletTypes)("refund static deposit", ({ name, Signer }) => {
   it(`${name} - should refund a static deposit`, async () => {
     const faucet = BitcoinFaucet.getInstance();
 

@@ -1,7 +1,7 @@
 import { IssuerSparkWallet } from "@buildonspark/issuer-sdk";
 
-import { createSparkRouter } from "./sparkRoutes.js";
 import { isError } from "@lightsparkdev/core";
+import { createSparkRouter } from "./sparkRoutes.js";
 
 const ISSUER_MNEMONIC_PATH = ".issuer-mnemonic";
 
@@ -242,7 +242,7 @@ router.post(
         Number(decimals),
         BigInt(maxSupply),
         isFreezable,
-        feeRateSatsPerVb,
+        feeRateSatsPerVb
       );
       res.json({
         data: { announcementTx },

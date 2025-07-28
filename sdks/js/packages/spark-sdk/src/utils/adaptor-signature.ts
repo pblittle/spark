@@ -73,16 +73,26 @@ export function applyAdaptorToSignature(
   const newS = mod(sBigInt + adaptorPrivateKey, secp256k1.CURVE.n);
   const newSig = new Uint8Array([...r, ...numberToBytesBE(newS, 32)]);
 
-  if (schnorr.verify(newSig, hash, pubkey)) {
-    return newSig;
+  try {
+    if (schnorr.verify(newSig, hash, pubkey)) {
+      return newSig;
+    }
+  } catch (e) {
+    console.error("[applyAdaptorToSignature] Addition verification failed:", e);
   }
 
   // If adding didn't work, try subtracting
   const altS = mod(sBigInt - adaptorPrivateKey, secp256k1.CURVE.n);
   const altSig = new Uint8Array([...r, ...numberToBytesBE(altS, 32)]);
-
-  if (schnorr.verify(altSig, hash, pubkey)) {
-    return altSig;
+  try {
+    if (schnorr.verify(altSig, hash, pubkey)) {
+      return altSig;
+    }
+  } catch (e) {
+    console.error(
+      "[applyAdaptorToSignature] Subtraction verification failed:",
+      e,
+    );
   }
 
   throw new Error("Cannot apply adaptor to signature");

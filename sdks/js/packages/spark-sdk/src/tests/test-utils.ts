@@ -6,7 +6,7 @@ import {
   KeyDerivationType,
   UnsafeStatelessSparkSigner,
 } from "../index.js";
-import { TreeNode } from "../proto/spark.js";
+import { FinalizeNodeSignaturesResponse, TreeNode } from "../proto/spark.js";
 import { WalletConfigService } from "../services/config.js";
 import { ConnectionManager } from "../services/connection.js";
 import { DepositService } from "../services/deposit.js";
@@ -32,12 +32,13 @@ export function getTestWalletConfigWithIdentityKey(
   } as ConfigOptions;
 }
 
-export async function createNewTree(
+async function createDeposit(
   wallet: SparkWalletTesting,
   leafId: string,
   faucet: BitcoinFaucet,
   amountSats: bigint = 100_000n,
-): Promise<TreeNode> {
+  includeDirectTx: boolean = true,
+) {
   const faucetCoin = await faucet.fund();
 
   const configService = new WalletConfigService(
@@ -75,15 +76,28 @@ export async function createNewTree(
   const script = OutScript.encode(addr);
   depositTx.addOutput({ script, amount: amountSats });
 
-  const treeResp = await depositService.createTreeRoot({
-    keyDerivation: {
-      type: KeyDerivationType.LEAF,
-      path: leafId,
-    },
-    verifyingKey: depositResp.depositAddress.verifyingKey,
-    depositTx,
-    vout: 0,
-  });
+  let treeResp: FinalizeNodeSignaturesResponse;
+  if (includeDirectTx) {
+    treeResp = await depositService.createTreeRoot({
+      keyDerivation: {
+        type: KeyDerivationType.LEAF,
+        path: leafId,
+      },
+      verifyingKey: depositResp.depositAddress.verifyingKey,
+      depositTx,
+      vout: 0,
+    });
+  } else {
+    treeResp = await depositService.createTreeWithoutDirectTx({
+      keyDerivation: {
+        type: KeyDerivationType.LEAF,
+        path: leafId,
+      },
+      verifyingKey: depositResp.depositAddress.verifyingKey,
+      depositTx,
+      vout: 0,
+    });
+  }
 
   const signedDepositTx = await faucet.signFaucetCoin(
     depositTx,
@@ -107,7 +121,42 @@ export async function createNewTree(
   return treeResp.nodes[0]!;
 }
 
+export async function createNewTree(
+  wallet: SparkWalletTesting,
+  leafId: string,
+  faucet: BitcoinFaucet,
+  amountSats: bigint = 100_000n,
+): Promise<TreeNode> {
+  return await createDeposit(wallet, leafId, faucet, amountSats, true);
+}
+
+export async function createNewTreeWithoutDirectTx(
+  wallet: SparkWalletTesting,
+  leafId: string,
+  faucet: BitcoinFaucet,
+  amountSats: bigint = 100_000n,
+): Promise<TreeNode> {
+  return await createDeposit(wallet, leafId, faucet, amountSats, false);
+}
+
 export const signerTypes = [
-  { name: "DefaultSparkSigner", Signer: DefaultSparkSigner },
-  { name: "UnsafeStatelessSparkSigner", Signer: UnsafeStatelessSparkSigner },
+  {
+    name: "DefaultSparkSigner",
+    Signer: DefaultSparkSigner,
+    createTree: createNewTree,
+  },
+  {
+    name: "UnsafeStatelessSparkSigner",
+    Signer: UnsafeStatelessSparkSigner,
+    createTree: createNewTree,
+  },
+];
+
+export const walletTypes = [
+  ...signerTypes,
+  {
+    name: "DefaultSparkSignerWithoutDirectTx",
+    Signer: UnsafeStatelessSparkSigner,
+    createTree: createNewTreeWithoutDirectTx,
+  },
 ];

@@ -1,6 +1,6 @@
 /* Root React Native entrypoint */
 
-import { setCrypto, SparkCrypto } from "../utils/crypto.js";
+import { setCrypto } from "../utils/crypto.js";
 
 setCrypto(globalThis.crypto);
 
@@ -14,8 +14,7 @@ export { ReactNativeSparkSigner as DefaultSparkSigner } from "../signer/signer.r
 export { SparkWallet } from "../spark-wallet/spark-wallet.js";
 export * from "../spark-wallet/types.js";
 
-export { WalletConfig } from "../services/wallet-config.js";
-export { TokenTransactionService } from "../services/token-transactions.js";
-export { type ConnectionManager } from "../services/connection.js";
 export { type WalletConfigService } from "../services/config.js";
-export { type ConfigOptions } from "../services/wallet-config.js";
+export { type ConnectionManager } from "../services/connection.js";
+export { TokenTransactionService } from "../services/token-transactions.js";
+export { WalletConfig, type ConfigOptions } from "../services/wallet-config.js";

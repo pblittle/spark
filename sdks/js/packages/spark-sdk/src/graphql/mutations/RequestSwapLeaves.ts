@@ -3,6 +3,8 @@ import { FRAGMENT as LeavesSwapRequestFragment } from "../objects/LeavesSwapRequ
 export const RequestSwapLeaves = `
   mutation RequestSwapLeaves(
     $adaptor_pubkey: PublicKey!
+    $direct_adaptor_pubkey: PublicKey
+    $direct_from_cpfp_adaptor_pubkey: PublicKey
     $total_amount_sats: Long!
     $target_amount_sats: Long!
     $fee_sats: Long!
@@ -12,6 +14,8 @@ export const RequestSwapLeaves = `
   ) {
     request_leaves_swap(input: {
       adaptor_pubkey: $adaptor_pubkey
+      direct_adaptor_pubkey: $direct_adaptor_pubkey
+      direct_from_cpfp_adaptor_pubkey: $direct_from_cpfp_adaptor_pubkey
       total_amount_sats: $total_amount_sats
       target_amount_sats: $target_amount_sats
       fee_sats: $fee_sats

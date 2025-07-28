@@ -5,7 +5,15 @@ interface UserLeafInput {
 
   raw_unsigned_refund_transaction: string;
 
+  direct_raw_unsigned_refund_transaction: string;
+
+  direct_from_cpfp_raw_unsigned_refund_transaction: string;
+
   adaptor_added_signature: string;
+
+  direct_adaptor_added_signature: string;
+
+  direct_from_cpfp_adaptor_added_signature: string;
 }
 
 export const UserLeafInputFromJson = (obj: any): UserLeafInput => {
@@ -13,7 +21,15 @@ export const UserLeafInputFromJson = (obj: any): UserLeafInput => {
     leaf_id: obj["user_leaf_input_leaf_id"],
     raw_unsigned_refund_transaction:
       obj["user_leaf_input_raw_unsigned_refund_transaction"],
+    direct_raw_unsigned_refund_transaction:
+      obj["user_leaf_input_direct_raw_unsigned_refund_transaction"],
+    direct_from_cpfp_raw_unsigned_refund_transaction:
+      obj["user_leaf_input_direct_from_cpfp_unsigned_refund_transaction"],
     adaptor_added_signature: obj["user_leaf_input_adaptor_added_signature"],
+    direct_adaptor_added_signature:
+      obj["user_leaf_input_direct_adaptor_added_signature"],
+    direct_from_cpfp_adaptor_added_signature:
+      obj["user_leaf_input_direct_from_cpfp_adaptor_added_signature"],
   } as UserLeafInput;
 };
 export const UserLeafInputToJson = (obj: UserLeafInput): any => {
@@ -21,7 +37,15 @@ export const UserLeafInputToJson = (obj: UserLeafInput): any => {
     user_leaf_input_leaf_id: obj.leaf_id,
     user_leaf_input_raw_unsigned_refund_transaction:
       obj.raw_unsigned_refund_transaction,
+    user_leaf_input_direct_raw_unsigned_refund_transaction:
+      obj.direct_raw_unsigned_refund_transaction,
+    user_leaf_input_direct_from_cpfp_raw_unsigned_refund_transaction:
+      obj.direct_from_cpfp_raw_unsigned_refund_transaction,
     user_leaf_input_adaptor_added_signature: obj.adaptor_added_signature,
+    user_leaf_input_direct_adaptor_added_signature:
+      obj.direct_adaptor_added_signature,
+    user_leaf_input_direct_from_cpfp_adaptor_added_signature:
+      obj.direct_from_cpfp_adaptor_added_signature,
   };
 };
 

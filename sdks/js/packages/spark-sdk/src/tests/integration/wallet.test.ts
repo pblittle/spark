@@ -1,10 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
 import { ConfigOptions } from "../../services/wallet-config.js";
 import { NetworkType } from "../../utils/network.js";
-import { signerTypes } from "../test-utils.js";
+import { walletTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 
-describe.each(signerTypes)("wallet", ({ name, Signer }) => {
+describe.each(walletTypes)("wallet", ({ name, Signer }) => {
   it(`${name} - should initialize a wallet`, async () => {
     const seedOrMnemonics = [
       "wear cattle behind affair parade error luxury profit just rate arch cigar",

@@ -16,19 +16,24 @@ import {
   TreeNode,
 } from "../proto/spark.js";
 import {
+  KeyDerivation,
   KeyDerivationType,
   SigningCommitmentWithOptionalNonce,
 } from "../signer/types.js";
 import {
-  getP2TRAddressFromPublicKey,
   getSigHashFromTx,
   getTxFromRawTxBytes,
   getTxId,
 } from "../utils/bitcoin.js";
 import { getNetwork, Network } from "../utils/network.js";
 import {
+  createLeafNodeTx,
+  createNodeTxs,
+  createRefundTxs,
+  createSplitTx,
   DEFAULT_FEE_SATS,
-  getEphemeralAnchorOutput,
+  INITIAL_DIRECT_SEQUENCE,
+  INITIAL_SEQUENCE,
 } from "../utils/transaction.js";
 import { WalletConfigService } from "./config.js";
 import { ConnectionManager } from "./connection.js";
@@ -41,8 +46,20 @@ export type DepositAddressTree = {
 };
 
 export type CreationNodeWithNonces = CreationNode & {
+  directNodeTxSigningCommitment?:
+    | SigningCommitmentWithOptionalNonce
+    | undefined;
   nodeTxSigningCommitment?: SigningCommitmentWithOptionalNonce | undefined;
   refundTxSigningCommitment?: SigningCommitmentWithOptionalNonce | undefined;
+  directRefundTxSigningCommitment?:
+    | SigningCommitmentWithOptionalNonce
+    | undefined;
+  directFromCpfpRefundTxSigningCommitment?:
+    | SigningCommitmentWithOptionalNonce
+    | undefined;
+  directNodeTxSigningJob?: SigningJob | undefined;
+  directRefundTxSigningJob?: SigningJob | undefined;
+  directFromCpfpRefundTxSigningJob?: SigningJob | undefined;
 };
 
 const INITIAL_TIME_LOCK = 2000;
@@ -205,7 +222,7 @@ export class TreeCreationService {
 
     let response: CreateTreeResponse;
     try {
-      response = await sparkClient.create_tree(request);
+      response = await sparkClient.create_tree_v2(request);
     } catch (error) {
       throw new Error(`Error creating tree: ${error}`);
     }
@@ -226,7 +243,7 @@ export class TreeCreationService {
 
     let finalizeResp: FinalizeNodeSignaturesResponse;
     try {
-      finalizeResp = await sparkClient.finalize_node_signatures({
+      finalizeResp = await sparkClient.finalize_node_signatures_v2({
         nodeSignatures: nodeSignatures,
       });
     } catch (error) {
@@ -318,111 +335,154 @@ export class TreeCreationService {
     // internal node
     const internalCreationNode: CreationNodeWithNonces = {
       nodeTxSigningJob: undefined,
-      refundTxSigningJob: undefined,
-      children: [],
       directNodeTxSigningJob: undefined,
+      refundTxSigningJob: undefined,
       directRefundTxSigningJob: undefined,
       directFromCpfpRefundTxSigningJob: undefined,
+      children: [],
     };
-
-    const tx = new Transaction({ version: 3 });
-    tx.addInput({
-      txid: getTxId(parentTx),
-      index: vout,
-    });
 
     const parentTxOut = parentTx.getOutput(vout);
     if (!parentTxOut?.script || !parentTxOut?.amount) {
       throw new Error("parentTxOut is undefined");
     }
 
-    tx.addOutput({
+    const parentOutPoint = {
+      txid: hexToBytes(getTxId(parentTx)),
+      index: vout,
+    };
+    const parentTxOutObj = {
       script: parentTxOut.script,
-      amount: parentTxOut.amount, // maybeApplyFee(parentTxOut.amount),
-    });
-
-    tx.addOutput(getEphemeralAnchorOutput());
-
-    const signingNonceCommitment =
-      await this.config.signer.getRandomSigningCommitment();
-    const signingJob: SigningJob = {
-      signingPublicKey: node.signingPublicKey,
-      rawTx: tx.toBytes(),
-      signingNonceCommitment: signingNonceCommitment.commitment,
+      amount: parentTxOut.amount,
     };
 
-    internalCreationNode.nodeTxSigningCommitment = signingNonceCommitment;
-    internalCreationNode.nodeTxSigningJob = signingJob;
+    // Create both CPFP and direct node transactions
+    const { cpfpNodeTx, directNodeTx } = createNodeTxs(
+      parentTxOutObj,
+      parentOutPoint,
+    );
+
+    // Create nonce commitments for node transactions
+    const cpfpNodeSigningCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+    const directNodeSigningCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+
+    const cpfpNodeSigningJob: SigningJob = {
+      signingPublicKey: node.signingPublicKey,
+      rawTx: cpfpNodeTx.toBytes(),
+      signingNonceCommitment: cpfpNodeSigningCommitment.commitment,
+    };
+    const directNodeSigningJob: SigningJob | undefined = directNodeTx
+      ? {
+          signingPublicKey: node.signingPublicKey,
+          rawTx: directNodeTx.toBytes(),
+          signingNonceCommitment: directNodeSigningCommitment.commitment,
+        }
+      : undefined;
+
+    internalCreationNode.nodeTxSigningCommitment = cpfpNodeSigningCommitment;
+    internalCreationNode.directNodeTxSigningCommitment =
+      directNodeSigningCommitment;
+    internalCreationNode.nodeTxSigningJob = cpfpNodeSigningJob;
+    internalCreationNode.directNodeTxSigningJob = directNodeSigningJob;
 
     // leaf node
-    const sequence = (1 << 30) | INITIAL_TIME_LOCK;
+    const sequence = INITIAL_SEQUENCE;
+    const directSequence = INITIAL_DIRECT_SEQUENCE;
 
     const childCreationNode: CreationNodeWithNonces = {
       nodeTxSigningJob: undefined,
-      refundTxSigningJob: undefined,
-      children: [],
       directNodeTxSigningJob: undefined,
+      refundTxSigningJob: undefined,
       directRefundTxSigningJob: undefined,
       directFromCpfpRefundTxSigningJob: undefined,
+      children: [],
     };
 
-    const childTx = new Transaction({ version: 3 });
-    childTx.addInput({
-      txid: getTxId(tx),
-      index: 0,
+    // Create both CPFP and direct leaf node transactions
+    const [cpfpLeafTx, directLeafTx] = createLeafNodeTx(
       sequence,
-    });
+      directSequence,
+      { txid: hexToBytes(getTxId(cpfpNodeTx)), index: 0 },
+      parentTxOutObj,
+      true, // shouldCalculateFee
+    );
 
-    childTx.addOutput({
-      script: parentTxOut.script,
-      amount: parentTxOut.amount, // maybeApplyFee(parentTxOut.amount),
-    });
-
-    childTx.addOutput(getEphemeralAnchorOutput());
-
-    const childSigningNonceCommitment =
+    // Create nonce commitments for leaf node transactions
+    const cpfpLeafSigningCommitment =
       await this.config.signer.getRandomSigningCommitment();
-    const childSigningJob: SigningJob = {
-      signingPublicKey: node.signingPublicKey,
-      rawTx: childTx.toBytes(),
-      signingNonceCommitment: childSigningNonceCommitment.commitment,
-    };
-
-    childCreationNode.nodeTxSigningCommitment = childSigningNonceCommitment;
-    childCreationNode.nodeTxSigningJob = childSigningJob;
-
-    const refundTx = new Transaction({ version: 3 });
-    refundTx.addInput({
-      txid: getTxId(childTx),
-      index: 0,
-      sequence,
-    });
-
-    const refundP2trAddress = getP2TRAddressFromPublicKey(
-      node.signingPublicKey,
-      network,
-    );
-    const refundAddress = Address(getNetwork(network)).decode(
-      refundP2trAddress,
-    );
-    const refundPkScript = OutScript.encode(refundAddress);
-    refundTx.addOutput({
-      script: refundPkScript,
-      amount: maybeApplyFee(parentTxOut.amount),
-    });
-
-    refundTx.addOutput(getEphemeralAnchorOutput());
-
-    const refundSigningNonceCommitment =
+    const directLeafSigningCommitment =
       await this.config.signer.getRandomSigningCommitment();
 
-    const refundSigningJob: SigningJob = {
+    const cpfpLeafSigningJob: SigningJob = {
       signingPublicKey: node.signingPublicKey,
-      rawTx: refundTx.toBytes(),
-      signingNonceCommitment: refundSigningNonceCommitment.commitment,
+      rawTx: cpfpLeafTx.toBytes(),
+      signingNonceCommitment: cpfpLeafSigningCommitment.commitment,
     };
-    childCreationNode.refundTxSigningCommitment = refundSigningNonceCommitment;
-    childCreationNode.refundTxSigningJob = refundSigningJob;
+    const directLeafSigningJob: SigningJob = {
+      signingPublicKey: node.signingPublicKey,
+      rawTx: directLeafTx.toBytes(),
+      signingNonceCommitment: directLeafSigningCommitment.commitment,
+    };
+
+    childCreationNode.nodeTxSigningCommitment = cpfpLeafSigningCommitment;
+    childCreationNode.directNodeTxSigningCommitment =
+      directLeafSigningCommitment;
+    childCreationNode.nodeTxSigningJob = cpfpLeafSigningJob;
+    childCreationNode.directNodeTxSigningJob = directLeafSigningJob;
+
+    // Create both CPFP and direct refund transactions
+    const { cpfpRefundTx, directRefundTx, directFromCpfpRefundTx } =
+      createRefundTxs({
+        sequence,
+        directSequence,
+        input: { txid: hexToBytes(getTxId(cpfpLeafTx)), index: 0 },
+        directInput: { txid: hexToBytes(getTxId(directLeafTx)), index: 0 },
+        amountSats: parentTxOut.amount,
+        receivingPubkey: node.signingPublicKey,
+        network,
+      });
+
+    // Create nonce commitments for refund transactions
+    const cpfpRefundSigningCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+    const directRefundSigningCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+    const directFromCpfpRefundSigningCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+
+    const cpfpRefundSigningJob: SigningJob = {
+      signingPublicKey: node.signingPublicKey,
+      rawTx: cpfpRefundTx.toBytes(),
+      signingNonceCommitment: cpfpRefundSigningCommitment.commitment,
+    };
+    const directRefundSigningJob: SigningJob | undefined = directRefundTx
+      ? {
+          signingPublicKey: node.signingPublicKey,
+          rawTx: directRefundTx.toBytes(),
+          signingNonceCommitment: directRefundSigningCommitment.commitment,
+        }
+      : undefined;
+    const directFromCpfpRefundSigningJob: SigningJob | undefined =
+      directFromCpfpRefundTx
+        ? {
+            signingPublicKey: node.signingPublicKey,
+            rawTx: directFromCpfpRefundTx.toBytes(),
+            signingNonceCommitment:
+              directFromCpfpRefundSigningCommitment.commitment,
+          }
+        : undefined;
+
+    childCreationNode.refundTxSigningCommitment = cpfpRefundSigningCommitment;
+    childCreationNode.directRefundTxSigningCommitment =
+      directRefundSigningCommitment;
+    childCreationNode.directFromCpfpRefundTxSigningCommitment =
+      directFromCpfpRefundSigningCommitment;
+    childCreationNode.refundTxSigningJob = cpfpRefundSigningJob;
+    childCreationNode.directRefundTxSigningJob = directRefundSigningJob;
+    childCreationNode.directFromCpfpRefundTxSigningJob =
+      directFromCpfpRefundSigningJob;
 
     internalCreationNode.children.push(childCreationNode);
 
@@ -440,12 +500,9 @@ export class TreeCreationService {
     if (!parentTxOutput?.script || !parentTxOutput?.amount) {
       throw new Error("parentTxOutput is undefined");
     }
-    const rootNodeTx = new Transaction({ version: 3 });
-    rootNodeTx.addInput({
-      txid: getTxId(parentTx),
-      index: vout,
-    });
 
+    // Create child transaction outputs
+    const childTxOuts: { script: Uint8Array; amount: bigint }[] = [];
     for (let i = 0; i < root.children.length; i++) {
       const child = root.children[i];
       if (!child || !child.address) {
@@ -454,32 +511,51 @@ export class TreeCreationService {
       const childAddress = Address(getNetwork(network)).decode(child.address);
       const childPkScript = OutScript.encode(childAddress);
 
-      // First subtract fee from total amount, then split between children
-      // const feeAdjustedAmount = maybeApplyFee(parentTxOutput.amount);
-      rootNodeTx.addOutput({
+      childTxOuts.push({
         script: childPkScript,
-        amount: parentTxOutput.amount / 2n, // feeAdjustedAmount / 2n,
+        amount: parentTxOutput.amount / 2n,
       });
     }
 
-    rootNodeTx.addOutput(getEphemeralAnchorOutput());
-
-    const rootNodeSigningCommitment =
-      await this.config.signer.getRandomSigningCommitment();
-    const rootNodeSigningJob: SigningJob = {
-      signingPublicKey: root.signingPublicKey,
-      rawTx: rootNodeTx.toBytes(),
-      signingNonceCommitment: rootNodeSigningCommitment.commitment,
+    const parentOutPoint = {
+      txid: hexToBytes(getTxId(parentTx)),
+      index: vout,
     };
+
+    // Create both CPFP and direct split transactions
+    const [cpfpSplitTx, directSplitTx] = createSplitTx(
+      parentOutPoint,
+      childTxOuts,
+    );
+
+    // Create nonce commitments for split transactions
+    const cpfpSplitSigningCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+    const directSplitSigningCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+
+    const cpfpSplitSigningJob: SigningJob = {
+      signingPublicKey: root.signingPublicKey,
+      rawTx: cpfpSplitTx.toBytes(),
+      signingNonceCommitment: cpfpSplitSigningCommitment.commitment,
+    };
+    const directSplitSigningJob: SigningJob = {
+      signingPublicKey: root.signingPublicKey,
+      rawTx: directSplitTx.toBytes(),
+      signingNonceCommitment: directSplitSigningCommitment.commitment,
+    };
+
     const rootCreationNode: CreationNodeWithNonces = {
-      nodeTxSigningJob: rootNodeSigningJob,
+      nodeTxSigningJob: cpfpSplitSigningJob,
+      directNodeTxSigningJob: directSplitSigningJob,
       refundTxSigningJob: undefined,
-      children: [],
-      directNodeTxSigningJob: undefined,
       directRefundTxSigningJob: undefined,
       directFromCpfpRefundTxSigningJob: undefined,
+      children: [],
     };
-    rootCreationNode.nodeTxSigningCommitment = rootNodeSigningCommitment;
+    rootCreationNode.nodeTxSigningCommitment = cpfpSplitSigningCommitment;
+    rootCreationNode.directNodeTxSigningCommitment =
+      directSplitSigningCommitment;
 
     const leftChild = root.children[0];
     const rightChild = root.children[1];
@@ -489,13 +565,13 @@ export class TreeCreationService {
 
     const leftChildCreationNode = await this.buildChildCreationNode(
       leftChild,
-      rootNodeTx,
+      cpfpSplitTx, // Use CPFP version for children
       0,
       network,
     );
     const rightChildCreationNode = await this.buildChildCreationNode(
       rightChild,
-      rootNodeTx,
+      cpfpSplitTx, // Use CPFP version for children
       1,
       network,
     );
@@ -515,6 +591,7 @@ export class TreeCreationService {
   ): Promise<{ tx: Transaction; signature: NodeSignatures }> {
     if (
       !creationNode.nodeTxSigningJob?.signingPublicKey ||
+      !creationNode.directNodeTxSigningJob?.signingPublicKey ||
       !internalNode.verificationKey
     ) {
       throw new Error("signingPublicKey or verificationKey is undefined");
@@ -525,13 +602,14 @@ export class TreeCreationService {
       throw new Error("parentTxOutput is undefined");
     }
 
-    const tx = getTxFromRawTxBytes(creationNode.nodeTxSigningJob.rawTx);
-    const txSighash = getSigHashFromTx(tx, 0, parentTxOutput);
+    // Sign CPFP node transaction
+    const cpfpNodeTx = getTxFromRawTxBytes(creationNode.nodeTxSigningJob.rawTx);
+    const cpfpNodeTxSighash = getSigHashFromTx(cpfpNodeTx, 0, parentTxOutput);
 
-    let nodeTxSignature: Uint8Array = new Uint8Array();
+    let cpfpNodeTxSignature: Uint8Array = new Uint8Array();
     if (creationNode.nodeTxSigningCommitment) {
-      const userSignature = await this.config.signer.signFrost({
-        message: txSighash,
+      const cpfpUserSignature = await this.config.signer.signFrost({
+        message: cpfpNodeTxSighash,
         publicKey: creationNode.nodeTxSigningJob.signingPublicKey,
         keyDerivation: {
           type: KeyDerivationType.LEAF,
@@ -543,8 +621,8 @@ export class TreeCreationService {
         verifyingKey: internalNode.verificationKey,
       });
 
-      nodeTxSignature = await this.config.signer.aggregateFrost({
-        message: txSighash,
+      cpfpNodeTxSignature = await this.config.signer.aggregateFrost({
+        message: cpfpNodeTxSighash,
         statechainSignatures:
           creationResponseNode.nodeTxSigningResult?.signatureShares,
         statechainPublicKeys:
@@ -553,25 +631,105 @@ export class TreeCreationService {
         statechainCommitments:
           creationResponseNode.nodeTxSigningResult?.signingNonceCommitments,
         selfCommitment: creationNode.nodeTxSigningCommitment,
-        selfSignature: userSignature,
+        selfSignature: cpfpUserSignature,
         publicKey: internalNode.signingPublicKey,
       });
     }
 
-    let refundTxSignature: Uint8Array = new Uint8Array();
-    if (creationNode.refundTxSigningCommitment) {
-      const rawTx = creationNode.refundTxSigningJob?.rawTx;
-      if (!rawTx) {
-        throw new Error("rawTx is undefined");
-      }
-      if (!creationNode.refundTxSigningJob?.signingPublicKey) {
-        throw new Error("signingPublicKey is undefined");
-      }
-      const refundTx = getTxFromRawTxBytes(rawTx);
-      const refundTxSighash = getSigHashFromTx(refundTx, 0, parentTxOutput);
+    // Sign direct node transaction
+    const directNodeTx = getTxFromRawTxBytes(
+      creationNode.directNodeTxSigningJob.rawTx,
+    );
+    const directNodeTxSighash = getSigHashFromTx(
+      directNodeTx,
+      0,
+      parentTxOutput,
+    );
 
-      const refundSigningResponse = await this.config.signer.signFrost({
-        message: refundTxSighash,
+    let directNodeTxSignature: Uint8Array = new Uint8Array();
+    if (creationNode.directNodeTxSigningCommitment) {
+      const directUserSignature = await this.config.signer.signFrost({
+        message: directNodeTxSighash,
+        publicKey: creationNode.directNodeTxSigningJob.signingPublicKey,
+        keyDerivation: {
+          type: KeyDerivationType.LEAF,
+          path: creationResponseNode.nodeId,
+        },
+        selfCommitment: creationNode.directNodeTxSigningCommitment,
+        statechainCommitments:
+          creationResponseNode.directNodeTxSigningResult
+            ?.signingNonceCommitments,
+        verifyingKey: internalNode.verificationKey,
+      });
+
+      directNodeTxSignature = await this.config.signer.aggregateFrost({
+        message: directNodeTxSighash,
+        statechainSignatures:
+          creationResponseNode.directNodeTxSigningResult?.signatureShares,
+        statechainPublicKeys:
+          creationResponseNode.directNodeTxSigningResult?.publicKeys,
+        verifyingKey: internalNode.verificationKey,
+        statechainCommitments:
+          creationResponseNode.directNodeTxSigningResult
+            ?.signingNonceCommitments,
+        selfCommitment: creationNode.directNodeTxSigningCommitment,
+        selfSignature: directUserSignature,
+        publicKey: internalNode.signingPublicKey,
+      });
+    }
+
+    // Sign refund transactions if they exist
+    let cpfpRefundTxSignature: Uint8Array = new Uint8Array();
+    let directRefundTxSignature: Uint8Array = new Uint8Array();
+    let directFromCpfpRefundTxSignature: Uint8Array = new Uint8Array();
+    if (
+      creationNode.refundTxSigningCommitment &&
+      creationNode.directRefundTxSigningCommitment &&
+      creationNode.directFromCpfpRefundTxSigningCommitment
+    ) {
+      const rawCpfpRefundTx = creationNode.refundTxSigningJob?.rawTx;
+      const rawDirectRefundTx = creationNode.directRefundTxSigningJob?.rawTx;
+      const rawDirectFromCpfpRefundTx =
+        creationNode.directFromCpfpRefundTxSigningJob?.rawTx;
+      if (
+        !rawCpfpRefundTx ||
+        !rawDirectRefundTx ||
+        !rawDirectFromCpfpRefundTx
+      ) {
+        throw new Error("refund transaction rawTx is undefined");
+      }
+      if (
+        !creationNode.refundTxSigningJob?.signingPublicKey ||
+        !creationNode.directRefundTxSigningJob?.signingPublicKey ||
+        !creationNode.directFromCpfpRefundTxSigningJob?.signingPublicKey
+      ) {
+        throw new Error("refund transaction signingPublicKey is undefined");
+      }
+
+      const cpfpRefundTx = getTxFromRawTxBytes(rawCpfpRefundTx);
+      const directRefundTx = getTxFromRawTxBytes(rawDirectRefundTx);
+      const directFromCpfpRefundTx = getTxFromRawTxBytes(
+        rawDirectFromCpfpRefundTx,
+      );
+      const cpfpRefundTxSighash = getSigHashFromTx(
+        cpfpRefundTx,
+        0,
+        cpfpNodeTx.getOutput(0),
+      );
+      const directRefundTxSighash = getSigHashFromTx(
+        directRefundTx,
+        0,
+        directNodeTx.getOutput(0),
+      );
+      const directFromCpfpRefundTxSighash = getSigHashFromTx(
+        directFromCpfpRefundTx,
+        0,
+        cpfpNodeTx.getOutput(0),
+      );
+
+      // Sign CPFP refund transaction
+      const cpfpRefundUserSignature = await this.config.signer.signFrost({
+        message: cpfpRefundTxSighash,
         publicKey: creationNode.refundTxSigningJob.signingPublicKey,
         keyDerivation: {
           type: KeyDerivationType.LEAF,
@@ -583,8 +741,8 @@ export class TreeCreationService {
         verifyingKey: internalNode.verificationKey,
       });
 
-      refundTxSignature = await this.config.signer.aggregateFrost({
-        message: refundTxSighash,
+      cpfpRefundTxSignature = await this.config.signer.aggregateFrost({
+        message: cpfpRefundTxSighash,
         statechainSignatures:
           creationResponseNode.refundTxSigningResult?.signatureShares,
         statechainPublicKeys:
@@ -593,21 +751,84 @@ export class TreeCreationService {
         statechainCommitments:
           creationResponseNode.refundTxSigningResult?.signingNonceCommitments,
         selfCommitment: creationNode.refundTxSigningCommitment,
-        selfSignature: refundSigningResponse,
+        selfSignature: cpfpRefundUserSignature,
         publicKey: internalNode.signingPublicKey,
       });
+
+      const keyDerivation: KeyDerivation = {
+        type: KeyDerivationType.LEAF,
+        path: creationResponseNode.nodeId,
+      };
+      // Sign direct refund transaction
+      const directRefundUserSignature = await this.config.signer.signFrost({
+        message: directRefundTxSighash,
+        publicKey: creationNode.directRefundTxSigningJob.signingPublicKey,
+        keyDerivation,
+        selfCommitment: creationNode.directRefundTxSigningCommitment,
+        statechainCommitments:
+          creationResponseNode.directRefundTxSigningResult
+            ?.signingNonceCommitments,
+        verifyingKey: internalNode.verificationKey,
+      });
+
+      directRefundTxSignature = await this.config.signer.aggregateFrost({
+        message: directRefundTxSighash,
+        statechainSignatures:
+          creationResponseNode.directRefundTxSigningResult?.signatureShares,
+        statechainPublicKeys:
+          creationResponseNode.directRefundTxSigningResult?.publicKeys,
+        verifyingKey: internalNode.verificationKey,
+        statechainCommitments:
+          creationResponseNode.directRefundTxSigningResult
+            ?.signingNonceCommitments,
+        selfCommitment: creationNode.directRefundTxSigningCommitment,
+        selfSignature: directRefundUserSignature,
+        publicKey: internalNode.signingPublicKey,
+      });
+
+      // Sign direct from CPFP refund transaction
+      const directFromCpfpRefundUserSignature =
+        await this.config.signer.signFrost({
+          message: directFromCpfpRefundTxSighash,
+          publicKey:
+            creationNode.directFromCpfpRefundTxSigningJob.signingPublicKey,
+          keyDerivation,
+          selfCommitment: creationNode.directFromCpfpRefundTxSigningCommitment,
+          statechainCommitments:
+            creationResponseNode.directFromCpfpRefundTxSigningResult
+              ?.signingNonceCommitments,
+          verifyingKey: internalNode.verificationKey,
+        });
+
+      directFromCpfpRefundTxSignature = await this.config.signer.aggregateFrost(
+        {
+          message: directFromCpfpRefundTxSighash,
+          statechainSignatures:
+            creationResponseNode.directFromCpfpRefundTxSigningResult
+              ?.signatureShares,
+          statechainPublicKeys:
+            creationResponseNode.directFromCpfpRefundTxSigningResult
+              ?.publicKeys,
+          verifyingKey: internalNode.verificationKey,
+          statechainCommitments:
+            creationResponseNode.directFromCpfpRefundTxSigningResult
+              ?.signingNonceCommitments,
+          selfCommitment: creationNode.directFromCpfpRefundTxSigningCommitment,
+          selfSignature: directFromCpfpRefundUserSignature,
+          publicKey: internalNode.signingPublicKey,
+        },
+      );
     }
 
     return {
-      tx: tx,
+      tx: cpfpNodeTx, // Return CPFP version for children
       signature: {
         nodeId: creationResponseNode.nodeId,
-        nodeTxSignature: nodeTxSignature,
-        refundTxSignature: refundTxSignature,
-        // TODO: Add direct refund signature
-        directNodeTxSignature: new Uint8Array(),
-        directRefundTxSignature: new Uint8Array(),
-        directFromCpfpRefundTxSignature: new Uint8Array(),
+        nodeTxSignature: cpfpNodeTxSignature,
+        directNodeTxSignature: directNodeTxSignature,
+        refundTxSignature: cpfpRefundTxSignature,
+        directRefundTxSignature: directRefundTxSignature,
+        directFromCpfpRefundTxSignature: directFromCpfpRefundTxSignature,
       },
     };
   }

@@ -1,7 +1,6 @@
 import { schnorr, secp256k1 } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha2";
 import { hexToBytes } from "@noble/hashes/utils";
-import * as btc from "@scure/btc-signer";
 import { p2tr, Transaction } from "@scure/btc-signer";
 import { equalBytes } from "@scure/btc-signer/utils";
 import { NetworkError, ValidationError } from "../errors/types.js";
@@ -13,15 +12,16 @@ import {
   StartDepositTreeCreationResponse,
 } from "../proto/spark.js";
 import { KeyDerivation } from "../signer/types.js";
-import {
-  getP2TRAddressFromPublicKey,
-  getSigHashFromTx,
-  getTxId,
-} from "../utils/bitcoin.js";
+import { getSigHashFromTx, getTxId } from "../utils/bitcoin.js";
 import { subtractPublicKeys } from "../utils/keys.js";
 import { getNetwork } from "../utils/network.js";
 import { proofOfPossessionMessageHashForDepositAddress } from "../utils/proof.js";
-import { getEphemeralAnchorOutput } from "../utils/transaction.js";
+import {
+  createRefundTxs,
+  createRootTx,
+  INITIAL_DIRECT_SEQUENCE,
+  INITIAL_SEQUENCE,
+} from "../utils/transaction.js";
 import { WalletConfigService } from "./config.js";
 import { ConnectionManager } from "./connection.js";
 
@@ -185,8 +185,7 @@ export class DepositService {
     depositTx,
     vout,
   }: CreateTreeRootParams) {
-    // Create a root tx
-    const rootTx = new Transaction({ version: 3 });
+    // Create root transactions (CPFP and direct)
     const output = depositTx.getOutput(vout);
     if (!output) {
       throw new ValidationError("Invalid deposit transaction output", {
@@ -205,63 +204,80 @@ export class DepositService {
       });
     }
 
-    // Calculate fee and adjust output amount
-    let outputAmount = amount;
-    /*if (outputAmount > DEFAULT_FEE_SATS) {
-      outputAmount = outputAmount - BigInt(DEFAULT_FEE_SATS);
-    }*/
-
-    // Create new output with fee-adjusted amount
-    rootTx.addInput({
-      txid: getTxId(depositTx),
+    const depositOutPoint = {
+      txid: hexToBytes(getTxId(depositTx)),
       index: vout,
-    });
-
-    rootTx.addOutput({
+    };
+    const depositTxOut = {
       script,
-      amount: outputAmount,
-    });
+      amount,
+    };
 
-    rootTx.addOutput(getEphemeralAnchorOutput());
+    const [cpfpRootTx, directRootTx] = createRootTx(
+      depositOutPoint,
+      depositTxOut,
+    );
 
-    const rootNonceCommitment =
+    // Create nonce commitments for root transactions
+    const cpfpRootNonceCommitment =
       await this.config.signer.getRandomSigningCommitment();
-    const rootTxSighash = getSigHashFromTx(rootTx, 0, output);
+    const directRootNonceCommitment =
+      await this.config.signer.getRandomSigningCommitment();
 
-    // Create a refund tx
-    const refundTx = new Transaction({ version: 3 });
-    const sequence = (1 << 30) | INITIAL_TIME_LOCK;
-    /* if (outputAmount > DEFAULT_FEE_SATS) {
-      outputAmount = outputAmount - BigInt(DEFAULT_FEE_SATS);
-    }*/
-    refundTx.addInput({
-      txid: getTxId(rootTx),
-      index: 0,
-      sequence,
-    });
+    // Get sighashes for root transactions
+    const cpfpRootTxSighash = getSigHashFromTx(cpfpRootTx, 0, output);
+    const directRootTxSighash = getSigHashFromTx(directRootTx, 0, output);
 
     const signingPubKey =
       await this.config.signer.getPublicKeyFromDerivation(keyDerivation);
 
-    const refundP2trAddress = getP2TRAddressFromPublicKey(
-      signingPubKey,
-      this.config.getNetwork(),
-    );
-    const refundAddress = btc
-      .Address(getNetwork(this.config.getNetwork()))
-      .decode(refundP2trAddress);
-    const refundPkScript = btc.OutScript.encode(refundAddress);
+    // Create refund transactions (CPFP and direct)
+    const { cpfpRefundTx, directRefundTx, directFromCpfpRefundTx } =
+      createRefundTxs({
+        sequence: INITIAL_SEQUENCE,
+        directSequence: INITIAL_DIRECT_SEQUENCE,
+        input: { txid: hexToBytes(getTxId(cpfpRootTx)), index: 0 },
+        directInput: { txid: hexToBytes(getTxId(directRootTx)), index: 0 },
+        amountSats: amount,
+        receivingPubkey: signingPubKey,
+        network: this.config.getNetwork(),
+      });
 
-    refundTx.addOutput({
-      script: refundPkScript,
-      amount: outputAmount,
-    });
-
-    refundTx.addOutput(getEphemeralAnchorOutput());
-
-    const refundNonceCommitment =
+    // Create nonce commitments for refund transactions
+    const cpfpRefundNonceCommitment =
       await this.config.signer.getRandomSigningCommitment();
-    const refundTxSighash = getSigHashFromTx(refundTx, 0, rootTx.getOutput(0));
+    const directRefundNonceCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+    const directFromCpfpRefundNonceCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+
+    // Get sighashes for refund transactions
+    const cpfpRefundTxSighash = getSigHashFromTx(
+      cpfpRefundTx,
+      0,
+      cpfpRootTx.getOutput(0),
+    );
+
+    if (!directRefundTx || !directFromCpfpRefundTx) {
+      throw new ValidationError(
+        "Expected direct refund transactions for tree creation",
+        {
+          field: "directRefundTx",
+          value: directRefundTx,
+        },
+      );
+    }
+
+    const directRefundTxSighash = getSigHashFromTx(
+      directRefundTx,
+      0,
+      directRootTx.getOutput(0),
+    );
+    const directFromCpfpRefundTxSighash = getSigHashFromTx(
+      directFromCpfpRefundTx,
+      0,
+      cpfpRootTx.getOutput(0),
+    );
 
     const sparkClient = await this.connectionManager.createSparkClient(
       this.config.getCoordinatorAddress(),
@@ -278,14 +294,395 @@ export class DepositService {
           network: this.config.getNetworkProto(),
         },
         rootTxSigningJob: {
-          rawTx: rootTx.toBytes(),
+          rawTx: cpfpRootTx.toBytes(),
           signingPublicKey: signingPubKey,
-          signingNonceCommitment: rootNonceCommitment.commitment,
+          signingNonceCommitment: cpfpRootNonceCommitment.commitment,
         },
         refundTxSigningJob: {
-          rawTx: refundTx.toBytes(),
+          rawTx: cpfpRefundTx.toBytes(),
           signingPublicKey: signingPubKey,
-          signingNonceCommitment: refundNonceCommitment.commitment,
+          signingNonceCommitment: cpfpRefundNonceCommitment.commitment,
+        },
+        directRootTxSigningJob: {
+          rawTx: directRootTx.toBytes(),
+          signingPublicKey: signingPubKey,
+          signingNonceCommitment: directRootNonceCommitment.commitment,
+        },
+        directRefundTxSigningJob: {
+          rawTx: directRefundTx.toBytes(),
+          signingPublicKey: signingPubKey,
+          signingNonceCommitment: directRefundNonceCommitment.commitment,
+        },
+        directFromCpfpRefundTxSigningJob: {
+          rawTx: directFromCpfpRefundTx.toBytes(),
+          signingPublicKey: signingPubKey,
+          signingNonceCommitment:
+            directFromCpfpRefundNonceCommitment.commitment,
+        },
+      });
+    } catch (error) {
+      throw new NetworkError(
+        "Failed to start deposit tree creation",
+        {
+          operation: "start_deposit_tree_creation",
+          errorCount: 1,
+          errors: error instanceof Error ? error.message : String(error),
+        },
+        error as Error,
+      );
+    }
+
+    if (!treeResp.rootNodeSignatureShares?.verifyingKey) {
+      throw new ValidationError("No verifying key found in tree response", {
+        field: "verifyingKey",
+        value: treeResp.rootNodeSignatureShares,
+        expected: "Non-null verifying key",
+      });
+    }
+
+    if (
+      !treeResp.rootNodeSignatureShares.nodeTxSigningResult
+        ?.signingNonceCommitments
+    ) {
+      throw new ValidationError(
+        "No signing nonce commitments found in tree response",
+        {
+          field: "nodeTxSigningResult.signingNonceCommitments",
+          value: treeResp.rootNodeSignatureShares.nodeTxSigningResult,
+          expected: "Non-null signing nonce commitments",
+        },
+      );
+    }
+
+    if (
+      !treeResp.rootNodeSignatureShares.refundTxSigningResult
+        ?.signingNonceCommitments
+    ) {
+      throw new ValidationError(
+        "No signing nonce commitments found in tree response",
+        {
+          field: "refundTxSigningResult.signingNonceCommitments",
+        },
+      );
+    }
+
+    if (
+      !treeResp.rootNodeSignatureShares.directNodeTxSigningResult
+        ?.signingNonceCommitments
+    ) {
+      throw new ValidationError(
+        "No direct node signing nonce commitments found in tree response",
+        {
+          field: "directNodeTxSigningResult.signingNonceCommitments",
+        },
+      );
+    }
+
+    if (
+      !treeResp.rootNodeSignatureShares.directRefundTxSigningResult
+        ?.signingNonceCommitments
+    ) {
+      throw new ValidationError(
+        "No direct refund signing nonce commitments found in tree response",
+        {
+          field: "directRefundTxSigningResult.signingNonceCommitments",
+        },
+      );
+    }
+
+    if (
+      !treeResp.rootNodeSignatureShares.directFromCpfpRefundTxSigningResult
+        ?.signingNonceCommitments
+    ) {
+      throw new ValidationError(
+        "No direct from CPFP refund signing nonce commitments found in tree response",
+        {
+          field: "directFromCpfpRefundTxSigningResult.signingNonceCommitments",
+        },
+      );
+    }
+
+    if (
+      !equalBytes(treeResp.rootNodeSignatureShares.verifyingKey, verifyingKey)
+    ) {
+      throw new ValidationError("Verifying key mismatch", {
+        field: "verifyingKey",
+        value: treeResp.rootNodeSignatureShares.verifyingKey,
+        expected: verifyingKey,
+      });
+    }
+
+    // Sign all four transactions
+    const cpfpRootSignature = await this.config.signer.signFrost({
+      message: cpfpRootTxSighash,
+      publicKey: signingPubKey,
+      keyDerivation,
+      verifyingKey,
+      selfCommitment: cpfpRootNonceCommitment,
+      statechainCommitments:
+        treeResp.rootNodeSignatureShares.nodeTxSigningResult
+          .signingNonceCommitments,
+      adaptorPubKey: new Uint8Array(),
+    });
+
+    const directRootSignature = await this.config.signer.signFrost({
+      message: directRootTxSighash,
+      publicKey: signingPubKey,
+      keyDerivation,
+      verifyingKey,
+      selfCommitment: directRootNonceCommitment,
+      statechainCommitments:
+        treeResp.rootNodeSignatureShares.directNodeTxSigningResult
+          .signingNonceCommitments,
+      adaptorPubKey: new Uint8Array(),
+    });
+
+    const cpfpRefundSignature = await this.config.signer.signFrost({
+      message: cpfpRefundTxSighash,
+      publicKey: signingPubKey,
+      keyDerivation,
+      verifyingKey: treeResp.rootNodeSignatureShares.verifyingKey,
+      selfCommitment: cpfpRefundNonceCommitment,
+      statechainCommitments:
+        treeResp.rootNodeSignatureShares.refundTxSigningResult
+          .signingNonceCommitments,
+      adaptorPubKey: new Uint8Array(),
+    });
+
+    const directRefundSignature = await this.config.signer.signFrost({
+      message: directRefundTxSighash,
+      publicKey: signingPubKey,
+      keyDerivation,
+      verifyingKey: treeResp.rootNodeSignatureShares.verifyingKey,
+      selfCommitment: directRefundNonceCommitment,
+      statechainCommitments:
+        treeResp.rootNodeSignatureShares.directRefundTxSigningResult
+          .signingNonceCommitments,
+      adaptorPubKey: new Uint8Array(),
+    });
+
+    const directFromCpfpRefundSignature = await this.config.signer.signFrost({
+      message: directFromCpfpRefundTxSighash,
+      publicKey: signingPubKey,
+      keyDerivation,
+      verifyingKey: treeResp.rootNodeSignatureShares.verifyingKey,
+      selfCommitment: directFromCpfpRefundNonceCommitment,
+      statechainCommitments:
+        treeResp.rootNodeSignatureShares.directFromCpfpRefundTxSigningResult
+          .signingNonceCommitments,
+      adaptorPubKey: new Uint8Array(),
+    });
+
+    // Aggregate all four signatures
+    const cpfpRootAggregate = await this.config.signer.aggregateFrost({
+      message: cpfpRootTxSighash,
+      statechainSignatures:
+        treeResp.rootNodeSignatureShares.nodeTxSigningResult.signatureShares,
+      statechainPublicKeys:
+        treeResp.rootNodeSignatureShares.nodeTxSigningResult.publicKeys,
+      verifyingKey: treeResp.rootNodeSignatureShares.verifyingKey,
+      statechainCommitments:
+        treeResp.rootNodeSignatureShares.nodeTxSigningResult
+          .signingNonceCommitments,
+      selfCommitment: cpfpRootNonceCommitment,
+      publicKey: signingPubKey,
+      selfSignature: cpfpRootSignature!,
+      adaptorPubKey: new Uint8Array(),
+    });
+
+    const directRootAggregate = await this.config.signer.aggregateFrost({
+      message: directRootTxSighash,
+      statechainSignatures:
+        treeResp.rootNodeSignatureShares.directNodeTxSigningResult
+          .signatureShares,
+      statechainPublicKeys:
+        treeResp.rootNodeSignatureShares.directNodeTxSigningResult.publicKeys,
+      verifyingKey: treeResp.rootNodeSignatureShares.verifyingKey,
+      statechainCommitments:
+        treeResp.rootNodeSignatureShares.directNodeTxSigningResult
+          .signingNonceCommitments,
+      selfCommitment: directRootNonceCommitment,
+      publicKey: signingPubKey,
+      selfSignature: directRootSignature!,
+      adaptorPubKey: new Uint8Array(),
+    });
+
+    const cpfpRefundAggregate = await this.config.signer.aggregateFrost({
+      message: cpfpRefundTxSighash,
+      statechainSignatures:
+        treeResp.rootNodeSignatureShares.refundTxSigningResult.signatureShares,
+      statechainPublicKeys:
+        treeResp.rootNodeSignatureShares.refundTxSigningResult.publicKeys,
+      verifyingKey: treeResp.rootNodeSignatureShares.verifyingKey,
+      statechainCommitments:
+        treeResp.rootNodeSignatureShares.refundTxSigningResult
+          .signingNonceCommitments,
+      selfCommitment: cpfpRefundNonceCommitment,
+      publicKey: signingPubKey,
+      selfSignature: cpfpRefundSignature!,
+      adaptorPubKey: new Uint8Array(),
+    });
+
+    const directRefundAggregate = await this.config.signer.aggregateFrost({
+      message: directRefundTxSighash,
+      statechainSignatures:
+        treeResp.rootNodeSignatureShares.directRefundTxSigningResult
+          .signatureShares,
+      statechainPublicKeys:
+        treeResp.rootNodeSignatureShares.directRefundTxSigningResult.publicKeys,
+      verifyingKey: treeResp.rootNodeSignatureShares.verifyingKey,
+      statechainCommitments:
+        treeResp.rootNodeSignatureShares.directRefundTxSigningResult
+          .signingNonceCommitments,
+      selfCommitment: directRefundNonceCommitment,
+      publicKey: signingPubKey,
+      selfSignature: directRefundSignature!,
+      adaptorPubKey: new Uint8Array(),
+    });
+
+    const directFromCpfpRefundAggregate =
+      await this.config.signer.aggregateFrost({
+        message: directFromCpfpRefundTxSighash,
+        statechainSignatures:
+          treeResp.rootNodeSignatureShares.directFromCpfpRefundTxSigningResult
+            .signatureShares,
+        statechainPublicKeys:
+          treeResp.rootNodeSignatureShares.directFromCpfpRefundTxSigningResult
+            .publicKeys,
+        verifyingKey: treeResp.rootNodeSignatureShares.verifyingKey,
+        statechainCommitments:
+          treeResp.rootNodeSignatureShares.directFromCpfpRefundTxSigningResult
+            .signingNonceCommitments,
+        selfCommitment: directFromCpfpRefundNonceCommitment,
+        publicKey: signingPubKey,
+        selfSignature: directFromCpfpRefundSignature!,
+        adaptorPubKey: new Uint8Array(),
+      });
+
+    let finalizeResp: FinalizeNodeSignaturesResponse;
+    try {
+      finalizeResp = await sparkClient.finalize_node_signatures_v2({
+        intent: SignatureIntent.CREATION,
+        nodeSignatures: [
+          {
+            nodeId: treeResp.rootNodeSignatureShares.nodeId,
+            nodeTxSignature: cpfpRootAggregate,
+            refundTxSignature: cpfpRefundAggregate,
+            directNodeTxSignature: directRootAggregate,
+            directRefundTxSignature: directRefundAggregate,
+            directFromCpfpRefundTxSignature: directFromCpfpRefundAggregate,
+          },
+        ],
+      });
+    } catch (error) {
+      throw new NetworkError(
+        "Failed to finalize node signatures",
+        {
+          operation: "finalize_node_signatures",
+          errorCount: 1,
+          errors: error instanceof Error ? error.message : String(error),
+        },
+        error as Error,
+      );
+    }
+
+    return finalizeResp;
+  }
+
+  /**
+   * @deprecated
+   * Use createTreeRoot instead.
+   * This is currently only used to test backwards compatibility.
+   */
+  async createTreeWithoutDirectTx({
+    keyDerivation,
+    verifyingKey,
+    depositTx,
+    vout,
+  }: CreateTreeRootParams) {
+    // Create root transactions (CPFP and direct)
+    const output = depositTx.getOutput(vout);
+    if (!output) {
+      throw new ValidationError("Invalid deposit transaction output", {
+        field: "vout",
+        value: vout,
+        expected: "Valid output index",
+      });
+    }
+    const script = output.script;
+    const amount = output.amount;
+    if (!script || !amount) {
+      throw new ValidationError("No script or amount found in deposit tx", {
+        field: "output",
+        value: output,
+        expected: "Output with script and amount",
+      });
+    }
+
+    const depositOutPoint = {
+      txid: hexToBytes(getTxId(depositTx)),
+      index: vout,
+    };
+    const depositTxOut = {
+      script,
+      amount,
+    };
+
+    const [cpfpRootTx, _] = createRootTx(depositOutPoint, depositTxOut);
+
+    // Create nonce commitments for root transactions
+    const cpfpRootNonceCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+
+    // Get sighashes for root transactions
+    const cpfpRootTxSighash = getSigHashFromTx(cpfpRootTx, 0, output);
+
+    const signingPubKey =
+      await this.config.signer.getPublicKeyFromDerivation(keyDerivation);
+
+    // Create refund transactions (CPFP and direct)
+    const { cpfpRefundTx } = createRefundTxs({
+      sequence: INITIAL_SEQUENCE,
+      input: { txid: hexToBytes(getTxId(cpfpRootTx)), index: 0 },
+      amountSats: amount,
+      receivingPubkey: signingPubKey,
+      network: this.config.getNetwork(),
+    });
+
+    // Create nonce commitments for refund transactions
+    const cpfpRefundNonceCommitment =
+      await this.config.signer.getRandomSigningCommitment();
+
+    // Get sighashes for refund transactions
+    const cpfpRefundTxSighash = getSigHashFromTx(
+      cpfpRefundTx,
+      0,
+      cpfpRootTx.getOutput(0),
+    );
+
+    const sparkClient = await this.connectionManager.createSparkClient(
+      this.config.getCoordinatorAddress(),
+    );
+
+    let treeResp: StartDepositTreeCreationResponse;
+
+    try {
+      treeResp = await sparkClient.start_deposit_tree_creation({
+        identityPublicKey: await this.config.signer.getIdentityPublicKey(),
+        onChainUtxo: {
+          vout: vout,
+          rawTx: depositTx.toBytes(true),
+          network: this.config.getNetworkProto(),
+        },
+        rootTxSigningJob: {
+          rawTx: cpfpRootTx.toBytes(),
+          signingPublicKey: signingPubKey,
+          signingNonceCommitment: cpfpRootNonceCommitment.commitment,
+        },
+        refundTxSigningJob: {
+          rawTx: cpfpRefundTx.toBytes(),
+          signingPublicKey: signingPubKey,
+          signingNonceCommitment: cpfpRefundNonceCommitment.commitment,
         },
       });
     } catch (error) {
@@ -344,32 +741,32 @@ export class DepositService {
       });
     }
 
-    const rootSignature = await this.config.signer.signFrost({
-      message: rootTxSighash,
+    const cpfpRootSignature = await this.config.signer.signFrost({
+      message: cpfpRootTxSighash,
       publicKey: signingPubKey,
       keyDerivation,
       verifyingKey,
-      selfCommitment: rootNonceCommitment,
+      selfCommitment: cpfpRootNonceCommitment,
       statechainCommitments:
         treeResp.rootNodeSignatureShares.nodeTxSigningResult
           .signingNonceCommitments,
       adaptorPubKey: new Uint8Array(),
     });
 
-    const refundSignature = await this.config.signer.signFrost({
-      message: refundTxSighash,
+    const cpfpRefundSignature = await this.config.signer.signFrost({
+      message: cpfpRefundTxSighash,
       publicKey: signingPubKey,
       keyDerivation,
-      verifyingKey,
-      selfCommitment: refundNonceCommitment,
+      verifyingKey: treeResp.rootNodeSignatureShares.verifyingKey,
+      selfCommitment: cpfpRefundNonceCommitment,
       statechainCommitments:
         treeResp.rootNodeSignatureShares.refundTxSigningResult
           .signingNonceCommitments,
       adaptorPubKey: new Uint8Array(),
     });
 
-    const rootAggregate = await this.config.signer.aggregateFrost({
-      message: rootTxSighash,
+    const cpfpRootAggregate = await this.config.signer.aggregateFrost({
+      message: cpfpRootTxSighash,
       statechainSignatures:
         treeResp.rootNodeSignatureShares.nodeTxSigningResult.signatureShares,
       statechainPublicKeys:
@@ -378,14 +775,14 @@ export class DepositService {
       statechainCommitments:
         treeResp.rootNodeSignatureShares.nodeTxSigningResult
           .signingNonceCommitments,
-      selfCommitment: rootNonceCommitment,
+      selfCommitment: cpfpRootNonceCommitment,
       publicKey: signingPubKey,
-      selfSignature: rootSignature!,
+      selfSignature: cpfpRootSignature!,
       adaptorPubKey: new Uint8Array(),
     });
 
-    const refundAggregate = await this.config.signer.aggregateFrost({
-      message: refundTxSighash,
+    const cpfpRefundAggregate = await this.config.signer.aggregateFrost({
+      message: cpfpRefundTxSighash,
       statechainSignatures:
         treeResp.rootNodeSignatureShares.refundTxSigningResult.signatureShares,
       statechainPublicKeys:
@@ -394,21 +791,21 @@ export class DepositService {
       statechainCommitments:
         treeResp.rootNodeSignatureShares.refundTxSigningResult
           .signingNonceCommitments,
-      selfCommitment: refundNonceCommitment,
+      selfCommitment: cpfpRefundNonceCommitment,
       publicKey: signingPubKey,
-      selfSignature: refundSignature,
+      selfSignature: cpfpRefundSignature!,
       adaptorPubKey: new Uint8Array(),
     });
 
     let finalizeResp: FinalizeNodeSignaturesResponse;
     try {
-      finalizeResp = await sparkClient.finalize_node_signatures({
+      finalizeResp = await sparkClient.finalize_node_signatures_v2({
         intent: SignatureIntent.CREATION,
         nodeSignatures: [
           {
             nodeId: treeResp.rootNodeSignatureShares.nodeId,
-            nodeTxSignature: rootAggregate,
-            refundTxSignature: refundAggregate,
+            nodeTxSignature: cpfpRootAggregate,
+            refundTxSignature: cpfpRefundAggregate,
           },
         ],
       });
