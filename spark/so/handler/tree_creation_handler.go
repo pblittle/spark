@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -478,7 +479,13 @@ func (h *TreeCreationHandler) prepareSigningJobs(ctx context.Context, req *pb.Cr
 		return nil, nil, err
 	}
 	userPublicKey := depositAddress.OwnerSigningPubkey
+	unchainUtxo := req.GetOnChainUtxo()
 	onchain := depositAddress.ConfirmationHeight != 0
+	if depositAddress.ConfirmationTxid != "" && unchainUtxo != nil {
+		if depositAddress.ConfirmationTxid != hex.EncodeToString(unchainUtxo.Txid) {
+			return nil, nil, errors.New("confirmation txid does not match utxo txid")
+		}
+	}
 
 	queue := []*element{}
 	queue = append(queue, &element{
