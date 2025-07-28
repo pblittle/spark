@@ -2563,7 +2563,9 @@ export class SparkWallet extends EventEmitter {
         transfer.status !==
           TransferStatus.TRANSFER_STATUS_RECEIVER_REFUND_SIGNED &&
         transfer.status !==
-          TransferStatus.TRANSFER_STATUS_RECEIVER_KEY_TWEAK_APPLIED
+          TransferStatus.TRANSFER_STATUS_RECEIVER_KEY_TWEAK_APPLIED &&
+        transfer.status !==
+          TransferStatus.TRANSFER_STATUS_RECEIVER_KEY_TWEAK_LOCKED
       ) {
         continue;
       }
