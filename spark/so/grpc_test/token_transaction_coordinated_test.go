@@ -13,7 +13,6 @@ import (
 	"github.com/lightsparkdev/spark/common"
 	sparkpb "github.com/lightsparkdev/spark/proto/spark"
 	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
-	"github.com/lightsparkdev/spark/so/dkg"
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
 	"github.com/lightsparkdev/spark/so/ent/tokentransaction"
@@ -440,19 +439,6 @@ func TestCoordinatedTokenMintAndTransferTokensTooManyOutputsFails(t *testing.T) 
 
 // TestCoordinatedTokenMintAndTransferTokensLotsOfOutputs tests the coordinated flow with many outputs
 func TestCoordinatedTokenMintAndTransferTokensWithTooManyInputsFails(t *testing.T) {
-	testConfig, err := testutil.TestConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// This test uses a lot of DKG keys, so let's generate them first
-	for i := 0; i < 3; i++ {
-		err = dkg.GenerateKeys(context.Background(), testConfig, 1000)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
 	config, err := testutil.TestWalletConfigWithIdentityKey(*staticLocalIssuerKey.IdentityPrivateKey())
 	require.NoError(t, err, "failed to create wallet config")
 
@@ -536,19 +522,6 @@ func TestCoordinatedTokenMintAndTransferTokensWithTooManyInputsFails(t *testing.
 }
 
 func TestCoordinatedTokenMintAndTransferMaxInputsSucceeds(t *testing.T) {
-	testConfig, err := testutil.TestConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// This test uses a lot of DKG keys, so let's generate them first
-	for i := 0; i < 3; i++ {
-		err = dkg.GenerateKeys(context.Background(), testConfig, 1000)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
 	config, err := testutil.TestWalletConfigWithIdentityKey(*staticLocalIssuerKey.IdentityPrivateKey())
 	require.NoError(t, err, "failed to create wallet config")
 
@@ -2164,13 +2137,6 @@ type SecondRequestScenario struct {
 }
 
 func TestCoordinatedTokenTransferPreemption(t *testing.T) {
-	// We need to generate keys for SO1 to test preemption with different coordinators
-	testSo1Config, err := testutil.SpecificOperatorTestConfig(1)
-	require.NoError(t, err, "failed to create test config")
-
-	err = dkg.GenerateKeys(context.Background(), testSo1Config, 1000)
-	require.NoError(t, err, "failed to generate keys for SO1")
-
 	coordinatorScenarios := []CoordinatorScenario{
 		{
 			name:            "different coordinators",
@@ -2532,7 +2498,7 @@ func TestQueryTokenOutputsWithRevealedRevocationSecrets(t *testing.T) {
 	)
 	require.NoError(t, err, "failed to prepare revocation shares for testing")
 
-	var exchangingOperator = config.SigningOperators["0000000000000000000000000000000000000000000000000000000000000002"]
+	exchangingOperator := config.SigningOperators["0000000000000000000000000000000000000000000000000000000000000002"]
 	require.NotNil(t, exchangingOperator, "expected a non-coordinator operator")
 
 	err = wallet.ExchangeRevocationSecretsManually(
