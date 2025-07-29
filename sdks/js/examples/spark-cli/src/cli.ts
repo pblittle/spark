@@ -301,6 +301,7 @@ const commands = [
   "claimdeposit",
   "claimstaticdepositquote",
   "claimstaticdeposit",
+  "refundstaticdepositlegacy",
   "refundstaticdeposit",
   "createpaymentintent",
   "createinvoice",
@@ -546,7 +547,8 @@ async function runCLI() {
   claimdeposit <txid>                                                 - Claim any pending deposits to the wallet
   claimstaticdepositquote <txid> [outputIndex]                        - Get a quote for claiming a static deposit
   claimstaticdeposit <txid> <creditAmountSats> <sspSignature> [outputIndex] - Claim a static deposits
-  refundstaticdeposit <depositTransactionId> <destinationAddress> <fee> [outputIndex] - Refund a static deposit
+  refundstaticdepositlegacy <depositTransactionId> <destinationAddress> <fee> [outputIndex] - Refund a static deposit legacy
+  refundstaticdeposit <depositTransactionId> <destinationAddress> <satsPerVbyteFee> [outputIndex] - Refund a static deposit
   gettransfers [limit] [offset]                                       - Get a list of transfers
   createinvoice <amount> <memo> <includeSparkAddress> [receiverIdentityPubkey] [descriptionHash] - Create a new lightning invoice
   payinvoice <invoice> <maxFeeSats> <preferSpark> [amountSatsToSend]  - Pay a lightning invoice
@@ -1018,6 +1020,20 @@ async function runCLI() {
             console.log(claimDeposit);
           }
           break;
+        case "refundstaticdepositlegacy":
+          if (!wallet) {
+            console.log("Please initialize a wallet first");
+            break;
+          }
+          const refundDepositLegacy = await wallet.refundStaticDeposit({
+            depositTransactionId: args[0],
+            destinationAddress: args[1],
+            fee: parseInt(args[2]),
+            outputIndex: args[3] ? parseInt(args[3]) : undefined,
+          });
+          console.log("Broadcast the transaction below to refund the deposit");
+          console.log(refundDepositLegacy);
+          break;
         case "refundstaticdeposit":
           if (!wallet) {
             console.log("Please initialize a wallet first");
@@ -1026,7 +1042,7 @@ async function runCLI() {
           const refundDeposit = await wallet.refundStaticDeposit({
             depositTransactionId: args[0],
             destinationAddress: args[1],
-            fee: parseInt(args[2]),
+            satsPerVbyteFee: parseInt(args[2]),
             outputIndex: args[3] ? parseInt(args[3]) : undefined,
           });
           console.log("Broadcast the transaction below to refund the deposit");

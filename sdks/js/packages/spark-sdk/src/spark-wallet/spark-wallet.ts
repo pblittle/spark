@@ -78,6 +78,7 @@ import {
   getTxFromRawTxBytes,
   getTxFromRawTxHex,
   getTxId,
+  getTxEstimatedVbytesSizeByNumberOfInputsOutputs,
 } from "../utils/bitcoin.js";
 import {
   getNetwork,
@@ -1790,10 +1791,12 @@ export class SparkWallet extends EventEmitter {
   /**
    * Refunds a static deposit to a destination address.
    *
-   * @param {string} depositTransactionId - The ID of the transaction
-   * @param {number} [outputIndex] - The index of the output
-   * @param {string} destinationAddress - The destination address
-   * @param {number} fee - The fee to refund
+   * @param {Object} params - The refund parameters
+   * @param {string} params.depositTransactionId - The ID of the transaction
+   * @param {number} [params.outputIndex] - The index of the output
+   * @param {string} params.destinationAddress - The destination address
+   * @param {number} [params.fee] - **@deprecated** The fee to refund
+   * @param {number} [params.satsPerVbyteFee] - The fee per vbyte to refund
    * @returns {Promise<string>} The hex of the refund transaction
    */
   public async refundStaticDeposit({
@@ -1801,16 +1804,38 @@ export class SparkWallet extends EventEmitter {
     outputIndex,
     destinationAddress,
     fee,
+    satsPerVbyteFee,
   }: {
     depositTransactionId: string;
     outputIndex?: number;
     destinationAddress: string;
-    fee: number;
+    /** @deprecated use `satsPerVbyteFee` */ fee?: number;
+    satsPerVbyteFee?: number;
   }): Promise<string> {
-    if (fee <= 300) {
+    if (fee !== undefined) {
+      console.warn(
+        `refundStaticDeposit(): \`fee\` parameter is deprecated and will be removed; ` +
+          `please switch to \`satsPerVbyteFee\`.`,
+      );
+    }
+
+    if (fee === undefined && satsPerVbyteFee === undefined) {
+      throw new ValidationError("Fee or satsPerVbyteFee must be provided");
+    }
+
+    // Users can set this to 300 or higher due to our old flow so they may be trained to type in 300 or higher which would make the fee way too high.
+    if (satsPerVbyteFee && satsPerVbyteFee > 150) {
+      throw new ValidationError("satsPerVbyteFee must be less than 150");
+    }
+
+    const finalFee = satsPerVbyteFee
+      ? satsPerVbyteFee * getTxEstimatedVbytesSizeByNumberOfInputsOutputs(1, 1)
+      : fee!;
+
+    if (finalFee <= 200) {
       throw new ValidationError("Fee must be greater than 300", {
         field: "fee",
-        value: fee,
+        value: finalFee,
       });
     }
 
@@ -1825,7 +1850,7 @@ export class SparkWallet extends EventEmitter {
     }
 
     const totalAmount = depositTx.getOutput(outputIndex).amount;
-    const creditAmountSats = Number(totalAmount) - fee;
+    const creditAmountSats = Number(totalAmount) - finalFee;
 
     if (creditAmountSats <= 0) {
       throw new ValidationError(
@@ -1889,29 +1914,15 @@ export class SparkWallet extends EventEmitter {
       this.config.getCoordinatorAddress(),
     );
 
-    const transferId = uuidv7();
-
     // Initiate Utxo Swap
-    const swapResponse = await sparkClient.initiate_utxo_swap({
+    const swapResponse = await sparkClient.initiate_static_deposit_utxo_refund({
       onChainUtxo: {
         txid: hexToBytes(depositTransactionId),
         vout: outputIndex,
         network: networkType,
       },
-      requestType: UtxoSwapRequestType.Refund,
-      amount: {
-        creditAmountSats: 0,
-        $case: "creditAmountSats",
-      },
       userSignature: swapResponseUserSignature,
-      sspSignature: new Uint8Array(),
-      transfer: {
-        transferId: transferId,
-        ownerIdentityPublicKey: await this.config.signer.getIdentityPublicKey(),
-        receiverIdentityPublicKey:
-          await this.config.signer.getIdentityPublicKey(),
-      },
-      spendTxSigningJob: signingJob,
+      refundTxSigningJob: signingJob,
     });
 
     if (!swapResponse) {
@@ -1928,17 +1939,17 @@ export class SparkWallet extends EventEmitter {
       },
       selfCommitment: signingNonceCommitment,
       statechainCommitments:
-        swapResponse.spendTxSigningResult!.signingNonceCommitments,
+        swapResponse.refundTxSigningResult!.signingNonceCommitments,
       verifyingKey: swapResponse.depositAddress!.verifyingPublicKey,
     });
 
     const signatureResult = await this.config.signer.aggregateFrost({
       message: spendTxSighash,
-      statechainSignatures: swapResponse.spendTxSigningResult!.signatureShares,
-      statechainPublicKeys: swapResponse.spendTxSigningResult!.publicKeys,
+      statechainSignatures: swapResponse.refundTxSigningResult!.signatureShares,
+      statechainPublicKeys: swapResponse.refundTxSigningResult!.publicKeys,
       verifyingKey: swapResponse.depositAddress!.verifyingPublicKey,
       statechainCommitments:
-        swapResponse.spendTxSigningResult!.signingNonceCommitments,
+        swapResponse.refundTxSigningResult!.signingNonceCommitments,
       selfCommitment: signingNonceCommitment,
       publicKey: await this.config.signer.getStaticDepositSigningKey(0),
       selfSignature: userSignature,

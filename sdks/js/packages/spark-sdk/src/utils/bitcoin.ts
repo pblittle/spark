@@ -193,3 +193,16 @@ export function getTxId(tx: btc.Transaction): string {
 export function getTxIdNoReverse(tx: btc.Transaction): string {
   return bytesToHex(sha256(sha256(tx.toBytes(true))));
 }
+
+export function getTxEstimatedVbytesSizeByNumberOfInputsOutputs(
+  numInputs: number,
+  numOutputs: number,
+): number {
+  // constants (all in vbytes)
+  const TX_OVERHEAD = 10; // usual tx overhead
+  const IN_VBYTES = 150; // largest potential input size
+  const OUT_VBYTES = 34; // average output size
+
+  // total
+  return TX_OVERHEAD + numInputs * IN_VBYTES + numOutputs * OUT_VBYTES;
+}

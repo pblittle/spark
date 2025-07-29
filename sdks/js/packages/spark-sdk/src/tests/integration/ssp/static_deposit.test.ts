@@ -90,4 +90,61 @@ describe("SSP static deposit address integration", () => {
     const transfers = await userWallet.getTransfers();
     expect(transfers.transfers.length).toBe(2);
   }, 60000);
+
+  it("should create a refund transaction", async () => {
+    const faucet = BitcoinFaucet.getInstance();
+
+    const { wallet: userWallet } = await SparkWalletTesting.initialize(
+      {
+        options: {
+          network: "LOCAL",
+        },
+      },
+      false,
+    );
+
+    const depositAddress = await userWallet.getStaticDepositAddress();
+    expect(depositAddress).toBeDefined();
+
+    const signedTx = await faucet.sendToAddress(depositAddress, DEPOSIT_AMOUNT);
+
+    // Wait for the transaction to be mined
+    await faucet.mineBlocks(6);
+
+    expect(signedTx).toBeDefined();
+
+    const transactionId = signedTx.id;
+
+    let vout: number | undefined;
+
+    for (let i = 0; i < signedTx.outputsLength; i++) {
+      const output = signedTx.getOutput(i);
+      if (output.amount === DEPOSIT_AMOUNT) {
+        vout = i;
+        break;
+      }
+    }
+
+    const refundAddress = await faucet.getNewAddress();
+
+    const refundTx = await userWallet.refundStaticDeposit({
+      depositTransactionId: transactionId,
+      destinationAddress: refundAddress,
+      satsPerVbyteFee: 2,
+    });
+
+    expect(refundTx).toBeDefined();
+
+    // Calling it again should create a new transaction.
+    const refundTx2 = await userWallet.refundStaticDeposit({
+      depositTransactionId: transactionId,
+      destinationAddress: refundAddress,
+      outputIndex: vout!,
+      satsPerVbyteFee: 2,
+    });
+
+    expect(refundTx2).toBeDefined();
+
+    expect(refundTx).not.toBe(refundTx2);
+  }, 60000);
 });
