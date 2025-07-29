@@ -349,7 +349,7 @@ func (h *LightningHandler) ValidateGetPreimageRequest(
 			return fmt.Errorf("unable to validate cpfp signature share: %w, for sighash: %v, user pubkey: %v", err, hex.EncodeToString(cpfpSighash), hex.EncodeToString(node.OwnerSigningPubkey))
 		}
 
-		if len(directTransactions) > 0 && len(directFromCpfpTransactions) > 0 {
+		if len(directTransactions) > 0 && len(directFromCpfpTransactions) > 0 && len(node.DirectTx) > 0 {
 			directTransaction := directTransactions[i]
 			directFromCpfpTransaction := directFromCpfpTransactions[i]
 			if directTransaction == nil {

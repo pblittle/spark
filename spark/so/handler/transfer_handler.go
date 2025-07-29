@@ -606,7 +606,7 @@ func signRefunds(ctx context.Context, config *so.Config, requests *pb.StartTrans
 		)
 		leafJobMap[cpfpJobID] = leaf
 
-		if req.DirectRefundTxSigningJob != nil && req.DirectFromCpfpRefundTxSigningJob != nil {
+		if req.DirectRefundTxSigningJob != nil && req.DirectFromCpfpRefundTxSigningJob != nil && len(leaf.DirectTx) > 0 {
 			directRefundTx, err := common.TxFromRawTxBytes(req.DirectRefundTxSigningJob.RawTx)
 			if err != nil {
 				return nil, fmt.Errorf("unable to load new refund tx: %w", err)
@@ -617,7 +617,7 @@ func signRefunds(ctx context.Context, config *so.Config, requests *pb.StartTrans
 			}
 			directLeafTx, err := common.TxFromRawTxBytes(leaf.DirectTx)
 			if err != nil {
-				return nil, fmt.Errorf("unable to load cpfp leaf tx: %w", err)
+				return nil, fmt.Errorf("unable to load direct leaf tx: %w", err)
 			}
 			if len(directLeafTx.TxOut) <= 0 {
 				return nil, fmt.Errorf("direct vout out of bounds")
