@@ -28,21 +28,18 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/tokentransaction"
 	"github.com/lightsparkdev/spark/so/ent/tokentransactionpeersignature"
 	"github.com/lightsparkdev/spark/so/helper"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"github.com/lightsparkdev/spark/so/tokens"
 	"github.com/lightsparkdev/spark/so/utils"
 )
 
 type InternalSignTokenHandler struct {
-	config      *so.Config
-	lrc20Client *lrc20.Client
+	config *so.Config
 }
 
 // NewInternalSignTokenHandler creates a new InternalSignTokenHandler.
-func NewInternalSignTokenHandler(config *so.Config, lrc20Client *lrc20.Client) *InternalSignTokenHandler {
+func NewInternalSignTokenHandler(config *so.Config) *InternalSignTokenHandler {
 	return &InternalSignTokenHandler{
-		config:      config,
-		lrc20Client: lrc20Client,
+		config: config,
 	}
 }
 
@@ -591,7 +588,7 @@ func (h *InternalSignTokenHandler) recoverFullRevocationSecretsAndFinalize(ctx c
 			return false, tokens.FormatErrorWithTransactionEnt("invalid revocation keys found", tokenTransaction, err)
 		}
 
-		internalFinalizeHandler := NewInternalFinalizeTokenHandler(h.config, h.lrc20Client)
+		internalFinalizeHandler := NewInternalFinalizeTokenHandler(h.config)
 		err = internalFinalizeHandler.FinalizeCoordinatedTokenTransactionInternal(ctx, tokenTransactionHash, outputRecoveredSecrets)
 		if err != nil {
 			return false, tokens.FormatErrorWithTransactionEnt("failed to finalize token transaction", tokenTransaction, err)

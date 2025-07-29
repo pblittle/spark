@@ -29,7 +29,6 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/signingkeyshare"
 	"github.com/lightsparkdev/spark/so/ent/treenode"
 	"github.com/lightsparkdev/spark/so/helper"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	events "github.com/lightsparkdev/spark/so/stream"
 	"github.com/lightsparkdev/spark/so/watchtower"
 	"go.opentelemetry.io/otel"
@@ -170,7 +169,6 @@ func scanChainUpdates(
 	config *so.Config,
 	dbClient *ent.Client,
 	bitcoinClient *rpcclient.Client,
-	lrc20Client *lrc20.Client,
 	network common.Network,
 ) error {
 	logger := logging.GetLoggerFromContext(ctx)
@@ -223,7 +221,6 @@ func scanChainUpdates(
 		config,
 		dbClient,
 		bitcoinClient,
-		lrc20Client,
 		difference.Connected,
 		network,
 	)
@@ -249,7 +246,6 @@ func WatchChain(
 	ctx context.Context,
 	config *so.Config,
 	dbClient *ent.Client,
-	lrc20Client *lrc20.Client,
 	bitcoindConfig so.BitcoindConfig,
 ) error {
 	logger := logging.GetLoggerFromContext(ctx)
@@ -264,7 +260,7 @@ func WatchChain(
 		return err
 	}
 
-	err = scanChainUpdates(ctx, config, dbClient, bitcoinClient, lrc20Client, network)
+	err = scanChainUpdates(ctx, config, dbClient, bitcoinClient, network)
 	if err != nil {
 		logger.Error("failed to scan chain updates", "error", err)
 	}
@@ -302,7 +298,7 @@ func WatchChain(
 		// we need to query bitcoind for the height anyway. We just
 		// treat it as a notification that a new block appeared.
 
-		err = scanChainUpdates(ctx, config, dbClient, bitcoinClient, lrc20Client, network)
+		err = scanChainUpdates(ctx, config, dbClient, bitcoinClient, network)
 		if err != nil {
 			logger.Error("Failed to scan chain updates", "error", err)
 		}
@@ -319,7 +315,6 @@ func connectBlocks(
 	config *so.Config,
 	dbClient *ent.Client,
 	bitcoinClient *rpcclient.Client,
-	lrc20Client *lrc20.Client,
 	chainTips []Tip,
 	network common.Network,
 ) error {

@@ -13,7 +13,6 @@ import (
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
 	"github.com/lightsparkdev/spark/so/helper"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"github.com/lightsparkdev/spark/so/protoconverter"
 	"github.com/lightsparkdev/spark/so/tokens"
 	"github.com/lightsparkdev/spark/so/utils"
@@ -23,15 +22,13 @@ import (
 )
 
 type InternalFinalizeTokenHandler struct {
-	config      *so.Config
-	lrc20Client *lrc20.Client
+	config *so.Config
 }
 
 // NewInternalFinalizeTokenHandler creates a new InternalFinalizeTokenHandler.
-func NewInternalFinalizeTokenHandler(config *so.Config, lrc20Client *lrc20.Client) *InternalFinalizeTokenHandler {
+func NewInternalFinalizeTokenHandler(config *so.Config) *InternalFinalizeTokenHandler {
 	return &InternalFinalizeTokenHandler{
-		config:      config,
-		lrc20Client: lrc20Client,
+		config: config,
 	}
 }
 
@@ -116,18 +113,6 @@ func (h *InternalFinalizeTokenHandler) FinalizeTokenTransactionInternal(
 	err = utils.ValidateRevocationKeys(revocationSecrets, revocationCommitments)
 	if err != nil {
 		return nil, tokens.FormatErrorWithTransactionEnt(tokens.ErrFailedToValidateRevocationKeys, tokenTransaction, err)
-	}
-
-	identityPrivateKey := secp256k1.PrivKeyFromBytes(h.config.IdentityPrivateKey)
-
-	err = h.lrc20Client.SendSparkSignature(ctx, h.lrc20Client.BuildLrc20SendSignaturesRequest(
-		req.FinalTokenTransaction,
-		tokenTransaction.OperatorSignature,
-		identityPrivateKey,
-		req.RevocationSecrets,
-	))
-	if err != nil {
-		return nil, tokens.FormatErrorWithTransactionEnt(tokens.ErrFailedToSendToLRC20Node, tokenTransaction, err)
 	}
 
 	err = ent.UpdateFinalizedTransaction(ctx, tokenTransaction, req.RevocationSecrets)

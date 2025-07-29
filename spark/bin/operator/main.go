@@ -39,7 +39,6 @@ import (
 	sparkerrors "github.com/lightsparkdev/spark/so/errors"
 	sparkgrpc "github.com/lightsparkdev/spark/so/grpc"
 	"github.com/lightsparkdev/spark/so/helper"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"github.com/lightsparkdev/spark/so/middleware"
 	"github.com/lightsparkdev/spark/so/task"
 	_ "github.com/mattn/go-sqlite3"
@@ -317,15 +316,6 @@ func main() {
 		log.Fatalf("Failed to create frost client: %v", err)
 	}
 
-	lrc20Client, err := lrc20.NewClient(
-		config,
-		slog.Default().With("component", "lrc20_client"),
-	)
-	if err != nil {
-		log.Fatalf("Failed to create LRC20 client: %v", err)
-	}
-	defer lrc20Client.Close() //nolint:errcheck
-
 	if !args.DisableDKG {
 		// Chain watchers
 		for network, bitcoindConfig := range config.BitcoindConfigs {
@@ -342,7 +332,6 @@ func main() {
 					chainCtx,
 					config,
 					dbClient,
-					lrc20Client,
 					bitcoindConfig,
 				)
 				if err != nil {
@@ -386,7 +375,7 @@ func main() {
 			// Don't run the task if the task specifies it should not be run in
 			// test environments and RunningLocally is set (eg. we are in a test environment)
 			if (!args.RunningLocally || scheduled.RunInTestEnv) && !scheduled.Disabled {
-				err := scheduled.Schedule(scheduler, config, dbClient, lrc20Client)
+				err := scheduled.Schedule(scheduler, config, dbClient)
 				if err != nil {
 					log.Fatalf("Failed to create job: %v", err)
 				}
@@ -397,7 +386,7 @@ func main() {
 	}
 
 	errGrp.Go(func() error {
-		return task.RunStartupTasks(config, dbClient, lrc20Client, args.RunningLocally)
+		return task.RunStartupTasks(config, dbClient, args.RunningLocally)
 	})
 
 	sessionTokenCreatorVerifier, err := authninternal.NewSessionTokenCreatorVerifier(config.IdentityPrivateKey, nil)
@@ -488,7 +477,6 @@ func main() {
 		args,
 		config,
 		dbClient,
-		lrc20Client,
 		frostConnection,
 		sessionTokenCreatorVerifier,
 		mockAction,

@@ -23,7 +23,6 @@ import (
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
 	"github.com/lightsparkdev/spark/so/helper"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"github.com/lightsparkdev/spark/so/protoconverter"
 	"github.com/lightsparkdev/spark/so/tokens"
 	"github.com/lightsparkdev/spark/so/utils"
@@ -31,28 +30,25 @@ import (
 
 type StartTokenTransactionHandler struct {
 	config           *so.Config
-	lrc20Client      *lrc20.Client
 	enablePreemption bool
 	prepareHandler   *InternalPrepareTokenHandler
 }
 
 // NewStartTokenTransactionHandler creates a new StartTokenTransactionHandler.
-func NewStartTokenTransactionHandler(config *so.Config, lrc20Client *lrc20.Client) *StartTokenTransactionHandler {
+func NewStartTokenTransactionHandler(config *so.Config) *StartTokenTransactionHandler {
 	return &StartTokenTransactionHandler{
 		config:           config,
-		lrc20Client:      lrc20Client,
 		enablePreemption: false,
-		prepareHandler:   NewInternalPrepareTokenHandler(config, lrc20Client),
+		prepareHandler:   NewInternalPrepareTokenHandler(config),
 	}
 }
 
 // NewStartTokenTransactionHandlerWithPreemption creates a new StartTokenTransactionHandler with pre-emption enabled.
-func NewStartTokenTransactionHandlerWithPreemption(config *so.Config, lrc20Client *lrc20.Client) *StartTokenTransactionHandler {
+func NewStartTokenTransactionHandlerWithPreemption(config *so.Config) *StartTokenTransactionHandler {
 	return &StartTokenTransactionHandler{
 		config:           config,
-		lrc20Client:      lrc20Client,
 		enablePreemption: true,
-		prepareHandler:   NewInternalPrepareTokenHandlerWithPreemption(config, lrc20Client),
+		prepareHandler:   NewInternalPrepareTokenHandlerWithPreemption(config),
 	}
 }
 

@@ -11,7 +11,6 @@ import (
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/errors"
 	"github.com/lightsparkdev/spark/so/handler/tokens"
-	"github.com/lightsparkdev/spark/so/lrc20"
 )
 
 type SparkTokenServer struct {
@@ -19,15 +18,13 @@ type SparkTokenServer struct {
 	authzConfig authz.Config
 	soConfig    *so.Config
 	db          *ent.Client
-	lrc20Client *lrc20.Client
 }
 
-func NewSparkTokenServer(authzConfig authz.Config, soConfig *so.Config, db *ent.Client, lrc20Client *lrc20.Client) *SparkTokenServer {
+func NewSparkTokenServer(authzConfig authz.Config, soConfig *so.Config, db *ent.Client) *SparkTokenServer {
 	return &SparkTokenServer{
 		authzConfig: authzConfig,
 		soConfig:    soConfig,
 		db:          db,
-		lrc20Client: lrc20Client,
 	}
 }
 
@@ -36,8 +33,9 @@ func (s *SparkTokenServer) StartTransaction(
 	req *tokenpb.StartTransactionRequest,
 ) (*tokenpb.StartTransactionResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.IdentityPublicKey)
-	tokenTransactionHandler := tokens.NewStartTokenTransactionHandlerWithPreemption(s.soConfig, s.lrc20Client)
-	return errors.WrapWithGRPCError(tokenTransactionHandler.StartTokenTransaction(ctx, req))
+	tokenTransactionHandler := tokens.NewStartTokenTransactionHandlerWithPreemption(s.soConfig)
+	resp, err := tokenTransactionHandler.StartTokenTransaction(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 // This RPC is called by the client to initiate the coordinated signing process.
@@ -45,26 +43,30 @@ func (s *SparkTokenServer) CommitTransaction(
 	ctx context.Context,
 	req *tokenpb.CommitTransactionRequest,
 ) (*tokenpb.CommitTransactionResponse, error) {
-	signTokenHandler := tokens.NewSignTokenHandler(s.soConfig, s.lrc20Client)
-	return errors.WrapWithGRPCError(signTokenHandler.CommitTransaction(ctx, req))
+	signTokenHandler := tokens.NewSignTokenHandler(s.soConfig)
+	resp, err := signTokenHandler.CommitTransaction(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 // QueryTokenOutputs returns created token metadata associated with passed in token identifiers or issuer public keys.
 func (s *SparkTokenServer) QueryTokenMetadata(ctx context.Context, req *tokenpb.QueryTokenMetadataRequest) (*tokenpb.QueryTokenMetadataResponse, error) {
 	queryTokenHandler := tokens.NewQueryTokenHandler(s.soConfig)
-	return errors.WrapWithGRPCError(queryTokenHandler.QueryTokenMetadata(ctx, req))
+	resp, err := queryTokenHandler.QueryTokenMetadata(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 // QueryTokenTransactions returns token transactions with status using native tokenpb protos.
 func (s *SparkTokenServer) QueryTokenTransactions(ctx context.Context, req *tokenpb.QueryTokenTransactionsRequest) (*tokenpb.QueryTokenTransactionsResponse, error) {
 	queryTokenHandler := tokens.NewQueryTokenHandler(s.soConfig)
-	return errors.WrapWithGRPCError(queryTokenHandler.QueryTokenTransactionsToken(ctx, req))
+	resp, err := queryTokenHandler.QueryTokenTransactionsToken(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 // QueryTokenOutputs returns token outputs with previous transaction data using native tokenpb protos.
 func (s *SparkTokenServer) QueryTokenOutputs(ctx context.Context, req *tokenpb.QueryTokenOutputsRequest) (*tokenpb.QueryTokenOutputsResponse, error) {
 	queryTokenHandler := tokens.NewQueryTokenHandlerWithExpiredTransactions(s.soConfig)
-	return errors.WrapWithGRPCError(queryTokenHandler.QueryTokenOutputsToken(ctx, req))
+	resp, err := queryTokenHandler.QueryTokenOutputsToken(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 // FreezeTokens prevents transfer of all outputs owned now and in the future by the provided owner public key.
@@ -73,7 +75,7 @@ func (s *SparkTokenServer) FreezeTokens(
 	ctx context.Context,
 	req *tokenpb.FreezeTokensRequest,
 ) (*tokenpb.FreezeTokensResponse, error) {
-	freezeTokenHandler := tokens.NewFreezeTokenHandler(s.soConfig, s.lrc20Client)
+	freezeTokenHandler := tokens.NewFreezeTokenHandler(s.soConfig)
 	sparkRes, err := freezeTokenHandler.FreezeTokens(ctx, req)
 	if err != nil {
 		return nil, err

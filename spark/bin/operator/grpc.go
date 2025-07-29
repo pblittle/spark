@@ -20,7 +20,6 @@ import (
 	"github.com/lightsparkdev/spark/so/dkg"
 	"github.com/lightsparkdev/spark/so/ent"
 	sparkgrpc "github.com/lightsparkdev/spark/so/grpc"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -31,13 +30,12 @@ func RegisterGrpcServers(
 	args *args,
 	config *so.Config,
 	dbClient *ent.Client,
-	lrc20Client *lrc20.Client,
 	frostClient *grpc.ClientConn,
 	sessionTokenCreatorVerifier *authninternal.SessionTokenCreatorVerifier,
 	mockAction *common.MockAction,
 ) error {
 	if mockAction != nil {
-		mockServer := sparkgrpc.NewMockServer(config, mockAction, lrc20Client, dbClient)
+		mockServer := sparkgrpc.NewMockServer(config, mockAction, dbClient)
 		pbmock.RegisterMockServiceServer(grpcServer, mockServer)
 	}
 
@@ -47,15 +45,15 @@ func RegisterGrpcServers(
 	}
 
 	// Private/Internal SO <-> SO endpoint
-	sparkInternalServer := sparkgrpc.NewSparkInternalServer(config, lrc20Client)
+	sparkInternalServer := sparkgrpc.NewSparkInternalServer(config)
 	pbinternal.RegisterSparkInternalServiceServer(grpcServer, sparkInternalServer)
 
 	// Public SO endpoint
-	sparkServer := sparkgrpc.NewSparkServer(config, lrc20Client, mockAction)
+	sparkServer := sparkgrpc.NewSparkServer(config, mockAction)
 	pbspark.RegisterSparkServiceServer(grpcServer, sparkServer)
 
 	// Public SO token endpoint
-	sparkTokenServer := sparkgrpc.NewSparkTokenServer(config, config, dbClient, lrc20Client)
+	sparkTokenServer := sparkgrpc.NewSparkTokenServer(config, config, dbClient)
 	pbtoken.RegisterSparkTokenServiceServer(grpcServer, sparkTokenServer)
 
 	// Gossip endpoint
@@ -63,7 +61,7 @@ func RegisterGrpcServers(
 	pbgossip.RegisterGossipServiceServer(grpcServer, gossipServer)
 
 	// Private/Internal token SO <-> SO endpoint
-	sparkTokenInternalServer := sparkgrpc.NewSparkTokenInternalServer(config, dbClient, lrc20Client)
+	sparkTokenInternalServer := sparkgrpc.NewSparkTokenInternalServer(config, dbClient)
 	pbtokeninternal.RegisterSparkTokenInternalServiceServer(grpcServer, sparkTokenInternalServer)
 
 	// SSP receive private/internal endpoint

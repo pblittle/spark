@@ -118,7 +118,7 @@ func TestBackfillTokenOutputTokenIdentifiersAndTokenCreateEdges(t *testing.T) {
 
 	// Run with the flag disabled
 	cfg.Token.EnableBackfillTokenOutputTask = false
-	require.NoError(t, backfillTask.RunOnce(cfg, dbCtx.Client, nil))
+	require.NoError(t, backfillTask.RunOnce(cfg, dbCtx.Client))
 
 	backfillDisabledOutput, err := dbCtx.Client.TokenOutput.Get(ctx, tokenOutput.ID)
 	require.NoError(t, err)
@@ -127,7 +127,7 @@ func TestBackfillTokenOutputTokenIdentifiersAndTokenCreateEdges(t *testing.T) {
 
 	// Run with the flag enabled
 	cfg.Token.EnableBackfillTokenOutputTask = true
-	require.NoError(t, backfillTask.RunOnce(cfg, dbCtx.Client, nil))
+	require.NoError(t, backfillTask.RunOnce(cfg, dbCtx.Client))
 
 	updatedOutput, err := dbCtx.Client.TokenOutput.Get(ctx, tokenOutput.ID)
 	require.NoError(t, err)
@@ -140,5 +140,5 @@ func TestBackfillTokenOutputTokenIdentifiersAndTokenCreateEdges(t *testing.T) {
 	require.Equal(t, uuid.Nil, updatedLegacyOutput.TokenCreateID)
 
 	// If the task is run again, there should be no errors.
-	require.NoError(t, backfillTask.RunOnce(cfg, dbCtx.Client, nil))
+	require.NoError(t, backfillTask.RunOnce(cfg, dbCtx.Client))
 }

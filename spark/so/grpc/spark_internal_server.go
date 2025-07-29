@@ -17,7 +17,6 @@ import (
 	"github.com/lightsparkdev/spark/so/errors"
 	"github.com/lightsparkdev/spark/so/handler"
 	"github.com/lightsparkdev/spark/so/handler/signing_handler"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -25,13 +24,12 @@ import (
 // This server is only used by the operator.
 type SparkInternalServer struct {
 	pb.UnimplementedSparkInternalServiceServer
-	config      *so.Config
-	lrc20Client *lrc20.Client
+	config *so.Config
 }
 
 // NewSparkInternalServer creates a new SparkInternalServer.
-func NewSparkInternalServer(config *so.Config, client *lrc20.Client) *SparkInternalServer {
-	return &SparkInternalServer{config: config, lrc20Client: client}
+func NewSparkInternalServer(config *so.Config) *SparkInternalServer {
+	return &SparkInternalServer{config: config}
 }
 
 // MarkKeysharesAsUsed marks the keyshares as used.
@@ -152,7 +150,7 @@ func (s *SparkInternalServer) ReturnLightningPayment(ctx context.Context, req *p
 
 // StartTokenTransactionInternal validates a token transaction and saves it to the database.
 func (s *SparkInternalServer) StartTokenTransactionInternal(ctx context.Context, req *pb.StartTokenTransactionInternalRequest) (*emptypb.Empty, error) {
-	internalPrepareHandler := tokens.NewInternalPrepareTokenHandler(s.config, s.lrc20Client)
+	internalPrepareHandler := tokens.NewInternalPrepareTokenHandler(s.config)
 	prepareReq, err := protoconverter.TokenProtoPrepareTransactionRequestFromSpark(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert request into v1: %w", err)
@@ -195,7 +193,8 @@ func (s *SparkInternalServer) CreateStaticDepositUtxoRefund(ctx context.Context,
 
 func (s *SparkInternalServer) QueryTokenOutputsInternal(ctx context.Context, req *pbspark.QueryTokenOutputsRequest) (*pbspark.QueryTokenOutputsResponse, error) {
 	queryTokenHandler := tokens.NewQueryTokenHandler(s.config)
-	return errors.WrapWithGRPCError(queryTokenHandler.QueryTokenOutputsSpark(ctx, req))
+	resp, err := queryTokenHandler.QueryTokenOutputsSpark(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 // Cancel a utxo swap in an SO after the creation of the swap failed

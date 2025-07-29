@@ -9,21 +9,18 @@ import (
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/ent/tokencreate"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"github.com/lightsparkdev/spark/so/tokens"
 	"github.com/lightsparkdev/spark/so/utils"
 )
 
 type FreezeTokenHandler struct {
-	config      *so.Config
-	lrc20Client *lrc20.Client
+	config *so.Config
 }
 
 // NewFreezeTokenHandler creates a new FreezeTokenHandler.
-func NewFreezeTokenHandler(config *so.Config, lrc20Client *lrc20.Client) *FreezeTokenHandler {
+func NewFreezeTokenHandler(config *so.Config) *FreezeTokenHandler {
 	return &FreezeTokenHandler{
-		config:      config,
-		lrc20Client: lrc20Client,
+		config: config,
 	}
 }
 

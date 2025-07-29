@@ -15,7 +15,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 	"github.com/lightsparkdev/spark/common/logging"
-	pblrc20 "github.com/lightsparkdev/spark/proto/lrc20"
 	sparkpb "github.com/lightsparkdev/spark/proto/spark"
 	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
 	tokeninternalpb "github.com/lightsparkdev/spark/proto/spark_token_internal"
@@ -27,7 +26,6 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/tokenoutput"
 	"github.com/lightsparkdev/spark/so/ent/tokentransaction"
 	"github.com/lightsparkdev/spark/so/helper"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"github.com/lightsparkdev/spark/so/protoconverter"
 	"github.com/lightsparkdev/spark/so/utils"
 )
@@ -37,15 +35,13 @@ const queryTokenOutputsWithPartialRevocationSecretSharesBatchSize = 50
 type operatorSignaturesMap map[string][]byte
 
 type SignTokenHandler struct {
-	config      *so.Config
-	lrc20Client *lrc20.Client
+	config *so.Config
 }
 
 // NewSignTokenHandler creates a new SignTokenHandler.
-func NewSignTokenHandler(config *so.Config, lrc20Client *lrc20.Client) *SignTokenHandler {
+func NewSignTokenHandler(config *so.Config) *SignTokenHandler {
 	return &SignTokenHandler{
-		config:      config,
-		lrc20Client: lrc20Client,
+		config: config,
 	}
 }
 
@@ -77,7 +73,7 @@ func (h *SignTokenHandler) SignTokenTransaction(
 		return nil, fmt.Errorf("%s %s: %w", tokens.ErrFailedToFetchTransaction, logging.FormatProto("final_token_transaction", req.FinalTokenTransaction), err)
 	}
 
-	internalSignTokenHandler := NewInternalSignTokenHandler(h.config, h.lrc20Client)
+	internalSignTokenHandler := NewInternalSignTokenHandler(h.config)
 	operatorSignature, err := internalSignTokenHandler.SignAndPersistTokenTransaction(ctx, tokenTransaction, finalTokenTransactionHash, req.OperatorSpecificSignatures)
 	if err != nil {
 		return nil, err
@@ -119,22 +115,23 @@ func (h *SignTokenHandler) SignTokenTransaction(
 		}
 	}
 
-	if !h.config.Token.DisconnectLRC20Node {
-		operatorSignatureData := &pblrc20.SparkOperatorSignatureData{
-			SparkOperatorSignature:    operatorSignature,
-			OperatorIdentityPublicKey: secp256k1.PrivKeyFromBytes(h.config.IdentityPrivateKey).PubKey().SerializeCompressed(),
-		}
-		sparkSigReq := &pblrc20.SendSparkSignatureRequest{
-			FinalTokenTransaction:      req.FinalTokenTransaction,
-			OperatorSpecificSignatures: req.OperatorSpecificSignatures,
-			OperatorSignatureData:      operatorSignatureData,
-		}
-		err = h.lrc20Client.SendSparkSignature(ctx, sparkSigReq)
-		if err != nil {
-			logger.Error("Failed to send transaction to LRC20 node", "error", err)
-			return nil, err
-		}
-	}
+	// TODO: LRC20 client functionality removed
+	// if !h.config.Token.DisconnectLRC20Node {
+	//	operatorSignatureData := &pblrc20.SparkOperatorSignatureData{
+	//		SparkOperatorSignature:    operatorSignature,
+	//		OperatorIdentityPublicKey: secp256k1.PrivKeyFromBytes(h.config.IdentityPrivateKey).PubKey().SerializeCompressed(),
+	//	}
+	//	sparkSigReq := &pblrc20.SendSparkSignatureRequest{
+	//		FinalTokenTransaction:      req.FinalTokenTransaction,
+	//		OperatorSpecificSignatures: req.OperatorSpecificSignatures,
+	//		OperatorSignatureData:      operatorSignatureData,
+	//	}
+	//	err = h.lrc20Client.SendSparkSignature(ctx, sparkSigReq)
+	//	if err != nil {
+	//		logger.Error("Failed to send transaction to LRC20 node", "error", err)
+	//		return nil, err
+	//	}
+	// }
 	return &sparkpb.SignTokenTransactionResponse{
 		SparkOperatorSignature: operatorSignature,
 		RevocationKeyshares:    revocationKeyshares,
@@ -208,16 +205,17 @@ func (h *SignTokenHandler) CommitTransaction(ctx context.Context, req *tokenpb.C
 		signatures[operatorID] = sig.SparkOperatorSignature
 	}
 
-	internalSignTokenHandler := NewInternalSignTokenHandler(h.config, h.lrc20Client)
+	internalSignTokenHandler := NewInternalSignTokenHandler(h.config)
 	if err := internalSignTokenHandler.validateSignaturesPackageAndPersistPeerSignatures(ctx, signatures, tokenTransaction); err != nil {
 		return nil, tokens.FormatErrorWithTransactionEnt("failed to validate signature package and persist peer signatures", tokenTransaction, err)
 	}
 
-	if !h.config.Token.DisconnectLRC20Node {
-		if err := h.sendSignaturesToLRC20Node(ctx, signatures[h.config.Identifier], req); err != nil {
-			return nil, fmt.Errorf("failed to send signatures to LRC20 node: %w", err)
-		}
-	}
+	// TODO: LRC20 client functionality removed
+	// if !h.config.Token.DisconnectLRC20Node {
+	//	if err := h.sendSignaturesToLRC20Node(ctx, signatures[h.config.Identifier], req); err != nil {
+	//		return nil, fmt.Errorf("failed to send signatures to LRC20 node: %w", err)
+	//	}
+	// }
 
 	logger.Info("Successfully signed and committed token transaction",
 		"transaction_hash", req.FinalTokenTransactionHash)
@@ -242,7 +240,7 @@ func (h *SignTokenHandler) CommitTransaction(ctx context.Context, req *tokenpb.C
 		}
 
 		// Persist the secret shares from all operators.
-		internalHandler := NewInternalSignTokenHandler(h.config, h.lrc20Client)
+		internalHandler := NewInternalSignTokenHandler(h.config)
 		finalized, err := internalHandler.persistPartialRevocationSecretShares(ctx, inputOperatorShareMap, req.FinalTokenTransactionHash)
 		if err != nil {
 			return nil, tokens.FormatErrorWithTransactionEnt("failed to persist partial revocation secret shares", tokenTransaction, err)
@@ -410,45 +408,6 @@ func (h *SignTokenHandler) prepareRevocationSecretSharesForExchange(ctx context.
 	return operatorRevocationShares, nil
 }
 
-func (h *SignTokenHandler) sendSignaturesToLRC20Node(ctx context.Context, operatorSignature []byte, req *tokenpb.CommitTransactionRequest) error {
-	identityPrivateKey := secp256k1.PrivKeyFromBytes(h.config.IdentityPrivateKey)
-	identityPublicKey := h.config.IdentityPublicKey()
-	operatorSignatureData := &pblrc20.SparkOperatorSignatureData{
-		SparkOperatorSignature:    operatorSignature,
-		OperatorIdentityPublicKey: identityPublicKey,
-	}
-
-	sparkTokenTransaction, err := protoconverter.SparkTokenTransactionFromTokenProto(req.FinalTokenTransaction)
-	if err != nil {
-		return fmt.Errorf("failed to convert token transaction to spark token transaction: %w", err)
-	}
-
-	var thisOperatorSignatures *tokenpb.InputTtxoSignaturesPerOperator
-	for _, operatorSignatures := range req.InputTtxoSignaturesPerOperator {
-		if bytes.Equal(operatorSignatures.OperatorIdentityPublicKey, identityPublicKey) {
-			thisOperatorSignatures = operatorSignatures
-			break
-		}
-	}
-	thisOperatorSpecificSignatures := convertTokenProtoSignaturesToOperatorSpecific(
-		thisOperatorSignatures.TtxoSignatures,
-		req.FinalTokenTransactionHash,
-		identityPrivateKey.PubKey().SerializeCompressed(),
-	)
-	sparkSigReq := &pblrc20.SendSparkSignatureRequest{
-		FinalTokenTransaction:      sparkTokenTransaction,
-		OperatorSpecificSignatures: thisOperatorSpecificSignatures,
-		OperatorSignatureData:      operatorSignatureData,
-	}
-
-	err = h.lrc20Client.SendSparkSignature(ctx, sparkSigReq)
-	if err != nil {
-		logging.GetLoggerFromContext(ctx).Error("Failed to send transaction to LRC20 node", "error", err)
-		return fmt.Errorf("failed to send transaction to LRC20 node: %w", err)
-	}
-	return nil
-}
-
 func (h *SignTokenHandler) localSignAndCommitTransaction(
 	ctx context.Context,
 	foundOperatorSignatures *tokenpb.InputTtxoSignaturesPerOperator,
@@ -460,7 +419,7 @@ func (h *SignTokenHandler) localSignAndCommitTransaction(
 		finalTokenTransactionHash,
 		h.config.IdentityPublicKey(),
 	)
-	internalSignTokenHandler := NewInternalSignTokenHandler(h.config, h.lrc20Client)
+	internalSignTokenHandler := NewInternalSignTokenHandler(h.config)
 	sigBytes, err := internalSignTokenHandler.SignAndPersistTokenTransaction(ctx, tokenTransaction, finalTokenTransactionHash, operatorSpecificSignatures)
 	if err != nil {
 		return nil, err

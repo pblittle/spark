@@ -30,7 +30,6 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/treenode"
 	"github.com/lightsparkdev/spark/so/ent/utxoswap"
 	"github.com/lightsparkdev/spark/so/handler"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -55,7 +54,7 @@ type BaseTask struct {
 	// If true, the task will not run
 	Disabled bool
 	// Task is the function that is run when the task is scheduled.
-	Task func(context.Context, *so.Config, *lrc20.Client) error
+	Task func(context.Context, *so.Config) error
 }
 
 // ScheduledTask is a task that runs on a schedule.
@@ -83,7 +82,7 @@ func AllScheduledTasks() []ScheduledTask {
 				Name:         "dkg",
 				Timeout:      &dkgTaskTimeout,
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
+				Task: func(ctx context.Context, config *so.Config) error {
 					return ent.RunDKGIfNeeded(ctx, config)
 				},
 			},
@@ -93,7 +92,7 @@ func AllScheduledTasks() []ScheduledTask {
 			BaseTask: BaseTask{
 				Name:         "cancel_expired_transfers",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
+				Task: func(ctx context.Context, config *so.Config) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					h := handler.NewTransferHandler(config)
 
@@ -103,6 +102,7 @@ func AllScheduledTasks() []ScheduledTask {
 					}
 					query := tx.Transfer.Query().Where(
 						transfer.And(
+
 							transfer.StatusIn(st.TransferStatusSenderInitiated, st.TransferStatusSenderKeyTweakPending),
 							transfer.ExpiryTimeLT(time.Now()),
 							transfer.ExpiryTimeNEQ(time.Unix(0, 0)),
@@ -134,7 +134,7 @@ func AllScheduledTasks() []ScheduledTask {
 				// TODO(LIG-7896): This task keeps on getting stuck on
 				// very large trees. Disabling for now as we investigate
 				Disabled: true,
-				Task: func(ctx context.Context, _ *so.Config, _ *lrc20.Client) error {
+				Task: func(ctx context.Context, _ *so.Config) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					tx, err := ent.GetDbFromContext(ctx)
 					if err != nil {
@@ -199,7 +199,7 @@ func AllScheduledTasks() []ScheduledTask {
 			ExecutionInterval: 5 * time.Minute,
 			BaseTask: BaseTask{
 				Name: "resume_send_transfer",
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
+				Task: func(ctx context.Context, config *so.Config) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					h := handler.NewTransferHandler(config)
 
@@ -234,11 +234,11 @@ func AllScheduledTasks() []ScheduledTask {
 			BaseTask: BaseTask{
 				Name:         "cancel_or_finalize_expired_token_transactions",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, lrc20Client *lrc20.Client) error {
+				Task: func(ctx context.Context, config *so.Config) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					currentTime := time.Now()
 
-					h := tokens.NewInternalFinalizeTokenHandler(config, lrc20Client)
+					h := tokens.NewInternalFinalizeTokenHandler(config)
 					logger.Info("Checking for expired token transactions",
 						"current_time", currentTime.Format(time.RFC3339))
 					// TODO: Consider adding support for expiring mints as well (although not strictly needed
@@ -306,7 +306,7 @@ func AllScheduledTasks() []ScheduledTask {
 			BaseTask: BaseTask{
 				Name:         "send_gossip",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
+				Task: func(ctx context.Context, config *so.Config) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					gossipHandler := handler.NewSendGossipHandler(config)
 					tx, err := ent.GetDbFromContext(ctx)
@@ -334,7 +334,7 @@ func AllScheduledTasks() []ScheduledTask {
 			BaseTask: BaseTask{
 				Name:         "complete_utxo_swap",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
+				Task: func(ctx context.Context, config *so.Config) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					tx, err := ent.GetDbFromContext(ctx)
 					if err != nil {
@@ -409,7 +409,7 @@ func AllStartupTasks() []StartupTask {
 				Name:         "maybe_reserve_entity_dkg",
 				RunInTestEnv: true,
 				Timeout:      &entityDkgTaskTimeout,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
+				Task: func(ctx context.Context, config *so.Config) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					tx, err := ent.GetDbFromContext(ctx)
 					if err != nil {
@@ -485,7 +485,7 @@ func AllStartupTasks() []StartupTask {
 			BaseTask: BaseTask{
 				Name:         "backfill_token_freezes_token_identifier",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
+				Task: func(ctx context.Context, config *so.Config) error {
 					logger := logging.GetLoggerFromContext(ctx)
 					logger.Info("Backfilling token create created_at")
 
@@ -561,7 +561,7 @@ func AllStartupTasks() []StartupTask {
 			BaseTask: BaseTask{
 				Name:         "backfill_token_output_token_identifiers_and_token_create_edges",
 				RunInTestEnv: true,
-				Task: func(ctx context.Context, config *so.Config, _ *lrc20.Client) error {
+				Task: func(ctx context.Context, config *so.Config) error {
 					logger := logging.GetLoggerFromContext(ctx)
 
 					if !config.Token.EnableBackfillTokenOutputTask {
@@ -643,14 +643,14 @@ func (t *BaseTask) getTimeout() time.Duration {
 	return defaultTaskTimeout
 }
 
-func (t *BaseTask) RunOnce(config *so.Config, db *ent.Client, lrc20Client *lrc20.Client) error {
+func (t *BaseTask) RunOnce(config *so.Config, db *ent.Client) error {
 	ctx := context.Background()
 	wrappedTask := t.createWrappedTask()
-	return wrappedTask(ctx, config, db, lrc20Client)
+	return wrappedTask(ctx, config, db)
 }
 
-func (t *BaseTask) createWrappedTask() func(ctx context.Context, cfg *so.Config, dbClient *ent.Client, lrc20 *lrc20.Client) error {
-	return func(ctx context.Context, cfg *so.Config, dbClient *ent.Client, lrc20Client *lrc20.Client) error {
+func (t *BaseTask) createWrappedTask() func(ctx context.Context, cfg *so.Config, dbClient *ent.Client) error {
+	return func(ctx context.Context, cfg *so.Config, dbClient *ent.Client) error {
 		logger := logging.GetLoggerFromContext(ctx).
 			With("task.name", t.Name).
 			With("task.id", uuid.New().String())
@@ -663,10 +663,10 @@ func (t *BaseTask) createWrappedTask() func(ctx context.Context, cfg *so.Config,
 
 		done := make(chan error, 1)
 
-		inner := func(ctx context.Context, cfg *so.Config, lrc20Client *lrc20.Client, dbClient *ent.Client) error {
+		inner := func(ctx context.Context, cfg *so.Config, dbClient *ent.Client) error {
 			dbSession := db.NewSession(dbClient, cfg.Database.NewTxTimeout)
 			ctx = ent.Inject(ctx, dbSession)
-			err := t.Task(ctx, cfg, lrc20Client)
+			err := t.Task(ctx, cfg)
 			if err != nil {
 				logger.Error("Task failed!", "error", err)
 
@@ -689,7 +689,7 @@ func (t *BaseTask) createWrappedTask() func(ctx context.Context, cfg *so.Config,
 		logger.Info("Starting task")
 
 		go func() {
-			done <- inner(ctx, cfg, lrc20Client, dbClient)
+			done <- inner(ctx, cfg, dbClient)
 		}()
 
 		select {
@@ -711,11 +711,10 @@ func (t *ScheduledTask) Schedule(
 	scheduler gocron.Scheduler,
 	config *so.Config,
 	db *ent.Client,
-	lrc20Client *lrc20.Client,
 ) error {
 	_, err := scheduler.NewJob(
 		gocron.DurationJob(t.ExecutionInterval),
-		gocron.NewTask(t.createWrappedTask(), config, db, lrc20Client),
+		gocron.NewTask(t.createWrappedTask(), config, db),
 		gocron.WithName(t.Name),
 	)
 	if err != nil {
@@ -785,7 +784,7 @@ func (t *Monitor) RecordJobTiming(startTime, endTime time.Time, _ uuid.UUID, nam
 
 // RunStartupTasks runs startup tasks with optional retry logic.
 // Any task with a non-nil RetryInterval will be retried in the background on failure.
-func RunStartupTasks(config *so.Config, db *ent.Client, lrc20Client *lrc20.Client, runningLocally bool) error {
+func RunStartupTasks(config *so.Config, db *ent.Client, runningLocally bool) error {
 	slog.Info("Running startup tasks...")
 
 	for _, task := range AllStartupTasks() {
@@ -799,7 +798,7 @@ func RunStartupTasks(config *so.Config, db *ent.Client, lrc20Client *lrc20.Clien
 
 					startTime := time.Now()
 					for {
-						err := task.RunOnce(config, db, lrc20Client)
+						err := task.RunOnce(config, db)
 						if err == nil {
 							slog.Info("Startup task completed successfully", "task", task.Name)
 							break
@@ -815,7 +814,7 @@ func RunStartupTasks(config *so.Config, db *ent.Client, lrc20Client *lrc20.Clien
 					}
 				}(task)
 			} else {
-				err := task.RunOnce(config, db, lrc20Client)
+				err := task.RunOnce(config, db)
 				if err != nil {
 					slog.Error("Startup task failed", "task", task.Name, "error", err)
 				} else {

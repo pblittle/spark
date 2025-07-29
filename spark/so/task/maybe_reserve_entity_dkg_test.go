@@ -141,7 +141,7 @@ func TestReserveEntityDkg_OperatorDown(t *testing.T) {
 
 			reserveTask, err := getReserveEntityDkgTask()
 			require.NoError(t, err)
-			err = reserveTask.RunOnce(cfg, client, nil)
+			err = reserveTask.RunOnce(cfg, client)
 
 			if tc.failOneOperator {
 				require.Error(t, err)
@@ -194,11 +194,11 @@ func TestReserveEntityDkg_Idempotent(t *testing.T) {
 
 	reserveTask, err := getReserveEntityDkgTask()
 	require.NoError(t, err)
-	err = reserveTask.RunOnce(cfg, client, nil)
+	err = reserveTask.RunOnce(cfg, client)
 	require.NoError(t, err)
 
 	// Run again to ensure idempotency.
-	err = reserveTask.RunOnce(cfg, client, nil)
+	err = reserveTask.RunOnce(cfg, client)
 	require.NoError(t, err)
 
 	count, err := client.EntityDkgKey.Query().Count(ctx)
@@ -233,7 +233,7 @@ func TestReserveEntityDkg_NonCoordinator(t *testing.T) {
 
 	reserveTask, err := getReserveEntityDkgTask()
 	require.NoError(t, err)
-	err = reserveTask.RunOnce(cfg, client, nil)
+	err = reserveTask.RunOnce(cfg, client)
 	require.NoError(t, err)
 
 	count, err := client.EntityDkgKey.Query().Count(ctx)

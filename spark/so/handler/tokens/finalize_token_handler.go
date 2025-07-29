@@ -7,21 +7,18 @@ import (
 	sparkpb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/authz"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"github.com/lightsparkdev/spark/so/tokens"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type FinalizeTokenHandler struct {
-	config      *so.Config
-	lrc20Client *lrc20.Client
+	config *so.Config
 }
 
 // NewFinalizeTokenHandler creates a new FinalizeTransactionHandler.
-func NewFinalizeTokenHandler(config *so.Config, lrc20Client *lrc20.Client) *FinalizeTokenHandler {
+func NewFinalizeTokenHandler(config *so.Config) *FinalizeTokenHandler {
 	return &FinalizeTokenHandler{
-		config:      config,
-		lrc20Client: lrc20Client,
+		config: config,
 	}
 }
 
@@ -34,6 +31,6 @@ func (h *FinalizeTokenHandler) FinalizeTokenTransaction(
 		return nil, fmt.Errorf("%s: %w", tokens.ErrIdentityPublicKeyAuthFailed, err)
 	}
 
-	internalFinalizeHandler := NewInternalFinalizeTokenHandler(h.config, h.lrc20Client)
+	internalFinalizeHandler := NewInternalFinalizeTokenHandler(h.config)
 	return internalFinalizeHandler.FinalizeTokenTransactionInternal(ctx, req)
 }

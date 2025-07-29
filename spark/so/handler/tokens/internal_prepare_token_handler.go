@@ -10,9 +10,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/lightsparkdev/spark/so/lrc20"
-	"github.com/lightsparkdev/spark/so/protoconverter"
-
 	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
 	tokeninternalpb "github.com/lightsparkdev/spark/proto/spark_token_internal"
 
@@ -30,22 +27,19 @@ import (
 
 type InternalPrepareTokenHandler struct {
 	config           *so.Config
-	lrc20Client      *lrc20.Client
 	enablePreemption bool
 }
 
-func NewInternalPrepareTokenHandler(config *so.Config, client *lrc20.Client) *InternalPrepareTokenHandler {
+func NewInternalPrepareTokenHandler(config *so.Config) *InternalPrepareTokenHandler {
 	return &InternalPrepareTokenHandler{
 		config:           config,
-		lrc20Client:      client,
 		enablePreemption: false,
 	}
 }
 
-func NewInternalPrepareTokenHandlerWithPreemption(config *so.Config, client *lrc20.Client) *InternalPrepareTokenHandler {
+func NewInternalPrepareTokenHandlerWithPreemption(config *so.Config) *InternalPrepareTokenHandler {
 	return &InternalPrepareTokenHandler{
 		config:           config,
-		lrc20Client:      client,
 		enablePreemption: true,
 	}
 }
@@ -143,19 +137,19 @@ func (h *InternalPrepareTokenHandler) PrepareTokenTransactionInternal(ctx contex
 		return nil, fmt.Errorf("token transaction type unknown")
 	}
 
-	sparkTokenTransaction, err := protoconverter.SparkTokenTransactionFromTokenProto(req.FinalTokenTransaction)
-	if err != nil {
-		return nil, tokens.FormatErrorWithTransactionProto("failed to convert token transaction", req.FinalTokenTransaction, err)
-	}
-
-	if !h.config.Token.DisconnectLRC20Node {
-		logger.Info("Verifying token transaction with LRC20 node")
-		err = h.lrc20Client.VerifySparkTx(ctx, sparkTokenTransaction)
-		if err != nil {
-			return nil, tokens.FormatErrorWithTransactionProto("failed to verify token transaction with LRC20 node", req.FinalTokenTransaction, err)
-		}
-		logger.Info("Token transaction verified with LRC20 node")
-	}
+	// TODO: LRC20 client functionality removed
+	// sparkTokenTransaction, err := protoconverter.SparkTokenTransactionFromTokenProto(req.FinalTokenTransaction)
+	// if err != nil {
+	//	return nil, tokens.FormatErrorWithTransactionProto("failed to convert token transaction", req.FinalTokenTransaction, err)
+	// }
+	// if !h.config.Token.DisconnectLRC20Node {
+	//	logger.Info("Verifying token transaction with LRC20 node")
+	//	err = h.lrc20Client.VerifySparkTx(ctx, sparkTokenTransaction)
+	//	if err != nil {
+	//		return nil, tokens.FormatErrorWithTransactionProto("failed to verify token transaction with LRC20 node", req.FinalTokenTransaction, err)
+	//	}
+	//	logger.Info("Token transaction verified with LRC20 node")
+	// }
 	// Save the token transaction, created output ents, and update the outputs to spend.
 	_, err = ent.CreateStartedTransactionEntities(ctx, req.FinalTokenTransaction, req.TokenTransactionSignatures, req.KeyshareIds, inputTtxos, req.CoordinatorPublicKey)
 	if err != nil {

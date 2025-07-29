@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lightsparkdev/spark/so/lrc20"
-
 	"github.com/lightsparkdev/spark/so/errors"
 
 	"github.com/lightsparkdev/spark/so/handler/tokens"
@@ -19,22 +17,21 @@ import (
 
 type SparkTokenInternalServer struct {
 	tokeninternalpb.UnimplementedSparkTokenInternalServiceServer
-	soConfig    *so.Config
-	db          *ent.Client
-	lrc20Client *lrc20.Client
+	soConfig *so.Config
+	db       *ent.Client
 }
 
-func NewSparkTokenInternalServer(soConfig *so.Config, db *ent.Client, client *lrc20.Client) *SparkTokenInternalServer {
+func NewSparkTokenInternalServer(soConfig *so.Config, db *ent.Client) *SparkTokenInternalServer {
 	return &SparkTokenInternalServer{
-		soConfig:    soConfig,
-		db:          db,
-		lrc20Client: client,
+		soConfig: soConfig,
+		db:       db,
 	}
 }
 
 func (s *SparkTokenInternalServer) PrepareTransaction(ctx context.Context, req *tokeninternalpb.PrepareTransactionRequest) (*tokeninternalpb.PrepareTransactionResponse, error) {
-	prepareHandler := tokens.NewInternalPrepareTokenHandlerWithPreemption(s.soConfig, s.lrc20Client)
-	return errors.WrapWithGRPCError(prepareHandler.PrepareTokenTransactionInternal(ctx, req))
+	prepareHandler := tokens.NewInternalPrepareTokenHandlerWithPreemption(s.soConfig)
+	resp, err := prepareHandler.PrepareTokenTransactionInternal(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 func (s *SparkTokenInternalServer) SignTokenTransactionFromCoordination(
@@ -58,7 +55,7 @@ func (s *SparkTokenInternalServer) SignTokenTransactionFromCoordination(
 		})
 	}
 
-	internalSignTokenHandler := tokens.NewInternalSignTokenHandler(s.soConfig, s.lrc20Client)
+	internalSignTokenHandler := tokens.NewInternalSignTokenHandler(s.soConfig)
 	sigBytes, err := internalSignTokenHandler.SignAndPersistTokenTransaction(ctx, tx, req.FinalTokenTransactionHash, operatorSpecificSignatures)
 	if err != nil {
 		return nil, err
@@ -73,6 +70,6 @@ func (s *SparkTokenInternalServer) ExchangeRevocationSecretsShares(
 	ctx context.Context,
 	req *tokeninternalpb.ExchangeRevocationSecretsSharesRequest,
 ) (*tokeninternalpb.ExchangeRevocationSecretsSharesResponse, error) {
-	internalTokenTransactionHandler := tokens.NewInternalSignTokenHandler(s.soConfig, s.lrc20Client)
+	internalTokenTransactionHandler := tokens.NewInternalSignTokenHandler(s.soConfig)
 	return internalTokenTransactionHandler.ExchangeRevocationSecretsShares(ctx, req)
 }

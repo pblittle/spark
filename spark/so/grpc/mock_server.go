@@ -9,7 +9,6 @@ import (
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/ent"
 
-	"github.com/lightsparkdev/spark/so/lrc20"
 	"github.com/lightsparkdev/spark/so/task"
 
 	pbmock "github.com/lightsparkdev/spark/proto/mock"
@@ -27,14 +26,13 @@ import (
 type MockServer struct {
 	config *so.Config
 	pbmock.UnimplementedMockServiceServer
-	mockAction  *common.MockAction
-	lrc20Client *lrc20.Client
-	rootClient  *ent.Client
+	mockAction *common.MockAction
+	rootClient *ent.Client
 }
 
 // NewMockServer creates a new MockServer.
-func NewMockServer(config *so.Config, mockAction *common.MockAction, lrc20Client *lrc20.Client, rootClient *ent.Client) *MockServer {
-	return &MockServer{config: config, mockAction: mockAction, lrc20Client: lrc20Client, rootClient: rootClient}
+func NewMockServer(config *so.Config, mockAction *common.MockAction, rootClient *ent.Client) *MockServer {
+	return &MockServer{config: config, mockAction: mockAction, rootClient: rootClient}
 }
 
 // CleanUpPreimageShare cleans up the preimage share for the given payment hash.
@@ -124,7 +122,7 @@ func (o *MockServer) TriggerTask(_ context.Context, req *pbmock.TriggerTaskReque
 	}
 	// Use the operator's root *ent.Client instead of the transactional one because RunOnce expects *ent.Client.
 	dbClient := o.rootClient
-	if err := selected.RunOnce(o.config, dbClient, o.lrc20Client); err != nil {
+	if err := selected.RunOnce(o.config, dbClient); err != nil {
 		return nil, status.Errorf(codes.Internal, "task %s failed: %v", taskName, err)
 	}
 

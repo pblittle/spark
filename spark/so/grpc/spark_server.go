@@ -14,7 +14,6 @@ import (
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/errors"
 	"github.com/lightsparkdev/spark/so/handler"
-	"github.com/lightsparkdev/spark/so/lrc20"
 	events "github.com/lightsparkdev/spark/so/stream"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -23,16 +22,15 @@ import (
 // It will be used by the user or Spark service provider.
 type SparkServer struct {
 	pb.UnimplementedSparkServiceServer
-	config      *so.Config
-	lrc20Client *lrc20.Client
-	mockAction  *common.MockAction
+	config     *so.Config
+	mockAction *common.MockAction
 }
 
 var emptyResponse = &emptypb.Empty{}
 
 // NewSparkServer creates a new SparkServer.
-func NewSparkServer(config *so.Config, lrc20Client *lrc20.Client, mockAction *common.MockAction) *SparkServer {
-	return &SparkServer{config: config, lrc20Client: lrc20Client, mockAction: mockAction}
+func NewSparkServer(config *so.Config, mockAction *common.MockAction) *SparkServer {
+	return &SparkServer{config: config, mockAction: mockAction}
 }
 
 // GenerateDepositAddress generates a deposit address for the given public key.
@@ -287,7 +285,7 @@ func (s *SparkServer) ReturnLightningPayment(ctx context.Context, req *pb.Return
 // StartTokenTransaction reserves revocation keyshares, and fills the revocation commitment (and other SO-derived fields) to create the final token transaction.
 func (s *SparkServer) StartTokenTransaction(ctx context.Context, req *pb.StartTokenTransactionRequest) (*pb.StartTokenTransactionResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.IdentityPublicKey)
-	tokenTransactionHandler := tokens.NewStartTokenTransactionHandler(s.config, s.lrc20Client)
+	tokenTransactionHandler := tokens.NewStartTokenTransactionHandler(s.config)
 
 	network, err := common.NetworkFromProtoNetwork(req.PartialTokenTransaction.Network)
 	if err != nil {
@@ -321,16 +319,18 @@ func (s *SparkServer) QueryNodes(ctx context.Context, req *pb.QueryNodesRequest)
 // allow the wallet to combine these shares into the fully resolved revocation secret necessary for transaction finalization.
 func (s *SparkServer) SignTokenTransaction(ctx context.Context, req *pb.SignTokenTransactionRequest) (*pb.SignTokenTransactionResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.IdentityPublicKey)
-	signTokenHandler := tokens.NewSignTokenHandler(s.config, s.lrc20Client)
-	return errors.WrapWithGRPCError(signTokenHandler.SignTokenTransaction(ctx, req))
+	signTokenHandler := tokens.NewSignTokenHandler(s.config)
+	resp, err := signTokenHandler.SignTokenTransaction(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 // FinalizeTokenTransaction verifies the revocation secrets constructed by the wallet and passes these keys to the LRC20 Node
 // to finalize the transaction. This operation irreversibly spends the inputs associated with the transaction.
 func (s *SparkServer) FinalizeTokenTransaction(ctx context.Context, req *pb.FinalizeTokenTransactionRequest) (*emptypb.Empty, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.IdentityPublicKey)
-	finalizeTokenHandler := tokens.NewFinalizeTokenHandler(s.config, s.lrc20Client)
-	return errors.WrapWithGRPCError(finalizeTokenHandler.FinalizeTokenTransaction(ctx, req))
+	finalizeTokenHandler := tokens.NewFinalizeTokenHandler(s.config)
+	resp, err := finalizeTokenHandler.FinalizeTokenTransaction(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 // FreezeTokens prevents transfer of all outputs owned now and in the future by the provided owner public key.
@@ -338,7 +338,7 @@ func (s *SparkServer) FinalizeTokenTransaction(ctx context.Context, req *pb.Fina
 func (s *SparkServer) FreezeTokens(ctx context.Context, req *pb.FreezeTokensRequest) (*pb.FreezeTokensResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.FreezeTokensPayload.OwnerPublicKey)
 	tokenReq := protoconverter.TokenProtoFreezeTokensRequestFromSpark(req)
-	freezeTokenHandler := tokens.NewFreezeTokenHandler(s.config, s.lrc20Client)
+	freezeTokenHandler := tokens.NewFreezeTokenHandler(s.config)
 
 	tokenRes, err := freezeTokenHandler.FreezeTokens(ctx, tokenReq)
 	if err != nil {
@@ -350,13 +350,15 @@ func (s *SparkServer) FreezeTokens(ctx context.Context, req *pb.FreezeTokensRequ
 // QueryTokenTransactions returns the token transactions currently owned by the provided owner public key.
 func (s *SparkServer) QueryTokenTransactions(ctx context.Context, req *pb.QueryTokenTransactionsRequest) (*pb.QueryTokenTransactionsResponse, error) {
 	queryTokenHandler := tokens.NewQueryTokenHandler(s.config)
-	return errors.WrapWithGRPCError(queryTokenHandler.QueryTokenTransactions(ctx, req))
+	resp, err := queryTokenHandler.QueryTokenTransactions(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 // QueryTokenOutputs returns the token outputs currently owned by the provided owner public key.
 func (s *SparkServer) QueryTokenOutputs(ctx context.Context, req *pb.QueryTokenOutputsRequest) (*pb.QueryTokenOutputsResponse, error) {
 	queryTokenHandler := tokens.NewQueryTokenHandler(s.config)
-	return errors.WrapWithGRPCError(queryTokenHandler.QueryTokenOutputs(ctx, req))
+	resp, err := queryTokenHandler.QueryTokenOutputs(ctx, req)
+	return errors.WrapWithGRPCError(resp, err)
 }
 
 func (s *SparkServer) QueryAllTransfers(ctx context.Context, req *pb.TransferFilter) (*pb.QueryTransfersResponse, error) {
