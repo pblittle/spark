@@ -550,7 +550,7 @@ async function runCLI() {
   gettransfers [limit] [offset]                                       - Get a list of transfers
   createinvoice <amount> <memo> <includeSparkAddress> [receiverIdentityPubkey] [descriptionHash] - Create a new lightning invoice
   payinvoice <invoice> <maxFeeSats> <preferSpark> [amountSatsToSend]  - Pay a lightning invoice
-  createpaymentintent <asset("btc" | tokenPubKey)> <amount> <memo>   - Create a spark payment request
+  createpaymentintent <asset("btc" | tokenIdentifier)> <amount> <memo>   - Create a spark payment request
   sendtransfer <amount> <receiverSparkAddress>                        - Send a spark transfer
   withdraw <amount> <onchainAddress> <exitSpeed(FAST|MEDIUM|SLOW)> [deductFeeFromWithdrawalAmount(true|false)] - Withdraw funds to an L1 address
   withdrawalfee <amount> <withdrawalAddress>                          - Get a fee estimate for a withdrawal (cooperative exit)
@@ -575,8 +575,8 @@ async function runCLI() {
   The advanced commands below are for specific use cases.
 
   Token Holder Commands:
-    transfertokens <tokenPubKey> <receiverSparkAddress> <amount>        - Transfer tokens
-    batchtransfertokens <tokenPubKey> <receiverAddress1:amount1> <receiverAddress2:amount2> ... - Transfer tokens with multiple outputs
+    transfertokens <tokenIdentifier> <receiverAddress> <amount>        - Transfer tokens
+    batchtransfertokens <tokenIdentifier> <receiverAddress1:amount1> <receiverAddress2:amount2> ... - Transfer tokens with multiple outputs
     querytokentransactions [--ownerPublicKeys] [--issuerPublicKeys] [--tokenTransactionHashes] [--tokenIdentifiers] [--outputIds] - Query token transaction history
 
   Token Issuer Commands:
@@ -1137,20 +1137,20 @@ async function runCLI() {
           }
           if (args.length < 3) {
             console.log(
-              "Usage: transfertokens <tokenIdentifier> <receiverPubKey> <amount>",
+              "Usage: transfertokens <tokenIdentifier> <receiverAddress> <amount>",
             );
             break;
           }
 
           const tokenIdentifier = args[0] as Bech32mTokenIdentifier;
-          const tokenReceiverPubKey = args[1];
+          const receiverSparkAddress = args[1];
           const tokenAmount = BigInt(parseInt(args[2]));
 
           try {
             const result = await wallet.transferTokens({
               tokenIdentifier,
               tokenAmount: tokenAmount,
-              receiverSparkAddress: tokenReceiverPubKey,
+              receiverSparkAddress: receiverSparkAddress,
             });
             console.log("Transfer Transaction ID:", result);
           } catch (error) {
@@ -1168,7 +1168,7 @@ async function runCLI() {
           }
           if (args.length < 2) {
             console.log(
-              "Usage: batchtransfertokens <tokenPubKey> <receiverAddress1:amount1> <receiverAddress2:amount2> ...",
+              "Usage: batchtransfertokens <tokenIdentifier> <receiverAddress1:amount1> <receiverAddress2:amount2> ...",
             );
             break;
           }
