@@ -410,7 +410,7 @@ func main() {
 			helper.LogInterceptor(args.LogJSON && args.LogRequestStats),
 			sparkgrpc.SparkTokenMetricsInterceptor(),
 			sparkgrpc.PanicRecoveryInterceptor(config.ReturnDetailedPanicErrors),
-			db.SessionMiddleware(dbClient, config.Database.NewTxTimeout),
+			db.SessionMiddleware(db.NewDefaultSessionFactory(dbClient, config.Database.NewTxTimeout)),
 			authn.NewInterceptor(sessionTokenCreatorVerifier).AuthnInterceptor,
 			authz.NewAuthzInterceptor(authz.NewAuthzConfig(
 				authz.WithMode(config.ServiceAuthz.Mode),

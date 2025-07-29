@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/lightsparkdev/spark/common/logging"
 	"github.com/lightsparkdev/spark/so/ent"
@@ -14,7 +13,7 @@ import (
 var ErrNoRollback = errors.New("no rollback performed")
 
 // SessionMiddleware is a middleware to manage database sessions for each gRPC call.
-func SessionMiddleware(dbClient *ent.Client, newTxTimeout *time.Duration) grpc.UnaryServerInterceptor {
+func SessionMiddleware(factory SessionFactory) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if info != nil &&
 			(info.FullMethod == "/grpc.health.v1.Health/Check" || info.FullMethod == "/spark.SparkService/query_token_outputs") {
@@ -24,7 +23,7 @@ func SessionMiddleware(dbClient *ent.Client, newTxTimeout *time.Duration) grpc.U
 		logger := logging.GetLoggerFromContext(ctx)
 
 		// Start a transaction or session
-		session := NewSession(dbClient, newTxTimeout)
+		session := factory.NewSession()
 
 		// Attach the transaction to the context
 		ctx = ent.Inject(ctx, session)

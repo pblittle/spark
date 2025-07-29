@@ -41,7 +41,7 @@ func TestSession_GetOrBeginTxReturnsSameTx(t *testing.T) {
 	dbClient := NewTestSQLiteClient(t)
 	defer dbClient.Close()
 
-	session := NewSession(dbClient, nil)
+	session := NewDefaultSessionFactory(dbClient, nil).NewSession()
 
 	tx1, err := session.GetOrBeginTx(ctx)
 	require.NoError(t, err, "Expected to retrieve a transaction")
@@ -59,7 +59,7 @@ func TestSession_GetCurrentTxReturnsNilWithNoTx(t *testing.T) {
 	dbClient := NewTestSQLiteClient(t)
 	defer dbClient.Close()
 
-	session := NewSession(dbClient, nil)
+	session := NewDefaultSessionFactory(dbClient, nil).NewSession()
 
 	tx := session.GetTxIfExists()
 	require.Nil(t, tx, "Expected no current transaction to exist")
@@ -72,7 +72,7 @@ func TestSession_GetCurrentTxReturnsNilAfterSuccessfulCommit(t *testing.T) {
 	dbClient := NewTestSQLiteClient(t)
 	defer dbClient.Close()
 
-	session := NewSession(dbClient, nil)
+	session := NewDefaultSessionFactory(dbClient, nil).NewSession()
 
 	tx, err := session.GetOrBeginTx(ctx)
 	require.NoError(t, err, "Expected to retrieve a transaction")
@@ -91,7 +91,7 @@ func TestSession_GetCurrentTxReturnsNilAfterSuccessfulRollback(t *testing.T) {
 	dbClient := NewTestSQLiteClient(t)
 	defer dbClient.Close()
 
-	session := NewSession(dbClient, nil)
+	session := NewDefaultSessionFactory(dbClient, nil).NewSession()
 
 	tx, err := session.GetOrBeginTx(ctx)
 	require.NoError(t, err, "Expected to retrieve a transaction")
@@ -110,7 +110,7 @@ func TestSession_GetCurrrentTxReturnsSameTxAfterFailedCommit(t *testing.T) {
 	dbClient := NewTestSQLiteClient(t)
 	defer dbClient.Close()
 
-	session := NewSession(dbClient, nil)
+	session := NewDefaultSessionFactory(dbClient, nil).NewSession()
 
 	tx, err := session.GetOrBeginTx(ctx)
 	require.NoError(t, err, "Expected to retrieve a transaction")
@@ -135,7 +135,7 @@ func TestSession_GetCurrrentTxReturnsSameTxAfterFailedRollback(t *testing.T) {
 	dbClient := NewTestSQLiteClient(t)
 	defer dbClient.Close()
 
-	session := NewSession(dbClient, nil)
+	session := NewDefaultSessionFactory(dbClient, nil).NewSession()
 
 	tx, err := session.GetOrBeginTx(ctx)
 	require.NoError(t, err, "Expected to retrieve a transaction")

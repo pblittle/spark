@@ -48,7 +48,7 @@ func NewTestContext(
 		return nil, nil, err
 	}
 
-	dbSession := NewSession(dbClient, nil)
+	dbSession := NewDefaultSessionFactory(dbClient, nil).NewSession()
 	return ent.Inject(ctx, dbSession), &TestContext{t: t, Client: dbClient, Session: dbSession}, nil
 }
 

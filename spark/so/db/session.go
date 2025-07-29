@@ -16,6 +16,37 @@ var (
 	DefaultNewTxTimeout = 15 * time.Second
 )
 
+// SessionFactory is an interface for creating a new Session.
+type SessionFactory interface {
+	NewSession() *Session
+}
+
+// DefaultSessionFactory is the default implementation of SessionFactory that creates sessions
+// using an ent.Client. It also provides a timeout for how long it will wait for a new transaction
+// to be started, to prevent requests from hanging indefinitely if the database is unresponsive or
+// overloaded.
+type DefaultSessionFactory struct {
+	dbClient     *ent.Client
+	newTxTimeout *time.Duration
+}
+
+func NewDefaultSessionFactory(dbClient *ent.Client, newTxTimeout *time.Duration) *DefaultSessionFactory {
+	return &DefaultSessionFactory{
+		dbClient:     dbClient,
+		newTxTimeout: newTxTimeout,
+	}
+}
+
+func (f *DefaultSessionFactory) NewSession() *Session {
+	provider := NewTxProviderWithTimeout(ent.NewEntClientTxProvider(f.dbClient), f.newTxTimeout)
+
+	return &Session{
+		provider:  provider,
+		currentTx: nil,
+		mu:        sync.Mutex{},
+	}
+}
+
 // A Session manages a transaction over the lifetime of a request or worker. It
 // wraps a TxProvider for creating an initial transaction, and stores that transaction for
 // subsequent requests until the transaction is committed or rolled back. Once the transaction
