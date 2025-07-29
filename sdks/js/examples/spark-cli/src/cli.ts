@@ -301,8 +301,9 @@ const commands = [
   "claimdeposit",
   "claimstaticdepositquote",
   "claimstaticdeposit",
-  "refundstaticdepositlegacy",
   "refundstaticdeposit",
+  "refundstaticdepositlegacy",
+  "claimstaticdepositwithmaxfee",
   "createpaymentintent",
   "createinvoice",
   "payinvoice",
@@ -547,6 +548,7 @@ async function runCLI() {
   claimdeposit <txid>                                                 - Claim any pending deposits to the wallet
   claimstaticdepositquote <txid> [outputIndex]                        - Get a quote for claiming a static deposit
   claimstaticdeposit <txid> <creditAmountSats> <sspSignature> [outputIndex] - Claim a static deposits
+  claimstaticdepositwithmaxfee <txid> <maxFee> [outputIndex]          - Claim a static deposit with a max fee
   refundstaticdepositlegacy <depositTransactionId> <destinationAddress> <fee> [outputIndex] - Refund a static deposit legacy
   refundstaticdeposit <depositTransactionId> <destinationAddress> <satsPerVbyteFee> [outputIndex] - Refund a static deposit
   gettransfers [limit] [offset]                                       - Get a list of transfers
@@ -1018,6 +1020,31 @@ async function runCLI() {
             });
 
             console.log(claimDeposit);
+          }
+          break;
+        case "claimstaticdepositwithmaxfee":
+          if (!wallet) {
+            console.log("Please initialize a wallet first");
+            break;
+          }
+
+          if (args[2] === undefined) {
+            const claimDepositWithMaxFee =
+              await wallet.claimStaticDepositWithMaxFee({
+                transactionId: args[0],
+                maxFee: parseInt(args[1]),
+              });
+
+            console.log(claimDepositWithMaxFee);
+          } else {
+            const claimDepositWithMaxFee =
+              await wallet.claimStaticDepositWithMaxFee({
+                transactionId: args[0],
+                maxFee: parseInt(args[1]),
+                outputIndex: parseInt(args[2]),
+              });
+
+            console.log(claimDepositWithMaxFee);
           }
           break;
         case "refundstaticdepositlegacy":

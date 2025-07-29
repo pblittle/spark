@@ -4,6 +4,7 @@ import { BitcoinFaucet } from "../../utils/test-faucet.js";
 
 const DEPOSIT_AMOUNT = 10000n;
 const SECOND_DEPOSIT_AMOUNT = 20000n;
+const THIRD_DEPOSIT_AMOUNT = 30000n;
 
 describe("SSP static deposit address integration", () => {
   it("should claim deposits to a static deposit address", async () => {
@@ -86,9 +87,33 @@ describe("SSP static deposit address integration", () => {
     const { balance: balance2 } = await userWallet.getBalance();
     expect(balance2).toBe(BigInt(quoteAmount + quoteAmount2));
 
+    // Test depositing money to the same address and test claim with max fee flow.
+    const signedTx3 = await faucet.sendToAddress(
+      depositAddress,
+      THIRD_DEPOSIT_AMOUNT,
+    );
+    const transactionId3 = signedTx3.id;
+    // Wait for the transaction to be mined
+    await faucet.mineBlocks(6);
+
+    // Get quote so we can calculate the expected balance. Not needed for actual flow.
+    const quote3 = await userWallet.getClaimStaticDepositQuote(transactionId3);
+
+    const quoteAmount3 = quote3!.creditAmountSats;
+
+    await userWallet.claimStaticDepositWithMaxFee({
+      transactionId: transactionId3,
+      maxFee: 1000,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const { balance: balance3 } = await userWallet.getBalance();
+    expect(balance3).toBe(BigInt(quoteAmount + quoteAmount2 + quoteAmount3));
+
     // Get transfers should include static deposit transfers.
     const transfers = await userWallet.getTransfers();
-    expect(transfers.transfers.length).toBe(2);
+    expect(transfers.transfers.length).toBe(3);
   }, 60000);
 
   it("should create a refund transaction", async () => {

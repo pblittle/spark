@@ -1721,7 +1721,9 @@ export class SparkWallet extends EventEmitter {
     }
 
     if (outputIndex === undefined) {
-      outputIndex = await this.getDepositTransactionVout(transactionId);
+      outputIndex = await this.getDepositTransactionVout({
+        txid: transactionId,
+      });
     }
 
     const quote = await sspClient.getClaimDepositQuote({
@@ -1762,7 +1764,9 @@ export class SparkWallet extends EventEmitter {
     }
 
     if (outputIndex === undefined) {
-      outputIndex = await this.getDepositTransactionVout(transactionId);
+      outputIndex = await this.getDepositTransactionVout({
+        txid: transactionId,
+      });
     }
 
     let network = this.config.getSspNetwork();
@@ -1798,6 +1802,77 @@ export class SparkWallet extends EventEmitter {
       depositSecretKey,
       signature,
       sspSignature,
+    });
+
+    if (!response) {
+      throw new Error("Failed to claim static deposit");
+    }
+
+    return response;
+  }
+
+  /**
+   * Get a quote on how much credit you can claim for a deposit from the SSP. If the quote charges less fees than the max fee, claim the deposit.
+   *
+   * @param {Object} params - The parameters object
+   * @param {string} params.transactionId - The ID of the transaction
+   * @param {number} params.maxFee - The maximum fee to claim the deposit for
+   * @param {number} [params.outputIndex] - The index of the output
+   * @returns {Promise<StaticDepositQuoteOutput>} Quote for claiming a deposit to a static deposit address
+   */
+  public async claimStaticDepositWithMaxFee({
+    transactionId,
+    maxFee,
+    outputIndex,
+  }: {
+    transactionId: string;
+    maxFee: number;
+    outputIndex?: number;
+  }): Promise<ClaimStaticDepositOutput | null> {
+    const sspClient = this.getSspClient();
+    let network = this.config.getSspNetwork();
+
+    if (network === BitcoinNetwork.FUTURE_VALUE) {
+      network = BitcoinNetwork.REGTEST;
+    }
+
+    const depositTx = await this.getDepositTransaction(transactionId);
+
+    if (outputIndex === undefined) {
+      outputIndex = await this.getDepositTransactionVout({
+        txid: transactionId,
+        depositTx,
+      });
+    }
+
+    const depositAmount = Number(depositTx.getOutput(outputIndex).amount);
+
+    const quote = await sspClient.getClaimDepositQuote({
+      transactionId,
+      outputIndex,
+      network,
+    });
+
+    if (!quote) {
+      throw new Error("Failed to get claim deposit quote");
+    }
+
+    const { creditAmountSats, signature: sspSignature } = quote;
+
+    const feeCharged = depositAmount - creditAmountSats;
+
+    if (feeCharged > maxFee) {
+      throw new ValidationError("Fee larger than max fee", {
+        field: "feeCharged",
+        value: feeCharged,
+      });
+    }
+
+    const response = await this.claimStaticDeposit({
+      transactionId,
+      creditAmountSats,
+      sspSignature,
+      outputIndex,
     });
 
     if (!response) {
@@ -1865,7 +1940,10 @@ export class SparkWallet extends EventEmitter {
     const depositTx = await this.getDepositTransaction(depositTransactionId);
 
     if (outputIndex === undefined) {
-      outputIndex = await this.getDepositTransactionVout(depositTransactionId);
+      outputIndex = await this.getDepositTransactionVout({
+        txid: depositTransactionId,
+        depositTx,
+      });
     }
 
     const totalAmount = depositTx.getOutput(outputIndex).amount;
@@ -2054,8 +2132,16 @@ export class SparkWallet extends EventEmitter {
     return payload;
   }
 
-  private async getDepositTransactionVout(txid: string): Promise<number> {
-    const depositTx = await this.getDepositTransaction(txid);
+  private async getDepositTransactionVout({
+    txid,
+    depositTx,
+  }: {
+    txid: string;
+    depositTx?: Transaction;
+  }): Promise<number> {
+    if (!depositTx) {
+      depositTx = await this.getDepositTransaction(txid);
+    }
 
     const staticDepositAddresses = new Set(
       await this.queryStaticDepositAddresses(),
