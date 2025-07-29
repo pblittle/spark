@@ -79,7 +79,7 @@ func CreateNewTree(config *wallet.Config, faucet *Faucet, privKey *secp256k1.Pri
 		return nil, fmt.Errorf("failed to serialize deposit tx: %w", err)
 	}
 
-	resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout)
+	resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tree: %w", err)
 	}

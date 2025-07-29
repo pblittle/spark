@@ -19,6 +19,8 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/blockheight"
 	"github.com/lightsparkdev/spark/so/ent/depositaddress"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
+	"github.com/lightsparkdev/spark/so/ent/tree"
+	"github.com/lightsparkdev/spark/so/ent/treenode"
 	"github.com/lightsparkdev/spark/so/ent/utxo"
 	"github.com/lightsparkdev/spark/so/ent/utxoswap"
 	"github.com/lightsparkdev/spark/so/errors"
@@ -750,21 +752,42 @@ func (o *DepositHandler) StartDepositTreeCreation(ctx context.Context, config *s
 		return nil, err
 	}
 	txid := onChainTx.TxHash()
-	treeMutator := db.Tree.
-		Create().
-		SetOwnerIdentityPubkey(depositAddress.OwnerIdentityPubkey).
-		SetNetwork(schemaNetwork).
-		SetBaseTxid(txid[:]).
-		SetVout(int16(req.OnChainUtxo.Vout))
 
-	if txConfirmed {
-		treeMutator.SetStatus(st.TreeStatusAvailable)
-	} else {
-		treeMutator.SetStatus(st.TreeStatusPending)
+	// Check if a tree already exists for this deposit
+	existingTree, err := db.Tree.Query().
+		Where(tree.BaseTxid(txid[:])).
+		Where(tree.Vout(int16(req.OnChainUtxo.Vout))).
+		First(ctx)
+
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to query for existing tree: %w", err)
 	}
-	tree, err := treeMutator.Save(ctx)
-	if err != nil {
-		return nil, err
+
+	logger := logging.GetLoggerFromContext(ctx)
+	logger.Info("existingTree", "existingTree", existingTree)
+	var tree *ent.Tree
+	if existingTree != nil {
+		// Tree already exists, use the existing one
+		tree = existingTree
+		logger.Info("Tree already exists", "treeId", existingTree.ID, "depositAddress", depositAddress.ID, "txid", txid)
+	} else {
+		// Create new tree
+		treeMutator := db.Tree.
+			Create().
+			SetOwnerIdentityPubkey(depositAddress.OwnerIdentityPubkey).
+			SetNetwork(schemaNetwork).
+			SetBaseTxid(txid[:]).
+			SetVout(int16(req.OnChainUtxo.Vout))
+
+		if txConfirmed {
+			treeMutator.SetStatus(st.TreeStatusAvailable)
+		} else {
+			treeMutator.SetStatus(st.TreeStatusPending)
+		}
+		tree, err = treeMutator.Save(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 	directTx := []byte{}
 	if req.DirectRootTxSigningJob != nil {
@@ -778,27 +801,63 @@ func (o *DepositHandler) StartDepositTreeCreation(ctx context.Context, config *s
 	if req.DirectFromCpfpRefundTxSigningJob != nil {
 		directFromCpfpRefundTx = req.DirectFromCpfpRefundTxSigningJob.RawTx
 	}
-	treeNodeMutator := db.TreeNode.
-		Create().
-		SetTree(tree).
-		SetStatus(st.TreeNodeStatusCreating).
-		SetOwnerIdentityPubkey(depositAddress.OwnerIdentityPubkey).
-		SetOwnerSigningPubkey(depositAddress.OwnerSigningPubkey).
-		SetValue(uint64(onChainOutput.Value)).
-		SetVerifyingPubkey(verifyingKeyBytes).
-		SetSigningKeyshare(signingKeyShare).
-		SetRawTx(req.RootTxSigningJob.RawTx).
-		SetRawRefundTx(req.RefundTxSigningJob.RawTx).
-		SetDirectTx(directTx).
-		SetDirectRefundTx(directRefundTx).
-		SetDirectFromCpfpRefundTx(directFromCpfpRefundTx).
-		SetVout(int16(req.OnChainUtxo.Vout))
+	// Check if a tree node already exists for this deposit
+	existingRoot, err := db.TreeNode.Query().
+		Where(treenode.OwnerIdentityPubkey(depositAddress.OwnerIdentityPubkey)).
+		Where(treenode.OwnerSigningPubkey(depositAddress.OwnerSigningPubkey)).
+		Where(treenode.Value(uint64(onChainOutput.Value))).
+		Where(treenode.Vout(int16(req.OnChainUtxo.Vout))).
+		ForUpdate().
+		Only(ctx)
 
-	if depositAddress.NodeID != uuid.Nil {
-		treeNodeMutator.SetID(depositAddress.NodeID)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to query for existing tree node: %w", err)
 	}
 
-	root, err := treeNodeMutator.Save(ctx)
+	var root *ent.TreeNode
+	if existingRoot != nil {
+		if existingRoot.Status != st.TreeNodeStatusCreating {
+			return nil, errors.AlreadyExistsErrorf("Expected tree node %s to be in creating status; got %s.", existingRoot.ID, existingRoot.Status)
+		}
+		logger.Info("Tree node already exists, updating with new transaction data", "treeNodeId", existingRoot.ID, "depositAddress", depositAddress.ID, "txid", txid)
+		// Tree node already exists, update it with new transaction data
+		root, err = existingRoot.Update().
+			SetRawTx(req.RootTxSigningJob.RawTx).
+			SetRawRefundTx(req.RefundTxSigningJob.RawTx).
+			SetDirectTx(directTx).
+			SetDirectRefundTx(directRefundTx).
+			SetDirectFromCpfpRefundTx(directFromCpfpRefundTx).
+			Save(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update existing tree node: %w", err)
+		}
+	} else {
+		// Create new tree node
+		treeNodeMutator := db.TreeNode.
+			Create().
+			SetTree(tree).
+			SetStatus(st.TreeNodeStatusCreating).
+			SetOwnerIdentityPubkey(depositAddress.OwnerIdentityPubkey).
+			SetOwnerSigningPubkey(depositAddress.OwnerSigningPubkey).
+			SetValue(uint64(onChainOutput.Value)).
+			SetVerifyingPubkey(verifyingKeyBytes).
+			SetSigningKeyshare(signingKeyShare).
+			SetRawTx(req.RootTxSigningJob.RawTx).
+			SetRawRefundTx(req.RefundTxSigningJob.RawTx).
+			SetDirectTx(directTx).
+			SetDirectRefundTx(directRefundTx).
+			SetDirectFromCpfpRefundTx(directFromCpfpRefundTx).
+			SetVout(int16(req.OnChainUtxo.Vout))
+
+		if depositAddress.NodeID != uuid.Nil {
+			treeNodeMutator.SetID(depositAddress.NodeID)
+		}
+
+		root, err = treeNodeMutator.Save(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

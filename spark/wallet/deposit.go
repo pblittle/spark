@@ -210,6 +210,7 @@ func QueryStaticDepositAddresses(
 	})
 }
 
+// DepositTreeCreationData holds the data needed to finalize deposit tree creation
 // CreateTreeRoot creates a tree root for a given deposit transaction.
 func CreateTreeRoot(
 	ctx context.Context,
@@ -218,6 +219,7 @@ func CreateTreeRoot(
 	verifyingKey []byte,
 	depositTx *wire.MsgTx,
 	vout int,
+	skipFinalizeSignatures bool,
 ) (*pb.FinalizeNodeSignaturesResponse, error) {
 	signingPubkey := secp256k1.PrivKeyFromBytes(signingPrivKey).PubKey()
 	signingPubkeyBytes := signingPubkey.SerializeCompressed()
@@ -311,6 +313,10 @@ func CreateTreeRoot(
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if skipFinalizeSignatures {
+		return nil, nil
 	}
 
 	if !bytes.Equal(treeResponse.RootNodeSignatureShares.VerifyingKey, verifyingKey) {
