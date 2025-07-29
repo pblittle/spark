@@ -3531,7 +3531,7 @@ export class SparkWallet extends EventEmitter {
     id: string,
   ): Promise<GraphQLTransferObj | null> {
     const sspClient = this.getSspClient();
-    return await sspClient.getTransfer(id);
+    return await sspClient.getTransfers([id]);
   }
 
   /**

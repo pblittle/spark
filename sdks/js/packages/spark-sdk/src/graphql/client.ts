@@ -70,7 +70,7 @@ import { GetClaimDepositQuote } from "./queries/GetClaimDepositQuote.js";
 import { GetCoopExitFeeQuote } from "./queries/GetCoopExitFeeQuote.js";
 import { LeavesSwapFeeEstimate } from "./queries/LeavesSwapFeeEstimate.js";
 import { LightningSendFeeEstimate } from "./queries/LightningSendFeeEstimate.js";
-import { GetTransfer } from "./queries/Transfer.js";
+import { GetTransfers } from "./queries/Transfers.js";
 import { UserRequest } from "./queries/UserRequest.js";
 
 export interface SspClientOptions {
@@ -485,14 +485,16 @@ export default class SspClient {
     });
   }
 
-  async getTransfer(id: string): Promise<Transfer | null> {
+  async getTransfers(ids: string[]): Promise<Transfer | null> {
     return await this.executeRawQuery({
-      queryPayload: GetTransfer,
+      queryPayload: GetTransfers,
       variables: {
-        transfer_spark_id: id,
+        transfer_spark_ids: ids,
       },
-      constructObject: (response: { transfer: any }) => {
-        return TransferFromJson(response.transfer);
+      constructObject: (response: { transfers: any }) => {
+        return response.transfers.map((transfer: any) =>
+          TransferFromJson(transfer),
+        );
       },
     });
   }
