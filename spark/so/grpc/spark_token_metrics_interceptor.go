@@ -68,10 +68,11 @@ func SparkTokenMetricsInterceptor() grpc.UnaryServerInterceptor {
 }
 
 // getSparkTokenAttributes returns the attributes for Spark token metrics
-func getSparkTokenAttributes(method string, txType string) []attribute.KeyValue {
+func getSparkTokenAttributes(fullMethod string, txType string) []attribute.KeyValue {
+	serviceName, methodName := extractServiceAndMethod(fullMethod)
 	attrs := []attribute.KeyValue{
-		attribute.String("grpc_method", method),
-		attribute.String("grpc_service", extractServiceName(method)),
+		attribute.String("grpc_method", methodName),
+		attribute.String("grpc_service", serviceName),
 		attribute.String("token_transaction_type", txType),
 	}
 
@@ -127,10 +128,10 @@ func extractTransactionType(req interface{}) string {
 	return "UNKNOWN"
 }
 
-func extractServiceName(method string) string {
-	parts := strings.Split(method, "/")
-	if len(parts) >= 2 {
-		return parts[1]
+func extractServiceAndMethod(fullMethod string) (string, string) {
+	parts := strings.Split(fullMethod, "/")
+	if len(parts) >= 3 {
+		return parts[1], parts[2]
 	}
-	return "unknown"
+	return "unknown", "unknown"
 }
