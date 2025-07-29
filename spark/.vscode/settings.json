@@ -11,5 +11,6 @@
   "go.formatFlags": [
     "fmt",
     "--stdin"
-  ]
+  ],
+  "prettier.prettierPath": "./sdks/js/node_modules/prettier/index.cjs"
 }
