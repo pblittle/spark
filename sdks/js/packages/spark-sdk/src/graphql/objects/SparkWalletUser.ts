@@ -2,7 +2,7 @@
 
 import { Query, isObject } from "@lightsparkdev/core";
 import autoBind from "../../auto-bind.js";
-import LightsparkClient from "../client.js";
+import type LightsparkClient from "../client.js";
 import BitcoinNetwork from "./BitcoinNetwork.js";
 import Entity from "./Entity.js";
 import SparkUserRequestStatus from "./SparkUserRequestStatus.js";

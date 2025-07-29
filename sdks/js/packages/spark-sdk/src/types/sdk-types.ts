@@ -1,4 +1,9 @@
 import { bytesToHex } from "@noble/curves/abstract/utils";
+import ClaimStaticDeposit from "../graphql/objects/ClaimStaticDeposit.js";
+import CoopExitRequest from "../graphql/objects/CoopExitRequest.js";
+import LeavesSwapRequest from "../graphql/objects/LeavesSwapRequest.js";
+import LightningReceiveRequest from "../graphql/objects/LightningReceiveRequest.js";
+import LightningSendRequest from "../graphql/objects/LightningSendRequest.js";
 import {
   Network,
   SigningKeyshare,
@@ -46,6 +51,13 @@ export enum TransferDirection {
   OUTGOING = "OUTGOING",
 }
 
+export type UserRequestType =
+  | LightningSendRequest
+  | LightningReceiveRequest
+  | LeavesSwapRequest
+  | CoopExitRequest
+  | ClaimStaticDeposit;
+
 export interface WalletTransfer {
   id: string;
   senderIdentityPublicKey: string;
@@ -58,6 +70,7 @@ export interface WalletTransfer {
   updatedTime: Date | undefined;
   type: keyof typeof TransferType;
   transferDirection: keyof typeof TransferDirection;
+  userRequest: Omit<UserRequestType, "transfer"> | undefined;
 }
 
 export interface WalletTransferLeaf {
@@ -81,6 +94,7 @@ export function mapTransferLeafToWalletTransferLeaf(
 export function mapTransferToWalletTransfer(
   proto: Transfer,
   identityPublicKey: string,
+  userRequest?: Omit<UserRequestType, "transfer">,
 ): WalletTransfer {
   const receiverIdentityPublicKey = bytesToHex(proto.receiverIdentityPublicKey);
   const senderIdentityPublicKey = bytesToHex(proto.senderIdentityPublicKey);
@@ -99,5 +113,6 @@ export function mapTransferToWalletTransfer(
       receiverIdentityPublicKey === identityPublicKey
         ? TransferDirection.INCOMING
         : TransferDirection.OUTGOING,
+    userRequest: userRequest,
   };
 }

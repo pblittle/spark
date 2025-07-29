@@ -19,7 +19,7 @@ import {
   RPCError,
   ValidationError,
 } from "../errors/types.js";
-import SspClient from "../graphql/client.js";
+import SspClient, { TransferWithUserRequest } from "../graphql/client.js";
 import {
   BitcoinNetwork,
   ClaimStaticDepositOutput,
@@ -35,7 +35,6 @@ import {
   StaticDepositQuoteOutput,
   UserLeafInput,
 } from "../graphql/objects/index.js";
-import GraphQLTransferObj from "../graphql/objects/Transfer.js";
 import {
   DepositAddressQueryResult,
   OutputWithPreviousTransactionData,
@@ -111,6 +110,7 @@ import { BitcoinFaucet } from "../tests/utils/test-faucet.js";
 import {
   mapTransferToWalletTransfer,
   mapTreeNodeToWalletLeaf,
+  UserRequestType,
   WalletLeaf,
   WalletTransfer,
 } from "../types/sdk-types.js";
@@ -1476,9 +1476,28 @@ export class SparkWallet extends EventEmitter {
     const identityPublicKey = bytesToHex(
       await this.config.signer.getIdentityPublicKey(),
     );
+
+    const userRequests = await this.sspClient?.getTransfers(
+      transfers.transfers.map((transfer) => transfer.id),
+    );
+
+    const userRequestsMap = new Map<
+      string,
+      Omit<UserRequestType, "transfer">
+    >();
+    for (const userRequest of userRequests || []) {
+      if (userRequest && userRequest.sparkId && userRequest.userRequest) {
+        userRequestsMap.set(userRequest.sparkId, userRequest.userRequest);
+      }
+    }
+
     return {
       transfers: transfers.transfers.map((transfer) =>
-        mapTransferToWalletTransfer(transfer, identityPublicKey),
+        mapTransferToWalletTransfer(
+          transfer,
+          identityPublicKey,
+          userRequestsMap.get(transfer.id),
+        ),
       ),
       offset: transfers.offset,
     };
@@ -3536,13 +3555,14 @@ export class SparkWallet extends EventEmitter {
    * Gets a transfer that has been sent by the SSP to the wallet.
    *
    * @param {string} id - The ID of the transfer
-   * @returns {Promise<GraphQLTransferObj | null>} The transfer
+   * @returns {Promise<TransferWithUserRequest | undefined>} The transfer
    */
   public async getTransferFromSsp(
     id: string,
-  ): Promise<GraphQLTransferObj | null> {
+  ): Promise<TransferWithUserRequest | undefined> {
     const sspClient = this.getSspClient();
-    return await sspClient.getTransfers([id]);
+    const transfers = await sspClient.getTransfers([id]);
+    return transfers?.[0];
   }
 
   /**

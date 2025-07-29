@@ -10,6 +10,7 @@ import {
 import { sha256 } from "@noble/hashes/sha2";
 import { AuthenticationError, NetworkError } from "../errors/index.js";
 import { SparkSigner } from "../signer/signer.js";
+import { UserRequestType } from "../types/sdk-types.js";
 import { ClaimStaticDeposit } from "./mutations/ClaimStaticDeposit.js";
 import { CompleteCoopExit } from "./mutations/CompleteCoopExit.js";
 import { CompleteLeavesSwap } from "./mutations/CompleteLeavesSwap.js";
@@ -19,6 +20,7 @@ import { RequestLightningReceive } from "./mutations/RequestLightningReceive.js"
 import { RequestLightningSend } from "./mutations/RequestLightningSend.js";
 import { RequestSwapLeaves } from "./mutations/RequestSwapLeaves.js";
 import { VerifyChallenge } from "./mutations/VerifyChallenge.js";
+import { ClaimStaticDepositFromJson } from "./objects/ClaimStaticDeposit.js";
 import ClaimStaticDepositOutput, {
   ClaimStaticDepositOutputFromJson,
 } from "./objects/ClaimStaticDepositOutput.js";
@@ -29,7 +31,7 @@ import CoopExitRequest, {
   CoopExitRequestFromJson,
 } from "./objects/CoopExitRequest.js";
 import { GetChallengeOutputFromJson } from "./objects/GetChallengeOutput.js";
-import type {
+import {
   BitcoinNetwork,
   CompleteCoopExitInput,
   CompleteLeavesSwapInput,
@@ -77,6 +79,10 @@ export interface SspClientOptions {
   baseUrl: string;
   identityPublicKey: string;
   schemaEndpoint?: string;
+}
+
+export interface TransferWithUserRequest extends Transfer {
+  userRequest?: UserRequestType;
 }
 
 export interface MayHaveSspClientOptions {
@@ -485,16 +491,49 @@ export default class SspClient {
     });
   }
 
-  async getTransfers(ids: string[]): Promise<Transfer | null> {
+  async getTransfers(ids: string[]): Promise<TransferWithUserRequest[]> {
     return await this.executeRawQuery({
       queryPayload: GetTransfers,
       variables: {
         transfer_spark_ids: ids,
       },
       constructObject: (response: { transfers: any }) => {
-        return response.transfers.map((transfer: any) =>
-          TransferFromJson(transfer),
-        );
+        return response.transfers.map((transfer: any) => {
+          const transferObj: TransferWithUserRequest = TransferFromJson(
+            transfer,
+          ) as TransferWithUserRequest;
+
+          switch (transfer.transfer_user_request.__typename) {
+            case "ClaimStaticDeposit":
+              transferObj.userRequest = ClaimStaticDepositFromJson(
+                transfer.transfer_user_request,
+              );
+              break;
+            case "CoopExitRequest":
+              transferObj.userRequest = CoopExitRequestFromJson(
+                transfer.transfer_user_request,
+              );
+              break;
+            case "LeavesSwapRequest":
+              transferObj.userRequest = LeavesSwapRequestFromJson(
+                transfer.transfer_user_request,
+              );
+              break;
+            case "LightningReceiveRequest":
+              transferObj.userRequest = LightningReceiveRequestFromJson(
+                transfer.transfer_user_request,
+              );
+              break;
+            case "LightningSendRequest":
+              transferObj.userRequest = LightningSendRequestFromJson(
+                transfer.transfer_user_request,
+              );
+              break;
+          }
+
+          const { userRequestId, ...rest } = transferObj;
+          return rest;
+        });
       },
     });
   }
