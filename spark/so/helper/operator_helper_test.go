@@ -179,7 +179,7 @@ func TestExecuteTaskWithAllOperators_Error(t *testing.T) {
 	}
 	task := func(_ context.Context, operator *so.SigningOperator) (string, error) {
 		if operator.Identifier == failID {
-			return "", fmt.Errorf(errMsg)
+			return "", fmt.Errorf("%s", errMsg)
 		}
 		return operator.Identifier, nil
 	}
