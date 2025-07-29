@@ -40,9 +40,13 @@ func SparkTokenMetricsInterceptor() grpc.UnaryServerInterceptor {
 	)
 
 	sparkTokenTxDuration, _ := meter.Float64Histogram(
-		"spark_token_transaction_duration_seconds",
+		"spark_token_transaction_duration_milliseconds",
 		metric.WithDescription("Duration of Spark token transaction RPCs"),
-		metric.WithUnit("s"),
+		metric.WithUnit("ms"),
+		metric.WithExplicitBucketBoundaries(
+			// Standard gRPC latency buckets in milliseconds
+			1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000,
+		),
 	)
 
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -57,7 +61,7 @@ func SparkTokenMetricsInterceptor() grpc.UnaryServerInterceptor {
 
 		startTime := time.Now()
 		resp, err := handler(ctx, req)
-		duration := time.Since(startTime).Seconds()
+		duration := time.Since(startTime).Seconds() * 1000
 		attrs = append(attrs, attribute.String("grpc_code", status.Code(err).String()))
 
 		sparkTokenTxHandledTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
