@@ -3,11 +3,11 @@ version = "0.35.0"
 backend = "aqua:ariga/atlas"
 
 [tools.go]
-version = "1.23.2"
+version = "1.24.5"
 backend = "core:go"
 
 [tools.go.checksums]
-"go1.23.2.darwin-arm64.tar.gz" = "sha256:d87031194fe3e01abdcaf3c7302148ade97a7add6eac3fec26765bcb3207b80f"
+"go1.24.5.darwin-arm64.tar.gz" = "sha256:92d30a678f306c327c544758f2d2fa5515aa60abe9dba4ca35fbf9b8bfc53212"
 
 [tools.golangci-lint]
 version = "2.0.2"
