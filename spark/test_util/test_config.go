@@ -86,13 +86,18 @@ func GetAllSigningOperators() (map[string]*so.SigningOperator, error) {
 
 	operators := make(map[string]*so.SigningOperator, opCount)
 	basePort := 8535
-	for i := 0; i < opCount; i++ {
+	for i := range opCount {
 		id := fmt.Sprintf("%064x", i+1) // "000…001", "000…002" …
+		address := fmt.Sprintf("localhost:%d", basePort+i)
+		if isHermeticTest() {
+			address = fmt.Sprintf("dns:///%d.spark.minikube.local", i)
+		}
+
 		operators[id] = &so.SigningOperator{
 			ID:                uint64(i),
 			Identifier:        id,
-			AddressRpc:        fmt.Sprintf("localhost:%d", basePort+i),
-			AddressDkg:        fmt.Sprintf("localhost:%d", basePort+i),
+			AddressRpc:        address,
+			AddressDkg:        address,
 			IdentityPublicKey: pubkeyBytesArray[i],
 			CertPath:          &certPath,
 		}
