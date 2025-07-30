@@ -738,12 +738,14 @@ func (h *LightningHandler) GetPreimageShare(ctx context.Context, req *pb.Initiat
 	for i := range req.Transfer.LeavesToSend {
 		cpfpTransaction := req.Transfer.LeavesToSend[i]
 		cpfpLeafRefundMap[cpfpTransaction.LeafId] = cpfpTransaction.RawTx
-		if len(req.Transfer.DirectLeavesToSend) > 0 && len(req.Transfer.DirectFromCpfpLeavesToSend) > 0 {
-			directTransaction := req.Transfer.DirectLeavesToSend[i]
-			directFromCpfpTransaction := req.Transfer.DirectFromCpfpLeavesToSend[i]
-			directLeafRefundMap[directTransaction.LeafId] = directTransaction.RawTx
-			directFromCpfpLeafRefundMap[directFromCpfpTransaction.LeafId] = directFromCpfpTransaction.RawTx
-		}
+	}
+	for i := range req.Transfer.DirectLeavesToSend {
+		directTransaction := req.Transfer.DirectLeavesToSend[i]
+		directLeafRefundMap[directTransaction.LeafId] = directTransaction.RawTx
+	}
+	for i := range req.Transfer.DirectFromCpfpLeavesToSend {
+		directFromCpfpTransaction := req.Transfer.DirectFromCpfpLeavesToSend[i]
+		directFromCpfpLeafRefundMap[directFromCpfpTransaction.LeafId] = directFromCpfpTransaction.RawTx
 	}
 
 	transferHandler := NewTransferHandler(h.config)
