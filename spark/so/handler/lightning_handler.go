@@ -46,6 +46,13 @@ func NewLightningHandler(config *so.Config) *LightningHandler {
 
 // StorePreimageShare stores the preimage share for the given payment hash.
 func (h *LightningHandler) StorePreimageShare(ctx context.Context, req *pb.StorePreimageShareRequest) error {
+	if req.PreimageShare == nil {
+		return fmt.Errorf("preimage share is nil")
+	}
+	if len(req.PreimageShare.Proofs) == 0 {
+		return fmt.Errorf("preimage share proofs is empty")
+	}
+
 	err := secretsharing.ValidateShare(
 		&secretsharing.VerifiableSecretShare{
 			SecretShare: secretsharing.SecretShare{
