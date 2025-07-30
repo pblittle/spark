@@ -256,11 +256,6 @@ func NewConfig(
 		return nil, err
 	}
 
-	identityPubkeyToOperatorIdentifierMap := make(map[string]string)
-	for _, operator := range signingOperatorMap {
-		identityPubkeyToOperatorIdentifierMap[string(operator.IdentityPublicKey)] = operator.Identifier
-	}
-
 	data, err := os.ReadFile(configFilePath)
 	if err != nil {
 		return nil, err
@@ -301,33 +296,35 @@ func NewConfig(
 		operatorConfig.XffClientIpPosition = 0
 	}
 
-	return &Config{
-		Index:                                 index,
-		Identifier:                            identifier,
-		IdentityPrivateKey:                    identityPrivateKeyBytes,
-		SigningOperatorMap:                    signingOperatorMap,
-		Threshold:                             threshold,
-		SignerAddress:                         signerAddress,
-		DatabasePath:                          databasePath,
-		IsRDS:                                 isRDS,
-		authzEnforced:                         authzEnforced,
-		DKGConfig:                             operatorConfig.Dkg,
-		SupportedNetworks:                     supportedNetworks,
-		BitcoindConfigs:                       operatorConfig.Bitcoind,
-		Lrc20Configs:                          operatorConfig.Lrc20,
-		ServerCertPath:                        serverCertPath,
-		ServerKeyPath:                         serverKeyPath,
-		RunDirectory:                          runDirectory,
-		ReturnDetailedErrors:                  operatorConfig.ReturnDetailedErrors,
-		ReturnDetailedPanicErrors:             operatorConfig.ReturnDetailedPanicErrors,
-		RateLimiter:                           rateLimiter,
-		Tracing:                               operatorConfig.Tracing,
-		Database:                              operatorConfig.Database,
-		identityPubkeyToOperatorIdentifierMap: identityPubkeyToOperatorIdentifierMap,
-		Token:                                 operatorConfig.Token,
-		ServiceAuthz:                          operatorConfig.ServiceAuthz,
-		XffClientIpPosition:                   operatorConfig.XffClientIpPosition,
-	}, nil
+	config := &Config{
+		Index:                     index,
+		Identifier:                identifier,
+		IdentityPrivateKey:        identityPrivateKeyBytes,
+		SigningOperatorMap:        signingOperatorMap,
+		Threshold:                 threshold,
+		SignerAddress:             signerAddress,
+		DatabasePath:              databasePath,
+		IsRDS:                     isRDS,
+		authzEnforced:             authzEnforced,
+		DKGConfig:                 operatorConfig.Dkg,
+		SupportedNetworks:         supportedNetworks,
+		BitcoindConfigs:           operatorConfig.Bitcoind,
+		Lrc20Configs:              operatorConfig.Lrc20,
+		ServerCertPath:            serverCertPath,
+		ServerKeyPath:             serverKeyPath,
+		RunDirectory:              runDirectory,
+		ReturnDetailedErrors:      operatorConfig.ReturnDetailedErrors,
+		ReturnDetailedPanicErrors: operatorConfig.ReturnDetailedPanicErrors,
+		RateLimiter:               rateLimiter,
+		Tracing:                   operatorConfig.Tracing,
+		Database:                  operatorConfig.Database,
+		Token:                     operatorConfig.Token,
+		ServiceAuthz:              operatorConfig.ServiceAuthz,
+		XffClientIpPosition:       operatorConfig.XffClientIpPosition,
+	}
+
+	config.buildIdentityPubkeyMap()
+	return config, nil
 }
 
 func (c *Config) IsNetworkSupported(network common.Network) bool {
@@ -540,7 +537,17 @@ func (c *Config) GetSigningOperatorList() map[string]*pb.SigningOperatorInfo {
 	return operatorList
 }
 
+func (c *Config) buildIdentityPubkeyMap() {
+	c.identityPubkeyToOperatorIdentifierMap = make(map[string]string, len(c.SigningOperatorMap))
+	for _, operator := range c.SigningOperatorMap {
+		c.identityPubkeyToOperatorIdentifierMap[string(operator.IdentityPublicKey)] = operator.Identifier
+	}
+}
+
 func (c *Config) GetOperatorIdentifierFromIdentityPublicKey(identityPublicKey []byte) string {
+	if len(c.identityPubkeyToOperatorIdentifierMap) == 0 {
+		c.buildIdentityPubkeyMap()
+	}
 	return c.identityPubkeyToOperatorIdentifierMap[string(identityPublicKey)]
 }
 

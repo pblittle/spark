@@ -9,6 +9,7 @@ import (
 
 	"github.com/lightsparkdev/spark/so/handler/tokens"
 	"github.com/lightsparkdev/spark/so/helper"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/go-co-op/gocron/v2"
@@ -17,6 +18,8 @@ import (
 	"github.com/lightsparkdev/spark/common/logging"
 	pbspark "github.com/lightsparkdev/spark/proto/spark"
 	pbinternal "github.com/lightsparkdev/spark/proto/spark_internal"
+	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
+	tokeninternalpb "github.com/lightsparkdev/spark/proto/spark_token_internal"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
@@ -295,6 +298,104 @@ func AllScheduledTasks() []ScheduledTask {
 							logger.Info(fmt.Sprintf("Successfully cancelled or finalized expired token transaction: id=%s, hash=%s",
 								expiredTransaction.ID,
 								txFinalHash))
+						}
+					}
+					return nil
+				},
+			},
+		},
+		{
+			ExecutionInterval: 10 * time.Minute,
+			BaseTask: BaseTask{
+				Name:         "finalize_revealed_token_transactions",
+				RunInTestEnv: true,
+				Task: func(ctx context.Context, config *so.Config) error {
+					logger := logging.GetLoggerFromContext(ctx)
+					logger.Info("[cron] Finalizing revealed token transactions")
+					db, err := ent.GetDbFromContext(ctx)
+					if err != nil {
+						return fmt.Errorf("failed to get or create current tx for request: %w", err)
+					}
+					tokenTransactions, err := db.TokenTransaction.Query().
+						Where(
+							tokentransaction.And(
+								tokentransaction.StatusEQ(st.TokenTransactionStatusRevealed),
+								tokentransaction.UpdateTimeLT(time.Now().Add(-5*time.Minute)),
+							),
+						).
+						WithPeerSignatures().
+						WithSpentOutput(func(q *ent.TokenOutputQuery) {
+							q.WithOutputCreatedTokenTransaction()
+						}).
+						WithCreatedOutput().
+						All(ctx)
+					if err != nil {
+						return err
+					}
+					logger.Info(fmt.Sprintf("[cron] Found %d token transactions to finalize", len(tokenTransactions)))
+					for _, tokenTransaction := range tokenTransactions {
+						var spentOutputs []*tokenpb.TokenOutputToSpend
+						var createdOutputs []*tokenpb.TokenOutput
+						signaturesPackage := make(map[string]*tokeninternalpb.SignTokenTransactionFromCoordinationResponse)
+
+						if tokenTransaction.Edges.SpentOutput != nil {
+							for _, spentOutput := range tokenTransaction.Edges.SpentOutput {
+								spentOutputs = append(spentOutputs, &tokenpb.TokenOutputToSpend{
+									PrevTokenTransactionHash: spentOutput.Edges.OutputCreatedTokenTransaction.FinalizedTokenTransactionHash,
+									PrevTokenTransactionVout: uint32(spentOutput.CreatedTransactionOutputVout),
+								})
+							}
+						}
+						if tokenTransaction.Edges.CreatedOutput != nil {
+							for _, createdOutput := range tokenTransaction.Edges.CreatedOutput {
+								idStr := createdOutput.ID.String()
+								createdOutputs = append(createdOutputs, &tokenpb.TokenOutput{
+									Id:                            &idStr,
+									OwnerPublicKey:                createdOutput.OwnerPublicKey,
+									RevocationCommitment:          createdOutput.WithdrawRevocationCommitment,
+									WithdrawBondSats:              &createdOutput.WithdrawBondSats,
+									WithdrawRelativeBlockLocktime: &createdOutput.WithdrawRelativeBlockLocktime,
+									TokenPublicKey:                createdOutput.TokenPublicKey,
+									TokenIdentifier:               createdOutput.TokenIdentifier,
+									TokenAmount:                   createdOutput.TokenAmount,
+								})
+							}
+						}
+						protoNetwork, err := common.ProtoNetworkFromSchemaNetwork(tokenTransaction.Edges.SpentOutput[0].Network)
+						if err != nil {
+							return fmt.Errorf("unable to get proto network: %w", err)
+						}
+
+						if tokenTransaction.Edges.PeerSignatures != nil {
+							for _, signature := range tokenTransaction.Edges.PeerSignatures {
+								identifier := config.GetOperatorIdentifierFromIdentityPublicKey(signature.OperatorIdentityPublicKey)
+								signaturesPackage[identifier] = &tokeninternalpb.SignTokenTransactionFromCoordinationResponse{
+									SparkOperatorSignature: signature.Signature,
+								}
+							}
+						}
+						if tokenTransaction.OperatorSignature != nil {
+							signaturesPackage[config.Identifier] = &tokeninternalpb.SignTokenTransactionFromCoordinationResponse{
+								SparkOperatorSignature: tokenTransaction.OperatorSignature,
+							}
+						}
+
+						tokenPb := &tokenpb.TokenTransaction{
+							Version: uint32(tokenTransaction.Version),
+							TokenInputs: &tokenpb.TokenTransaction_TransferInput{
+								TransferInput: &tokenpb.TokenTransferInput{
+									OutputsToSpend: spentOutputs,
+								},
+							},
+							TokenOutputs: createdOutputs,
+							ExpiryTime:   timestamppb.New(tokenTransaction.ExpiryTime),
+							Network:      protoNetwork,
+						}
+
+						signTokenHandler := tokens.NewSignTokenHandler(config)
+						err = signTokenHandler.ExchangeRevocationSecretsAndFinalizeIfPossible(ctx, tokenPb, signaturesPackage, tokenTransaction.FinalizedTokenTransactionHash)
+						if err != nil {
+							return fmt.Errorf("cron job failed to exchange revocation secrets and finalize if possible for token txHash: %x: %w", tokenTransaction.FinalizedTokenTransactionHash, err)
 						}
 					}
 					return nil

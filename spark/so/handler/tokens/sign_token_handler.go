@@ -221,40 +221,46 @@ func (h *SignTokenHandler) CommitTransaction(ctx context.Context, req *tokenpb.C
 		"transaction_hash", req.FinalTokenTransactionHash)
 
 	if req.FinalTokenTransaction.GetTransferInput() != nil {
-		response, err := h.exchangeRevocationSecretShares(ctx, internalSignatures, req.FinalTokenTransaction, req.FinalTokenTransactionHash)
-		if err != nil {
-			return nil, tokens.FormatErrorWithTransactionEnt("3 coordinator failed to exchange revocation secret shares with all other operators", tokenTransaction, err)
-		}
-
-		// Collect the secret shares from all operators.
-		var operatorShares []*tokeninternalpb.OperatorRevocationShares
-		for _, exchangeResponse := range response {
-			if exchangeResponse == nil {
-				return nil, tokens.FormatErrorWithTransactionEnt("nil exchange response received from operator", tokenTransaction, nil)
-			}
-			operatorShares = append(operatorShares, exchangeResponse.ReceivedOperatorShares...)
-		}
-		inputOperatorShareMap, err := buildInputOperatorShareMap(operatorShares)
-		if err != nil {
-			return nil, tokens.FormatErrorWithTransactionEnt("failed to build input operator share map for token txHash", tokenTransaction, err)
-		}
-
-		// Persist the secret shares from all operators.
-		internalHandler := NewInternalSignTokenHandler(h.config)
-		finalized, err := internalHandler.persistPartialRevocationSecretShares(ctx, inputOperatorShareMap, req.FinalTokenTransactionHash)
-		if err != nil {
-			return nil, tokens.FormatErrorWithTransactionEnt("failed to persist partial revocation secret shares", tokenTransaction, err)
-		}
-
-		if finalized {
-			_, err := h.exchangeRevocationSecretShares(ctx, internalSignatures, req.FinalTokenTransaction, req.FinalTokenTransactionHash)
-			if err != nil {
-				return nil, tokens.FormatErrorWithTransactionEnt("2 failed to exchange revocation secret shares", tokenTransaction, err)
-			}
+		if err := h.ExchangeRevocationSecretsAndFinalizeIfPossible(ctx, req.FinalTokenTransaction, internalSignatures, req.FinalTokenTransactionHash); err != nil {
+			return nil, tokens.FormatErrorWithTransactionEnt("failed to exchange revocation secret shares and finalize if possible", tokenTransaction, err)
 		}
 	}
 
 	return &tokenpb.CommitTransactionResponse{}, nil
+}
+
+func (h *SignTokenHandler) ExchangeRevocationSecretsAndFinalizeIfPossible(ctx context.Context, tokenTransactionProto *tokenpb.TokenTransaction, internalSignatures map[string]*tokeninternalpb.SignTokenTransactionFromCoordinationResponse, tokenTransactionhash []byte) error {
+	response, err := h.exchangeRevocationSecretShares(ctx, internalSignatures, tokenTransactionProto, tokenTransactionhash)
+	if err != nil {
+		return fmt.Errorf("coordinator failed to exchange revocation secret shares with all other operators for token txHash: %x: %w", tokenTransactionhash, err)
+	}
+
+	// Collect the secret shares from all operators.
+	var operatorShares []*tokeninternalpb.OperatorRevocationShares
+	for _, exchangeResponse := range response {
+		if exchangeResponse == nil {
+			return fmt.Errorf("nil exchange response received from operator for token txHash: %x", tokenTransactionhash)
+		}
+		operatorShares = append(operatorShares, exchangeResponse.ReceivedOperatorShares...)
+	}
+	inputOperatorShareMap, err := buildInputOperatorShareMap(operatorShares)
+	if err != nil {
+		return fmt.Errorf("failed to build input operator share map for token txHash: %x: %w", tokenTransactionhash, err)
+	}
+
+	// Persist the secret shares from all operators.
+	internalHandler := NewInternalSignTokenHandler(h.config)
+	finalized, err := internalHandler.persistPartialRevocationSecretShares(ctx, inputOperatorShareMap, tokenTransactionhash)
+	if err != nil {
+		return fmt.Errorf("failed to persist partial revocation secret shares for token txHash: %x: %w", tokenTransactionhash, err)
+	}
+	if finalized {
+		_, err := h.exchangeRevocationSecretShares(ctx, internalSignatures, tokenTransactionProto, tokenTransactionhash)
+		if err != nil {
+			return fmt.Errorf("failed to exchange revocation secret shares for token txHash after finalized: %x: %w", tokenTransactionhash, err)
+		}
+	}
+	return nil
 }
 
 func (h *SignTokenHandler) exchangeRevocationSecretShares(ctx context.Context, allOperatorSignaturesResponse map[string]*tokeninternalpb.SignTokenTransactionFromCoordinationResponse, tokenTransaction *tokenpb.TokenTransaction, tokenTransactionHash []byte) (map[string]*tokeninternalpb.ExchangeRevocationSecretsSharesResponse, error) {

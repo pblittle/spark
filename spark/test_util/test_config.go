@@ -178,6 +178,7 @@ func SpecificOperatorTestConfig(operatorIndex int) (*so.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	identifier := fmt.Sprintf("000000000000000000000000000000000000000000000000000000000000000%d", operatorIndex+1)
 	opCount := len(signingOperators)
 	threshold := (opCount + 2) / 2 // 1/1, 2/2, 2/3, 3/4, 3/5
@@ -190,6 +191,7 @@ func SpecificOperatorTestConfig(operatorIndex int) (*so.Config, error) {
 		SignerAddress:      getLocalFrostSignerAddress(),
 		DatabasePath:       getTestDatabasePath(operatorIndex),
 	}
+
 	return &config, nil
 }
 
