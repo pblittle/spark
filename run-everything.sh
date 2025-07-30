@@ -124,7 +124,7 @@ build_go_operator() {
     }
 
     # Build the operator
-    go build -o "${run_dir}/bin/operator" ./bin/operator
+    go build -tags=lightspark -o "${run_dir}/bin/operator" ./bin/operator
     build_status=$?
 
     cd - > /dev/null
