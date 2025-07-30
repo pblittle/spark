@@ -1,5 +1,14 @@
 # @buildonspark/spark-sdk
 
+## 0.2.5
+
+### Patch Changes
+
+- Attach the SSP request object to spark transfer if it exists
+- Update static deposit refund flow to take sats per vbyte
+- Allow the creation of multiple refunds in static deposit refund flow
+- Add new function to claim a static deposit while specifying a max fee
+
 ## 0.2.4
 
 ### Patch Changes
