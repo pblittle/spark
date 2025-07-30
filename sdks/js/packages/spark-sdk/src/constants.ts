@@ -27,3 +27,14 @@ if (isBun) {
 }
 
 export const clientEnv = `js-spark-sdk/${packageVersion} ${baseEnvStr}`;
+
+export const otelTraceDomains = [
+  "api.dev.dev.sparkinfra.net",
+  "0.spark.dev.dev.sparkinfra.net",
+  "1.spark.dev.dev.sparkinfra.net",
+  "2.spark.dev.dev.sparkinfra.net",
+  "api.lightspark.com",
+  "0.spark.lightspark.com",
+  "1.spark.lightspark.com",
+  "2.spark.lightspark.com",
+];

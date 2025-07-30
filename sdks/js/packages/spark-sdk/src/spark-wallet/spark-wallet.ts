@@ -1,4 +1,4 @@
-import { isNode, mapCurrencyAmount } from "@lightsparkdev/core";
+import { isNode, isObject, mapCurrencyAmount } from "@lightsparkdev/core";
 import {
   bytesToHex,
   bytesToNumberBE,
@@ -144,6 +144,12 @@ import {
   TokenMetadata,
 } from "../proto/spark_token.js";
 import { getFetch } from "../utils/fetch.js";
+import { Tracer, trace } from "@opentelemetry/api";
+import {
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+  SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 
 /**
  * The SparkWallet class is the primary interface for interacting with the Spark network.
@@ -186,14 +192,7 @@ export class SparkWallet extends EventEmitter {
   // Add this property near the top of the class with other private properties
   private claimTransfersInterval: NodeJS.Timeout | null = null;
 
-  protected wrapWithOtelSpan<T>(
-    name: string,
-    fn: (...args: any[]) => Promise<T>,
-  ): (...args: any[]) => Promise<T> {
-    return async (...args: any[]): Promise<T> => {
-      return await fn(...args);
-    };
-  }
+  private tracer: Tracer | null = null;
 
   protected constructor(options?: ConfigOptions, signer?: SparkSigner) {
     super();
@@ -228,6 +227,9 @@ export class SparkWallet extends EventEmitter {
       this.connectionManager,
       this.signingService,
     );
+
+    this.tracer = trace.getTracer(this.tracerId);
+    this.wrapSparkWalletWithTracing();
   }
 
   public static async initialize({
@@ -237,6 +239,8 @@ export class SparkWallet extends EventEmitter {
     options,
   }: SparkWalletProps) {
     const wallet = new SparkWallet(options, signer);
+    wallet.initializeTracer(wallet);
+
     const initResponse = await wallet.initWallet(mnemonicOrSeed, accountNumber);
 
     return {
@@ -3114,7 +3118,7 @@ export class SparkWallet extends EventEmitter {
       return invoice;
     };
 
-    const invoice = await this.lightningService!.createLightningInvoice({
+    const invoice = await this.lightningService.createLightningInvoice({
       amountSats,
       memo,
       invoiceCreator: requestLightningInvoice,
@@ -4408,5 +4412,118 @@ export class SparkWallet extends EventEmitter {
 
       offset += pageSize;
     }
+  }
+
+  protected initializeTracer(wallet: SparkWallet) {
+    const consoleOptions = wallet.config.getConsoleOptions();
+    const spanProcessors: SpanProcessor[] = [];
+    if (consoleOptions.otel) {
+      console.log("OpenTelemetry client logging enabled.");
+      spanProcessors.push(new SimpleSpanProcessor(new ConsoleSpanExporter()));
+    }
+    wallet.initializeTracerEnv({ spanProcessors });
+  }
+
+  protected initializeTracerEnv({
+    spanProcessors,
+  }: {
+    spanProcessors: SpanProcessor[];
+  }) {
+    /* This needs to be implemented differently depending on platform due to
+       incompatible dependencies in both */
+  }
+
+  protected wrapWithOtelSpan<A extends unknown[], R>(
+    name: string,
+    fn: (...args: A) => Promise<R>,
+  ) {
+    return async (...args: A) => {
+      if (!this.tracer) {
+        throw new Error("Tracer not initialized");
+      }
+
+      return await this.tracer.startActiveSpan(name, async (span) => {
+        const traceId = span.spanContext().traceId;
+        try {
+          const result = await fn(...args);
+          return result;
+        } catch (error) {
+          if (error instanceof Error) {
+            error.message += ` [traceId: ${traceId}]`;
+          } else if (isObject(error)) {
+            error["traceId"] = traceId;
+          }
+          throw error;
+        } finally {
+          span.end();
+        }
+      });
+    };
+  }
+
+  private getTraceName(methodName: string) {
+    return `SparkWallet.${methodName}`;
+  }
+
+  private wrapPublicMethodsWithOtelSpan<M extends keyof SparkWallet>(
+    methodName: M,
+  ) {
+    const original = this[methodName];
+
+    if (typeof original !== "function") {
+      throw new Error(`Method ${methodName} is not a function on SparkWallet.`);
+    }
+
+    const wrapped = this.wrapWithOtelSpan(
+      this.getTraceName(methodName),
+      original.bind(this) as (...args: unknown[]) => Promise<unknown>,
+    ) as SparkWallet[M];
+
+    (this as SparkWallet)[methodName] = wrapped;
+  }
+
+  private wrapSparkWalletWithTracing() {
+    const methods = [
+      "getLeaves",
+      "getIdentityPublicKey",
+      "getSparkAddress",
+      "createSparkPaymentIntent",
+      "getSwapFeeEstimate",
+      "getTransfers",
+      "getBalance",
+      "getSingleUseDepositAddress",
+      "getStaticDepositAddress",
+      "queryStaticDepositAddresses",
+      "getClaimStaticDepositQuote",
+      "claimStaticDeposit",
+      "refundStaticDeposit",
+      "getUnusedDepositAddresses",
+      "claimDeposit",
+      "advancedDeposit",
+      "transfer",
+      "createLightningInvoice",
+      "payLightningInvoice",
+      "getLightningSendFeeEstimate",
+      "withdraw",
+      "getWithdrawalFeeQuote",
+      "getTransferFromSsp",
+      "getTransfer",
+      "transferTokens",
+      "batchTransferTokens",
+      "queryTokenTransactions",
+      "getLightningReceiveRequest",
+      "getLightningSendRequest",
+      "getCoopExitRequest",
+      "checkTimelock",
+      "testOnly_expireTimelock",
+    ] as const;
+
+    methods.forEach((m) => this.wrapPublicMethodsWithOtelSpan(m));
+
+    /* Private methods can't be indexed on `this` and need to be wrapped individually: */
+    this.initWallet = this.wrapWithOtelSpan(
+      this.getTraceName("initWallet"),
+      this.initWallet.bind(this),
+    );
   }
 }

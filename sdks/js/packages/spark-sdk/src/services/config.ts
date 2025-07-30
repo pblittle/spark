@@ -10,6 +10,7 @@ import {
   ConfigOptions,
   WalletConfig,
   SigningOperator,
+  ConsoleOptions,
 } from "./wallet-config.js";
 import { ConfigurationError } from "../errors/types.js";
 
@@ -126,5 +127,11 @@ export class WalletConfigService
 
   public getSspIdentityPublicKey(): string {
     return this.config.sspClientOptions.identityPublicKey;
+  }
+
+  public getConsoleOptions(): ConsoleOptions {
+    return {
+      ...this.config.console,
+    };
   }
 }

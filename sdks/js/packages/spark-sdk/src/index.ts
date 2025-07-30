@@ -24,7 +24,7 @@ export {
 } from "./signer/signer.js";
 export * from "./signer/types.js";
 
-export { SparkWallet } from "./spark-wallet/spark-wallet.js";
+export { SparkWalletBrowser as SparkWallet } from "./spark-wallet/spark-wallet.browser.js";
 export * from "./spark-wallet/types.js";
 
 export { type WalletConfigService } from "./services/config.js";

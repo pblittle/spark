@@ -1,6 +1,7 @@
 /* Root Node.js entrypoint */
 
 import nodeCrypto from "crypto";
+
 import { setCrypto } from "./utils/crypto.js";
 
 const cryptoImpl =
@@ -21,7 +22,7 @@ export {
 } from "./signer/signer.js";
 export * from "./signer/types.js";
 
-export { SparkWallet } from "./spark-wallet/spark-wallet.node.js";
+export { SparkWalletNodeJS as SparkWallet } from "./spark-wallet/spark-wallet.node.js";
 export * from "./spark-wallet/types.js";
 
 export { type WalletConfigService } from "./services/config.js";

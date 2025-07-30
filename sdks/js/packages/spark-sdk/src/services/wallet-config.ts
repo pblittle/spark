@@ -132,6 +132,11 @@ export type SigningOperator = {
   readonly identityPublicKey: string;
 };
 
+/* Console logging and debug tool options */
+export type ConsoleOptions = {
+  otel?: boolean;
+};
+
 export type ConfigOptions = MayHaveLrc20WalletApiConfig &
   MayHaveSspClientOptions & {
     readonly network?: NetworkType;
@@ -148,6 +153,7 @@ export type ConfigOptions = MayHaveLrc20WalletApiConfig &
     readonly sspClientOptions?: SspClientOptions;
     readonly expectedWithdrawBondSats?: number;
     readonly expectedWithdrawRelativeBlockLocktime?: number;
+    readonly console?: ConsoleOptions;
   };
 
 const DEV_PUBKEYS = [
@@ -189,6 +195,9 @@ const BASE_CONFIG: Required<ConfigOptions> = {
     baseUrl: getSspUrl("LOCAL"),
     identityPublicKey: getSspIdentityPublicKey("LOCAL"),
     schemaEndpoint: getSspSchemaEndpoint("LOCAL"),
+  },
+  console: {
+    otel: false,
   },
 };
 

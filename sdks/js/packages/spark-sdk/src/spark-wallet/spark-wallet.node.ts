@@ -1,129 +1,71 @@
-import { Tracer } from "@opentelemetry/api";
 import { SparkWallet as BaseSparkWallet } from "./spark-wallet.js";
-import type { InitWalletResponse } from "./types.js";
-import { isObject } from "@lightsparkdev/core";
+// OpenTelemetry bootstrap for Node.js environments.
+// This file is imported for its side effects from `index.node.ts`.
+// It registers a tracer provider and automatically instruments all `undici`/`globalThis.fetch` calls.
+//
+// Requests whose URL does **not** start with one of the comma-separated prefixes provided via
+// `SPARK_TRACE_URL_ALLOW_LIST` are ignored via `ignoreRequestHook`.
 
-export class SparkWallet extends BaseSparkWallet {
-  private tracer: Tracer | null = null;
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
+import { W3CTraceContextPropagator } from "@opentelemetry/core";
+import { registerInstrumentations } from "@opentelemetry/instrumentation";
+import { UndiciInstrumentation } from "@opentelemetry/instrumentation-undici";
+import {
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { otelTraceDomains } from "../constants.js";
+import { SparkWalletProps } from "./types.js";
 
-  protected wrapWithOtelSpan<A extends unknown[], R>(
-    name: string,
-    fn: (...args: A) => Promise<R>,
-  ) {
-    return async (...args: A) => {
-      if (!this.tracer) {
-        throw new Error("Tracer not initialized");
-      }
+export class SparkWalletNodeJS extends BaseSparkWallet {
+  public static async initialize({
+    mnemonicOrSeed,
+    accountNumber,
+    signer,
+    options,
+  }: SparkWalletProps) {
+    const wallet = new SparkWalletNodeJS(options, signer);
+    wallet.initializeTracer(wallet);
 
-      return await this.tracer.startActiveSpan(name, async (span) => {
-        const traceId = span.spanContext().traceId;
-        try {
-          const result = await fn(...args);
-          return result;
-        } catch (error) {
-          if (error instanceof Error) {
-            error.message += ` [traceId: ${traceId}]`;
-          } else if (isObject(error)) {
-            error["traceId"] = traceId;
-          }
-          throw error;
-        } finally {
-          span.end();
-        }
-      });
+    const initResponse = await wallet.initWallet(mnemonicOrSeed, accountNumber);
+
+    return {
+      wallet,
+      ...initResponse,
     };
   }
 
-  protected async initializeTracer(tracerName: string) {
-    const { trace, propagation, context } = await import("@opentelemetry/api");
-    const { W3CTraceContextPropagator } = await import("@opentelemetry/core");
-    const { AsyncLocalStorageContextManager } = await import(
-      "@opentelemetry/context-async-hooks"
-    );
-    const { BasicTracerProvider } = await import(
-      "@opentelemetry/sdk-trace-base"
-    );
+  protected initializeTracerEnv({
+    spanProcessors,
+  }: Parameters<BaseSparkWallet["initializeTracerEnv"]>[0]) {
+    const provider = new NodeTracerProvider({ spanProcessors });
+    provider.register({
+      contextManager: new AsyncLocalStorageContextManager(),
+      propagator: new W3CTraceContextPropagator(),
+    });
 
-    trace.setGlobalTracerProvider(new BasicTracerProvider());
-    propagation.setGlobalPropagator(new W3CTraceContextPropagator());
-    context.setGlobalContextManager(new AsyncLocalStorageContextManager());
-
-    this.tracer = trace.getTracer(tracerName);
-  }
-
-  private getTraceName(methodName: string) {
-    return `SparkWallet.${methodName}`;
-  }
-
-  private wrapPublicMethodsWithOtelSpan<M extends keyof SparkWallet>(
-    methodName: M,
-  ) {
-    const original = this[methodName];
-
-    if (typeof original !== "function") {
-      throw new Error(`Method ${methodName} is not a function on SparkWallet.`);
-    }
-
-    const wrapped = this.wrapWithOtelSpan(
-      this.getTraceName(methodName),
-      original.bind(this) as (...args: unknown[]) => Promise<unknown>,
-    ) as SparkWallet[M];
-
-    (this as SparkWallet)[methodName] = wrapped;
-  }
-
-  private wrapSparkWalletWithTracing() {
-    const methods = [
-      "getLeaves",
-      "getIdentityPublicKey",
-      "getSparkAddress",
-      "createSparkPaymentIntent",
-      "getSwapFeeEstimate",
-      "getTransfers",
-      "getBalance",
-      "getSingleUseDepositAddress",
-      "getStaticDepositAddress",
-      "queryStaticDepositAddresses",
-      "getClaimStaticDepositQuote",
-      "claimStaticDeposit",
-      "refundStaticDeposit",
-      "getUnusedDepositAddresses",
-      "claimDeposit",
-      "advancedDeposit",
-      "transfer",
-      "createLightningInvoice",
-      "payLightningInvoice",
-      "getLightningSendFeeEstimate",
-      "withdraw",
-      "getWithdrawalFeeQuote",
-      "getTransferFromSsp",
-      "getTransfer",
-      "transferTokens",
-      "batchTransferTokens",
-      "queryTokenTransactions",
-      "getLightningReceiveRequest",
-      "getLightningSendRequest",
-      "getCoopExitRequest",
-      "checkTimelock",
-      "testOnly_expireTimelock",
-    ] as const;
-
-    methods.forEach((m) => this.wrapPublicMethodsWithOtelSpan(m));
-
-    /* Private methods can't be indexed on `this` and need to be wrapped individually: */
-    this.initWallet = this.wrapWithOtelSpan(
-      this.getTraceName("initWallet"),
-      this.initWallet.bind(this),
-    );
-  }
-
-  protected async initWallet(
-    mnemonicOrSeed?: Uint8Array | string,
-    accountNumber?: number,
-  ): Promise<InitWalletResponse | undefined> {
-    const res = super.initWallet(mnemonicOrSeed, accountNumber);
-    await this.initializeTracer(this.tracerId);
-    this.wrapSparkWalletWithTracing();
-    return res;
+    registerInstrumentations({
+      instrumentations: [
+        new UndiciInstrumentation({
+          requestHook: (span, request) => {
+            console.log("tmp in Node requestHook", span, request);
+          },
+          ignoreRequestHook: (request) => {
+            /* Since we're wrapping global fetch we should be careful to avoid
+               adding headers or causing errors for unrelated requests */
+            try {
+              return !otelTraceDomains.some((prefix) =>
+                request.origin.startsWith(`https://${prefix}`),
+              );
+            } catch {
+              return true;
+            }
+          },
+        }),
+      ],
+    });
   }
 }
+
+export { SparkWalletNodeJS as SparkWallet };
