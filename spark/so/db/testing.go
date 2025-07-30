@@ -109,3 +109,14 @@ func NewPgTestClient(t *testing.T, dsn string) *ent.Client {
 
 	return client
 }
+
+func NewPgTestContext(t *testing.T, ctx context.Context, dsn string) (context.Context, *TestContext, error) {
+	client, err := ent.Open("postgres", dsn)
+	require.NoError(t, err)
+
+	err = client.Schema.Create(ctx)
+	require.NoError(t, err)
+
+	session := NewSession(client, nil)
+	return ent.Inject(ctx, session), &TestContext{t: t, Client: client, Session: session}, nil
+}

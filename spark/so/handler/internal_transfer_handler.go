@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -41,19 +42,6 @@ func (h *InternalTransferHandler) FinalizeTransfer(ctx context.Context, req *pbi
 		return fmt.Errorf("unable to load transfer %s: %w", req.TransferId, err)
 	}
 
-	switch transfer.Status {
-	case st.TransferStatusCompleted:
-		// Early return
-		return nil
-	case st.TransferStatusReceiverKeyTweaked:
-	case st.TransferStatusReceiverKeyTweakLocked:
-	case st.TransferStatusReceiverRefundSigned:
-	case st.TransferStatusReceiverKeyTweakApplied:
-		// do nothing
-	default:
-		return fmt.Errorf("transfer is not in receiver key tweaked status. transfer id: %s. status: %s", req.TransferId, transfer.Status)
-	}
-
 	if err := checkCoopExitTxBroadcasted(ctx, db, transfer); err != nil {
 		return fmt.Errorf("failed to unlock transfer id: %s. with status: %s and error: %w", req.TransferId, transfer.Status, err)
 	}
@@ -83,21 +71,63 @@ func (h *InternalTransferHandler) FinalizeTransfer(ctx context.Context, req *pbi
 		if err != nil {
 			return fmt.Errorf("failed to get dbNode. transfer id: %s. with status: %s. node id: %s with uuid: %s and error: %w", req.TransferId, transfer.Status, node.Id, nodeID, err)
 		}
-		_, err = dbNode.Update().
-			SetRawTx(node.RawTx).
-			SetRawRefundTx(node.RawRefundTx).
-			SetDirectRefundTx(node.DirectRefundTx).
-			SetDirectFromCpfpRefundTx(node.DirectFromCpfpRefundTx).
-			SetStatus(st.TreeNodeStatusAvailable).
-			Save(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to update dbNode. transfer id: %s. with status: %s. node id: %s with uuid: %s and error: %w", req.TransferId, transfer.Status, node.Id, nodeID, err)
-		}
-	}
 
-	_, err = transfer.Update().SetStatus(st.TransferStatusCompleted).SetCompletionTime(req.Timestamp.AsTime()).Save(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to update transfer status to completed for transfer id: %s. with status: %s and error: %w", req.TransferId, transfer.Status, err)
+		if transfer.Status == st.TransferStatusCompleted {
+			// Verify that the transfer details are the same between both nodes
+			rawTxMatch, err := compareTxs(dbNode.RawTx, node.RawTx)
+			if err != nil {
+				return fmt.Errorf("failed to compare raw txs: %w", err)
+			}
+			directRefundTxMatch, err := compareTxs(dbNode.DirectRefundTx, node.DirectRefundTx)
+			if err != nil {
+				return fmt.Errorf("failed to compare direct refund txs: %w", err)
+			}
+			directFromCpfpRefundTxMatch, err := compareTxs(dbNode.DirectFromCpfpRefundTx, node.DirectFromCpfpRefundTx)
+			if err != nil {
+				return fmt.Errorf("failed to compare direct from cpfp refund txs: %w", err)
+			}
+
+			if !rawTxMatch || !directRefundTxMatch || !directFromCpfpRefundTxMatch {
+				return fmt.Errorf("node is not the same as the one in the DB or maybe refundTX not matching. transfer id: %s. with status: %s. node id: %s with uuid: %s", req.TransferId, transfer.Status, node.Id, nodeID)
+			}
+
+			// Synchronize any non-nil tx fields.
+			update := dbNode.Update()
+
+			update.SetRawTx(node.RawTx) // RawTx is required field, can't be nil
+			if dbNode.RawRefundTx != nil {
+				update.SetRawRefundTx(node.RawRefundTx)
+			}
+			if dbNode.DirectRefundTx != nil {
+				update.SetDirectRefundTx(node.DirectRefundTx)
+			}
+			if dbNode.DirectFromCpfpRefundTx != nil {
+				update.SetDirectFromCpfpRefundTx(node.DirectFromCpfpRefundTx)
+			}
+			update.SetStatus(st.TreeNodeStatusAvailable)
+
+			_, err = update.Save(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update dbNode. transfer id: %s. with status: %s. node id: %s with uuid: %s and error: %w", req.TransferId, transfer.Status, node.Id, nodeID, err)
+			}
+		} else {
+			_, err = dbNode.Update().
+				SetRawTx(node.RawTx).
+				SetRawRefundTx(node.RawRefundTx).
+				SetDirectRefundTx(node.DirectRefundTx).
+				SetDirectFromCpfpRefundTx(node.DirectFromCpfpRefundTx).
+				SetStatus(st.TreeNodeStatusAvailable).
+				Save(ctx)
+
+			if err != nil {
+				return fmt.Errorf("failed to update dbNode. transfer id: %s. with status: %s. node id: %s with uuid: %s and error: %w", req.TransferId, transfer.Status, node.Id, nodeID, err)
+			}
+
+			_, err = transfer.Update().SetStatus(st.TransferStatusCompleted).SetCompletionTime(req.Timestamp.AsTime()).Save(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update transfer status to completed for transfer id: %s. with status: %s and error: %w", req.TransferId, transfer.Status, err)
+			}
+		}
 	}
 	return nil
 }
@@ -365,4 +395,53 @@ func (h *InternalTransferHandler) GetTransfers(ctx context.Context, req *pbinter
 		}
 	}
 	return &pbinternal.GetTransfersResponse{Transfers: transferProtos}, nil
+}
+
+// Deserializes the txs and compares the inputs and outputs.
+func compareTxs(rawTx1, rawTx2 []byte) (bool, error) {
+	if rawTx1 == nil && rawTx2 == nil {
+		return true, nil
+	}
+	tx1, err := common.TxFromRawTxBytes(rawTx1)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse tx1: %w", err)
+	}
+
+	tx2, err := common.TxFromRawTxBytes(rawTx2)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse tx2: %w", err)
+	}
+
+	if len(tx1.TxIn) != len(tx2.TxIn) {
+		return false, nil
+	}
+
+	for i, txIn1 := range tx1.TxIn {
+		txIn2 := tx2.TxIn[i]
+		if txIn1.PreviousOutPoint != txIn2.PreviousOutPoint {
+			return false, nil
+		}
+		if !bytes.Equal(txIn1.SignatureScript, txIn2.SignatureScript) {
+			return false, nil
+		}
+		if txIn1.Sequence != txIn2.Sequence {
+			return false, nil
+		}
+	}
+
+	if len(tx1.TxOut) != len(tx2.TxOut) {
+		return false, nil
+	}
+
+	for i, txOut1 := range tx1.TxOut {
+		txOut2 := tx2.TxOut[i]
+		if txOut1.Value != txOut2.Value {
+			return false, nil
+		}
+		if !bytes.Equal(txOut1.PkScript, txOut2.PkScript) {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
