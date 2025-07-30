@@ -84,6 +84,7 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 				}
 			},
 			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input interface{}) error {
+				require.IsType(t, &pb.FinalizeNodeSignaturesRequest{}, input)
 				req := input.(*pb.FinalizeNodeSignaturesRequest)
 				resp, err := handler.FinalizeNodeSignatures(ctx, req)
 				assert.Nil(t, resp)
@@ -174,20 +175,19 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 			input := tt.setupFunc(t, ctx, handler)
 			err := tt.verifyFunc(t, ctx, handler, input)
 
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), tt.expectedError)
+			require.ErrorContains(t, err, tt.expectedError)
 		})
 	}
 }
 
-func createTestTree(t *testing.T, ctx context.Context, network st.Network) (*ent.Tree, *ent.TreeNode) {
+func createTestTree(t *testing.T, ctx context.Context, network st.Network, status st.TreeStatus) (*ent.Tree, *ent.TreeNode) {
 	db, err := ent.GetDbFromContext(ctx)
 	require.NoError(t, err)
 
 	tree, err := db.Tree.Create().
 		SetID(uuid.New()).
 		SetNetwork(network).
-		SetStatus(st.TreeStatusAvailable).
+		SetStatus(status).
 		SetBaseTxid([]byte("base_txid")).
 		SetVout(0).
 		SetOwnerIdentityPubkey([]byte("owner_pubkey")).
@@ -242,7 +242,7 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignatures_InvalidIntent(t *testin
 	}
 	handler := NewFinalizeSignatureHandler(config)
 
-	_, node := createTestTree(t, ctx, st.NetworkRegtest)
+	_, node := createTestTree(t, ctx, st.NetworkRegtest, st.TreeStatusAvailable)
 
 	req := &pb.FinalizeNodeSignaturesRequest{
 		NodeSignatures: []*pb.NodeSignatures{
@@ -254,9 +254,9 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignatures_InvalidIntent(t *testin
 	}
 
 	resp, err := handler.FinalizeNodeSignatures(ctx, req)
-	assert.Error(t, err)
+
+	require.ErrorContains(t, err, "invalid intent")
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "invalid intent")
 }
 
 func TestFinalizeSignatureHandler_FinalizeNodeSignaturesV2_RequireDirectTx(t *testing.T) {
@@ -278,4 +278,99 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignaturesV2_RequireDirectTx(t *te
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Empty(t, resp.Nodes)
+}
+
+// Regression test for https://linear.app/lightsparkdev/issue/LIG-8045
+func TestConfirmTreeWithNonRootConfirmation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	defer dbCtx.Close()
+
+	config := &so.Config{
+		SigningOperatorMap: map[string]*so.SigningOperator{
+			"test-operator": {
+				ID:         0,
+				Identifier: "test-operator",
+				AddressRpc: "localhost:8080",
+				AddressDkg: "localhost:8081",
+			},
+		},
+	}
+	handler := NewFinalizeSignatureHandler(config)
+
+	// Create a tree in a not-yet-finalized (PENDING) state
+	tree, rootNode := createTestTree(t, ctx, st.NetworkRegtest, st.TreeStatusPending)
+
+	db, err := ent.GetDbFromContext(ctx)
+	require.NoError(t, err)
+
+	keyshare, err := rootNode.QuerySigningKeyshare().Only(ctx)
+	require.NoError(t, err)
+
+	// Create a child node in the tree - this represents a non-root node
+	// that can receive deposits independently of the root node
+	childNode, err := db.TreeNode.Create().
+		SetID(uuid.New()).
+		SetTree(tree).
+		SetSigningKeyshare(keyshare).
+		SetValue(65536).
+		SetVerifyingPubkey([]byte("child_verifying_pubkey")).
+		SetOwnerIdentityPubkey([]byte("child_owner_identity_pubkey")).
+		SetOwnerSigningPubkey([]byte("child_owner_signing_pubkey")).
+		SetRawTx([]byte("child_raw_tx")).
+		SetRawRefundTx([]byte("child_raw_refund_tx")).
+		SetVout(0).
+		SetStatus(st.TreeNodeStatusCreating).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// Create a deposit address for the child node - this simulates the scenario
+	// where a user deposits to a non-root node's address instead of the tree's root
+	depositAddress, err := db.DepositAddress.Create().
+		SetID(uuid.New()).
+		SetAddress("child_deposit_address").
+		SetOwnerIdentityPubkey([]byte("child_owner_identity_pubkey")).
+		SetOwnerSigningPubkey([]byte("child_owner_signing_pubkey")).
+		SetConfirmationHeight(100).
+		// This txid is different from the tree's base txid, which is the core of the issue.
+		SetConfirmationTxid("other_non_root_deposit_txid").
+		SetSigningKeyshare(keyshare).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// Create a UTXO that represents the actual Bitcoin transaction
+	// confirming the deposit to the child node's address
+	_, err = db.Utxo.Create().
+		SetID(uuid.New()).
+		SetBlockHeight(100).
+		// The actual transaction ID of the deposit is different from tree base txid
+		SetTxid([]byte("non_root_deposit_txid")).
+		SetVout(0).
+		SetAmount(65536).
+		SetNetwork(st.NetworkRegtest).
+		SetPkScript([]byte("pk_script")).
+		SetDepositAddress(depositAddress).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// This creates the mismatch that triggers the old bug path: the tree's base
+	// txid is "non_root_deposit_txid" but the deposit address confirmation txid
+	// is "other_non_root_deposit_txid"
+	_, err = tree.Update().
+		SetBaseTxid([]byte("non_root_deposit_txid")).
+		Save(ctx)
+	require.NoError(t, err)
+
+	req := &pb.FinalizeNodeSignaturesRequest{
+		NodeSignatures: []*pb.NodeSignatures{
+			{NodeId: rootNode.ID.String()},
+			{NodeId: childNode.ID.String()},
+		},
+		Intent: pbcommon.SignatureIntent_CREATION,
+	}
+
+	_, err = handler.FinalizeNodeSignatures(ctx, req)
+	require.ErrorContains(t, err, "confirmation txid does not match tree base txid")
 }
