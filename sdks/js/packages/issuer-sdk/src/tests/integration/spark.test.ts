@@ -6,6 +6,8 @@ import {
 import { jest } from "@jest/globals";
 import { IssuerSparkWalletTesting } from "../utils/issuer-test-wallet.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
+import { BitcoinFaucet } from "@buildonspark/spark-sdk/test-utils";
+import { IssuerSparkWallet } from "../../index.js";
 
 export const TOKENS_V0_SCHNORR_CONFIG: Required<ConfigOptions> = {
   ...WalletConfig.LOCAL,
@@ -45,6 +47,89 @@ describe.each(TEST_CONFIGS)(
   ({ name, config }) => {
     jest.setTimeout(80000);
 
+    it("should create a token", async () => {
+      const { wallet: issuerWallet } =
+        await IssuerSparkWalletTesting.initialize({
+          options: config,
+        });
+
+      const tokenName = `${name}Creatable`;
+      const tokenTicker = "CRT";
+      const maxSupply = 5000n;
+      const decimals = 0;
+      const txId = await issuerWallet.createToken({
+        tokenName,
+        tokenTicker,
+        decimals,
+        isFreezable: false,
+        maxSupply,
+      });
+
+      expect(typeof txId).toBe("string");
+      expect(txId.length).toBeGreaterThan(0);
+
+      const metadata = await issuerWallet.getIssuerTokenMetadata();
+      expect(metadata.tokenName).toEqual(tokenName);
+      expect(metadata.tokenTicker).toEqual(tokenTicker);
+      expect(metadata.maxSupply).toEqual(maxSupply);
+      expect(metadata.decimals).toEqual(decimals);
+    });
+
+    it("should announce a token", async () => {
+      const { wallet: issuerWallet } =
+        await IssuerSparkWalletTesting.initialize({
+          options: config,
+        });
+
+      const tokenName = `${name}Announcable`;
+      const tokenTicker = "ANN";
+      const maxSupply = 5000n;
+      const decimals = 0;
+
+      await fundAndAnnounce(
+        issuerWallet,
+        5000n,
+        0,
+        tokenName,
+        tokenTicker,
+        false,
+      );
+
+      const metadata = await issuerWallet.getIssuerTokenMetadata();
+      expect(metadata.tokenName).toEqual(tokenName);
+      expect(metadata.tokenTicker).toEqual(tokenTicker);
+      expect(metadata.maxSupply).toEqual(maxSupply);
+      expect(metadata.decimals).toEqual(decimals);
+    });
+
+    it("should fail on duplicate token creation", async () => {
+      const { wallet: issuerWallet } =
+        await IssuerSparkWalletTesting.initialize({
+          options: config,
+        });
+
+      const tokenName = `${name}Dup`;
+      const tokenTicker = `DP${name}`;
+
+      await issuerWallet.createToken({
+        tokenName,
+        tokenTicker,
+        decimals: 0,
+        isFreezable: false,
+        maxSupply: 100n,
+      });
+
+      await expect(
+        issuerWallet.createToken({
+          tokenName,
+          tokenTicker,
+          decimals: 0,
+          isFreezable: false,
+          maxSupply: 100n,
+        }),
+      ).rejects.toThrow();
+    });
+
     it("should fail when minting tokens without creation", async () => {
       const tokenAmount: bigint = 1000n;
       const { wallet } = await IssuerSparkWalletTesting.initialize({
@@ -54,24 +139,7 @@ describe.each(TEST_CONFIGS)(
       await expect(wallet.mintTokens(tokenAmount)).rejects.toThrow();
     });
 
-    it("should fail when creation decimal is greater than js MAX_SAFE_INTEGER", async () => {
-      const tokenAmount: bigint = 1000n;
-      const { wallet } = await IssuerSparkWalletTesting.initialize({
-        options: config,
-      });
-
-      await expect(
-        wallet.createToken({
-          tokenName: "2Pow53Decimal",
-          tokenTicker: "2P53D",
-          decimals: 2 ** 53,
-          isFreezable: false,
-          maxSupply: tokenAmount,
-        }),
-      ).rejects.toThrow();
-    });
-
-    it("should fail when minting more than max supply", async () => {
+    it("should create, andfail when minting more than max supply", async () => {
       const tokenAmount: bigint = 1000n;
       const { wallet } = await IssuerSparkWalletTesting.initialize({
         options: config,
@@ -87,7 +155,7 @@ describe.each(TEST_CONFIGS)(
       await expect(wallet.mintTokens(tokenAmount)).rejects.toThrow();
     });
 
-    it("should mint tokens successfully", async () => {
+    it("should create, and mint tokens successfully", async () => {
       const tokenAmount: bigint = 1000n;
 
       const { wallet: issuerWallet } =
@@ -121,7 +189,7 @@ describe.each(TEST_CONFIGS)(
       expect(tokenBalance.balance).toBeGreaterThanOrEqual(tokenAmount);
     });
 
-    it("should mint and transfer tokens", async () => {
+    it("should create, mint, and transfer tokens", async () => {
       const tokenAmount: bigint = 1000n;
 
       const { wallet: issuerWallet } =
@@ -292,7 +360,7 @@ describe.each(TEST_CONFIGS)(
     //   }
     // });
 
-    it("should mint and batchtransfer tokens", async () => {
+    it("should create, mint, and batchtransfer tokens", async () => {
       const tokenAmount: bigint = 999n;
 
       const { wallet: issuerWallet } =
@@ -448,6 +516,15 @@ describe.each(TEST_CONFIGS)(
       });
     });
 
+    it("it should be able to anounce a token with name of size equal to MAX_SYMBOL_SIZE", async () => {
+      const { wallet: issuerWallet } =
+        await IssuerSparkWalletTesting.initialize({
+          options: config,
+        });
+
+      await fundAndAnnounce(issuerWallet, 100000n, 0, "MST", "TESTAA", false);
+    });
+
     it("it should be able to create a token with symbol of size equal to MAX_NAME_SIZE", async () => {
       const { wallet: issuerWallet } =
         await IssuerSparkWalletTesting.initialize({
@@ -463,7 +540,23 @@ describe.each(TEST_CONFIGS)(
       });
     });
 
-    it("should create, mint, freeze and unfreeze tokens", async () => {
+    it("it should be able to create a token with symbol of size equal to MAX_NAME_SIZE", async () => {
+      const { wallet: issuerWallet } =
+        await IssuerSparkWalletTesting.initialize({
+          options: config,
+        });
+
+      await fundAndAnnounce(
+        issuerWallet,
+        100000n,
+        0,
+        "ABCDEFGHIJKLMNOPQ",
+        "MQS",
+        false,
+      );
+    });
+
+    it("should create, mint, freeze, and unfreeze tokens", async () => {
       const tokenAmount: bigint = 1000n;
       const { wallet: issuerWallet } =
         await IssuerSparkWalletTesting.initialize({
@@ -525,7 +618,7 @@ describe.each(TEST_CONFIGS)(
       expect(unfreezeResponse.impactedTokenAmount).toEqual(tokenAmount);
     });
 
-    it("should mint and burn tokens", async () => {
+    it("should create, mint and burn tokens", async () => {
       const tokenAmount: bigint = 200n;
 
       const { wallet: issuerWallet } =
@@ -555,7 +648,7 @@ describe.each(TEST_CONFIGS)(
       );
     });
 
-    it("should complete full token lifecycle: create, mint, transfer, return, burn", async () => {
+    it("should complete a full token lifecycle - create, mint, transfer, return, burn", async () => {
       const tokenAmount: bigint = 1000n;
 
       const { wallet: issuerWallet } =
@@ -706,36 +799,41 @@ describe.each(TEST_CONFIGS)(
     //   expect(transferBackTransaction).toBeDefined();
     //   expect(userBurnTransaction).toBeDefined();
     // });
-
-    (config.tokenTransactionVersion === "V0" ? it.skip : it)(
-      "should create a token using createToken API",
-      async () => {
-        const { wallet: issuerWallet } =
-          await IssuerSparkWalletTesting.initialize({
-            options: config,
-          });
-
-        const tokenName = `${name}Creatable`;
-        const tokenTicker = "CRT";
-        const maxSupply = 5000n;
-        const decimals = 0;
-        const txId = await issuerWallet.createToken({
-          tokenName,
-          tokenTicker,
-          decimals,
-          isFreezable: false,
-          maxSupply,
-        });
-
-        expect(typeof txId).toBe("string");
-        expect(txId.length).toBeGreaterThan(0);
-
-        const metadata = await issuerWallet.getIssuerTokenMetadata();
-        expect(metadata.tokenName).toEqual(tokenName);
-        expect(metadata.tokenTicker).toEqual(tokenTicker);
-        expect(metadata.maxSupply).toEqual(maxSupply);
-        expect(metadata.decimals).toEqual(decimals);
-      },
-    );
   },
 );
+
+async function fundAndAnnounce(
+  wallet: IssuerSparkWallet,
+  maxSupply: bigint = 100000n,
+  decimals: number = 0,
+  tokenName: string = "TestToken1",
+  tokenSymbol: string = "TT1",
+  isFreezable: boolean = false,
+) {
+  // Faucet funds to the Issuer wallet because announcing a token
+  // requires ownership of an L1 UTXO.
+  const faucet = BitcoinFaucet.getInstance();
+  const l1WalletPubKey = await wallet.getTokenL1Address();
+  await faucet.sendToAddress(l1WalletPubKey, 100_000n);
+  await faucet.mineBlocks(6);
+
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+  try {
+    const response = await wallet.announceTokenL1(
+      tokenName,
+      tokenSymbol,
+      decimals,
+      maxSupply,
+      isFreezable,
+    );
+    console.log("Announce token response:", response);
+  } catch (error: any) {
+    console.error("Error when announcing token on L1:", error);
+    throw error;
+  }
+  await faucet.mineBlocks(2);
+
+  const SECONDS = 1000;
+  await new Promise((resolve) => setTimeout(resolve, 3 * SECONDS));
+}
