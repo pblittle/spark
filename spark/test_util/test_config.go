@@ -221,6 +221,15 @@ func TestWalletConfigWithIdentityKey(identityPrivKey secp256k1.PrivateKey) (*wal
 		})
 }
 
+// TestWalletConfigWithIdentityKey returns a wallet configuration with specified identity key that can be used for testing.
+func TestWalletConfigWithIdentityKeyAndCoordinator(identityPrivKey secp256k1.PrivateKey, coordinatorIndex int) (*wallet.Config, error) {
+	return TestWalletConfigWithParams(
+		TestWalletConfigParams{
+			IdentityPrivateKey: &identityPrivKey,
+			CoordinatorIndex:   coordinatorIndex,
+		})
+}
+
 func TestWalletConfigDeployed(identityPrivKeyBytes []byte) (*wallet.Config, error) {
 	identityPrivKey := secp256k1.PrivKeyFromBytes(identityPrivKeyBytes)
 	if identityPrivKey == nil {
