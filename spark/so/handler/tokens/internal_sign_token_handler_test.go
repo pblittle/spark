@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -16,7 +18,6 @@ import (
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
-	"github.com/lightsparkdev/spark/so/helper"
 	testutil "github.com/lightsparkdev/spark/test_util"
 )
 
@@ -181,16 +182,16 @@ func TestGetSecretSharesNotInInput(t *testing.T) {
 			SecretShare:                    aliceSigningKeyshare.SecretShare,
 			OperatorIdentityPublicKeyBytes: aliceOperatorPubKeyBytes,
 		}
-		bobOperatorIdentityPubkeyBytes, err := helper.NewOperatorIdentityPubkey(bobOperatorPubKeyBytes)
+		bobOperatorIdentityPubKey, err := keys.ParsePublicKey(bobOperatorPubKeyBytes)
 		require.NoError(t, err)
-		carolOperatorIdentityPubkeyBytes, err := helper.NewOperatorIdentityPubkey(carolOperatorPubKeyBytes)
+		carolOperatorIdentityPubKey, err := keys.ParsePublicKey(carolOperatorPubKeyBytes)
 		require.NoError(t, err)
 
 		result, err := handler.getSecretSharesNotInInput(ctx, inputOperatorShareMap)
 		require.NoError(t, err)
 		assert.Len(t, result, 2)
-		assert.Equal(t, bobSigningKeyshare.SecretShare, result[bobOperatorIdentityPubkeyBytes][0].SecretShare)
-		assert.Equal(t, carolSigningKeyshare.SecretShare, result[carolOperatorIdentityPubkeyBytes][0].SecretShare)
+		assert.Equal(t, bobSigningKeyshare.SecretShare, result[bobOperatorIdentityPubKey][0].SecretShare)
+		assert.Equal(t, carolSigningKeyshare.SecretShare, result[carolOperatorIdentityPubKey][0].SecretShare)
 	})
 
 	t.Run("excludes the partial revocation secret share if it is in the input", func(t *testing.T) {
@@ -202,16 +203,16 @@ func TestGetSecretSharesNotInInput(t *testing.T) {
 			SecretShare:                    bobSigningKeyshare.SecretShare,
 			OperatorIdentityPublicKeyBytes: bobOperatorPubKeyBytes,
 		}
-		aliceOperatorIdentityPubkeyBytes, err := helper.NewOperatorIdentityPubkey(aliceOperatorPubKeyBytes)
+		aliceOperatorIdentityPubkey, err := keys.ParsePublicKey(aliceOperatorPubKeyBytes)
 		require.NoError(t, err)
-		carolOperatorIdentityPubkeyBytes, err := helper.NewOperatorIdentityPubkey(carolOperatorPubKeyBytes)
+		carolOperatorIdentityPubkey, err := keys.ParsePublicKey(carolOperatorPubKeyBytes)
 		require.NoError(t, err)
 
 		result, err := handler.getSecretSharesNotInInput(ctx, inputOperatorShareMap)
 		require.NoError(t, err)
 		assert.Len(t, result, 2)
-		assert.Equal(t, aliceSigningKeyshare.SecretShare, result[aliceOperatorIdentityPubkeyBytes][0].SecretShare)
-		assert.Equal(t, carolSigningKeyshare.SecretShare, result[carolOperatorIdentityPubkeyBytes][0].SecretShare)
+		assert.Equal(t, aliceSigningKeyshare.SecretShare, result[aliceOperatorIdentityPubkey][0].SecretShare)
+		assert.Equal(t, carolSigningKeyshare.SecretShare, result[carolOperatorIdentityPubkey][0].SecretShare)
 	})
 }
 

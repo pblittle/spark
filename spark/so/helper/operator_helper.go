@@ -2,10 +2,9 @@ package helper
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"maps"
-	rand2 "math/rand/v2"
+	"math/rand/v2"
 	"slices"
 	"sync"
 
@@ -54,24 +53,6 @@ func NewPreSelectedOperatorSelection(config *so.Config, operatorIDs []string) (*
 	}, nil
 }
 
-// Stricter type for operator identity public key.
-type OperatorIdentityPubkey [33]byte
-
-func NewOperatorIdentityPubkey(pubkey []byte) (OperatorIdentityPubkey, error) {
-	if len(pubkey) != 33 {
-		return OperatorIdentityPubkey{}, fmt.Errorf("public key must be 33 bytes, got %d", len(pubkey))
-	}
-	return OperatorIdentityPubkey(pubkey), nil
-}
-
-func (op OperatorIdentityPubkey) String() string {
-	return hex.EncodeToString(op[:])
-}
-
-func (op OperatorIdentityPubkey) Bytes() []byte {
-	return op[:]
-}
-
 // OperatorList returns the list of operators based on the option.
 // Lazily creates the list of operators and stores it in the OperatorSelection object.
 func (o *OperatorSelection) OperatorList(config *so.Config) ([]*so.SigningOperator, error) {
@@ -95,7 +76,7 @@ func (o *OperatorSelection) OperatorList(config *so.Config) ([]*so.SigningOperat
 			return nil, fmt.Errorf("threshold %d exceeds length of signing operator list %d", o.Threshold, len(config.SigningOperatorMap))
 		}
 		operators := slices.Collect(maps.Values(config.SigningOperatorMap))
-		rand2.Shuffle(len(operators), func(i, j int) { operators[i], operators[j] = operators[j], operators[i] })
+		rand.Shuffle(len(operators), func(i, j int) { operators[i], operators[j] = operators[j], operators[i] })
 		o.operatorList = operators[:o.Threshold]
 	case OperatorSelectionOptionPreSelected:
 	}

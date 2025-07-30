@@ -8,6 +8,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
@@ -17,7 +19,6 @@ import (
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/ent/tokenoutput"
 	"github.com/lightsparkdev/spark/so/ent/tokentransaction"
-	"github.com/lightsparkdev/spark/so/helper"
 	"github.com/lightsparkdev/spark/so/utils"
 	"google.golang.org/grpc"
 )
@@ -480,9 +481,9 @@ func PrepareRevocationSharesFromCoordinator(
 
 	sharesToReturnMap := make(map[string]*tokeninternalpb.OperatorRevocationShares)
 
-	allOperatorPubkeys := make([]helper.OperatorIdentityPubkey, 0, len(config.SigningOperators))
+	allOperatorPubkeys := make([]keys.Public, 0, len(config.SigningOperators))
 	for _, operator := range config.SigningOperators {
-		identityPubkey, err := helper.NewOperatorIdentityPubkey(operator.IdentityPublicKey)
+		identityPubkey, err := keys.ParsePublicKey(operator.IdentityPublicKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create operator identity public key: %w", err)
 		}
@@ -490,8 +491,8 @@ func PrepareRevocationSharesFromCoordinator(
 	}
 
 	for _, identityPubkey := range allOperatorPubkeys {
-		sharesToReturnMap[identityPubkey.String()] = &tokeninternalpb.OperatorRevocationShares{
-			OperatorIdentityPublicKey: identityPubkey.Bytes(),
+		sharesToReturnMap[identityPubkey.ToHex()] = &tokeninternalpb.OperatorRevocationShares{
+			OperatorIdentityPublicKey: identityPubkey.Serialize(),
 			Shares:                    make([]*tokeninternalpb.RevocationSecretShare, 0, len(outputsToSpend)),
 		}
 	}

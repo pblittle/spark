@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/so/tokens"
 
@@ -368,9 +370,9 @@ func (h *SignTokenHandler) prepareRevocationSecretSharesForExchange(ctx context.
 	sharesToReturnMap := make(map[string]*tokeninternalpb.OperatorRevocationShares)
 
 	coordinatorPubKeyStr := hex.EncodeToString(h.config.IdentityPublicKey())
-	allOperatorPubkeys := make([]helper.OperatorIdentityPubkey, 0, len(h.config.SigningOperatorMap))
+	allOperatorPubkeys := make([]keys.Public, 0, len(h.config.SigningOperatorMap))
 	for _, operator := range h.config.SigningOperatorMap {
-		identityPubkey, err := helper.NewOperatorIdentityPubkey(operator.IdentityPublicKey)
+		identityPubkey, err := keys.ParsePublicKey(operator.IdentityPublicKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create operator identity public key: %w", err)
 		}
@@ -378,8 +380,8 @@ func (h *SignTokenHandler) prepareRevocationSecretSharesForExchange(ctx context.
 	}
 
 	for _, identityPubkey := range allOperatorPubkeys {
-		sharesToReturnMap[identityPubkey.String()] = &tokeninternalpb.OperatorRevocationShares{
-			OperatorIdentityPublicKey: identityPubkey.Bytes(),
+		sharesToReturnMap[identityPubkey.ToHex()] = &tokeninternalpb.OperatorRevocationShares{
+			OperatorIdentityPublicKey: identityPubkey.Serialize(),
 			Shares:                    make([]*tokeninternalpb.RevocationSecretShare, 0, len(tokenTransaction.GetTransferInput().GetOutputsToSpend())),
 		}
 	}

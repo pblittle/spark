@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"entgo.io/ent/dialect/sql"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
@@ -27,7 +29,6 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/tokenpartialrevocationsecretshare"
 	"github.com/lightsparkdev/spark/so/ent/tokentransaction"
 	"github.com/lightsparkdev/spark/so/ent/tokentransactionpeersignature"
-	"github.com/lightsparkdev/spark/so/helper"
 	"github.com/lightsparkdev/spark/so/tokens"
 	"github.com/lightsparkdev/spark/so/utils"
 )
@@ -201,7 +202,7 @@ type ShareValue struct {
 	OperatorIdentityPublicKeyBytes []byte
 }
 
-type OperatorSharesMap map[helper.OperatorIdentityPubkey][]*pbtkinternal.RevocationSecretShare
+type operatorSharesMap map[keys.Public][]*pbtkinternal.RevocationSecretShare
 
 func (h *InternalSignTokenHandler) ExchangeRevocationSecretsShares(ctx context.Context, req *pbtkinternal.ExchangeRevocationSecretsSharesRequest) (*pbtkinternal.ExchangeRevocationSecretsSharesResponse, error) {
 	if len(req.OperatorShares) == 0 {
@@ -283,7 +284,7 @@ func (h *InternalSignTokenHandler) prepareResponseForExchangeRevocationSecretsSh
 	secretSharesToReturn := make([]*pbtkinternal.OperatorRevocationShares, 0, len(operatorSharesMap))
 	for operatorIdentity, shares := range operatorSharesMap {
 		secretSharesToReturn = append(secretSharesToReturn, &pbtkinternal.OperatorRevocationShares{
-			OperatorIdentityPublicKey: operatorIdentity[:],
+			OperatorIdentityPublicKey: operatorIdentity.Serialize(),
 			Shares:                    shares,
 		})
 	}
@@ -293,7 +294,7 @@ func (h *InternalSignTokenHandler) prepareResponseForExchangeRevocationSecretsSh
 	}, nil
 }
 
-func (h *InternalSignTokenHandler) getSecretSharesNotInInput(ctx context.Context, inputOperatorShareMap map[ShareKey]ShareValue) (OperatorSharesMap, error) {
+func (h *InternalSignTokenHandler) getSecretSharesNotInInput(ctx context.Context, inputOperatorShareMap map[ShareKey]ShareValue) (operatorSharesMap, error) {
 	if len(inputOperatorShareMap) == 0 {
 		return nil, fmt.Errorf("no input operator shares provided")
 	}
@@ -369,25 +370,23 @@ func (h *InternalSignTokenHandler) getSecretSharesNotInInput(ctx context.Context
 		outputsWithKeyShares = append(outputsWithKeyShares, batchOutputs...)
 	}
 
-	operatorSharesMap, err := h.buildOperatorPubkeyToRevocationSecretShareMap(outputsWithKeyShares)
+	operatorShares, err := h.buildOperatorPubkeyToRevocationSecretShareMap(outputsWithKeyShares)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build operator pubkey to revocation secret share map: %w", err)
 	}
-	return operatorSharesMap, nil
+	return operatorShares, nil
 }
 
-func (h *InternalSignTokenHandler) buildOperatorPubkeyToRevocationSecretShareMap(
-	tokenOutputs []*ent.TokenOutput,
-) (OperatorSharesMap, error) {
-	operatorSharesMap := make(OperatorSharesMap)
+func (h *InternalSignTokenHandler) buildOperatorPubkeyToRevocationSecretShareMap(tokenOutputs []*ent.TokenOutput) (operatorSharesMap, error) {
+	operatorShares := make(operatorSharesMap)
 	for _, to := range tokenOutputs {
 		if share := to.Edges.RevocationKeyshare; share != nil {
-			operatorIdentityPubkeyBytes, err := helper.NewOperatorIdentityPubkey(h.config.IdentityPublicKey())
+			operatorIdentityPubkey, err := keys.ParsePublicKey(h.config.IdentityPublicKey())
 			if err != nil {
 				return nil, fmt.Errorf("failed to create operator identity pubkey: %w", err)
 			}
-			operatorSharesMap[operatorIdentityPubkeyBytes] = append(
-				operatorSharesMap[operatorIdentityPubkeyBytes],
+			operatorShares[operatorIdentityPubkey] = append(
+				operatorShares[operatorIdentityPubkey],
 				&pbtkinternal.RevocationSecretShare{
 					InputTtxoId: to.ID.String(),
 					SecretShare: share.SecretShare,
@@ -395,12 +394,12 @@ func (h *InternalSignTokenHandler) buildOperatorPubkeyToRevocationSecretShareMap
 			)
 		}
 		for _, partialShare := range to.Edges.TokenPartialRevocationSecretShares {
-			partialShareOperatorIdentityPubkeyBytes, err := helper.NewOperatorIdentityPubkey(partialShare.OperatorIdentityPublicKey)
+			partialShareOperatorIdentityPubkey, err := keys.ParsePublicKey(partialShare.OperatorIdentityPublicKey)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create operator identity pubkey: %w", err)
 			}
-			operatorSharesMap[partialShareOperatorIdentityPubkeyBytes] = append(
-				operatorSharesMap[partialShareOperatorIdentityPubkeyBytes],
+			operatorShares[partialShareOperatorIdentityPubkey] = append(
+				operatorShares[partialShareOperatorIdentityPubkey],
 				&pbtkinternal.RevocationSecretShare{
 					InputTtxoId: to.ID.String(),
 					SecretShare: partialShare.SecretShare,
@@ -408,7 +407,7 @@ func (h *InternalSignTokenHandler) buildOperatorPubkeyToRevocationSecretShareMap
 			)
 		}
 	}
-	return operatorSharesMap, nil
+	return operatorShares, nil
 }
 
 func (h *InternalSignTokenHandler) persistPartialRevocationSecretShares(
@@ -687,13 +686,13 @@ func (h *InternalSignTokenHandler) validateSignaturesPackageAndPersistPeerSignat
 	for identifier, sig := range signatures {
 		// DO NOT WRITE this operator's signature to the peer signatures table
 		if identifier != h.config.Identifier {
-			operatorIdentityPubkey, err := helper.NewOperatorIdentityPubkey(h.config.SigningOperatorMap[identifier].IdentityPublicKey)
+			operatorIdentityPubkey, err := keys.ParsePublicKey(h.config.SigningOperatorMap[identifier].IdentityPublicKey)
 			if err != nil {
 				return tokens.FormatErrorWithTransactionEnt("failed to create operator identity public key", tokenTransaction, err)
 			}
 			peerSignatures = append(peerSignatures, db.TokenTransactionPeerSignature.Create().
 				SetTokenTransactionID(tokenTransaction.ID).
-				SetOperatorIdentityPublicKey(operatorIdentityPubkey.Bytes()).
+				SetOperatorIdentityPublicKey(operatorIdentityPubkey.Serialize()).
 				SetSignature(sig))
 		}
 	}
