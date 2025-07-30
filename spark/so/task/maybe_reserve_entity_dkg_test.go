@@ -26,13 +26,13 @@ import (
 )
 
 // getReserveEntityDkgTask returns the startup task we are testing.
-func getReserveEntityDkgTask() (StartupTask, error) {
+func getReserveEntityDkgTask() (StartupTaskSpec, error) {
 	for _, t := range AllStartupTasks() {
 		if t.Name == "maybe_reserve_entity_dkg" {
 			return t, nil
 		}
 	}
-	return StartupTask{}, assert.AnError
+	return StartupTaskSpec{}, assert.AnError
 }
 
 // pruneOperators keeps only the current operator in the SigningOperatorMap so

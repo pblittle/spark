@@ -110,7 +110,7 @@ func (o *MockServer) UpdateNodesStatus(ctx context.Context, req *pbmock.UpdateNo
 // TriggerTask executes a scheduled task immediately. Primarily used from hermetic tests to avoid relying on gocron timing.
 func (o *MockServer) TriggerTask(_ context.Context, req *pbmock.TriggerTaskRequest) (*emptypb.Empty, error) {
 	taskName := req.GetTaskName()
-	var selected *task.ScheduledTask
+	var selected *task.ScheduledTaskSpec
 	for _, t := range task.AllScheduledTasks() {
 		if t.Name == taskName {
 			selected = &t

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/handler/tokens"
 	"github.com/lightsparkdev/spark/so/helper"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -21,7 +22,6 @@ import (
 	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
 	tokeninternalpb "github.com/lightsparkdev/spark/proto/spark_token_internal"
 	"github.com/lightsparkdev/spark/so"
-	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/ent/gossip"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
@@ -42,12 +42,14 @@ var (
 	defaultTaskTimeout              = 1 * time.Minute
 	dkgTaskTimeout                  = 3 * time.Minute
 	deleteStaleTreeNodesTaskTimeout = 10 * time.Minute
-
-	errTaskTimeout = fmt.Errorf("task timed out")
 )
 
 // BaseTask contains common fields for all task types.
-type BaseTask struct {
+
+type Task func(context.Context, *so.Config) error
+
+// BaseTaskSpec is a task that is scheduled to run.
+type BaseTaskSpec struct { //nolint:revive
 	// Name is the human-readable name of the task.
 	Name string
 	// Timeout is the maximum time the task is allowed to run before it will be cancelled.
@@ -61,15 +63,15 @@ type BaseTask struct {
 }
 
 // ScheduledTask is a task that runs on a schedule.
-type ScheduledTask struct {
-	BaseTask
+type ScheduledTaskSpec struct {
+	BaseTaskSpec
 	// ExecutionInterval is the interval between each run of the task.
 	ExecutionInterval time.Duration
 }
 
 // StartupTask is a task that runs once at startup.
-type StartupTask struct {
-	BaseTask
+type StartupTaskSpec struct {
+	BaseTaskSpec
 	// RetryInterval is the interval between retries for startup tasks. If nil, no retries are performed.
 	// Retries may be necessary if a startup task is dependent on other asynchronous setup, such as internal
 	// GRPCs to other operators that may not be ready immediately upon the startup of this operator.
@@ -77,11 +79,11 @@ type StartupTask struct {
 }
 
 // AllScheduledTasks returns all the tasks that are scheduled to run.
-func AllScheduledTasks() []ScheduledTask {
-	return []ScheduledTask{
+func AllScheduledTasks() []ScheduledTaskSpec {
+	return []ScheduledTaskSpec{
 		{
 			ExecutionInterval: 10 * time.Second,
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name:         "dkg",
 				Timeout:      &dkgTaskTimeout,
 				RunInTestEnv: true,
@@ -92,7 +94,7 @@ func AllScheduledTasks() []ScheduledTask {
 		},
 		{
 			ExecutionInterval: 1 * time.Minute,
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name:         "cancel_expired_transfers",
 				RunInTestEnv: true,
 				Task: func(ctx context.Context, config *so.Config) error {
@@ -130,7 +132,7 @@ func AllScheduledTasks() []ScheduledTask {
 		},
 		{
 			ExecutionInterval: 1 * time.Hour,
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name:         "delete_stale_pending_trees",
 				Timeout:      &deleteStaleTreeNodesTaskTimeout,
 				RunInTestEnv: false,
@@ -200,7 +202,7 @@ func AllScheduledTasks() []ScheduledTask {
 		},
 		{
 			ExecutionInterval: 5 * time.Minute,
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name: "resume_send_transfer",
 				Task: func(ctx context.Context, config *so.Config) error {
 					logger := logging.GetLoggerFromContext(ctx)
@@ -234,7 +236,7 @@ func AllScheduledTasks() []ScheduledTask {
 		},
 		{
 			ExecutionInterval: 1 * time.Hour,
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name:         "cancel_or_finalize_expired_token_transactions",
 				RunInTestEnv: true,
 				Task: func(ctx context.Context, config *so.Config) error {
@@ -306,7 +308,7 @@ func AllScheduledTasks() []ScheduledTask {
 		},
 		{
 			ExecutionInterval: 10 * time.Minute,
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name:         "finalize_revealed_token_transactions",
 				RunInTestEnv: true,
 				Task: func(ctx context.Context, config *so.Config) error {
@@ -404,7 +406,7 @@ func AllScheduledTasks() []ScheduledTask {
 		},
 		{
 			ExecutionInterval: 5 * time.Minute,
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name:         "send_gossip",
 				RunInTestEnv: true,
 				Task: func(ctx context.Context, config *so.Config) error {
@@ -432,7 +434,7 @@ func AllScheduledTasks() []ScheduledTask {
 		},
 		{
 			ExecutionInterval: 1 * time.Minute,
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name:         "complete_utxo_swap",
 				RunInTestEnv: true,
 				Task: func(ctx context.Context, config *so.Config) error {
@@ -498,15 +500,15 @@ func AllScheduledTasks() []ScheduledTask {
 	}
 }
 
-func AllStartupTasks() []StartupTask {
+func AllStartupTasks() []StartupTaskSpec {
 	entityDkgTaskTimeout := 5 * time.Minute
 	entityDkgRetryInterval := 10 * time.Second
 	backfillTokenOutputInterval := 10 * time.Minute
 
-	return []StartupTask{
+	return []StartupTaskSpec{
 		{
 			RetryInterval: &entityDkgRetryInterval,
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name:         "maybe_reserve_entity_dkg",
 				RunInTestEnv: true,
 				Timeout:      &entityDkgTaskTimeout,
@@ -583,7 +585,7 @@ func AllStartupTasks() []StartupTask {
 			},
 		},
 		{
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name:         "backfill_token_freezes_token_identifier",
 				RunInTestEnv: true,
 				Task: func(ctx context.Context, config *so.Config) error {
@@ -659,7 +661,7 @@ func AllStartupTasks() []StartupTask {
 		},
 		{
 			RetryInterval: &backfillTokenOutputInterval,
-			BaseTask: BaseTask{
+			BaseTaskSpec: BaseTaskSpec{
 				Name:         "backfill_token_output_token_identifiers_and_token_create_edges",
 				RunInTestEnv: true,
 				Task: func(ctx context.Context, config *so.Config) error {
@@ -737,85 +739,35 @@ func AllStartupTasks() []StartupTask {
 	}
 }
 
-func (t *BaseTask) getTimeout() time.Duration {
+func (t *BaseTaskSpec) getTimeout() time.Duration {
 	if t.Timeout != nil {
 		return *t.Timeout
 	}
 	return defaultTaskTimeout
 }
 
-func (t *BaseTask) RunOnce(config *so.Config, db *ent.Client) error {
+func (t *BaseTaskSpec) RunOnce(config *so.Config, dbClient *ent.Client) error {
 	ctx := context.Background()
-	wrappedTask := t.createWrappedTask()
-	return wrappedTask(ctx, config, db)
+
+	wrappedTask := t.chainMiddleware(
+		LogMiddleware(),
+		TimeoutMiddleware(),
+		DatabaseMiddleware(db.NewDefaultSessionFactory(dbClient, config.Database.NewTxTimeout)),
+	)
+
+	return wrappedTask.Task(ctx, config)
 }
 
-func (t *BaseTask) createWrappedTask() func(ctx context.Context, cfg *so.Config, dbClient *ent.Client) error {
-	return func(ctx context.Context, cfg *so.Config, dbClient *ent.Client) error {
-		logger := logging.GetLoggerFromContext(ctx).
-			With("task.name", t.Name).
-			With("task.id", uuid.New().String())
+func (t *ScheduledTaskSpec) Schedule(scheduler gocron.Scheduler, config *so.Config, dbClient *ent.Client) error {
+	wrappedTask := t.chainMiddleware(
+		LogMiddleware(),
+		TimeoutMiddleware(),
+		DatabaseMiddleware(db.NewDefaultSessionFactory(dbClient, config.Database.NewTxTimeout)),
+	)
 
-		ctx = logging.Inject(ctx, logger)
-
-		timeout := t.getTimeout()
-		ctx, cancel := context.WithTimeoutCause(ctx, timeout, errTaskTimeout)
-		defer cancel()
-
-		done := make(chan error, 1)
-
-		inner := func(ctx context.Context, cfg *so.Config, dbClient *ent.Client) error {
-			dbSession := db.NewSession(dbClient, cfg.Database.NewTxTimeout)
-			ctx = ent.Inject(ctx, dbSession)
-			err := t.Task(ctx, cfg)
-			if err != nil {
-				logger.Error("Task failed!", "error", err)
-
-				if tx := dbSession.GetTxIfExists(); tx != nil {
-					rollbackErr := tx.Rollback()
-					if rollbackErr != nil {
-						logger.Warn("Failed to rollback transaction after task failure", "error", rollbackErr)
-					}
-				}
-
-				return err
-			}
-
-			if tx := dbSession.GetTxIfExists(); tx != nil {
-				return tx.Commit()
-			}
-			return nil
-		}
-
-		logger.Info("Starting task")
-
-		go func() {
-			done <- inner(ctx, cfg, dbClient)
-		}()
-
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			if context.Cause(ctx) == errTaskTimeout {
-				logger.Warn("Task timed out!")
-				return ctx.Err()
-			}
-
-			logger.Warn("Context done before task completion! Are we shutting down?", "error", ctx.Err())
-			return ctx.Err()
-		}
-	}
-}
-
-func (t *ScheduledTask) Schedule(
-	scheduler gocron.Scheduler,
-	config *so.Config,
-	db *ent.Client,
-) error {
 	_, err := scheduler.NewJob(
 		gocron.DurationJob(t.ExecutionInterval),
-		gocron.NewTask(t.createWrappedTask(), config, db),
+		gocron.NewTask(wrappedTask.Task, config),
 		gocron.WithName(t.Name),
 	)
 	if err != nil {
@@ -823,6 +775,49 @@ func (t *ScheduledTask) Schedule(
 	}
 
 	return nil
+}
+
+// Wrap the task with the given middleware. This returns a new BaseTaskSpec whose Task function
+// is wrapped with the provided middleware. The original task's fields are preserved.
+func (t *BaseTaskSpec) wrapMiddleware(middleware TaskMiddleware) *BaseTaskSpec {
+	return &BaseTaskSpec{
+		Name:         t.Name,
+		Timeout:      t.Timeout,
+		RunInTestEnv: t.RunInTestEnv,
+		Task: func(ctx context.Context, config *so.Config) error {
+			return middleware(ctx, config, t)
+		},
+	}
+}
+
+// Wrap the task with the given middlewares chained together. The middlewares have their ordering
+// preserved, so the first middelware in the slice will be the outermost, and the last middleware
+// will be the innermost.
+//
+// +------- Middleware 1 -------+
+// | +----- Middleware 2 -----+ |
+// | | +--- Middleware 3 ---+ | |
+// | | |                    | | |
+// | | |   Task (t.Task)    | | |
+// | | |                    | | |
+// | | +--------------------+ | |
+// | +------------------------+ |
+// +----------------------------+
+//
+// Once the task has completed, the middlewares will be unwound in reverse order, so the last
+// middleware will be the first to complete.
+func (t *BaseTaskSpec) chainMiddleware(
+	middlewares ...TaskMiddleware,
+) *BaseTaskSpec {
+	// Apply the middleware to the task so that the last middleware is the inner most.
+	currTask := t
+
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		innerTask, i := currTask, i
+		currTask = innerTask.wrapMiddleware(middlewares[i])
+	}
+
+	return currTask
 }
 
 type Monitor struct {
@@ -893,7 +888,7 @@ func RunStartupTasks(config *so.Config, db *ent.Client, runningLocally bool) err
 			slog.Info("Running startup task", "task", task.Name)
 
 			if task.RetryInterval != nil {
-				go func(task StartupTask) {
+				go func(task StartupTaskSpec) {
 					timeout := task.getTimeout()
 					retryInterval := *task.RetryInterval
 

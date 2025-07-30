@@ -104,7 +104,7 @@ func TestBackfillTokenOutputTokenIdentifiersAndTokenCreateEdges(t *testing.T) {
 	require.Nil(t, initialOutput.TokenIdentifier)
 	require.Equal(t, uuid.Nil, initialOutput.TokenCreateID)
 
-	var backfillTask StartupTask
+	var backfillTask StartupTaskSpec
 	for _, stsk := range AllStartupTasks() {
 		if stsk.Name == "backfill_token_output_token_identifiers_and_token_create_edges" {
 			backfillTask = stsk

@@ -13,6 +13,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestSessionFactory is a SessionFactory for returning a specific Session, useful for testing.
+type TestSessionFactory struct {
+	Session *Session
+}
+
+func (t *TestSessionFactory) NewSession() *Session {
+	return t.Session
+}
+
 type TestContext struct {
 	t       *testing.T
 	Client  *ent.Client
