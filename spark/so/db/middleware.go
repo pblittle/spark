@@ -16,7 +16,7 @@ var ErrNoRollback = errors.New("no rollback performed")
 func SessionMiddleware(factory SessionFactory) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if info != nil &&
-			(info.FullMethod == "/grpc.health.v1.Health/Check" || info.FullMethod == "/spark.SparkService/query_token_outputs") {
+			(info.FullMethod == "/grpc.health.v1.Health/Check") {
 			return handler(ctx, req)
 		}
 
