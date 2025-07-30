@@ -143,23 +143,39 @@ func (h *InternalFinalizeTokenHandler) CancelOrFinalizeExpiredTokenTransaction(
 	// 2. (# of SOs) - threshold have not progressed the transaction to a 'Signed' state.
 	allSelection := helper.OperatorSelection{Option: helper.OperatorSelectionOptionAll}
 	responses, err := helper.ExecuteTaskWithAllOperators(ctx, config, &allSelection, func(ctx context.Context, operator *so.SigningOperator) (any, error) {
-		conn, err := operator.NewGRPCConnection()
-		if err != nil {
-			return nil, tokens.FormatErrorWithTransactionEnt(
-				fmt.Sprintf(tokens.ErrFailedToConnectToOperatorForCancel, operator.Identifier),
-				lockedTokenTransaction, err)
-		}
-		defer conn.Close()
+		var internalResp *pb.QueryTokenTransactionsResponse
+		var err error
 
-		client := pb.NewSparkServiceClient(conn)
-		internalResp, err := client.QueryTokenTransactions(ctx, &pb.QueryTokenTransactionsRequest{
-			TokenTransactionHashes: [][]byte{lockedTokenTransaction.FinalizedTokenTransactionHash},
-		})
-		if err != nil {
-			return nil, tokens.FormatErrorWithTransactionEnt(
-				fmt.Sprintf(tokens.ErrFailedToQueryOperatorForCancel, operator.Identifier),
-				lockedTokenTransaction, err)
+		if operator.Identifier == h.config.Identifier {
+			queryTokenHandler := NewQueryTokenHandler(config)
+			internalResp, err = queryTokenHandler.QueryTokenTransactions(ctx, &pb.QueryTokenTransactionsRequest{
+				TokenTransactionHashes: [][]byte{lockedTokenTransaction.FinalizedTokenTransactionHash},
+			})
+			if err != nil {
+				return nil, tokens.FormatErrorWithTransactionEnt(
+					fmt.Sprintf(tokens.ErrFailedToQueryOperatorForCancel, operator.Identifier),
+					lockedTokenTransaction, err)
+			}
+		} else {
+			conn, err := operator.NewGRPCConnection()
+			if err != nil {
+				return nil, tokens.FormatErrorWithTransactionEnt(
+					fmt.Sprintf(tokens.ErrFailedToConnectToOperatorForCancel, operator.Identifier),
+					lockedTokenTransaction, err)
+			}
+			defer conn.Close()
+
+			client := pb.NewSparkServiceClient(conn)
+			internalResp, err = client.QueryTokenTransactions(ctx, &pb.QueryTokenTransactionsRequest{
+				TokenTransactionHashes: [][]byte{lockedTokenTransaction.FinalizedTokenTransactionHash},
+			})
+			if err != nil {
+				return nil, tokens.FormatErrorWithTransactionEnt(
+					fmt.Sprintf(tokens.ErrFailedToQueryOperatorForCancel, operator.Identifier),
+					lockedTokenTransaction, err)
+			}
 		}
+
 		return internalResp, err
 	})
 	if err != nil {

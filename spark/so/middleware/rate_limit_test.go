@@ -291,5 +291,4 @@ func TestRateLimiter(t *testing.T) {
 		assert.Equal(t, codes.ResourceExhausted, status.Code(err))
 		assert.Equal(t, "rate limit exceeded", status.Convert(err).Message())
 	})
-
 }
