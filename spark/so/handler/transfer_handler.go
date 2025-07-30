@@ -224,14 +224,6 @@ func (h *TransferHandler) startTransferInternal(ctx context.Context, req *pb.Sta
 	// returned, it means the transfer package is valid and the transfer is considered sent.
 	err = h.syncTransferInit(ctx, req, transferType, finalCpfpSignatureMap, finalDirectSignatureMap, finalDirectFromCpfpSignatureMap)
 	if err != nil {
-		db, err := ent.GetDbFromContext(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
-		}
-		dbCommitErr := db.Commit()
-		if dbCommitErr != nil {
-			return nil, fmt.Errorf("failed to commit transaction: %w", dbCommitErr)
-		}
 		cancelErr := h.CreateCancelTransferGossipMessage(ctx, req.TransferId)
 		if cancelErr != nil {
 			logger.Error("failed to create cancel transfer gossip message", "error", cancelErr, "transfer_id", req.TransferId)
