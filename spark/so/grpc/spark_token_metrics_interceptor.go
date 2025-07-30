@@ -75,8 +75,8 @@ func SparkTokenMetricsInterceptor() grpc.UnaryServerInterceptor {
 func getSparkTokenAttributes(fullMethod string, txType string) []attribute.KeyValue {
 	serviceName, methodName := extractServiceAndMethod(fullMethod)
 	attrs := []attribute.KeyValue{
-		attribute.String("grpc_method", methodName),
-		attribute.String("grpc_service", serviceName),
+		attribute.String("rpc_method", methodName),
+		attribute.String("rpc_service", serviceName),
 		attribute.String("token_transaction_type", txType),
 	}
 
