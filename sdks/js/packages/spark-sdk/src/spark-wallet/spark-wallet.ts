@@ -3142,7 +3142,13 @@ export class SparkWallet extends EventEmitter {
   }: PayLightningInvoiceParams) {
     const invoiceNetwork = getNetworkFromInvoice(invoice);
     const walletNetwork = this.config.getNetwork();
-    if (invoiceNetwork !== walletNetwork) {
+
+    const isValidNetworkForWallet =
+      invoiceNetwork === walletNetwork ||
+      (invoiceNetwork === Network.REGTEST &&
+        (walletNetwork === Network.REGTEST || walletNetwork === Network.LOCAL));
+
+    if (!isValidNetworkForWallet) {
       throw new ValidationError(
         `Invoice network: ${invoiceNetwork} does not match wallet network: ${walletNetwork}`,
         {
