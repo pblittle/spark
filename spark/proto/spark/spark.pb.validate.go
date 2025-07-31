@@ -10528,6 +10528,8 @@ func (m *TransferFilter) validate(all bool) error {
 
 	// no validation rules for Network
 
+	// no validation rules for Order
+
 	switch v := m.Participant.(type) {
 	case *TransferFilter_ReceiverIdentityPublicKey:
 		if v == nil {
