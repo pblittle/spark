@@ -30,6 +30,7 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/treenode"
 	"github.com/lightsparkdev/spark/so/helper"
 	decodepay "github.com/nbd-wtf/ln-decodepay"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -100,7 +101,7 @@ func (h *LightningHandler) StorePreimageShare(ctx context.Context, req *pb.Store
 }
 
 func (h *LightningHandler) validateNodeOwnership(ctx context.Context, nodes []*ent.TreeNode) error {
-	if !h.config.AuthzEnforced() {
+	if !h.config.IsAuthzEnforced() {
 		return nil
 	}
 
@@ -130,7 +131,7 @@ func (h *LightningHandler) validateNodeOwnership(ctx context.Context, nodes []*e
 }
 
 func (h *LightningHandler) validateHasSession(ctx context.Context) error {
-	if h.config.AuthzEnforced() {
+	if h.config.IsAuthzEnforced() {
 		_, err := authn.GetSessionFromContext(ctx)
 		if err != nil {
 			return err
@@ -240,8 +241,53 @@ func (h *LightningHandler) ValidateDuplicateLeaves(
 	return nil
 }
 
+type frostServiceClientConnection interface {
+	StartFrostServiceClient(h *LightningHandler) (pbfrost.FrostServiceClient, error)
+	Close()
+}
+
+type defaultFrostServiceClientConnection struct {
+	conn *grpc.ClientConn
+}
+
+func (f *defaultFrostServiceClientConnection) StartFrostServiceClient(h *LightningHandler) (pbfrost.FrostServiceClient, error) {
+	var err error
+
+	if f.conn != nil {
+		return nil, fmt.Errorf("frost service client already started")
+	}
+
+	f.conn, err = common.NewGRPCConnectionWithoutTLS(h.config.SignerAddress, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect to signer: %w", err)
+	}
+
+	return pbfrost.NewFrostServiceClient(f.conn), nil
+}
+
+func (f *defaultFrostServiceClientConnection) Close() {
+	// The only caller is a defer and doesn't handle errors
+	_ = f.conn.Close()
+}
+
 func (h *LightningHandler) ValidateGetPreimageRequest(
 	ctx context.Context,
+	paymentHash []byte,
+	cpfpTransactions []*pb.UserSignedTxSigningJob,
+	directTransactions []*pb.UserSignedTxSigningJob,
+	directFromCpfpTransactions []*pb.UserSignedTxSigningJob,
+	amount *pb.InvoiceAmount,
+	destinationPubkey []byte,
+	feeSats uint64,
+	reason pb.InitiatePreimageSwapRequest_Reason,
+	validateNodeOwnership bool,
+) error {
+	return h.validateGetPreimageRequestWithFrostServiceClientFactory(ctx, &defaultFrostServiceClientConnection{}, paymentHash, cpfpTransactions, directTransactions, directFromCpfpTransactions, amount, destinationPubkey, feeSats, reason, validateNodeOwnership)
+}
+
+func (h *LightningHandler) validateGetPreimageRequestWithFrostServiceClientFactory(
+	ctx context.Context,
+	frostServiceClientConnection frostServiceClientConnection,
 	paymentHash []byte,
 	cpfpTransactions []*pb.UserSignedTxSigningJob,
 	directTransactions []*pb.UserSignedTxSigningJob,
@@ -272,13 +318,12 @@ func (h *LightningHandler) ValidateGetPreimageRequest(
 	}
 
 	// Step 1 validate all signatures are valid
-	conn, err := common.NewGRPCConnectionWithoutTLS(h.config.SignerAddress, nil)
+	client, err := frostServiceClientConnection.StartFrostServiceClient(h)
 	if err != nil {
-		return fmt.Errorf("unable to connect to signer: %w", err)
+		return fmt.Errorf("unable to start frost service client: %w", err)
 	}
-	defer conn.Close()
+	defer frostServiceClientConnection.Close()
 
-	client := pbfrost.NewFrostServiceClient(conn)
 	nodes := make([]*ent.TreeNode, 0)
 	// Validate CPFP transaction.
 	for i := range cpfpTransactions {

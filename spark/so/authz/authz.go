@@ -12,8 +12,8 @@ import (
 
 // Config defines the base configuration interface for authorization
 type Config interface {
-	// AuthzEnforced returns whether authorization is enforced
-	AuthzEnforced() bool
+	// IsAuthzEnforced returns whether authorization is enforced
+	IsAuthzEnforced() bool
 }
 
 // Error represents authorization errors
@@ -54,7 +54,7 @@ func (e *Error) ToGRPCError() error {
 // EnforceSessionIdentityPublicKeyMatches checks if the request's identity public key matches the current session.
 // Returns an error if authorization fails or is required but not present.
 func EnforceSessionIdentityPublicKeyMatches(ctx context.Context, config Config, identityPublicKey []byte) error {
-	if !config.AuthzEnforced() {
+	if !config.IsAuthzEnforced() {
 		return nil
 	}
 

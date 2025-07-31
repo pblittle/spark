@@ -59,8 +59,8 @@ type Config struct {
 	DatabasePath string
 	// IsRDS indicates if the database is an RDS instance.
 	IsRDS bool
-	// authzEnforced determines if client authorization checks are enforced
-	authzEnforced bool
+	// AuthzEnforced determines if client authorization checks are enforced
+	AuthzEnforced bool
 	// DKGConfig
 	DKGConfig DkgConfig
 	// SupportedNetworks is the list of networks supported by the signing operator.
@@ -305,7 +305,7 @@ func NewConfig(
 		SignerAddress:             signerAddress,
 		DatabasePath:              databasePath,
 		IsRDS:                     isRDS,
-		authzEnforced:             authzEnforced,
+		AuthzEnforced:             authzEnforced,
 		DKGConfig:                 operatorConfig.Dkg,
 		SupportedNetworks:         supportedNetworks,
 		BitcoindConfigs:           operatorConfig.Bitcoind,
@@ -551,9 +551,9 @@ func (c *Config) GetOperatorIdentifierFromIdentityPublicKey(identityPublicKey []
 	return c.identityPubkeyToOperatorIdentifierMap[string(identityPublicKey)]
 }
 
-// AuthzEnforced returns whether authorization is enforced
-func (c *Config) AuthzEnforced() bool {
-	return c.authzEnforced
+// IsAuthzEnforced returns whether authorization is enforced
+func (c *Config) IsAuthzEnforced() bool {
+	return c.AuthzEnforced
 }
 
 func (c *Config) IdentityPublicKey() []byte {

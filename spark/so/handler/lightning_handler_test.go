@@ -1,17 +1,79 @@
-package handler_test
+package handler
 
 import (
 	"context"
+	"encoding/hex"
+	rand2 "math/rand/v2"
 	"testing"
+	"time"
 
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/google/uuid"
+	"github.com/lightsparkdev/spark/common"
+	"github.com/lightsparkdev/spark/common/keys"
 	pbcommon "github.com/lightsparkdev/spark/proto/common"
+	pbfrost "github.com/lightsparkdev/spark/proto/frost"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so"
+	"github.com/lightsparkdev/spark/so/authn"
+	"github.com/lightsparkdev/spark/so/authninternal"
 	"github.com/lightsparkdev/spark/so/db"
-	"github.com/lightsparkdev/spark/so/handler"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/lightsparkdev/spark/so/ent"
+	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+// mockFrostServiceClientConnection implements the FrostServiceClientConnection interface for testing
+type mockFrostServiceClientConnection struct{}
+
+func (m *mockFrostServiceClientConnection) StartFrostServiceClient(h *LightningHandler) (pbfrost.FrostServiceClient, error) {
+	return &mockFrostServiceClient{}, nil
+}
+
+func (m *mockFrostServiceClientConnection) Close() {
+}
+
+// mockFrostServiceClient implements the FrostServiceClient interface for testing
+type mockFrostServiceClient struct{}
+
+func (m *mockFrostServiceClient) Echo(ctx context.Context, in *pbfrost.EchoRequest, opts ...grpc.CallOption) (*pbfrost.EchoResponse, error) {
+	return &pbfrost.EchoResponse{}, nil
+}
+
+func (m *mockFrostServiceClient) DkgRound1(ctx context.Context, in *pbfrost.DkgRound1Request, opts ...grpc.CallOption) (*pbfrost.DkgRound1Response, error) {
+	return &pbfrost.DkgRound1Response{}, nil
+}
+
+func (m *mockFrostServiceClient) DkgRound2(ctx context.Context, in *pbfrost.DkgRound2Request, opts ...grpc.CallOption) (*pbfrost.DkgRound2Response, error) {
+	return &pbfrost.DkgRound2Response{}, nil
+}
+
+func (m *mockFrostServiceClient) DkgRound3(ctx context.Context, in *pbfrost.DkgRound3Request, opts ...grpc.CallOption) (*pbfrost.DkgRound3Response, error) {
+	return &pbfrost.DkgRound3Response{}, nil
+}
+
+func (m *mockFrostServiceClient) FrostNonce(ctx context.Context, in *pbfrost.FrostNonceRequest, opts ...grpc.CallOption) (*pbfrost.FrostNonceResponse, error) {
+	return &pbfrost.FrostNonceResponse{}, nil
+}
+
+func (m *mockFrostServiceClient) SignFrost(ctx context.Context, in *pbfrost.SignFrostRequest, opts ...grpc.CallOption) (*pbfrost.SignFrostResponse, error) {
+	return &pbfrost.SignFrostResponse{}, nil
+}
+
+func (m *mockFrostServiceClient) AggregateFrost(ctx context.Context, in *pbfrost.AggregateFrostRequest, opts ...grpc.CallOption) (*pbfrost.AggregateFrostResponse, error) {
+	return &pbfrost.AggregateFrostResponse{}, nil
+}
+
+func (m *mockFrostServiceClient) ValidateSignatureShare(ctx context.Context, in *pbfrost.ValidateSignatureShareRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	// Mock successful validation
+	return &emptypb.Empty{}, nil
+}
+
+var rng = rand2.NewChaCha8([32]byte{1})
 
 func TestValidateDuplicateLeaves(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -21,7 +83,7 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 	defer dbCtx.Close()
 
 	config := &so.Config{}
-	lightningHandler := handler.NewLightningHandler(config)
+	lightningHandler := NewLightningHandler(config)
 
 	// Helper function to create a UserSignedTxSigningJob
 	createSigningJob := func(leafID string) *pb.UserSignedTxSigningJob {
@@ -231,7 +293,7 @@ func TestStorePreimageShareEdgeCases(t *testing.T) {
 		Threshold: 2,
 		Index:     0,
 	}
-	lightningHandler := handler.NewLightningHandler(config)
+	lightningHandler := NewLightningHandler(config)
 
 	t.Run("nil preimage share returns error", func(t *testing.T) {
 		req := &pb.StorePreimageShareRequest{
@@ -268,7 +330,7 @@ func TestGetSigningCommitments(t *testing.T) {
 	defer dbCtx.Close()
 
 	config := &so.Config{}
-	lightningHandler := handler.NewLightningHandler(config)
+	lightningHandler := NewLightningHandler(config)
 
 	tests := []struct {
 		name           string
@@ -350,7 +412,7 @@ func TestValidatePreimage(t *testing.T) {
 	defer dbCtx.Close()
 
 	config := &so.Config{}
-	lightningHandler := handler.NewLightningHandler(config)
+	lightningHandler := NewLightningHandler(config)
 
 	tests := []struct {
 		name              string
@@ -442,7 +504,7 @@ func TestReturnLightningPayment(t *testing.T) {
 	defer dbCtx.Close()
 
 	config := &so.Config{}
-	lightningHandler := handler.NewLightningHandler(config)
+	lightningHandler := NewLightningHandler(config)
 
 	t.Run("non-existent payment hash", func(t *testing.T) {
 		req := &pb.ReturnLightningPaymentRequest{
@@ -470,10 +532,10 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 	config := &so.Config{
 		SignerAddress: "invalid_address", // This will cause connection failures
 	}
-	lightningHandler := handler.NewLightningHandler(config)
+	lightningHandler := NewLightningHandler(config)
 
 	// Valid 33-byte compressed secp256k1 public key for destination
-	validPubKey := []byte{0x02, 0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x98}
+	validPubKey := keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize()
 
 	tests := []struct {
 		name                       string
@@ -597,7 +659,7 @@ func TestInitiatePreimageSwapEdgeCases(t *testing.T) {
 	defer dbCtx.Close()
 
 	config := &so.Config{}
-	lightningHandler := handler.NewLightningHandler(config)
+	lightningHandler := NewLightningHandler(config)
 
 	tests := []struct {
 		name           string
@@ -708,4 +770,169 @@ func TestInitiatePreimageSwapEdgeCases(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Regression test for https://linear.app/lightsparkdev/issue/LIG-8044
+// Ensure that only a node owner can initiate a preimage swap for that node.
+func TestPreimageSwapAuthorizationBugRegression(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	defer dbCtx.Close()
+
+	// Valid 33-byte compressed secp256k1 public key for destination
+	validPubKey := keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize()
+	paymentHash := []byte("test_payment_hash_32_bytes_long_")
+
+	// Create a valid transaction for testing
+	validTxHex := "02000000000102dc552c6c0ef5ed0d8cd64bd1d2d1ffd7cf0ec0b5ad8df2a4c6269b59cffcc696010000000000000000603fbd40e86ee82258c57571c557b89a444aabf5b6a05574e6c6848379febe9a00000000000000000002e86905000000000022512024741d89092c5965f35a63802352fa9c7fae4a23d471b9dceb3379e8ff6b7dd1d054080000000000220020aea091435e74e3c1eba0bd964e67a05f300ace9e73efa66fe54767908f3e68800140f607486d87f59af453d62cffe00b6836d8cca2c89a340fab5fe842b20696908c77fd2f64900feb0cbb1c14da3e02271503fc465fcfb1b043c8187dccdd494558014067dff0f0c321fc8abc28bf555acfdfa5ee889b6909b24bc66cedf05e8cc2750a4d95037c3dc9c24f1e502198bade56fef61a2504809f5b2a60a62afeaf8bf52e00000000"
+	validTxBytes, err := hex.DecodeString(validTxHex)
+	require.NoError(t, err)
+
+	validTx := &pb.UserSignedTxSigningJob{
+		LeafId: "550e8400-e29b-41d4-a716-446655440000",
+		SigningCommitments: &pb.SigningCommitments{
+			SigningCommitments: map[string]*pbcommon.SigningCommitment{
+				"test": {
+					Hiding:  []byte("test_hiding"),
+					Binding: []byte("test_binding"),
+				},
+			},
+		},
+		SigningNonceCommitment: &pbcommon.SigningCommitment{
+			Hiding:  []byte("test_nonce_hiding"),
+			Binding: []byte("test_nonce_binding"),
+		},
+		UserSignature: []byte("test_signature"),
+		RawTx:         validTxBytes,
+	}
+
+	t.Run("non-node owner cannot initiate preimage swap", func(t *testing.T) {
+		// Use reflection to modify the original config and enable authorization
+		baseConfig := &so.Config{AuthzEnforced: true}
+
+		lightningHandler := NewLightningHandler(baseConfig)
+
+		// Create an authentication session with a specific identity (different from node owner)
+		sessionIdentityKey := []byte{0x02, 0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x99} // Different from node owner
+
+		// Create token verifier using the session identity key so the token will validate properly
+		tokenVerifier, err := authninternal.NewSessionTokenCreatorVerifier(sessionIdentityKey, authninternal.RealClock{})
+		require.NoError(t, err)
+
+		// Create a valid session token for the session identity
+		tokenResult, err := tokenVerifier.CreateToken(sessionIdentityKey, time.Hour)
+		require.NoError(t, err)
+
+		// Create context with authorization header like real gRPC requests
+		ctx = metadata.NewIncomingContext(ctx, metadata.Pairs(
+			"authorization", "Bearer "+tokenResult.Token,
+		))
+
+		// Use the authn interceptor to properly set the authentication context
+		authnInterceptor := authn.NewInterceptor(tokenVerifier)
+		var authenticatedCtx context.Context
+		_, err = authnInterceptor.AuthnInterceptor(ctx, nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, _ any) (any, error) {
+			authenticatedCtx = ctx
+			return nil, nil
+		})
+		require.NoError(t, err)
+
+		// Verify the session was set correctly
+		session, err := authn.GetSessionFromContext(authenticatedCtx)
+		require.NoError(t, err)
+		require.Equal(t, sessionIdentityKey, session.IdentityPublicKeyBytes())
+
+		// Create a tree node in the database for the test
+		tx, err := ent.GetDbFromContext(authenticatedCtx)
+		require.NoError(t, err)
+
+		// Create a tree first
+		tree, err := tx.Tree.Create().
+			SetOwnerIdentityPubkey(validPubKey).
+			SetStatus(st.TreeStatusAvailable).
+			SetNetwork(st.NetworkMainnet).
+			SetBaseTxid([]byte("test_base_txid_32_bytes_long_")).
+			SetVout(0).
+			Save(authenticatedCtx)
+		require.NoError(t, err)
+
+		// Create a keyshare with proper 33-byte public keys
+		keyshare, err := tx.SigningKeyshare.Create().
+			SetStatus(st.KeyshareStatusInUse).
+			SetSecretShare([]byte("test_secret_share_32_bytes_long_")).
+			SetPublicShares(map[string][]byte{"operator1": {0x02, 0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x98}}).
+			SetPublicKey([]byte{0x02, 0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x99}).
+			SetMinSigners(2).
+			SetCoordinatorIndex(1).
+			Save(authenticatedCtx)
+		require.NoError(t, err)
+
+		// Create a tree node with a different owner than the session
+		nodeID, err := uuid.Parse(validTx.LeafId)
+		require.NoError(t, err)
+
+		// First, let's create a transaction that will match our destination pubkey
+		// Let's use Go code to generate the correct P2TR script for our test pubkey
+		testDestinationPubkey := []byte{0x02, 0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x98}
+
+		// Parse the pubkey and generate the correct P2TR script
+		destPubkey, err := secp256k1.ParsePubKey(testDestinationPubkey)
+		require.NoError(t, err)
+
+		correctScript, err := common.P2TRScriptFromPubKey(destPubkey)
+		require.NoError(t, err)
+
+		// Create a minimal transaction with the correct P2TR output script
+		// Format: version(4) + input_count(1) + input(36) + output_count(1) + output_value(8) + output_script_len(1) + output_script + locktime(4)
+		testTx := []byte{0x02, 0x00, 0x00, 0x00} // version = 2
+		testTx = append(testTx, 0x01)            // input count = 1
+		// Add a dummy input (prev hash + vout + script_len + scriptSig + sequence)
+		testTx = append(testTx, make([]byte, 32)...)                            // prev hash (32 zeros)
+		testTx = append(testTx, 0x00, 0x00, 0x00, 0x00)                         // vout = 0
+		testTx = append(testTx, 0x00)                                           // scriptSig length = 0
+		testTx = append(testTx, 0xff, 0xff, 0xff, 0xff)                         // sequence
+		testTx = append(testTx, 0x01)                                           // output count = 1
+		testTx = append(testTx, 0xe8, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00) // value = 1000 satoshis
+		testTx = append(testTx, byte(len(correctScript)))                       // script length
+		testTx = append(testTx, correctScript...)                               // the correct P2TR script
+		testTx = append(testTx, 0x00, 0x00, 0x00, 0x00)                         // locktime = 0
+
+		_, err = tx.TreeNode.Create().
+			SetTree(tree).
+			SetID(nodeID). // Use the specific ID from the test
+			SetValue(1000).
+			SetStatus(st.TreeNodeStatusAvailable).
+			SetVerifyingPubkey(keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize()).
+			SetOwnerIdentityPubkey(keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize()).
+			SetOwnerSigningPubkey(keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize()).
+			SetRawTx(testTx).
+			SetVout(0).
+			SetSigningKeyshare(keyshare).
+			Save(authenticatedCtx)
+		require.NoError(t, err)
+
+		// Update the test transaction to use our generated transaction bytes
+		validTx.RawTx = testTx
+
+		mockFrostConnection := &mockFrostServiceClientConnection{}
+
+		// This test should fail because the node is not the owner of the leaf.
+		err = lightningHandler.validateGetPreimageRequestWithFrostServiceClientFactory(
+			authenticatedCtx,
+			mockFrostConnection,
+			paymentHash,
+			[]*pb.UserSignedTxSigningJob{validTx},
+			[]*pb.UserSignedTxSigningJob{},
+			[]*pb.UserSignedTxSigningJob{},
+			&pb.InvoiceAmount{ValueSats: 1000},
+			testDestinationPubkey,
+			0,
+			pb.InitiatePreimageSwapRequest_REASON_SEND,
+			true, // validateNodeOwnership = true
+		)
+
+		require.ErrorContains(t, err, "not owned by the authenticated identity public key")
+	})
 }
