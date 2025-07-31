@@ -14,7 +14,6 @@ import (
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/so/tokens"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 	"github.com/lightsparkdev/spark/common/logging"
 	sparkpb "github.com/lightsparkdev/spark/proto/spark"
@@ -171,7 +170,11 @@ func (h *SignTokenHandler) CommitTransaction(ctx context.Context, req *tokenpb.C
 		func(ctx context.Context, operator *so.SigningOperator) (*tokeninternalpb.SignTokenTransactionFromCoordinationResponse, error) {
 			var foundOperatorSignatures *tokenpb.InputTtxoSignaturesPerOperator
 			for _, operatorSignatures := range req.InputTtxoSignaturesPerOperator {
-				if bytes.Equal(operatorSignatures.OperatorIdentityPublicKey, operator.IdentityPublicKey) {
+				signaturesPubKey, err := keys.ParsePublicKey(operatorSignatures.OperatorIdentityPublicKey)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse signatures operator ID public key: %w", err)
+				}
+				if signaturesPubKey.Equals(operator.IdentityPublicKey) {
 					foundOperatorSignatures = operatorSignatures
 					break
 				}
@@ -270,7 +273,7 @@ func (h *SignTokenHandler) exchangeRevocationSecretShares(ctx context.Context, a
 	allOperatorSignaturesPackage := make([]*tokeninternalpb.OperatorTransactionSignature, 0, len(allOperatorSignaturesResponse))
 	for identifier, sig := range allOperatorSignaturesResponse {
 		allOperatorSignaturesPackage = append(allOperatorSignaturesPackage, &tokeninternalpb.OperatorTransactionSignature{
-			OperatorIdentityPublicKey: h.config.SigningOperatorMap[identifier].IdentityPublicKey,
+			OperatorIdentityPublicKey: h.config.SigningOperatorMap[identifier].IdentityPublicKey.Serialize(),
 			Signature:                 sig.SparkOperatorSignature,
 		})
 	}
@@ -294,7 +297,7 @@ func (h *SignTokenHandler) exchangeRevocationSecretShares(ctx context.Context, a
 			FinalTokenTransactionHash:     tokenTransactionHash,
 			OperatorTransactionSignatures: allOperatorSignaturesPackage,
 			OperatorShares:                revocationSecretShares,
-			OperatorIdentityPublicKey:     h.config.IdentityPublicKey(),
+			OperatorIdentityPublicKey:     h.config.IdentityPublicKey().Serialize(),
 		})
 	})
 
@@ -369,14 +372,10 @@ func (h *SignTokenHandler) prepareRevocationSecretSharesForExchange(ctx context.
 
 	sharesToReturnMap := make(map[string]*tokeninternalpb.OperatorRevocationShares)
 
-	coordinatorPubKeyStr := hex.EncodeToString(h.config.IdentityPublicKey())
+	coordinatorPubKeyStr := h.config.IdentityPublicKey().ToHex()
 	allOperatorPubkeys := make([]keys.Public, 0, len(h.config.SigningOperatorMap))
 	for _, operator := range h.config.SigningOperatorMap {
-		identityPubkey, err := keys.ParsePublicKey(operator.IdentityPublicKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create operator identity public key: %w", err)
-		}
-		allOperatorPubkeys = append(allOperatorPubkeys, identityPubkey)
+		allOperatorPubkeys = append(allOperatorPubkeys, operator.IdentityPublicKey)
 	}
 
 	for _, identityPubkey := range allOperatorPubkeys {
@@ -425,7 +424,7 @@ func (h *SignTokenHandler) localSignAndCommitTransaction(
 	operatorSpecificSignatures := convertTokenProtoSignaturesToOperatorSpecific(
 		foundOperatorSignatures.TtxoSignatures,
 		finalTokenTransactionHash,
-		h.config.IdentityPublicKey(),
+		h.config.IdentityPublicKey().Serialize(),
 	)
 	internalSignTokenHandler := NewInternalSignTokenHandler(h.config)
 	sigBytes, err := internalSignTokenHandler.SignAndPersistTokenTransaction(ctx, tokenTransaction, finalTokenTransactionHash, operatorSpecificSignatures)
@@ -502,17 +501,12 @@ func verifyOperatorSignatures(
 			return fmt.Errorf("operator %s not found in operator map", operatorID)
 		}
 
-		operatorPubKey, err := secp256k1.ParsePubKey(operator.IdentityPublicKey)
-		if err != nil {
-			return fmt.Errorf("failed to parse operator public key for operator %s: %w", operatorID, err)
-		}
-
 		operatorSig, err := ecdsa.ParseDERSignature(sigBytes)
 		if err != nil {
 			return fmt.Errorf("failed to parse operator signature for operator %s: %w", operatorID, err)
 		}
 
-		if !operatorSig.Verify(finalTokenTransactionHash, operatorPubKey) {
+		if !operatorSig.Verify(finalTokenTransactionHash, operator.IdentityPublicKey.ToBTCEC()) {
 			return fmt.Errorf("invalid signature from operator %s", operatorID)
 		}
 

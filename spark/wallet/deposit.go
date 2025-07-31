@@ -61,11 +61,6 @@ func validateDepositAddress(config *Config, address *pb.Address, userPubkey []by
 		if operator.Identifier == config.CoodinatorIdentifier {
 			continue
 		}
-		operatorPubkey, err := secp256k1.ParsePubKey(operator.IdentityPublicKey)
-		if err != nil {
-			return err
-		}
-
 		operatorSig, ok := address.DepositAddressProof.AddressSignatures[operator.Identifier]
 		if !ok {
 			return fmt.Errorf("address signature for operator %s is nil", operator.Identifier)
@@ -76,7 +71,7 @@ func validateDepositAddress(config *Config, address *pb.Address, userPubkey []by
 			return err
 		}
 
-		if !sig.Verify(addrHash[:], operatorPubkey) {
+		if !sig.Verify(addrHash[:], operator.IdentityPublicKey.ToBTCEC()) {
 			return fmt.Errorf("signature verification failed for operator %s", operator.Identifier)
 		}
 	}

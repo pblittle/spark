@@ -82,11 +82,11 @@ func GenerateRollbackStaticDepositUtxoSwapForUtxoRequest(ctx context.Context, co
 	return &pbinternal.RollbackUtxoSwapRequest{
 		OnChainUtxo:          utxo,
 		Signature:            rollbackUtxoSwapRequestSignature.Serialize(),
-		CoordinatorPublicKey: config.IdentityPublicKey(),
+		CoordinatorPublicKey: config.IdentityPublicKey().Serialize(),
 	}, nil
 }
 
-// rollbackUtxoSwap attempts to rollback a UTXO swap if an error occurred during creation.
+// rollbackUtxoSwap attempts to roll back a UTXO swap if an error occurred during creation.
 // It logs warnings for rollback failures but doesn't return errors since the original error is more important.
 func (o *StaticDepositHandler) rollbackUtxoSwap(ctx context.Context, config *so.Config, utxo *pb.UTXO) {
 	logger := logging.GetLoggerFromContext(ctx)
@@ -269,7 +269,7 @@ func GenerateCreateStaticDepositUtxoRefundRequest(ctx context.Context, config *s
 	return &pbinternal.CreateStaticDepositUtxoRefundRequest{
 		Request:              req,
 		Signature:            createUtxoSwapRequestSignature.Serialize(),
-		CoordinatorPublicKey: config.IdentityPublicKey(),
+		CoordinatorPublicKey: config.IdentityPublicKey().Serialize(),
 	}, nil
 }
 

@@ -687,7 +687,7 @@ func FetchAndLockTokenTransactionDataByHash(ctx context.Context, tokenTransactio
 func (t *TokenTransaction) MarshalProto(config *so.Config) (*tokenpb.TokenTransaction, error) {
 	operatorPublicKeys := make([][]byte, 0, len(config.SigningOperatorMap))
 	for _, operator := range config.SigningOperatorMap {
-		operatorPublicKeys = append(operatorPublicKeys, operator.IdentityPublicKey)
+		operatorPublicKeys = append(operatorPublicKeys, operator.IdentityPublicKey.Serialize())
 	}
 	tokenTransaction := &tokenpb.TokenTransaction{
 		Version:      uint32(t.Version),

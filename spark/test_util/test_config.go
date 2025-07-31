@@ -42,16 +42,20 @@ var testOperatorPrivkeys = []string{
 	"effe79dc2a911a5a359910cb7782f5cabb3b7cf01e3809f8d323898ffd78e408",
 }
 
-func decodePubkeys(pubkeys []string) ([][]byte, error) {
-	pubkeyBytesArray := make([][]byte, len(pubkeys))
-	for i, pubkey := range pubkeys {
-		pubkeyBytes, err := hex.DecodeString(pubkey)
+func decodePubKeys(pubKeys []string) ([]keys.Public, error) {
+	parsed := make([]keys.Public, len(pubKeys))
+	for i, pubKey := range pubKeys {
+		pubKeyBytes, err := hex.DecodeString(pubKey)
 		if err != nil {
 			return nil, err
 		}
-		pubkeyBytesArray[i] = pubkeyBytes
+		key, err := keys.ParsePublicKey(pubKeyBytes)
+		if err != nil {
+			return nil, err
+		}
+		parsed[i] = key
 	}
-	return pubkeyBytesArray, nil
+	return parsed, nil
 }
 
 func operatorCount() (int, error) {
@@ -76,7 +80,7 @@ func GetAllSigningOperators() (map[string]*so.SigningOperator, error) {
 		return nil, err
 	}
 
-	pubkeyBytesArray, err := decodePubkeys(testOperatorPubkeys[:opCount])
+	pubkeyBytesArray, err := decodePubKeys(testOperatorPubkeys[:opCount])
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +118,7 @@ func GetAllSigningOperatorsDeployed() (map[string]*so.SigningOperator, error) {
 		"0350f07ffc21bfd59d31e0a7a600e2995273938444447cb9bc4c75b8a895dbb853",
 	}
 
-	pubkeyBytesArray, err := decodePubkeys(pubkeys)
+	pubkeyBytesArray, err := decodePubKeys(pubkeys)
 	if err != nil {
 		return nil, err
 	}

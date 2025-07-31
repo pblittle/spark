@@ -59,7 +59,7 @@ const (
 	ErrInvalidIssuerSignature             = "invalid issuer signature for mint"
 	ErrFailedToHashRevocationKeyshares    = "failed to hash revocation keyshares payload"
 	ErrTransactionHashMismatch            = "transaction hash in payload (%x) does not match actual transaction hash (%x)"
-	ErrOperatorPublicKeyMismatch          = "operator identity public key in payload (%x) does not match this SO's identity public key (%x)"
+	ErrOperatorPublicKeyMismatch          = "operator identity public key in payload (%v) does not match this SO's identity public key (%v)"
 	ErrInvalidValidityDuration            = "invalid validity duration"
 	ErrTransactionPreemptedByExisting     = "transaction pre-empted by existing transaction with better hash"
 	ErrFailedToCancelPreemptedTransaction = "failed to cancel pre-empted transaction"

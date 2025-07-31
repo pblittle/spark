@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so/utils"
@@ -23,7 +25,7 @@ type SigningOperator struct {
 	// Address is the address of the signing operator used for serving the DKG service.
 	AddressDkg string
 	// IdentityPublicKey is the identity public key of the signing operator.
-	IdentityPublicKey []byte
+	IdentityPublicKey keys.Public
 	// ServerCertPath is the path to the server certificate.
 	CertPath *string
 	// ExternalAddress is the external address of the signing operator.
@@ -52,6 +54,11 @@ func (s *SigningOperator) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to decode public key hex: %w", err)
 	}
+	identityPubKey, err := keys.ParsePublicKey(pubKey)
+	if err != nil {
+		return fmt.Errorf("failed to parse public key: %w", err)
+	}
+	s.IdentityPublicKey = identityPubKey
 
 	s.ID = uint64(js.ID)
 	s.Identifier = utils.IndexToIdentifier(js.ID)
@@ -61,7 +68,6 @@ func (s *SigningOperator) UnmarshalJSON(data []byte) error {
 	} else {
 		s.AddressDkg = js.Address // Use the same address for DKG if not specified
 	}
-	s.IdentityPublicKey = pubKey
 	s.CertPath = js.CertPath
 	s.ExternalAddress = js.ExternalAddress
 	return nil
@@ -72,7 +78,7 @@ func (s *SigningOperator) MarshalProto() *pb.SigningOperatorInfo {
 	return &pb.SigningOperatorInfo{
 		Index:      s.ID,
 		Identifier: s.Identifier,
-		PublicKey:  s.IdentityPublicKey,
+		PublicKey:  s.IdentityPublicKey.Serialize(),
 		Address:    s.ExternalAddress,
 	}
 }

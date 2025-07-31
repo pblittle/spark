@@ -136,8 +136,8 @@ func TestSignRound1Packages(t *testing.T) {
 }
 
 func TestValidateRound1Signature(t *testing.T) {
-	operator1 := &so.SigningOperator{IdentityPublicKey: priv1.Public().Serialize()}
-	operator2 := &so.SigningOperator{IdentityPublicKey: priv2.Public().Serialize()}
+	operator1 := &so.SigningOperator{IdentityPublicKey: priv1.Public()}
+	operator2 := &so.SigningOperator{IdentityPublicKey: priv2.Public()}
 	operatorMap := map[string]*so.SigningOperator{"op1": operator1, "op2": operator2}
 	packages := []map[string][]byte{
 		{"key1": []byte("value1")},
@@ -154,8 +154,8 @@ func TestValidateRound1Signature(t *testing.T) {
 }
 
 func TestValidateRound1Signature_InvalidSignature(t *testing.T) {
-	operator1 := &so.SigningOperator{IdentityPublicKey: priv1.Public().Serialize()}
-	operator2 := &so.SigningOperator{IdentityPublicKey: priv2.Public().Serialize()}
+	operator1 := &so.SigningOperator{IdentityPublicKey: priv1.Public()}
+	operator2 := &so.SigningOperator{IdentityPublicKey: priv2.Public()}
 	operatorMap := map[string]*so.SigningOperator{"op1": operator1, "op2": operator2}
 	packages := []map[string][]byte{
 		{"key1": []byte("value1")},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/lightsparkdev/spark/common/keys"
 	"log/slog"
 	"time"
 
@@ -367,7 +368,11 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 
 						if tokenTransaction.Edges.PeerSignatures != nil {
 							for _, signature := range tokenTransaction.Edges.PeerSignatures {
-								identifier := config.GetOperatorIdentifierFromIdentityPublicKey(signature.OperatorIdentityPublicKey)
+								pubKey, err := keys.ParsePublicKey(signature.OperatorIdentityPublicKey)
+								if err != nil {
+									return fmt.Errorf("unable to parse public key: %w", err)
+								}
+								identifier := config.GetOperatorIdentifierFromIdentityPublicKey(pubKey)
 								signaturesPackage[identifier] = &tokeninternalpb.SignTokenTransactionFromCoordinationResponse{
 									SparkOperatorSignature: signature.Signature,
 								}
@@ -443,7 +448,7 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 
 					query := tx.UtxoSwap.Query().
 						Where(utxoswap.StatusEQ(st.UtxoSwapStatusCreated)).
-						Where(utxoswap.CoordinatorIdentityPublicKeyEQ(config.IdentityPublicKey())).
+						Where(utxoswap.CoordinatorIdentityPublicKeyEQ(config.IdentityPublicKey().Serialize())).
 						Order(utxoswap.ByCreateTime(sql.OrderDesc())).
 						Limit(100)
 

@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -282,9 +284,14 @@ func (h *InternalDepositHandler) CreateUtxoSwap(ctx context.Context, config *so.
 	if err != nil {
 		return nil, fmt.Errorf("failed to create create utxo swap request statement: %w", err)
 	}
+
+	coordinatorPubKey, err := keys.ParsePublicKey(reqWithSignature.CoordinatorPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse coordinator public key: %w", err)
+	}
 	coordinatorIsSO := false
 	for _, op := range config.SigningOperatorMap {
-		if bytes.Equal(op.IdentityPublicKey, reqWithSignature.CoordinatorPublicKey) {
+		if op.IdentityPublicKey.Equals(coordinatorPubKey) {
 			coordinatorIsSO = true
 			break
 		}
@@ -833,7 +840,7 @@ func CreateCompleteSwapForUtxoRequest(config *so.Config, utxo *pb.UTXO) (*pbinte
 	return &pbinternal.UtxoSwapCompletedRequest{
 		OnChainUtxo:          utxo,
 		Signature:            completedUtxoSwapRequestSignature.Serialize(),
-		CoordinatorPublicKey: config.IdentityPublicKey(),
+		CoordinatorPublicKey: config.IdentityPublicKey().Serialize(),
 	}, nil
 }
 
@@ -887,7 +894,7 @@ func CreateCreateSwapForUtxoRequest(config *so.Config, req *pb.InitiateUtxoSwapR
 	return &pbinternal.CreateUtxoSwapRequest{
 		Request:              req,
 		Signature:            createUtxoSwapRequestSignature.Serialize(),
-		CoordinatorPublicKey: config.IdentityPublicKey(),
+		CoordinatorPublicKey: config.IdentityPublicKey().Serialize(),
 	}, nil
 }
 
@@ -952,7 +959,7 @@ func (h *InternalDepositHandler) RollbackSwapForAllOperators(ctx context.Context
 
 		client := pbinternal.NewSparkInternalServiceClient(conn)
 		internalResp, err := client.RollbackUtxoSwap(ctx, &pbinternal.RollbackUtxoSwapRequest{
-			CoordinatorPublicKey: config.IdentityPublicKey(),
+			CoordinatorPublicKey: config.IdentityPublicKey().Serialize(),
 			Signature:            rollbackUtxoSwapRequestSignature.Serialize(),
 			OnChainUtxo:          req.OnChainUtxo,
 		})

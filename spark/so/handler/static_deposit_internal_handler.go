@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/common/logging"
@@ -85,9 +87,14 @@ func (h *StaticDepositInternalHandler) CreateStaticDepositUtxoSwap(ctx context.C
 	if err != nil {
 		return nil, fmt.Errorf("failed to create create utxo swap request statement: %w", err)
 	}
+	coordinatorPubKey, err := keys.ParsePublicKey(reqWithSignature.CoordinatorPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse coordinator public key: %w", err)
+	}
+
 	coordinatorIsSO := false
 	for _, op := range config.SigningOperatorMap {
-		if bytes.Equal(op.IdentityPublicKey, reqWithSignature.CoordinatorPublicKey) {
+		if op.IdentityPublicKey.Equals(coordinatorPubKey) {
 			coordinatorIsSO = true
 			break
 		}
@@ -255,9 +262,13 @@ func (h *StaticDepositInternalHandler) CreateStaticDepositUtxoRefund(ctx context
 	if err != nil {
 		return nil, fmt.Errorf("failed to create create utxo swap request statement: %w", err)
 	}
+	coordinatorPubKey, err := keys.ParsePublicKey(reqWithSignature.CoordinatorPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse coordinator public key: %w", err)
+	}
 	coordinatorIsSO := false
 	for _, op := range config.SigningOperatorMap {
-		if bytes.Equal(op.IdentityPublicKey, reqWithSignature.CoordinatorPublicKey) {
+		if op.IdentityPublicKey.Equals(coordinatorPubKey) {
 			coordinatorIsSO = true
 			break
 		}

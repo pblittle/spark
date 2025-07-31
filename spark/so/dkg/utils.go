@@ -8,7 +8,6 @@ import (
 
 	"github.com/lightsparkdev/spark/common/keys"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/so"
@@ -18,11 +17,11 @@ func round1PackageHash(packageMaps []map[string][]byte) []byte {
 	// For each map, create a deterministic string representation
 	finalHasher := sha256.New()
 	for _, m := range packageMaps {
-		keys := slices.Sorted(maps.Keys(m)) // Only sort keys within each map
+		packageKeys := slices.Sorted(maps.Keys(m)) // Only sort keys within each map
 
 		// Create a hash for this map
 		hasher := sha256.New()
-		for _, k := range keys {
+		for _, k := range packageKeys {
 			hasher.Write([]byte(k))
 			hasher.Write(m[k])
 		}
@@ -53,19 +52,13 @@ func validateRound1Signature(round1Packages []map[string][]byte, round1Signature
 			continue
 		}
 
-		pub, err := secp256k1.ParsePubKey(operator.IdentityPublicKey)
-		if err != nil {
-			validationFailures = append(validationFailures, identifier)
-			continue
-		}
-
 		sig, err := ecdsa.ParseDERSignature(signature)
 		if err != nil {
 			validationFailures = append(validationFailures, identifier)
 			continue
 		}
 
-		if !sig.Verify(hash, pub) {
+		if !sig.Verify(hash, operator.IdentityPublicKey.ToBTCEC()) {
 			validationFailures = append(validationFailures, identifier)
 		}
 	}

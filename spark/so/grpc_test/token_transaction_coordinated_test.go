@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
@@ -199,7 +201,7 @@ func TestCoordinatedL1TokenMintAndTransfer(t *testing.T) {
 				Only(context.Background())
 			require.NoError(t, err)
 			// We expect to see one peer signature per peer operator.
-			require.Equal(t, numOperators-1, len(tokenTransaction.Edges.PeerSignatures), "should have exactly numOperators-1 peer signatures")
+			require.Len(t, tokenTransaction.Edges.PeerSignatures, numOperators-1, "should have exactly numOperators-1 peer signatures")
 			require.Equal(t, st.TokenTransactionStatusFinalized, tokenTransaction.Status)
 
 			spentTokenOutputs := tokenTransaction.Edges.SpentOutput
@@ -218,7 +220,7 @@ func TestCoordinatedL1TokenMintAndTransfer(t *testing.T) {
 
 			for _, tokenOutput := range spentTokenOutputs {
 				shares := tokenOutput.Edges.TokenPartialRevocationSecretShares
-				require.Equal(t, numOperators-1, len(shares),
+				require.Len(t, shares, numOperators-1,
 					"tokenOutput %s should have %d secret-share rows", tokenOutput.ID, numOperators-1)
 
 				seenSecrets := make(map[string]struct{})
@@ -231,12 +233,12 @@ func TestCoordinatedL1TokenMintAndTransfer(t *testing.T) {
 
 				// We expect to see one secret share per operator, except for the coordinator
 				// We expect to see a 32 byte revocation secret for each output
-				require.Equal(t, numOperators-1, len(seenSecrets),
+				require.Len(t, seenSecrets, numOperators-1,
 					"tokenOutput %s has duplicate secret-share blobs", tokenOutput.ID)
-				require.Equal(t, numOperators-1, len(seenOperators),
+				require.Len(t, seenOperators, numOperators-1,
 					"tokenOutput %s has duplicate operator-identity keys", tokenOutput.ID)
 				require.NotNil(t, tokenOutput.SpentRevocationSecret, "tokenOutput %s has no revocation secret", tokenOutput.ID)
-				require.Equal(t, len(tokenOutput.SpentRevocationSecret), 32, "tokenOutput %s revocation secret does not match commitment size", tokenOutput.ID)
+				require.Len(t, tokenOutput.SpentRevocationSecret, 32, "tokenOutput %s revocation secret does not match commitment size", tokenOutput.ID)
 			}
 
 			require.Len(t, transferTokenTransactionResponse.TokenOutputs, 1, "expected 1 created output in transfer transaction")
@@ -663,7 +665,7 @@ func TestCoordinatedTokenMintAndTransferTokensWithTooManyInputsFails(t *testing.
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 
 	allUserOutputPrivKeys := append(userOutputPrivKeysFirstBatch, userOutputPrivKeysSecondBatch...)
@@ -722,7 +724,7 @@ func TestCoordinatedTokenMintAndTransferMaxInputsSucceeds(t *testing.T) {
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 		ClientCreatedTimestamp:          timestamppb.New(time.Now()),
 	}
 
@@ -1019,7 +1021,7 @@ func TestCoordinatedBroadcastTokenTransactionWithInvalidPrevTxHash(t *testing.T)
 					},
 				},
 				Network:                         config.ProtoNetwork(),
-				SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+				SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 			}
 
 			// Attempt to broadcast the transfer transaction with corrupted hash
@@ -1197,7 +1199,7 @@ func createTestTokenMintTransactionTokenPbWithParams(config *wallet.Config, para
 		},
 		TokenOutputs:                    tokenOutputs,
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 		ClientCreatedTimestamp:          timestamppb.New(now),
 	}
 
@@ -1266,7 +1268,7 @@ func createTestTokenTransferTransactionTokenPbWithParams(config *wallet.Config, 
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 		ClientCreatedTimestamp:          timestamppb.New(time.Now()),
 	}
 
@@ -1419,7 +1421,7 @@ func testCoordinatedTransactionSigningScenarios(
 		for idx, privKey := range commitOwnerPrivateKeys {
 			payload := &sparkpb.OperatorSpecificTokenTransactionSignablePayload{
 				FinalTokenTransactionHash: finalTxHash,
-				OperatorIdentityPublicKey: operator.IdentityPublicKey,
+				OperatorIdentityPublicKey: operator.IdentityPublicKey.Serialize(),
 			}
 			payloadHash, hashErr := utils.HashOperatorSpecificTokenTransactionSignablePayload(payload)
 			require.NoError(t, hashErr, "failed to hash operator-specific payload")
@@ -1434,7 +1436,7 @@ func testCoordinatedTransactionSigningScenarios(
 		}
 		operatorSignatures = append(operatorSignatures, &tokenpb.InputTtxoSignaturesPerOperator{
 			TtxoSignatures:            ttxoSigs,
-			OperatorIdentityPublicKey: operator.IdentityPublicKey,
+			OperatorIdentityPublicKey: operator.IdentityPublicKey.Serialize(),
 		})
 	}
 
@@ -1493,7 +1495,7 @@ func createTestCoordinatedTokenCreateTransactionWithParams(config *wallet.Config
 		},
 		TokenOutputs:                    []*tokenpb.TokenOutput{},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 		ClientCreatedTimestamp:          timestamppb.New(time.Now()),
 	}
 	return createTokenTransaction, nil
@@ -2616,7 +2618,9 @@ func TestQueryTokenOutputsWithRevealedRevocationSecrets(t *testing.T) {
 	for _, operator := range config.SigningOperators {
 		var foundOperatorSignatures *tokenpb.InputTtxoSignaturesPerOperator
 		for _, sig := range operatorSignatures {
-			if bytes.Equal(sig.OperatorIdentityPublicKey, operator.IdentityPublicKey) {
+			sigOperatorIDPubKey, err := keys.ParsePublicKey(sig.OperatorIdentityPublicKey)
+			require.NoError(t, err)
+			if sigOperatorIDPubKey.Equals(operator.IdentityPublicKey) {
 				foundOperatorSignatures = sig
 				break
 			}
@@ -2643,8 +2647,7 @@ func TestQueryTokenOutputsWithRevealedRevocationSecrets(t *testing.T) {
 
 	// Verify that the transaction is in the correct state after signing with all operators
 	// but before revocation secret exchange
-	require.Equal(t, len(config.SigningOperators), len(allOperatorSignatures),
-		"expected signatures from all operators")
+	require.Len(t, allOperatorSignatures, len(config.SigningOperators), "expected signatures from all operators")
 
 	revocationShares, err := wallet.PrepareRevocationSharesFromCoordinator(
 		context.Background(),

@@ -10,6 +10,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
 	tokeninternalpb "github.com/lightsparkdev/spark/proto/spark_token_internal"
 
@@ -204,7 +206,7 @@ func (h *InternalPrepareTokenHandler) validateAndReserveKeyshares(ctx context.Co
 
 // validateOperatorSpecificSignatures validates the signatures in the request against the transaction hash
 // and verifies that the number of signatures matches the expected count based on transaction type
-func validateOperatorSpecificSignatures(identityPublicKey []byte, operatorSpecificSignatures []*pb.OperatorSpecificOwnerSignature, tokenTransaction *ent.TokenTransaction) error {
+func validateOperatorSpecificSignatures(identityPublicKey keys.Public, operatorSpecificSignatures []*pb.OperatorSpecificOwnerSignature, tokenTransaction *ent.TokenTransaction) error {
 	if len(tokenTransaction.Edges.SpentOutput) > 0 {
 		return validateTransferOperatorSpecificSignatures(identityPublicKey, operatorSpecificSignatures, tokenTransaction)
 	}
@@ -212,7 +214,7 @@ func validateOperatorSpecificSignatures(identityPublicKey []byte, operatorSpecif
 }
 
 // validateTransferOperatorSpecificSignatures validates signatures for transfer transactions
-func validateTransferOperatorSpecificSignatures(identityPublicKey []byte, operatorSpecificSignatures []*pb.OperatorSpecificOwnerSignature, tokenTransaction *ent.TokenTransaction) error {
+func validateTransferOperatorSpecificSignatures(identityPublicKey keys.Public, operatorSpecificSignatures []*pb.OperatorSpecificOwnerSignature, tokenTransaction *ent.TokenTransaction) error {
 	if len(operatorSpecificSignatures) != len(tokenTransaction.Edges.SpentOutput) {
 		return tokens.FormatErrorWithTransactionEnt(
 			fmt.Sprintf("expected %d signatures for transfer (one per input), but got %d",
@@ -265,9 +267,12 @@ func validateTransferOperatorSpecificSignatures(identityPublicKey []byte, operat
 				sig.Payload.FinalTokenTransactionHash, tokenTransaction.FinalizedTokenTransactionHash)
 		}
 
-		if !bytes.Equal(sig.Payload.OperatorIdentityPublicKey, identityPublicKey) {
-			return fmt.Errorf(tokens.ErrOperatorPublicKeyMismatch,
-				sig.Payload.OperatorIdentityPublicKey, identityPublicKey)
+		payloadPubKey, err := keys.ParsePublicKey(sig.Payload.OperatorIdentityPublicKey)
+		if err != nil {
+			return fmt.Errorf("unable to parse signature payload operator identity public key: %w", err)
+		}
+		if !payloadPubKey.Equals(identityPublicKey) {
+			return fmt.Errorf(tokens.ErrOperatorPublicKeyMismatch, payloadPubKey, identityPublicKey)
 		}
 
 		output := spentOutputs[i]
@@ -284,7 +289,7 @@ func validateTransferOperatorSpecificSignatures(identityPublicKey []byte, operat
 }
 
 // validateIssuerOperatorSpecificSignatures validates signatures for mint and create transactions
-func validateIssuerOperatorSpecificSignatures(identityPublicKey []byte, operatorSpecificSignatures []*pb.OperatorSpecificOwnerSignature, tokenTransaction *ent.TokenTransaction) error {
+func validateIssuerOperatorSpecificSignatures(identityPublicKey keys.Public, operatorSpecificSignatures []*pb.OperatorSpecificOwnerSignature, tokenTransaction *ent.TokenTransaction) error {
 	if len(operatorSpecificSignatures) != 1 {
 		return tokens.FormatErrorWithTransactionEnt(
 			fmt.Sprintf("expected exactly 1 signature for mint/create, but got %d",
@@ -317,9 +322,12 @@ func validateIssuerOperatorSpecificSignatures(identityPublicKey []byte, operator
 	}
 
 	if len(sig.Payload.OperatorIdentityPublicKey) > 0 {
-		if !bytes.Equal(sig.Payload.OperatorIdentityPublicKey, identityPublicKey) {
-			return fmt.Errorf(tokens.ErrOperatorPublicKeyMismatch,
-				sig.Payload.OperatorIdentityPublicKey, identityPublicKey)
+		payloadPubKey, err := keys.ParsePublicKey(sig.Payload.OperatorIdentityPublicKey)
+		if err != nil {
+			return fmt.Errorf("unable to parse signature payload operator identity public key: %w", err)
+		}
+		if !payloadPubKey.Equals(identityPublicKey) {
+			return fmt.Errorf(tokens.ErrOperatorPublicKeyMismatch, payloadPubKey, identityPublicKey)
 		}
 	}
 

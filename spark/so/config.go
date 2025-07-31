@@ -89,7 +89,7 @@ type Config struct {
 	// Database is the configuration for the database.
 	Database DatabaseConfig
 	// identityPubkeyToOperatorIdentifierMap maps the signing operator identity pubkeys to its corresponding identifier.
-	identityPubkeyToOperatorIdentifierMap map[string]string
+	identityPubkeyToOperatorIdentifierMap map[keys.Public]string
 	// Token is the configuration for token-related settings.
 	Token TokenConfig
 	// ServiceAuthz specifies the enforcement of authorization checks for
@@ -546,17 +546,17 @@ func (c *Config) GetSigningOperatorList() map[string]*pb.SigningOperatorInfo {
 }
 
 func (c *Config) buildIdentityPubkeyMap() {
-	c.identityPubkeyToOperatorIdentifierMap = make(map[string]string, len(c.SigningOperatorMap))
+	c.identityPubkeyToOperatorIdentifierMap = make(map[keys.Public]string, len(c.SigningOperatorMap))
 	for _, operator := range c.SigningOperatorMap {
-		c.identityPubkeyToOperatorIdentifierMap[string(operator.IdentityPublicKey)] = operator.Identifier
+		c.identityPubkeyToOperatorIdentifierMap[operator.IdentityPublicKey] = operator.Identifier
 	}
 }
 
-func (c *Config) GetOperatorIdentifierFromIdentityPublicKey(identityPublicKey []byte) string {
+func (c *Config) GetOperatorIdentifierFromIdentityPublicKey(identityPublicKey keys.Public) string {
 	if len(c.identityPubkeyToOperatorIdentifierMap) == 0 {
 		c.buildIdentityPubkeyMap()
 	}
-	return c.identityPubkeyToOperatorIdentifierMap[string(identityPublicKey)]
+	return c.identityPubkeyToOperatorIdentifierMap[identityPublicKey]
 }
 
 // IsAuthzEnforced returns whether authorization is enforced
@@ -564,7 +564,7 @@ func (c *Config) IsAuthzEnforced() bool {
 	return c.AuthzEnforced
 }
 
-func (c *Config) IdentityPublicKey() []byte {
+func (c *Config) IdentityPublicKey() keys.Public {
 	return c.SigningOperatorMap[c.Identifier].IdentityPublicKey
 }
 

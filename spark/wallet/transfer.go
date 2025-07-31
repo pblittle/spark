@@ -180,7 +180,7 @@ func prepareTransferPackage(
 			return nil, fmt.Errorf("failed to marshal proto to encrypt: %w", err)
 		}
 		encryptionKeyBytes := config.SigningOperators[identifier].IdentityPublicKey
-		encryptionKey, err := eciesgo.NewPublicKeyFromBytes(encryptionKeyBytes)
+		encryptionKey, err := eciesgo.NewPublicKeyFromBytes(encryptionKeyBytes.Serialize())
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse encryption key: %w", err)
 		}

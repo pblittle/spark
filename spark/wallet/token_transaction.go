@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -9,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -69,7 +70,7 @@ func StartTokenTransaction(
 	// Attach operator public keys to the transaction
 	var operatorKeys [][]byte
 	for _, operator := range config.SigningOperators {
-		operatorKeys = append(operatorKeys, operator.IdentityPublicKey)
+		operatorKeys = append(operatorKeys, operator.IdentityPublicKey.Serialize())
 	}
 	tokenTransaction.SparkOperatorIdentityPublicKeys = operatorKeys
 
@@ -216,7 +217,11 @@ func getOperatorsToContact(
 			// Find the operator with this public key
 			found := false
 			for _, operator := range config.SigningOperators {
-				if bytes.Equal(operator.IdentityPublicKey, opPubKey) {
+				opIDPubKey, err := keys.ParsePublicKey(opPubKey)
+				if err != nil {
+					return nil, nil, err
+				}
+				if operator.IdentityPublicKey.Equals(opIDPubKey) {
 					operatorsToContact = append(operatorsToContact, operator)
 					selectedPubKeys = append(selectedPubKeys, opPubKey)
 					found = true
@@ -231,7 +236,7 @@ func getOperatorsToContact(
 		// Use all signing operators
 		for _, operator := range config.SigningOperators {
 			operatorsToContact = append(operatorsToContact, operator)
-			selectedPubKeys = append(selectedPubKeys, operator.IdentityPublicKey)
+			selectedPubKeys = append(selectedPubKeys, operator.IdentityPublicKey.Serialize())
 		}
 	}
 
@@ -315,7 +320,7 @@ func SignTokenTransaction(
 		}
 		// Validate signature
 		operatorSig := signTokenTransactionResponse.SparkOperatorSignature
-		if err := utils.ValidateOwnershipSignature(operatorSig, finalTxHash, operator.IdentityPublicKey); err != nil {
+		if err := utils.ValidateOwnershipSignature(operatorSig, finalTxHash, operator.IdentityPublicKey.Serialize()); err != nil {
 			return nil, nil, fmt.Errorf("invalid signature from operator with public key %x: %w", operator.IdentityPublicKey, err)
 		}
 
@@ -537,7 +542,7 @@ func FreezeTokens(
 		payloadSparkProto := &pb.FreezeTokensPayload{
 			OwnerPublicKey:            ownerPublicKey,
 			TokenPublicKey:            tokenPublicKey,
-			OperatorIdentityPublicKey: operator.IdentityPublicKey,
+			OperatorIdentityPublicKey: operator.IdentityPublicKey.Serialize(),
 			IssuerProvidedTimestamp:   timestamp,
 			ShouldUnfreeze:            shouldUnfreeze,
 		}
@@ -546,7 +551,7 @@ func FreezeTokens(
 			Version:                   0,
 			OwnerPublicKey:            ownerPublicKey,
 			TokenPublicKey:            tokenPublicKey,
-			OperatorIdentityPublicKey: operator.IdentityPublicKey,
+			OperatorIdentityPublicKey: operator.IdentityPublicKey.Serialize(),
 			IssuerProvidedTimestamp:   timestamp,
 			ShouldUnfreeze:            shouldUnfreeze,
 		}

@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/common/logging"
@@ -102,10 +104,10 @@ func getTokenMaxSupplyBytes(maxSupply uint64) []byte {
 	return int64ToUint128Bytes(0, maxSupply)
 }
 
-func getSigningOperatorPublicKeys(config *wallet.Config) [][]byte {
+func getSigningOperatorPublicKeyBytes(config *wallet.Config) [][]byte {
 	var publicKeys [][]byte
 	for _, operator := range config.SigningOperators {
-		publicKeys = append(publicKeys, operator.IdentityPublicKey)
+		publicKeys = append(publicKeys, operator.IdentityPublicKey.Serialize())
 	}
 	return publicKeys
 }
@@ -152,7 +154,7 @@ func createTestTokenMintTransactionWithParams(config *wallet.Config,
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 
 	return mintTokenTransaction, userOutput1PrivKey, userOutput2PrivKey, nil
@@ -200,7 +202,7 @@ func createTestTokenTransferTransactionWithParams(
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 	return transferTokenTransaction, userOutput3PrivKey, nil
 }
@@ -235,30 +237,30 @@ func createTestTokenMintTransactionWithMultipleTokenOutputs(config *wallet.Confi
 		},
 		TokenOutputs:                    outputOutputs,
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 
 	return issueTokenTransaction, userOutputPrivKeys, nil
 }
 
-// OperatorKeysSplit contains two groups of operator public keys
-type OperatorKeysSplit struct {
-	FirstHalf  []wallet.SerializedPublicKey
-	SecondHalf []wallet.SerializedPublicKey
+// operatorKeysSplit contains two groups of operator public keys
+type operatorKeysSplit struct {
+	firstHalf  []keys.Public
+	secondHalf []keys.Public
 }
 
 // splitOperatorIdentityPublicKeys splits the operators from the config into two approximately equal groups
-func splitOperatorIdentityPublicKeys(config *wallet.Config) OperatorKeysSplit {
-	publicKeys := make([]wallet.SerializedPublicKey, 0, len(config.SigningOperators))
+func splitOperatorIdentityPublicKeys(config *wallet.Config) operatorKeysSplit {
+	publicKeys := make([]keys.Public, 0, len(config.SigningOperators))
 	for _, operator := range config.SigningOperators {
 		publicKeys = append(publicKeys, operator.IdentityPublicKey)
 	}
 
 	halfOperatorCount := len(config.SigningOperators) / 2
 
-	return OperatorKeysSplit{
-		FirstHalf:  publicKeys[:halfOperatorCount],
-		SecondHalf: publicKeys[halfOperatorCount:],
+	return operatorKeysSplit{
+		firstHalf:  publicKeys[:halfOperatorCount],
+		secondHalf: publicKeys[halfOperatorCount:],
 	}
 }
 
@@ -297,7 +299,7 @@ func TestQueryPartiallySpentTokenOutputsNotReturned(t *testing.T) {
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 
 	ownerSigningPrivateKeys := []*secp256k1.PrivateKey{&tokenPrivKey}
@@ -333,7 +335,7 @@ func TestQueryPartiallySpentTokenOutputsNotReturned(t *testing.T) {
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 
 	transferTxResp, _, transferTxHash, err := wallet.StartTokenTransaction(
@@ -345,12 +347,17 @@ func TestQueryPartiallySpentTokenOutputsNotReturned(t *testing.T) {
 	)
 	require.NoError(t, err, "failed to start token transaction: %v", err)
 
+	var operatorIDPubKeyBytes []wallet.SerializedPublicKey
+	for _, key := range splitOperatorIdentityPublicKeys(config).secondHalf {
+		operatorIDPubKeyBytes = append(operatorIDPubKeyBytes, key.Serialize())
+	}
+
 	_, _, err = wallet.SignTokenTransaction(
 		context.Background(),
 		config,
 		transferTxResp.FinalTokenTransaction,
 		transferTxHash,
-		splitOperatorIdentityPublicKeys(config).SecondHalf,
+		operatorIDPubKeyBytes,
 		ownerSigningPrivateKeys,
 		nil,
 	)
@@ -688,7 +695,7 @@ func TestBroadcastTokenTransactionMintAndTransferTokensLotsOfOutputs(t *testing.
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 
 	// Combine private keys from both issuance transactions
@@ -731,7 +738,7 @@ func TestBroadcastTokenTransactionMintAndTransferTokensLotsOfOutputs(t *testing.
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 
 	// Collect all revocation public keys
@@ -965,10 +972,10 @@ func testMintTransactionSigningScenarios(t *testing.T, config *wallet.Config,
 
 	if testInvalidSigningOperatorPublicKey {
 		// Generate a new random key to replace the valid one
-		randomKey, err := secp256k1.GeneratePrivateKey()
+		randomKey, err := keys.GeneratePrivateKey()
 		require.NoError(t, err, "failed to generate random key")
 		for operatorID := range config.SigningOperators {
-			config.SigningOperators[operatorID].IdentityPublicKey = randomKey.PubKey().SerializeCompressed()
+			config.SigningOperators[operatorID].IdentityPublicKey = randomKey.Public()
 			break // Only modify the first operator
 		}
 	}
@@ -977,13 +984,18 @@ func testMintTransactionSigningScenarios(t *testing.T, config *wallet.Config,
 	var halfSignOperatorSignatures wallet.OperatorSignatures
 	if testDoubleSign {
 		operatorKeys := splitOperatorIdentityPublicKeys(config)
+		var operatorIDPubKeyBytes []wallet.SerializedPublicKey
+		for _, key := range operatorKeys.firstHalf {
+			operatorIDPubKeyBytes = append(operatorIDPubKeyBytes, key.Serialize())
+		}
+
 		// Sign with half the operators to get in a partial signed state
 		_, halfSignOperatorSignatures, err = wallet.SignTokenTransaction(
 			context.Background(),
 			config,
 			startResp.FinalTokenTransaction, // Always use the original transaction for first sign (if double signing)
 			finalTxHash,
-			operatorKeys.FirstHalf,
+			operatorIDPubKeyBytes,
 			ownerSigningPrivateKeys,
 			nil,
 		)
@@ -1302,10 +1314,10 @@ func testTransferTransactionSigningScenarios(t *testing.T, config *wallet.Config
 
 	if testInvalidSigningOperatorPublicKey {
 		// Generate a new random key to replace the valid one
-		randomKey, err := secp256k1.GeneratePrivateKey()
+		randomKey, err := keys.GeneratePrivateKey()
 		require.NoError(t, err, "failed to generate random key")
 		for operatorID := range config.SigningOperators {
-			config.SigningOperators[operatorID].IdentityPublicKey = randomKey.PubKey().SerializeCompressed()
+			config.SigningOperators[operatorID].IdentityPublicKey = randomKey.Public()
 			break // Only modify the first operator
 		}
 	}
@@ -1314,12 +1326,16 @@ func testTransferTransactionSigningScenarios(t *testing.T, config *wallet.Config
 	var halfSignOperatorSignatures wallet.OperatorSignatures
 	if testDoubleSign || testPartialSignExpiredAndRecover {
 		operatorKeys := splitOperatorIdentityPublicKeys(config)
+		var operatorIDPubKeyBytes []wallet.SerializedPublicKey
+		for _, key := range operatorKeys.firstHalf {
+			operatorIDPubKeyBytes = append(operatorIDPubKeyBytes, key.Serialize())
+		}
 		_, halfSignOperatorSignatures, err = wallet.SignTokenTransaction(
 			context.Background(),
 			config,
 			transferStartResp.FinalTokenTransaction, // Always use original transaction for first sign
 			transferFinalTxHash,
-			operatorKeys.FirstHalf,
+			operatorIDPubKeyBytes,
 			signingOwnerPrivateKeys,
 			signSignatureIndexOrder,
 		)
@@ -1373,11 +1389,15 @@ func testTransferTransactionSigningScenarios(t *testing.T, config *wallet.Config
 
 	if testPartialFinalizeExpireAndRecover {
 		operatorKeys := splitOperatorIdentityPublicKeys(config)
+		var operatorIDPubKeyBytes []wallet.SerializedPublicKey
+		for _, key := range operatorKeys.firstHalf {
+			operatorIDPubKeyBytes = append(operatorIDPubKeyBytes, key.Serialize())
+		}
 		err = wallet.FinalizeTokenTransaction(
 			context.Background(),
 			config,
 			transferStartResp.FinalTokenTransaction,
-			operatorKeys.FirstHalf,
+			operatorIDPubKeyBytes,
 			signResponseTransferKeyshares,
 			[]wallet.SerializedPublicKey{revPubKey1, revPubKey2},
 		)
@@ -1736,7 +1756,7 @@ func TestBroadcastTokenTransactionWithInvalidPrevTxHash(t *testing.T) {
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 
 	revPubKey1 := finalIssueTokenTransaction.TokenOutputs[0].RevocationCommitment
@@ -1777,7 +1797,7 @@ func TestBroadcastTokenTransactionWithInvalidPrevTxHash(t *testing.T) {
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 
 	// Attempt to broadcast the second transfer transaction with corrupted hash
@@ -2024,7 +2044,7 @@ func createTestTokenCreateTransactionWithParams(config *wallet.Config, issuerPub
 			},
 		},
 		Network:                         config.ProtoNetwork(),
-		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeys(config),
+		SparkOperatorIdentityPublicKeys: getSigningOperatorPublicKeyBytes(config),
 	}
 
 	return createTokenTransaction, nil

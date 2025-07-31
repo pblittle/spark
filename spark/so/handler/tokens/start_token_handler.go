@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/lightsparkdev/spark"
 
 	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
@@ -79,11 +81,16 @@ func (h *StartTokenTransactionHandler) StartTokenTransaction(ctx context.Context
 	// Also, check that this SO was the coordinator for the transaction. This is necessary because only the coordinator
 	// receives direct evidence from each SO individually that a threshold of SOs have validated and saved the transaction.
 	if previouslyCreatedTokenTransaction != nil &&
-		previouslyCreatedTokenTransaction.Status == st.TokenTransactionStatusStarted &&
-		bytes.Equal(previouslyCreatedTokenTransaction.CoordinatorPublicKey, h.config.IdentityPublicKey()) {
-		tokens.LogWithTransactionEnt(ctx, "Found existing token transaction in started state with matching coordinator",
-			previouslyCreatedTokenTransaction, slog.LevelInfo)
-		return h.regenerateStartResponseForDuplicateRequest(ctx, previouslyCreatedTokenTransaction)
+		previouslyCreatedTokenTransaction.Status == st.TokenTransactionStatusStarted {
+		coordinatorPubKey, err := keys.ParsePublicKey(previouslyCreatedTokenTransaction.CoordinatorPublicKey)
+		if err != nil {
+			return nil, err
+		}
+		if coordinatorPubKey.Equals(h.config.IdentityPublicKey()) {
+			tokens.LogWithTransactionEnt(ctx, "Found existing token transaction in started state with matching coordinator",
+				previouslyCreatedTokenTransaction, slog.LevelInfo)
+			return h.regenerateStartResponseForDuplicateRequest(ctx, previouslyCreatedTokenTransaction)
+		}
 	}
 
 	if h.enablePreemption {
@@ -124,7 +131,7 @@ func (h *StartTokenTransactionHandler) StartTokenTransaction(ctx context.Context
 		KeyshareIds:                keyshareIDStrings,
 		FinalTokenTransaction:      finalTokenTransaction,
 		TokenTransactionSignatures: req.PartialTokenTransactionOwnerSignatures,
-		CoordinatorPublicKey:       h.config.IdentityPublicKey(),
+		CoordinatorPublicKey:       h.config.IdentityPublicKey().Serialize(),
 	})
 	if err != nil {
 		return nil, tokens.FormatErrorWithTransactionProto(tokens.ErrFailedToExecuteWithCoordinator, req.PartialTokenTransaction, err)
@@ -144,7 +151,7 @@ func (h *StartTokenTransactionHandler) StartTokenTransaction(ctx context.Context
 // callPrepareTokenTransactionInternal handles calling the PrepareTokenTransactionInternal RPC on an operator
 func callPrepareTokenTransactionInternal(ctx context.Context, operator *so.SigningOperator,
 	finalTokenTransaction *tokenpb.TokenTransaction, signaturesWithIndex []*tokenpb.SignatureWithIndex,
-	keyshareIDStrings []string, coordinatorPublicKey []byte,
+	keyshareIDStrings []string, coordinatorPublicKey keys.Public,
 	callSparkTokenInternal bool,
 ) error {
 	conn, err := operator.NewGRPCConnection()
@@ -157,7 +164,7 @@ func callPrepareTokenTransactionInternal(ctx context.Context, operator *so.Signi
 		KeyshareIds:                keyshareIDStrings,
 		FinalTokenTransaction:      finalTokenTransaction,
 		TokenTransactionSignatures: signaturesWithIndex,
-		CoordinatorPublicKey:       coordinatorPublicKey,
+		CoordinatorPublicKey:       coordinatorPublicKey.Serialize(),
 	}
 	if callSparkTokenInternal {
 		client := tokeninternalpb.NewSparkTokenInternalServiceClient(conn)
