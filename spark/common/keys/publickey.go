@@ -78,7 +78,7 @@ func (p Public) Sub(b Public) Public {
 	return p.Add(negB)
 }
 
-// ToBTCEC converts this [Public] into a [secp256k1.PublicKey].
+// ToBTCEC converts this [Public] into a [*secp256k1.PublicKey].
 func (p Public) ToBTCEC() *secp256k1.PublicKey {
 	return &p.key
 }
@@ -117,6 +117,9 @@ func SumPublicKeys(keys []Public) (Public, error) {
 
 // Serialize serializes this key into the 33-byte compressed format. It is equivalent to [secp256k1.PublicKey.SerializeCompressed].
 func (p Public) Serialize() []byte {
+	if p.key == (secp256k1.PublicKey{}) {
+		return nil
+	}
 	return p.key.SerializeCompressed()
 }
 

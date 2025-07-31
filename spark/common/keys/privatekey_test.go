@@ -252,6 +252,12 @@ func TestPrivate_Scan_InvalidInput_Errors(t *testing.T) {
 	assert.ErrorContains(t, err, "unexpected input for Scan")
 }
 
+func TestPrivate_Serialize_Empty_ReturnsEmpty(t *testing.T) {
+	pubKeyBytes := Private{}.Serialize()
+
+	assert.Empty(t, pubKeyBytes)
+}
+
 func TestPrivate_MarshalJSON(t *testing.T) {
 	privKey := MustGeneratePrivateKeyFromRand(rng)
 	tests := []struct {

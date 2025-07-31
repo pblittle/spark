@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
@@ -109,7 +111,7 @@ func (h *TransferHandler) loadDirectFromCpfpLeafRefundMap(req *pb.StartTransferR
 
 // startTransferInternal starts a transfer, signing refunds, and saving the transfer to the DB
 // for the first time. This optionally takes an adaptorPubKey to modify the refund signatures.
-func (h *TransferHandler) startTransferInternal(ctx context.Context, req *pb.StartTransferRequest, transferType st.TransferType, cpfpAdaptorPubKey []byte, directAdaptorPubkey []byte, directFromCpfpAdaptorPubkey []byte, requireDirectTx bool) (*pb.StartTransferResponse, error) {
+func (h *TransferHandler) startTransferInternal(ctx context.Context, req *pb.StartTransferRequest, transferType st.TransferType, cpfpAdaptorPubKey keys.Public, directAdaptorPubKey keys.Public, directFromCpfpAdaptorPubKey keys.Public, requireDirectTx bool) (*pb.StartTransferResponse, error) {
 	logger := logging.GetLoggerFromContext(ctx)
 
 	ctx, span := tracer.Start(ctx, "TransferHandler.startTransferInternal", trace.WithAttributes(
@@ -153,16 +155,16 @@ func (h *TransferHandler) startTransferInternal(ctx context.Context, req *pb.Sta
 	var finalDirectSignatureMap map[string][]byte
 	var finalDirectFromCpfpSignatureMap map[string][]byte
 	if req.TransferPackage == nil {
-		signingResults, err = signRefunds(ctx, h.config, req, leafMap, cpfpAdaptorPubKey, directAdaptorPubkey, directFromCpfpAdaptorPubkey)
+		signingResults, err = signRefunds(ctx, h.config, req, leafMap, cpfpAdaptorPubKey, directAdaptorPubKey, directFromCpfpAdaptorPubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign refunds for request %s: %w", logging.FormatProto("start_transfer_request", req), err)
 		}
 	} else {
-		cpfpSigningResultMap, directSigningResultMap, directFromCpfpSigningResultMap, err := signRefundsWithPregeneratedNonce(ctx, h.config, req, leafMap, cpfpAdaptorPubKey, directAdaptorPubkey, directFromCpfpAdaptorPubkey)
+		cpfpSigningResultMap, directSigningResultMap, directFromCpfpSigningResultMap, err := signRefundsWithPregeneratedNonce(ctx, h.config, req, leafMap, cpfpAdaptorPubKey, directAdaptorPubKey, directFromCpfpAdaptorPubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign refunds with pregenerated nonce: %w", err)
 		}
-		finalCpfpSignatureMap, finalDirectSignatureMap, finalDirectFromCpfpSignatureMap, err = aggregateSignatures(ctx, h.config, req, cpfpAdaptorPubKey, directAdaptorPubkey, directFromCpfpAdaptorPubkey, cpfpSigningResultMap, directSigningResultMap, directFromCpfpSigningResultMap, leafMap)
+		finalCpfpSignatureMap, finalDirectSignatureMap, finalDirectFromCpfpSignatureMap, err = aggregateSignatures(ctx, h.config, req, cpfpAdaptorPubKey, directAdaptorPubKey, directFromCpfpAdaptorPubKey, cpfpSigningResultMap, directSigningResultMap, directFromCpfpSigningResultMap, leafMap)
 		if err != nil {
 			return nil, fmt.Errorf("failed to aggregate signatures: %w", err)
 		}
@@ -420,37 +422,69 @@ func (h *TransferHandler) settleSenderKeyTweaks(ctx context.Context, transferID 
 
 // StartTransfer initiates a transfer from sender.
 func (h *TransferHandler) StartTransfer(ctx context.Context, req *pb.StartTransferRequest) (*pb.StartTransferResponse, error) {
-	return h.startTransferInternal(ctx, req, st.TransferTypeTransfer, nil, nil, nil, false)
+	return h.startTransferInternal(ctx, req, st.TransferTypeTransfer, keys.Public{}, keys.Public{}, keys.Public{}, false)
 }
 
 func (h *TransferHandler) StartTransferV2(ctx context.Context, req *pb.StartTransferRequest) (*pb.StartTransferResponse, error) {
-	return h.startTransferInternal(ctx, req, st.TransferTypeTransfer, nil, nil, nil, true)
+	return h.startTransferInternal(ctx, req, st.TransferTypeTransfer, keys.Public{}, keys.Public{}, keys.Public{}, true)
 }
 
 func (h *TransferHandler) StartLeafSwap(ctx context.Context, req *pb.StartTransferRequest) (*pb.StartTransferResponse, error) {
-	return h.startTransferInternal(ctx, req, st.TransferTypeSwap, nil, nil, nil, false)
+	return h.startTransferInternal(ctx, req, st.TransferTypeSwap, keys.Public{}, keys.Public{}, keys.Public{}, false)
 }
 
 func (h *TransferHandler) StartLeafSwapV2(ctx context.Context, req *pb.StartTransferRequest) (*pb.StartTransferResponse, error) {
-	return h.startTransferInternal(ctx, req, st.TransferTypeSwap, nil, nil, nil, true)
+	return h.startTransferInternal(ctx, req, st.TransferTypeSwap, keys.Public{}, keys.Public{}, keys.Public{}, true)
 }
 
 // CounterLeafSwap initiates a leaf swap for the other side, signing refunds with an adaptor public key.
 func (h *TransferHandler) CounterLeafSwap(ctx context.Context, req *pb.CounterLeafSwapRequest) (*pb.CounterLeafSwapResponse, error) {
-	startTransferResponse, err := h.startTransferInternal(ctx, req.Transfer, st.TransferTypeCounterSwap, req.AdaptorPublicKey, req.DirectAdaptorPublicKey, req.DirectFromCpfpAdaptorPublicKey, false)
+	adaptorPublicKey, err := keys.ParsePublicKey(req.AdaptorPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse adaptor public key: %w", err)
+	}
+	directAdaptorPublicKey, err := parsePublicKeyIfPresent(req.DirectAdaptorPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse direct adaptor public key: %w", err)
+	}
+	directFromCpfpAdaptorPublicKey, err := parsePublicKeyIfPresent(req.DirectFromCpfpAdaptorPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse direct from cpfp adaptor public key: %w", err)
+	}
+	startTransferResponse, err := h.startTransferInternal(ctx, req.Transfer, st.TransferTypeCounterSwap, adaptorPublicKey, directAdaptorPublicKey, directFromCpfpAdaptorPublicKey, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start counter leaf swap for request %s: %w", logging.FormatProto("counter_leaf_swap_request", req), err)
 	}
 	return &pb.CounterLeafSwapResponse{Transfer: startTransferResponse.Transfer, SigningResults: startTransferResponse.SigningResults}, nil
 }
 
-// CounterLeafSwap initiates a leaf swap for the other side, signing refunds with an adaptor public key.
+// CounterLeafSwapV2 initiates a leaf swap for the other side, signing refunds with an adaptor public key.
 func (h *TransferHandler) CounterLeafSwapV2(ctx context.Context, req *pb.CounterLeafSwapRequest) (*pb.CounterLeafSwapResponse, error) {
-	startTransferResponse, err := h.startTransferInternal(ctx, req.Transfer, st.TransferTypeCounterSwap, req.AdaptorPublicKey, req.DirectAdaptorPublicKey, req.DirectFromCpfpAdaptorPublicKey, true)
+	adaptorPublicKey, err := keys.ParsePublicKey(req.AdaptorPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse adaptor public key: %w", err)
+	}
+
+	directAdaptorPublicKey, err := parsePublicKeyIfPresent(req.DirectAdaptorPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse direct adaptor public key: %w", err)
+	}
+	directFromCpfpAdaptorPublicKey, err := parsePublicKeyIfPresent(req.DirectFromCpfpAdaptorPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse direct from cpfp adaptor public key: %w", err)
+	}
+	startTransferResponse, err := h.startTransferInternal(ctx, req.Transfer, st.TransferTypeCounterSwap, adaptorPublicKey, directAdaptorPublicKey, directFromCpfpAdaptorPublicKey, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start counter leaf swap for request %s: %w", logging.FormatProto("counter_leaf_swap_request", req), err)
 	}
 	return &pb.CounterLeafSwapResponse{Transfer: startTransferResponse.Transfer, SigningResults: startTransferResponse.SigningResults}, nil
+}
+
+func parsePublicKeyIfPresent(raw []byte) (keys.Public, error) {
+	if len(raw) == 0 {
+		return keys.Public{}, nil
+	}
+	return keys.ParsePublicKey(raw)
 }
 
 func (h *TransferHandler) syncTransferInit(ctx context.Context, req *pb.StartTransferRequest, transferType st.TransferType, cpfpRefundSignatures map[string][]byte, directRefundSignatures map[string][]byte, directFromCpfpRefundSignatures map[string][]byte) error {
@@ -458,13 +492,13 @@ func (h *TransferHandler) syncTransferInit(ctx context.Context, req *pb.StartTra
 		transferTypeKey.String(string(transferType)),
 	))
 	defer span.End()
-	leaves := make([]*pbinternal.InitiateTransferLeaf, 0)
+	var leaves []*pbinternal.InitiateTransferLeaf
 	for _, leaf := range req.LeavesToSend {
-		directRefundTx := []byte{}
+		var directRefundTx []byte
 		if leaf.DirectRefundTxSigningJob != nil {
 			directRefundTx = leaf.DirectRefundTxSigningJob.RawTx
 		}
-		directFromCpfpRefundTx := []byte{}
+		var directFromCpfpRefundTx []byte
 		if leaf.DirectFromCpfpRefundTxSigningJob != nil {
 			directFromCpfpRefundTx = leaf.DirectFromCpfpRefundTxSigningJob.RawTx
 		}
@@ -538,7 +572,7 @@ func (h *TransferHandler) syncDeliverSenderKeyTweak(ctx context.Context, req *pb
 	return err
 }
 
-func signRefunds(ctx context.Context, config *so.Config, requests *pb.StartTransferRequest, leafMap map[string]*ent.TreeNode, cpfpAdaptorPubKey []byte, directAdaptorPubKey []byte, directFromCpfpAdaptorPubKey []byte) ([]*pb.LeafRefundTxSigningResult, error) {
+func signRefunds(ctx context.Context, config *so.Config, requests *pb.StartTransferRequest, leafMap map[string]*ent.TreeNode, cpfpAdaptorPubKey keys.Public, directAdaptorPubKey keys.Public, directFromCpfpAdaptorPubKey keys.Public) ([]*pb.LeafRefundTxSigningResult, error) {
 	ctx, span := tracer.Start(ctx, "TransferHandler.signRefunds")
 	defer span.End()
 
@@ -551,9 +585,9 @@ func signRefunds(ctx context.Context, config *so.Config, requests *pb.StartTrans
 	var directSigningResults []*helper.SigningResult
 	var directFromCpfpSigningResults []*helper.SigningResult
 
-	cpfpSigningJobs := make([]*helper.SigningJob, 0)
-	directSigningJobs := make([]*helper.SigningJob, 0)
-	directFromCpfpSigningJobs := make([]*helper.SigningJob, 0)
+	var cpfpSigningJobs []*helper.SigningJob
+	var directSigningJobs []*helper.SigningJob
+	var directFromCpfpSigningJobs []*helper.SigningJob
 
 	// Process each leaf's signing jobs
 	for _, req := range requests.LeavesToSend {
@@ -585,15 +619,21 @@ func signRefunds(ctx context.Context, config *so.Config, requests *pb.StartTrans
 		if err != nil {
 			return nil, fmt.Errorf("failed to get signing keyshare id: %w", err)
 		}
+
+		leafVerifyingPubKey, err := keys.ParsePublicKey(leaf.VerifyingPubkey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse verifying public key: %w", err)
+		}
+
 		cpfpSigningJobs = append(
 			cpfpSigningJobs,
 			&helper.SigningJob{
 				JobID:             cpfpJobID,
 				SigningKeyshareID: signingKeyshare.ID,
 				Message:           cpfpRefundTxSigHash,
-				VerifyingKey:      leaf.VerifyingPubkey,
+				VerifyingKey:      &leafVerifyingPubKey,
 				UserCommitment:    cpfpUserNonceCommitment,
-				AdaptorPublicKey:  cpfpAdaptorPubKey,
+				AdaptorPublicKey:  &cpfpAdaptorPubKey,
 			},
 		)
 		leafJobMap[cpfpJobID] = leaf
@@ -639,9 +679,9 @@ func signRefunds(ctx context.Context, config *so.Config, requests *pb.StartTrans
 					JobID:             directJobID,
 					SigningKeyshareID: signingKeyshare.ID,
 					Message:           directRefundTxSigHash,
-					VerifyingKey:      leaf.VerifyingPubkey,
+					VerifyingKey:      &leafVerifyingPubKey,
 					UserCommitment:    directUserNonceCommitment,
-					AdaptorPublicKey:  directAdaptorPubKey,
+					AdaptorPublicKey:  &directAdaptorPubKey,
 				},
 			)
 			directFromCpfpSigningJobs = append(
@@ -650,9 +690,9 @@ func signRefunds(ctx context.Context, config *so.Config, requests *pb.StartTrans
 					JobID:             directFromCpfpJobID,
 					SigningKeyshareID: signingKeyshare.ID,
 					Message:           directFromCpfpRefundTxSigHash,
-					VerifyingKey:      leaf.VerifyingPubkey,
+					VerifyingKey:      &leafVerifyingPubKey,
 					UserCommitment:    directFromCpfpUserNonceCommitment,
-					AdaptorPublicKey:  directFromCpfpAdaptorPubKey,
+					AdaptorPublicKey:  &directFromCpfpAdaptorPubKey,
 				},
 			)
 			leafJobMap[directJobID] = leaf
@@ -745,9 +785,9 @@ func signRefundsWithPregeneratedNonce(
 	config *so.Config,
 	requests *pb.StartTransferRequest,
 	leafMap map[string]*ent.TreeNode,
-	cpfpAdaptorPubKey []byte,
-	directAdaptorPubKey []byte,
-	directFromCpfpAdaptorPubKey []byte,
+	cpfpAdaptorPubKey keys.Public,
+	directAdaptorPubKey keys.Public,
+	directFromCpfpAdaptorPubKey keys.Public,
 ) (map[string]*helper.SigningResult, map[string]*helper.SigningResult, map[string]*helper.SigningResult, error) {
 	ctx, span := tracer.Start(ctx, "TransferHandler.signRefunds")
 	defer span.End()
@@ -806,6 +846,10 @@ func signRefundsWithPregeneratedNonce(
 				return nil, nil, nil, fmt.Errorf("cpfp signing commitment is invalid for key %s: hiding or binding is empty", key)
 			}
 		}
+		leafVerifyingPubKey, err := keys.ParsePublicKey(leaf.VerifyingPubkey)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to parse verifying public key: %w", err)
+		}
 		signingJobs = append(
 			signingJobs,
 			&helper.SigningJobWithPregeneratedNonce{
@@ -813,9 +857,9 @@ func signRefundsWithPregeneratedNonce(
 					JobID:             cpfpJobID,
 					SigningKeyshareID: signingKeyshare.ID,
 					Message:           refundTxSigHash,
-					VerifyingKey:      leaf.VerifyingPubkey,
+					VerifyingKey:      &leafVerifyingPubKey,
 					UserCommitment:    &userNonceCommitment,
-					AdaptorPublicKey:  cpfpAdaptorPubKey,
+					AdaptorPublicKey:  &cpfpAdaptorPubKey,
 				},
 				Round1Packages: round1Packages,
 			},
@@ -864,15 +908,18 @@ func signRefundsWithPregeneratedNonce(
 			}
 			round1Packages[key] = obj
 		}
-
+		leafVerifyingPubKey, err := keys.ParsePublicKey(leaf.VerifyingPubkey)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to parse verifying public key: %w", err)
+		}
 		signingJobs = append(signingJobs, &helper.SigningJobWithPregeneratedNonce{
 			SigningJob: helper.SigningJob{
 				JobID:             directJobID,
 				SigningKeyshareID: signingKeyshare.ID,
 				Message:           directRefundTxSigHash,
-				VerifyingKey:      leaf.VerifyingPubkey,
+				VerifyingKey:      &leafVerifyingPubKey,
 				UserCommitment:    &userNonceCommitment,
-				AdaptorPublicKey:  directAdaptorPubKey,
+				AdaptorPublicKey:  &directAdaptorPubKey,
 			},
 			Round1Packages: round1Packages,
 		})
@@ -918,14 +965,18 @@ func signRefundsWithPregeneratedNonce(
 			}
 			round1Packages[key] = obj
 		}
+		leafVerifyingPubKey, err := keys.ParsePublicKey(leaf.VerifyingPubkey)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to parse verifying public key: %w", err)
+		}
 		signingJobs = append(signingJobs, &helper.SigningJobWithPregeneratedNonce{
 			SigningJob: helper.SigningJob{
 				JobID:             directFromCpfpJobID,
 				SigningKeyshareID: signingKeyshare.ID,
 				Message:           directFromCpfpRefundTxSigHash,
-				VerifyingKey:      leaf.VerifyingPubkey,
+				VerifyingKey:      &leafVerifyingPubKey,
 				UserCommitment:    &userNonceCommitment,
-				AdaptorPublicKey:  directFromCpfpAdaptorPubKey,
+				AdaptorPublicKey:  &directFromCpfpAdaptorPubKey,
 			},
 			Round1Packages: round1Packages,
 		})
@@ -970,9 +1021,9 @@ func aggregateSignatures(
 	ctx context.Context,
 	config *so.Config,
 	req *pb.StartTransferRequest,
-	cpfpAdaptorPubKey []byte,
-	directAdaptorPubKey []byte,
-	directFromCpfpAdaptorPubKey []byte,
+	cpfpAdaptorPubKey keys.Public,
+	directAdaptorPubKey keys.Public,
+	directFromCpfpAdaptorPubKey keys.Public,
 	cpfpSigningResultMap map[string]*helper.SigningResult,
 	directSigningResultMap map[string]*helper.SigningResult,
 	directFromCpfpSigningResultMap map[string]*helper.SigningResult,
@@ -1017,7 +1068,7 @@ func aggregateSignatures(
 			UserCommitments:    cpfpUserSignedRefund.SigningNonceCommitment,
 			UserPublicKey:      leaf.OwnerSigningPubkey,
 			UserSignatureShare: cpfpUserSignedRefund.UserSignature,
-			AdaptorPublicKey:   cpfpAdaptorPubKey,
+			AdaptorPublicKey:   cpfpAdaptorPubKey.Serialize(),
 		})
 		if err != nil {
 			logger.Error("unable to aggregate frost for cpfp results", "error", err, "leaf_id", leaf.ID)
@@ -1038,7 +1089,7 @@ func aggregateSignatures(
 			UserCommitments:    directUserSignedRefund.SigningNonceCommitment,
 			UserPublicKey:      leaf.OwnerSigningPubkey,
 			UserSignatureShare: directUserSignedRefund.UserSignature,
-			AdaptorPublicKey:   directAdaptorPubKey,
+			AdaptorPublicKey:   directAdaptorPubKey.Serialize(),
 		})
 		if err != nil {
 			logger.Error("unable to aggregate frost for direct results", "error", err, "leaf_id", leaf.ID)
@@ -1059,7 +1110,7 @@ func aggregateSignatures(
 			UserCommitments:    directFromCpfpUserSignedRefund.SigningNonceCommitment,
 			UserPublicKey:      leaf.OwnerSigningPubkey,
 			UserSignatureShare: directFromCpfpUserSignedRefund.UserSignature,
-			AdaptorPublicKey:   directFromCpfpAdaptorPubKey,
+			AdaptorPublicKey:   directFromCpfpAdaptorPubKey.Serialize(),
 		})
 		if err != nil {
 			logger.Error("unable to aggregate frost for direct from cpfp results", "error", err, "leaf_id", leaf.ID)
@@ -1336,8 +1387,8 @@ func (h *TransferHandler) completeSendLeaf(ctx context.Context, transfer *ent.Tr
 	if err != nil {
 		return fmt.Errorf("unable to update cpfp refund tx with signature: %w", err)
 	}
-	directRefundTxBytes := []byte{}
-	directFromCpfpRefundTxBytes := []byte{}
+	var directRefundTxBytes []byte
+	var directFromCpfpRefundTxBytes []byte
 	if transferLeaf.IntermediateDirectRefundTx != nil && req.DirectRefundSignature != nil && transferLeaf.IntermediateDirectFromCpfpRefundTx != nil && req.DirectFromCpfpRefundSignature != nil {
 		directRefundTxBytes, err = common.UpdateTxWithSignature(transferLeaf.IntermediateDirectRefundTx, 0, req.DirectRefundSignature)
 		if err != nil {
@@ -1589,7 +1640,7 @@ func (h *TransferHandler) queryTransfers(ctx context.Context, filter *pb.Transfe
 		return nil, fmt.Errorf("unable to query transfers: %w", err)
 	}
 
-	transferProtos := []*pb.Transfer{}
+	var transferProtos []*pb.Transfer
 	for _, transfer := range transfers {
 		transferProto, err := transfer.MarshalProto(ctx)
 		if err != nil {
@@ -2028,7 +2079,7 @@ func (h *TransferHandler) claimTransferSignRefunds(ctx context.Context, req *pb.
 		return nil, err
 	}
 
-	signingJobs := []*helper.SigningJob{}
+	var signingJobs []*helper.SigningJob
 	jobToLeafMap := make(map[string]uuid.UUID)
 	isDirectSigningJob := make(map[string]bool)
 	isDirectFromCpfpSigningJob := make(map[string]bool)
@@ -2050,8 +2101,8 @@ func (h *TransferHandler) claimTransferSignRefunds(ctx context.Context, req *pb.
 		} else if requireDirectTx && len(leaf.DirectTx) > 0 {
 			return nil, fmt.Errorf("DirectFromCpfpRefundTxSigningJob is required. Please upgrade to the latest SDK version")
 		}
-		directRefundTx := []byte{}
-		directFromCpfpRefundTx := []byte{}
+		var directRefundTx []byte
+		var directFromCpfpRefundTx []byte
 		if directRefundTxSigningJob != nil {
 			directRefundTx = directRefundTxSigningJob.RawTx
 		}
@@ -2152,11 +2203,11 @@ func (h *TransferHandler) getRefundTxSigningJobs(ctx context.Context, leaf *ent.
 		if len(directLeafTx.TxOut) <= 0 {
 			return nil, nil, nil, fmt.Errorf("vout out of bounds for direct tx")
 		}
-		directRefundSigningJob, _, err = helper.NewSigningJob(keyshare, directJob, directLeafTx.TxOut[0], nil)
+		directRefundSigningJob, _, err = helper.NewSigningJob(keyshare, directJob, directLeafTx.TxOut[0])
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("unable to create direct signing job for leaf %s: %w", leaf.ID.String(), err)
 		}
-		directFromCpfpRefundSigningJob, _, err = helper.NewSigningJob(keyshare, directFromCpfpJob, cpfpLeafTx.TxOut[0], nil)
+		directFromCpfpRefundSigningJob, _, err = helper.NewSigningJob(keyshare, directFromCpfpJob, cpfpLeafTx.TxOut[0])
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("unable to create direct from cpfp signing job for leaf %s: %w", leaf.ID.String(), err)
 		}
@@ -2164,7 +2215,7 @@ func (h *TransferHandler) getRefundTxSigningJobs(ctx context.Context, leaf *ent.
 	if len(cpfpLeafTx.TxOut) <= 0 {
 		return nil, nil, nil, fmt.Errorf("vout out of bounds for cpfp tx")
 	}
-	cpfpRefundSigningJob, _, err := helper.NewSigningJob(keyshare, cpfpJob, cpfpLeafTx.TxOut[0], nil)
+	cpfpRefundSigningJob, _, err := helper.NewSigningJob(keyshare, cpfpJob, cpfpLeafTx.TxOut[0])
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("unable to create cpfp signing job for leaf %s: %w", leaf.ID.String(), err)
 	}

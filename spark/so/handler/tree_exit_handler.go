@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
@@ -136,7 +138,7 @@ func (h *TreeExitHandler) signExitTransaction(ctx context.Context, exitingTrees 
 		}
 	}
 
-	signingJobs := make([]*helper.SigningJob, 0)
+	var signingJobs []*helper.SigningJob
 	for i, exitingTree := range exitingTrees {
 		tree := trees[i]
 		root, err := tree.GetRoot(ctx)
@@ -160,13 +162,17 @@ func (h *TreeExitHandler) signExitTransaction(ctx context.Context, exitingTrees 
 		if err != nil {
 			return nil, fmt.Errorf("failed to get signing keyshare id: %w", err)
 		}
+		rootVerifyingPubKey, err := keys.ParsePublicKey(root.VerifyingPubkey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse root verifying public key: %w", err)
+		}
 		signingJobs = append(
 			signingJobs,
 			&helper.SigningJob{
 				JobID:             jobID,
 				SigningKeyshareID: signingKeyshare.ID,
 				Message:           txSigHash,
-				VerifyingKey:      root.VerifyingPubkey,
+				VerifyingKey:      &rootVerifyingPubKey,
 				UserCommitment:    userNonceCommitment,
 			},
 		)
@@ -181,7 +187,7 @@ func (h *TreeExitHandler) signExitTransaction(ctx context.Context, exitingTrees 
 		jobIDToSigningResult[signingResult.JobID] = signingResult
 	}
 
-	pbSigningResults := make([]*pb.ExitSingleNodeTreeSigningResult, 0)
+	var pbSigningResults []*pb.ExitSingleNodeTreeSigningResult
 	for i, tree := range trees {
 		signingResultProto, err := jobIDToSigningResult[signingJobs[i].JobID].MarshalProto()
 		if err != nil {

@@ -274,6 +274,12 @@ func TestPublic_Scan(t *testing.T) {
 	}
 }
 
+func TestPublic_Serialize_Empty_ReturnsEmpty(t *testing.T) {
+	pubKeyBytes := Public{}.Serialize()
+
+	assert.Empty(t, pubKeyBytes)
+}
+
 func TestPublic_Scan_InvalidInput_Errors(t *testing.T) {
 	public := &Public{}
 	err := public.Scan("not bytes")

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
@@ -350,11 +352,15 @@ func createSigningJob(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signing keyshare id: %w", err)
 	}
+	verifyingPubKey, err := keys.ParsePublicKey(leaf.VerifyingPubkey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse verifying public key: %w", err)
+	}
 	return &helper.SigningJob{
 		JobID:             uuid.New().String(),
 		SigningKeyshareID: signingKeyshare.ID,
 		Message:           sigHash,
-		VerifyingKey:      leaf.VerifyingPubkey,
+		VerifyingKey:      &verifyingPubKey,
 		UserCommitment:    newNodeUserNonceCommitment,
 	}, nil
 }

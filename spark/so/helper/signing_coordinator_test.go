@@ -5,8 +5,11 @@ import (
 	"context"
 	"errors"
 	"math"
+	"math/rand/v2"
 	"slices"
 	"testing"
+
+	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/google/uuid"
@@ -24,16 +27,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func mockPublicKey() []byte {
-	// Use a valid compressed secp256k1 public key (from Bitcoin test vectors)
-	return []byte{
-		0x02, 0xc6, 0x04, 0x7f, 0x94, 0x41, 0xed, 0x7d,
-		0x6d, 0x30, 0x45, 0x40, 0x6e, 0x95, 0xc0, 0x7c,
-		0xd8, 0x5a, 0x6f, 0x54, 0x8b, 0x66, 0x32, 0x19,
-		0xa1, 0x7f, 0x9e, 0xea, 0x36, 0xd2, 0xb6, 0xff,
-		0x7f,
-	}
-}
+var pubKey = keys.MustGeneratePrivateKeyFromRand(rand.NewChaCha8([32]byte{})).Public()
 
 func mockTxBuf(t *testing.T, values []int64) []byte {
 	// A minimal valid Bitcoin transaction
@@ -54,13 +48,13 @@ func mockTxBuf(t *testing.T, values []int64) []byte {
 	return txBuf
 }
 
-func runWithRawTx(keysharePub []byte, protoPub []byte, rawTx []byte, commitment *pbcommon.SigningCommitment, prevOutputValue int64) (*helper.SigningJob, *wire.MsgTx, error) {
+func runWithRawTx(keysharePub keys.Public, protoPub keys.Public, rawTx []byte, commitment *pbcommon.SigningCommitment, prevOutputValue int64) (*helper.SigningJob, *wire.MsgTx, error) {
 	keyshare := &ent.SigningKeyshare{
 		ID:        uuid.New(),
-		PublicKey: keysharePub,
+		PublicKey: keysharePub.Serialize(),
 	}
 	proto := &pbspark.SigningJob{
-		SigningPublicKey:       protoPub,
+		SigningPublicKey:       protoPub.Serialize(),
 		RawTx:                  rawTx,
 		SigningNonceCommitment: commitment,
 	}
@@ -70,14 +64,13 @@ func runWithRawTx(keysharePub []byte, protoPub []byte, rawTx []byte, commitment 
 		PkScript: []byte("test-pkscript"),
 	}
 
-	return helper.NewSigningJob(keyshare, proto, prevOutput, nil)
+	return helper.NewSigningJob(keyshare, proto, prevOutput)
 }
 
 func runWithValues(t *testing.T, prevOutputValue int64, values []int64) (*helper.SigningJob, *wire.MsgTx, error) {
-	pubkey := mockPublicKey()
 	rawTx := mockTxBuf(t, values)
-	commitment := &pbcommon.SigningCommitment{Binding: pubkey, Hiding: pubkey}
-	return runWithRawTx(pubkey, pubkey, rawTx, commitment, prevOutputValue)
+	commitment := &pbcommon.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()}
+	return runWithRawTx(pubKey, pubKey, rawTx, commitment, prevOutputValue)
 }
 
 func expectError(t *testing.T, prevOutputValue int64, values []int64, expectedError error) {
@@ -149,9 +142,6 @@ func TestNewSigningJob_InvalidInputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	goodKey := mockPublicKey()
-	badKey := make([]byte, len(goodKey)-1) // Invalid length
-
 	tx := wire.NewMsgTx(2)
 	tx.AddTxIn(&wire.TxIn{})
 	tx.AddTxOut(&wire.TxOut{Value: 1000000, PkScript: []byte("test-pkscript")})
@@ -164,48 +154,32 @@ func TestNewSigningJob_InvalidInputs(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		keyshare      []byte
-		protoPub      []byte
+		keyshare      keys.Public
+		protoPub      keys.Public
 		rawTx         []byte
 		commit        *pbcommon.SigningCommitment
 		expectedError string
 	}{
 		{
-			name:          "invalid keyshare pubkey length",
-			keyshare:      badKey,
-			protoPub:      goodKey,
-			rawTx:         goodTx,
-			commit:        &pbcommon.SigningCommitment{Binding: goodKey, Hiding: goodKey},
-			expectedError: "pubkeys must be 33 bytes",
-		},
-		{
-			name:          "invalid proto pubkey length",
-			keyshare:      goodKey,
-			protoPub:      badKey,
-			rawTx:         goodTx,
-			commit:        &pbcommon.SigningCommitment{Binding: goodKey, Hiding: goodKey},
-			expectedError: "pubkeys must be 33 bytes",
-		},
-		{
 			name:          "malformed raw tx",
-			keyshare:      goodKey,
-			protoPub:      goodKey,
+			keyshare:      pubKey,
+			protoPub:      pubKey,
 			rawTx:         []byte{0x00, 0x01, 0x02},
-			commit:        &pbcommon.SigningCommitment{Binding: goodKey, Hiding: goodKey},
+			commit:        &pbcommon.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			expectedError: "unexpected EOF",
 		},
 		{
 			name:          "malformed commitment",
-			keyshare:      goodKey,
-			protoPub:      goodKey,
+			keyshare:      pubKey,
+			protoPub:      pubKey,
 			rawTx:         goodTx,
-			commit:        &pbcommon.SigningCommitment{Binding: goodKey[:30], Hiding: goodKey},
+			commit:        &pbcommon.SigningCommitment{Binding: pubKey.Serialize()[:30], Hiding: pubKey.Serialize()},
 			expectedError: "invalid nonce commitment length",
 		},
 		{
 			name:          "nil commitment",
-			keyshare:      goodKey,
-			protoPub:      goodKey,
+			keyshare:      pubKey,
+			protoPub:      pubKey,
 			rawTx:         goodTx,
 			commit:        nil,
 			expectedError: "nil proto",
@@ -269,7 +243,7 @@ type MockSparkInternalServiceClient struct {
 }
 
 // GetTransfers implements spark_internal.SparkInternalServiceClient.
-func (m *MockSparkInternalServiceClient) GetTransfers(ctx context.Context, in *pbinternal.GetTransfersRequest, opts ...grpc.CallOption) (*pbinternal.GetTransfersResponse, error) {
+func (m *MockSparkInternalServiceClient) GetTransfers(context.Context, *pbinternal.GetTransfersRequest, ...grpc.CallOption) (*pbinternal.GetTransfersResponse, error) {
 	return &pbinternal.GetTransfersResponse{}, nil
 }
 
@@ -421,8 +395,8 @@ func TestSignFrostInternal(t *testing.T) {
 			JobID:             "test-job-id",
 			SigningKeyshareID: keyshareID,
 			Message:           []byte("test message to sign"),
-			VerifyingKey:      mockPublicKey(),
-			UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+			VerifyingKey:      &pubKey,
+			UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			AdaptorPublicKey:  nil,
 		}
 
@@ -439,7 +413,7 @@ func TestSignFrostInternal(t *testing.T) {
 			t.Error("Expected message to be present")
 		}
 
-		if len(job.VerifyingKey) == 0 {
+		if job.VerifyingKey == nil {
 			t.Error("Expected verifying key to be present")
 		}
 
@@ -458,9 +432,9 @@ func TestSignFrostInternal(t *testing.T) {
 					Identifier:  "test-identifier",
 					SecretShare: []byte("test-secret-share-32-bytes-long"),
 					PublicShares: map[string][]byte{
-						"test-identifier": mockPublicKey(),
+						"test-identifier": pubKey.Serialize(),
 					},
-					PublicKey:  mockPublicKey(),
+					PublicKey:  pubKey.Serialize(),
 					MinSigners: 1,
 				}
 			}
@@ -494,10 +468,7 @@ func TestSignFrostInternal(t *testing.T) {
 
 	// Test the signing commitment creation
 	t.Run("SigningCommitmentCreation", func(t *testing.T) {
-		commitment := &objects.SigningCommitment{
-			Binding: mockPublicKey(),
-			Hiding:  mockPublicKey(),
-		}
+		commitment := &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()}
 
 		// Test that the commitment is properly created
 		if len(commitment.Binding) == 0 {
@@ -544,8 +515,8 @@ func TestSignFrostInternal(t *testing.T) {
 			JobID:             "test-job-id",
 			SigningKeyshareID: keyshareID,
 			Message:           []byte("test message to sign"),
-			VerifyingKey:      mockPublicKey(),
-			UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+			VerifyingKey:      &pubKey,
+			UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			AdaptorPublicKey:  nil,
 		}
 
@@ -557,9 +528,9 @@ func TestSignFrostInternal(t *testing.T) {
 					Identifier:  "test-identifier",
 					SecretShare: []byte("test-secret-share-32-bytes-long"),
 					PublicShares: map[string][]byte{
-						"test-identifier": mockPublicKey(),
+						"test-identifier": pubKey.Serialize(),
 					},
-					PublicKey:  mockPublicKey(),
+					PublicKey:  pubKey.Serialize(),
 					MinSigners: 1,
 				}
 			}
@@ -570,10 +541,7 @@ func TestSignFrostInternal(t *testing.T) {
 		mockConnection := &MockSparkSvcConnection{
 			frostRound1Response: &pbinternal.FrostRound1Response{
 				SigningCommitments: []*pbcommon.SigningCommitment{
-					{
-						Binding: mockPublicKey(),
-						Hiding:  mockPublicKey(),
-					},
+					{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 				},
 			},
 			frostRound2Response: &pbinternal.FrostRound2Response{
@@ -677,8 +645,8 @@ func TestSignFrostInternal(t *testing.T) {
 				JobID:             "test-job-id",
 				SigningKeyshareID: uuid.New(),
 				Message:           []byte("test message"),
-				VerifyingKey:      mockPublicKey(),
-				UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+				VerifyingKey:      &pubKey,
+				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			}
 
 			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
@@ -701,16 +669,14 @@ func TestSignFrostInternal(t *testing.T) {
 
 			mockConnection := &MockSparkSvcConnection{}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
-			}
+			mockConnectionFactory := &MockSparkServiceClientFactory{conn: mockConnection}
 
 			job := &helper.SigningJob{
 				JobID:             "test-job-id",
 				SigningKeyshareID: keyshareID,
 				Message:           []byte("test message"),
-				VerifyingKey:      mockPublicKey(),
-				UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+				VerifyingKey:      &pubKey,
+				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			}
 
 			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
@@ -729,9 +695,9 @@ func TestSignFrostInternal(t *testing.T) {
 						Identifier:  "test-identifier",
 						SecretShare: []byte("test-secret-share-32-bytes-long"),
 						PublicShares: map[string][]byte{
-							"test-identifier": mockPublicKey(),
+							"test-identifier": pubKey.Serialize(),
 						},
-						PublicKey:  mockPublicKey(),
+						PublicKey:  pubKey.Serialize(),
 						MinSigners: 1,
 					}
 				}
@@ -751,8 +717,8 @@ func TestSignFrostInternal(t *testing.T) {
 				JobID:             "test-job-id",
 				SigningKeyshareID: keyshareID,
 				Message:           []byte("test message"),
-				VerifyingKey:      mockPublicKey(),
-				UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+				VerifyingKey:      &pubKey,
+				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			}
 
 			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
@@ -775,9 +741,9 @@ func TestSignFrostInternal(t *testing.T) {
 						Identifier:  "test-identifier",
 						SecretShare: []byte("test-secret-share-32-bytes-long"),
 						PublicShares: map[string][]byte{
-							"test-identifier": mockPublicKey(),
+							"test-identifier": pubKey.Serialize(),
 						},
-						PublicKey:  mockPublicKey(),
+						PublicKey:  pubKey.Serialize(),
 						MinSigners: 1,
 					}
 				}
@@ -788,10 +754,7 @@ func TestSignFrostInternal(t *testing.T) {
 			mockConnection := &MockSparkSvcConnection{
 				frostRound1Response: &pbinternal.FrostRound1Response{
 					SigningCommitments: []*pbcommon.SigningCommitment{
-						{
-							Binding: mockPublicKey(),
-							Hiding:  mockPublicKey(),
-						},
+						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 					},
 				},
 				frostRound2Error: errors.New("frost round 2 failed"),
@@ -811,8 +774,8 @@ func TestSignFrostInternal(t *testing.T) {
 				JobID:             "test-job-id",
 				SigningKeyshareID: keyshareID,
 				Message:           []byte("test message"),
-				VerifyingKey:      mockPublicKey(),
-				UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+				VerifyingKey:      &pubKey,
+				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			}
 
 			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
@@ -845,9 +808,9 @@ func TestSignFrostInternal(t *testing.T) {
 						Identifier:  "test-identifier",
 						SecretShare: []byte("test-secret-share-32-bytes-long"),
 						PublicShares: map[string][]byte{
-							"test-identifier": mockPublicKey(),
+							"test-identifier": pubKey.Serialize(),
 						},
-						PublicKey:  mockPublicKey(),
+						PublicKey:  pubKey.Serialize(),
 						MinSigners: 1,
 					}
 				}
@@ -857,14 +820,8 @@ func TestSignFrostInternal(t *testing.T) {
 			mockConnection := &MockSparkSvcConnection{
 				frostRound1Response: &pbinternal.FrostRound1Response{
 					SigningCommitments: []*pbcommon.SigningCommitment{
-						{
-							Binding: mockPublicKey(),
-							Hiding:  mockPublicKey(),
-						},
-						{
-							Binding: mockPublicKey(),
-							Hiding:  mockPublicKey(),
-						},
+						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
+						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 					},
 				},
 				frostRound2Response: &pbinternal.FrostRound2Response{
@@ -888,15 +845,15 @@ func TestSignFrostInternal(t *testing.T) {
 					JobID:             "job-1",
 					SigningKeyshareID: keyshareID1,
 					Message:           []byte("message 1"),
-					VerifyingKey:      mockPublicKey(),
-					UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+					VerifyingKey:      &pubKey,
+					UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 				},
 				{
 					JobID:             "job-2",
 					SigningKeyshareID: keyshareID2,
 					Message:           []byte("message 2"),
-					VerifyingKey:      mockPublicKey(),
-					UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+					VerifyingKey:      &pubKey,
+					UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 				},
 			}
 
@@ -931,9 +888,9 @@ func TestSignFrostInternal(t *testing.T) {
 						Identifier:  "test-identifier",
 						SecretShare: []byte("test-secret-share-32-bytes-long"),
 						PublicShares: map[string][]byte{
-							"test-identifier": mockPublicKey(),
+							"test-identifier": pubKey.Serialize(),
 						},
-						PublicKey:  mockPublicKey(),
+						PublicKey:  pubKey.Serialize(),
 						MinSigners: 1,
 					}
 				}
@@ -943,10 +900,7 @@ func TestSignFrostInternal(t *testing.T) {
 			mockConnection := &MockSparkSvcConnection{
 				frostRound1Response: &pbinternal.FrostRound1Response{
 					SigningCommitments: []*pbcommon.SigningCommitment{
-						{
-							Binding: mockPublicKey(),
-							Hiding:  mockPublicKey(),
-						},
+						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 					},
 				},
 				frostRound2Response: &pbinternal.FrostRound2Response{
@@ -966,7 +920,7 @@ func TestSignFrostInternal(t *testing.T) {
 				JobID:             "test-job-id",
 				SigningKeyshareID: keyshareID,
 				Message:           []byte("test message"),
-				VerifyingKey:      mockPublicKey(),
+				VerifyingKey:      &pubKey,
 				UserCommitment:    nil, // Test with nil user commitment
 				AdaptorPublicKey:  nil,
 			}
@@ -984,7 +938,7 @@ func TestSignFrostInternal(t *testing.T) {
 		// Test with adaptor public key
 		t.Run("WithAdaptorPublicKey", func(t *testing.T) {
 			keyshareID := uuid.New()
-			adaptorPubKey := mockPublicKey()
+			adaptorPubKey := pubKey
 
 			mockGetKeyPackages := func(_ context.Context, _ *so.Config, keyshareIDs []uuid.UUID) (map[uuid.UUID]*pbfrost.KeyPackage, error) {
 				result := make(map[uuid.UUID]*pbfrost.KeyPackage)
@@ -993,9 +947,9 @@ func TestSignFrostInternal(t *testing.T) {
 						Identifier:  "test-identifier",
 						SecretShare: []byte("test-secret-share-32-bytes-long"),
 						PublicShares: map[string][]byte{
-							"test-identifier": mockPublicKey(),
+							"test-identifier": pubKey.Serialize(),
 						},
-						PublicKey:  mockPublicKey(),
+						PublicKey:  pubKey.Serialize(),
 						MinSigners: 1,
 					}
 				}
@@ -1005,10 +959,7 @@ func TestSignFrostInternal(t *testing.T) {
 			mockConnection := &MockSparkSvcConnection{
 				frostRound1Response: &pbinternal.FrostRound1Response{
 					SigningCommitments: []*pbcommon.SigningCommitment{
-						{
-							Binding: mockPublicKey(),
-							Hiding:  mockPublicKey(),
-						},
+						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 					},
 				},
 				frostRound2Response: &pbinternal.FrostRound2Response{
@@ -1028,9 +979,9 @@ func TestSignFrostInternal(t *testing.T) {
 				JobID:             "test-job-id",
 				SigningKeyshareID: keyshareID,
 				Message:           []byte("test message"),
-				VerifyingKey:      mockPublicKey(),
-				UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
-				AdaptorPublicKey:  adaptorPubKey,
+				VerifyingKey:      &pubKey,
+				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
+				AdaptorPublicKey:  &adaptorPubKey,
 			}
 
 			results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
@@ -1054,9 +1005,9 @@ func TestSignFrostInternal(t *testing.T) {
 						Identifier:  "test-identifier",
 						SecretShare: []byte("test-secret-share-32-bytes-long"),
 						PublicShares: map[string][]byte{
-							"test-identifier": mockPublicKey(),
+							"test-identifier": pubKey.Serialize(),
 						},
-						PublicKey:  mockPublicKey(),
+						PublicKey:  pubKey.Serialize(),
 						MinSigners: 3, // Test with different threshold
 					}
 				}
@@ -1066,10 +1017,7 @@ func TestSignFrostInternal(t *testing.T) {
 			mockConnection := &MockSparkSvcConnection{
 				frostRound1Response: &pbinternal.FrostRound1Response{
 					SigningCommitments: []*pbcommon.SigningCommitment{
-						{
-							Binding: mockPublicKey(),
-							Hiding:  mockPublicKey(),
-						},
+						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 					},
 				},
 				frostRound2Response: &pbinternal.FrostRound2Response{
@@ -1089,8 +1037,8 @@ func TestSignFrostInternal(t *testing.T) {
 				JobID:             "test-job-id",
 				SigningKeyshareID: keyshareID,
 				Message:           []byte("test message"),
-				VerifyingKey:      mockPublicKey(),
-				UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+				VerifyingKey:      &pubKey,
+				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			}
 
 			results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
@@ -1150,9 +1098,9 @@ func TestSignFrostInternal(t *testing.T) {
 					Identifier:  "test-identifier",
 					SecretShare: []byte("test-secret-share-32-bytes-long"),
 					PublicShares: map[string][]byte{
-						"test-identifier": mockPublicKey(),
+						"test-identifier": pubKey.Serialize(),
 					},
-					PublicKey:  mockPublicKey(),
+					PublicKey:  pubKey.Serialize(),
 					MinSigners: 1,
 				}
 			}
@@ -1171,8 +1119,8 @@ func TestSignFrostInternal(t *testing.T) {
 			JobID:             "test-job-id",
 			SigningKeyshareID: keyshareID,
 			Message:           []byte("test message"),
-			VerifyingKey:      mockPublicKey(),
-			UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+			VerifyingKey:      &pubKey,
+			UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 		}
 
 		_, err = helper.SignFrostInternal(ctx, config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
@@ -1208,12 +1156,12 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 				JobID:             "test-job-id",
 				SigningKeyshareID: keyshareID,
 				Message:           []byte("test message"),
-				VerifyingKey:      mockPublicKey(),
-				UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+				VerifyingKey:      &pubKey,
+				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			},
 			Round1Packages: map[string]objects.SigningCommitment{
-				"operator1": {Binding: mockPublicKey(), Hiding: mockPublicKey()},
-				"operator2": {Binding: mockPublicKey(), Hiding: mockPublicKey()},
+				"operator1": {Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
+				"operator2": {Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			},
 		}
 
@@ -1224,9 +1172,9 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 					Identifier:  "test-identifier",
 					SecretShare: []byte("test-secret-share-32-bytes-long"),
 					PublicShares: map[string][]byte{
-						"test-identifier": mockPublicKey(),
+						"test-identifier": pubKey.Serialize(),
 					},
-					PublicKey:  mockPublicKey(),
+					PublicKey:  pubKey.Serialize(),
 					MinSigners: 1,
 				}
 			}
@@ -1236,10 +1184,7 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 		mockConnection := &MockSparkSvcConnection{
 			frostRound1Response: &pbinternal.FrostRound1Response{
 				SigningCommitments: []*pbcommon.SigningCommitment{
-					{
-						Binding: mockPublicKey(),
-						Hiding:  mockPublicKey(),
-					},
+					{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 				},
 			},
 			frostRound2Response: &pbinternal.FrostRound2Response{
@@ -1298,11 +1243,11 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 					JobID:             "test-job-id",
 					SigningKeyshareID: uuid.New(),
 					Message:           []byte("test message"),
-					VerifyingKey:      mockPublicKey(),
-					UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+					VerifyingKey:      &pubKey,
+					UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 				},
 				Round1Packages: map[string]objects.SigningCommitment{
-					"operator1": {Binding: mockPublicKey(), Hiding: mockPublicKey()},
+					"operator1": {Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 				},
 			}
 
@@ -1325,9 +1270,9 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 						Identifier:  "test-identifier",
 						SecretShare: []byte("test-secret-share-32-bytes-long"),
 						PublicShares: map[string][]byte{
-							"test-identifier": mockPublicKey(),
+							"test-identifier": pubKey.Serialize(),
 						},
-						PublicKey:  mockPublicKey(),
+						PublicKey:  pubKey.Serialize(),
 						MinSigners: 1,
 					}
 				}
@@ -1347,11 +1292,11 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 					JobID:             "test-job-id",
 					SigningKeyshareID: uuid.New(),
 					Message:           []byte("test message"),
-					VerifyingKey:      mockPublicKey(),
-					UserCommitment:    &objects.SigningCommitment{Binding: mockPublicKey(), Hiding: mockPublicKey()},
+					VerifyingKey:      &pubKey,
+					UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 				},
 				Round1Packages: map[string]objects.SigningCommitment{
-					"operator1": {Binding: mockPublicKey(), Hiding: mockPublicKey()},
+					"operator1": {Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 				},
 			}
 
@@ -1385,14 +1330,8 @@ func TestGetSigningCommitments(t *testing.T) {
 		mockConnection := &MockSparkSvcConnection{
 			frostRound1Response: &pbinternal.FrostRound1Response{
 				SigningCommitments: []*pbcommon.SigningCommitment{
-					{
-						Binding: mockPublicKey(),
-						Hiding:  mockPublicKey(),
-					},
-					{
-						Binding: mockPublicKey(),
-						Hiding:  mockPublicKey(),
-					},
+					{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
+					{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 				},
 			},
 		}
@@ -1409,9 +1348,9 @@ func TestGetSigningCommitments(t *testing.T) {
 					Identifier:  "test-identifier",
 					SecretShare: []byte("test-secret-share-32-bytes-long"),
 					PublicShares: map[string][]byte{
-						"test-identifier": mockPublicKey(),
+						"test-identifier": pubKey.Serialize(),
 					},
-					PublicKey:  mockPublicKey(),
+					PublicKey:  pubKey.Serialize(),
 					MinSigners: 1,
 				}
 			}
@@ -1450,9 +1389,9 @@ func TestGetSigningCommitments(t *testing.T) {
 						Identifier:  "test-identifier",
 						SecretShare: []byte("test-secret-share-32-bytes-long"),
 						PublicShares: map[string][]byte{
-							"test-identifier": mockPublicKey(),
+							"test-identifier": pubKey.Serialize(),
 						},
-						PublicKey:  mockPublicKey(),
+						PublicKey:  pubKey.Serialize(),
 						MinSigners: 1,
 					}
 				}
@@ -1505,12 +1444,9 @@ func TestNewSigningJobEdgeCases(t *testing.T) {
 	t.Run("InvalidKeyshare", func(t *testing.T) {
 		// Test with nil keyshare
 		proto := &pbspark.SigningJob{
-			SigningPublicKey: mockPublicKey(),
-			RawTx:            mockTxBuf(t, []int64{1000000}),
-			SigningNonceCommitment: &pbcommon.SigningCommitment{
-				Binding: mockPublicKey(),
-				Hiding:  mockPublicKey(),
-			},
+			SigningPublicKey:       pubKey.Serialize(),
+			RawTx:                  mockTxBuf(t, []int64{1000000}),
+			SigningNonceCommitment: &pbcommon.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 		}
 
 		prevOutput := &wire.TxOut{
@@ -1518,7 +1454,7 @@ func TestNewSigningJobEdgeCases(t *testing.T) {
 			PkScript: []byte("test-pkscript"),
 		}
 
-		_, _, err := helper.NewSigningJob(nil, proto, prevOutput, nil)
+		_, _, err := helper.NewSigningJob(nil, proto, prevOutput)
 		if err == nil {
 			t.Fatal("Expected error with nil keyshare, got nil")
 		}
@@ -1527,20 +1463,17 @@ func TestNewSigningJobEdgeCases(t *testing.T) {
 	t.Run("InvalidPrevOutput", func(t *testing.T) {
 		keyshare := &ent.SigningKeyshare{
 			ID:        uuid.New(),
-			PublicKey: mockPublicKey(),
+			PublicKey: pubKey.Serialize(),
 		}
 
 		proto := &pbspark.SigningJob{
-			SigningPublicKey: mockPublicKey(),
-			RawTx:            mockTxBuf(t, []int64{1000000}),
-			SigningNonceCommitment: &pbcommon.SigningCommitment{
-				Binding: mockPublicKey(),
-				Hiding:  mockPublicKey(),
-			},
+			SigningPublicKey:       pubKey.Serialize(),
+			RawTx:                  mockTxBuf(t, []int64{1000000}),
+			SigningNonceCommitment: &pbcommon.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 		}
 
 		// Test with nil prevOutput
-		_, _, err := helper.NewSigningJob(keyshare, proto, nil, nil)
+		_, _, err := helper.NewSigningJob(keyshare, proto, nil)
 		if err == nil {
 			t.Fatal("Expected error with nil prevOutput, got nil")
 		}
@@ -1549,17 +1482,14 @@ func TestNewSigningJobEdgeCases(t *testing.T) {
 	t.Run("InvalidPublicKeyCombination", func(t *testing.T) {
 		keyshare := &ent.SigningKeyshare{
 			ID:        uuid.New(),
-			PublicKey: mockPublicKey(),
+			PublicKey: pubKey.Serialize(),
 		}
 
 		// Test with invalid proto public key (wrong length)
 		proto := &pbspark.SigningJob{
-			SigningPublicKey: []byte("invalid-key"), // Wrong length
-			RawTx:            mockTxBuf(t, []int64{1000000}),
-			SigningNonceCommitment: &pbcommon.SigningCommitment{
-				Binding: mockPublicKey(),
-				Hiding:  mockPublicKey(),
-			},
+			SigningPublicKey:       []byte("invalid-key"), // Wrong length
+			RawTx:                  mockTxBuf(t, []int64{1000000}),
+			SigningNonceCommitment: &pbcommon.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 		}
 
 		prevOutput := &wire.TxOut{
@@ -1567,7 +1497,7 @@ func TestNewSigningJobEdgeCases(t *testing.T) {
 			PkScript: []byte("test-pkscript"),
 		}
 
-		_, _, err := helper.NewSigningJob(keyshare, proto, prevOutput, nil)
+		_, _, err := helper.NewSigningJob(keyshare, proto, prevOutput)
 		if err == nil {
 			t.Fatal("Expected error with invalid public key, got nil")
 		}

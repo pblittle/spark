@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common/logging"
@@ -106,7 +107,7 @@ func (h *CooperativeExitHandler) cooperativeExit(ctx context.Context, req *pb.Co
 		return nil, fmt.Errorf("failed to marshal transfer for request %s: %w", logging.FormatProto("cooperative_exit_request", req), err)
 	}
 
-	signingResults, err := signRefunds(ctx, h.config, req.Transfer, leafMap, nil, nil, nil)
+	signingResults, err := signRefunds(ctx, h.config, req.Transfer, leafMap, keys.Public{}, keys.Public{}, keys.Public{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign refund transactions for request %s: %w", logging.FormatProto("cooperative_exit_request", req), err)
 	}

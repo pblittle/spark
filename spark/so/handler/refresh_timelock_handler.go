@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark"
@@ -246,11 +248,16 @@ func (h *RefreshTimelockHandler) refreshTimelock(ctx context.Context, req *pb.Re
 			return nil, fmt.Errorf("failed to get signing keyshare id: %w", err)
 		}
 
+		verifyingPubKey, err := keys.ParsePublicKey(nodes[i].VerifyingPubkey)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse verifying public key: %w", err)
+		}
+
 		signingJobs = append(signingJobs, &helper.SigningJob{
 			JobID:             uuid.New().String(),
 			SigningKeyshareID: signingKeyshare.ID,
 			Message:           sigHash,
-			VerifyingKey:      nodes[i].VerifyingPubkey,
+			VerifyingKey:      &verifyingPubKey,
 			UserCommitment:    userNonceCommitment,
 		})
 	}

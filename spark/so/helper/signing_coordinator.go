@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
@@ -168,7 +170,7 @@ func frostRound2(
 	logger := logging.GetLoggerFromContext(ctx)
 	for _, job := range jobs {
 		logger.Info("FrostRound2 signing job message", "message", hex.EncodeToString(job.Message))
-		logger.Info("FrostRound2 signing job verifying key", "verifyingKey", hex.EncodeToString(job.VerifyingKey))
+		logger.Info("FrostRound2 signing job verifying key", "verifyingKey", job.VerifyingKey.ToHex())
 	}
 	operatorResult, err := ExecuteTaskWithAllOperators(ctx, config, operatorSelection, func(ctx context.Context, operator *so.SigningOperator) (map[string][]byte, error) {
 		commitmentsArray := common.MapOfArrayToArrayOfMap(round1)
@@ -191,14 +193,18 @@ func frostRound2(
 					return nil, err
 				}
 			}
+			var adaptorPublicKeyBytes []byte
+			if job.AdaptorPublicKey != nil {
+				adaptorPublicKeyBytes = job.AdaptorPublicKey.Serialize()
+			}
 			signingJobs[i] = &pbinternal.SigningJob{
 				JobId:            job.JobID,
 				Message:          job.Message,
 				KeyshareId:       job.SigningKeyshareID.String(),
-				VerifyingKey:     job.VerifyingKey,
+				VerifyingKey:     job.VerifyingKey.Serialize(),
 				Commitments:      commitments,
 				UserCommitments:  userCommitmentProto,
-				AdaptorPublicKey: job.AdaptorPublicKey,
+				AdaptorPublicKey: adaptorPublicKeyBytes,
 			}
 		}
 
@@ -251,11 +257,11 @@ type SigningJob struct {
 	// Message is the message to sign.
 	Message []byte
 	// VerifyingKey is the verifying key for the message.
-	VerifyingKey []byte
+	VerifyingKey *keys.Public
 	// UserCommitment is the user commitment for the message.
 	UserCommitment *objects.SigningCommitment
 	// AdaptorPublicKey is the adaptor public key for the message.
-	AdaptorPublicKey []byte
+	AdaptorPublicKey *keys.Public
 }
 
 type SigningJobWithPregeneratedNonce struct {
@@ -264,7 +270,7 @@ type SigningJobWithPregeneratedNonce struct {
 }
 
 // NewSigningJob creates a new signing job from signing job proto and the keyshare.
-func NewSigningJob(keyshare *ent.SigningKeyshare, proto *pbspark.SigningJob, prevOutput *wire.TxOut, adaptorPublicKey []byte) (*SigningJob, *wire.MsgTx, error) {
+func NewSigningJob(keyshare *ent.SigningKeyshare, proto *pbspark.SigningJob, prevOutput *wire.TxOut) (*SigningJob, *wire.MsgTx, error) {
 	if keyshare == nil {
 		return nil, nil, errors.New("keyshare cannot be nil")
 	}
@@ -275,10 +281,15 @@ func NewSigningJob(keyshare *ent.SigningKeyshare, proto *pbspark.SigningJob, pre
 		return nil, nil, errors.New("prevOutput cannot be nil")
 	}
 
-	verifyingKey, err := common.AddPublicKeys(proto.SigningPublicKey, keyshare.PublicKey)
+	protoSigningPublicKey, err := keys.ParsePublicKey(proto.SigningPublicKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to parse signing public key: %w", err)
 	}
+	keySharePublicKey, err := keys.ParsePublicKey(keyshare.PublicKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse keyshare public key: %w", err)
+	}
+	verifyingKey := protoSigningPublicKey.Add(keySharePublicKey)
 
 	tx, err := common.TxFromRawTxBytes(proto.RawTx)
 	if err != nil {
@@ -313,9 +324,9 @@ func NewSigningJob(keyshare *ent.SigningKeyshare, proto *pbspark.SigningJob, pre
 		JobID:             uuid.New().String(),
 		SigningKeyshareID: keyshare.ID,
 		Message:           txSigHash,
-		VerifyingKey:      verifyingKey,
+		VerifyingKey:      &verifyingKey,
 		UserCommitment:    &userCommitment,
-		AdaptorPublicKey:  adaptorPublicKey,
+		AdaptorPublicKey:  nil,
 	}
 
 	return job, tx, nil

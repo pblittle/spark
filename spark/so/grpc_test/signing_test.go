@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"testing"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -45,17 +47,16 @@ func TestFrostSign(t *testing.T) {
 	operatorKeyShares, err := ent.GetUnusedSigningKeyshares(ctx, config, 1)
 	require.NoError(t, err)
 	operatorKeyShare := operatorKeyShares[0]
-	operatorPubKeyBytes := operatorKeyShare.PublicKey
+	operatorPubKey, err := keys.ParsePublicKey(operatorKeyShare.PublicKey)
+	require.NoError(t, err)
 
 	// Step 3: Get user key pubkey
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
 
 	// Step 4: Calculate verifying key
-	verifyingKeyBytes, err := common.AddPublicKeys(operatorPubKeyBytes, userPubKeyBytes)
-	require.NoError(t, err)
+	verifyingKey := operatorPubKey.Add(userPubKey)
 
 	// User identifier will not be used in this test, so we can use any string.
 	userIdentifier := "0000000000000000000000000000000000000000000000000000000000000063"
@@ -63,9 +64,9 @@ func TestFrostSign(t *testing.T) {
 		Identifier:  userIdentifier,
 		SecretShare: privKey.Serialize(),
 		PublicShares: map[string][]byte{
-			userIdentifier: userPubKeyBytes,
+			userIdentifier: userPubKey.Serialize(),
 		},
-		PublicKey:  verifyingKeyBytes,
+		PublicKey:  verifyingKey.Serialize(),
 		MinSigners: uint32(config.Threshold),
 	}
 
@@ -91,14 +92,14 @@ func TestFrostSign(t *testing.T) {
 			JobID:             uuid.New().String(),
 			SigningKeyshareID: operatorKeyShare.ID,
 			Message:           msgHash[:],
-			VerifyingKey:      verifyingKeyBytes,
+			VerifyingKey:      &verifyingKey,
 			UserCommitment:    userNonceCommitment,
 		},
 		{
 			JobID:             uuid.New().String(),
 			SigningKeyshareID: operatorKeyShare.ID,
 			Message:           msgHash[:],
-			VerifyingKey:      verifyingKeyBytes,
+			VerifyingKey:      &verifyingKey,
 			UserCommitment:    userNonceCommitment,
 		},
 	}
@@ -123,7 +124,7 @@ func TestFrostSign(t *testing.T) {
 		JobId:           userJobID,
 		Message:         msgHash[:],
 		KeyPackage:      &userKeyPackage,
-		VerifyingKey:    verifyingKeyBytes,
+		VerifyingKey:    verifyingKey.Serialize(),
 		Nonce:           userNonceProto,
 		Commitments:     operatorCommitmentsProto,
 		UserCommitments: userNonceCommitmentProto,
@@ -143,7 +144,7 @@ func TestFrostSign(t *testing.T) {
 			Message:         msgHash[:],
 			SignatureShare:  signature,
 			PublicShare:     signingResult[0].PublicKeys[identifier],
-			VerifyingKey:    verifyingKeyBytes,
+			VerifyingKey:    verifyingKey.Serialize(),
 			Commitments:     operatorCommitmentsProto,
 			UserCommitments: userNonceCommitmentProto,
 		})
@@ -155,8 +156,8 @@ func TestFrostSign(t *testing.T) {
 		Role:            pbfrost.SigningRole_USER,
 		Message:         msgHash[:],
 		SignatureShare:  userSignatures.Results[userJobID].SignatureShare,
-		PublicShare:     userPubKeyBytes,
-		VerifyingKey:    verifyingKeyBytes,
+		PublicShare:     userPubKey.Serialize(),
+		VerifyingKey:    verifyingKey.Serialize(),
 		Commitments:     operatorCommitmentsProto,
 		UserCommitments: userNonceCommitmentProto,
 	})
@@ -169,10 +170,10 @@ func TestFrostSign(t *testing.T) {
 		Message:            msgHash[:],
 		SignatureShares:    signatureShares,
 		PublicShares:       publicKeys,
-		VerifyingKey:       verifyingKeyBytes,
+		VerifyingKey:       verifyingKey.Serialize(),
 		Commitments:        operatorCommitmentsProto,
 		UserCommitments:    userNonceCommitmentProto,
-		UserPublicKey:      userPubKeyBytes,
+		UserPublicKey:      userPubKey.Serialize(),
 		UserSignatureShare: userSignatures.Results[userJobID].SignatureShare,
 	})
 	require.NoError(t, err)
@@ -181,9 +182,7 @@ func TestFrostSign(t *testing.T) {
 	sig, err := schnorr.ParseSignature(signatureResult.Signature)
 	require.NoError(t, err)
 
-	pubKey, err := btcec.ParsePubKey(verifyingKeyBytes)
-	require.NoError(t, err)
-	taprootKey := txscript.ComputeTaprootKeyNoScript(pubKey)
+	taprootKey := txscript.ComputeTaprootKeyNoScript(verifyingKey.ToBTCEC())
 
 	verified := sig.Verify(msgHash[:], taprootKey)
 	if !verified {
@@ -210,14 +209,15 @@ func TestFrostWithoutUserSign(t *testing.T) {
 	operatorKeyShares, err := ent.GetUnusedSigningKeyshares(ctx, config, 1)
 	require.NoError(t, err)
 	operatorKeyShare := operatorKeyShares[0]
-	operatorPubKeyBytes := operatorKeyShare.PublicKey
+	operatorPubKey, err := keys.ParsePublicKey(operatorKeyShare.PublicKey)
+	require.NoError(t, err)
 
 	// Step 3: Operator signing
 	signingJobs := []*helper.SigningJob{{
 		JobID:             uuid.New().String(),
 		SigningKeyshareID: operatorKeyShare.ID,
 		Message:           msgHash[:],
-		VerifyingKey:      operatorPubKeyBytes,
+		VerifyingKey:      &operatorPubKey,
 		UserCommitment:    nil,
 	}}
 	signingResult, err := helper.SignFrost(ctx, config, signingJobs)
@@ -241,7 +241,7 @@ func TestFrostWithoutUserSign(t *testing.T) {
 		Message:         msgHash[:],
 		SignatureShares: signatureShares,
 		PublicShares:    publicKeys,
-		VerifyingKey:    operatorPubKeyBytes,
+		VerifyingKey:    operatorPubKey.Serialize(),
 		Commitments:     operatorCommitmentsProto,
 	})
 	require.NoError(t, err)
@@ -263,12 +263,14 @@ func TestFrostSignWithAdaptor(t *testing.T) {
 
 	assert.True(t, senderSig.Verify(msgHash[:], pk))
 
-	adaptorSig, adaptorPrivKey, err := common.GenerateAdaptorFromSignature(senderSig.Serialize())
+	adaptorSig, adaptorPrivKeyBytes, err := common.GenerateAdaptorFromSignature(senderSig.Serialize())
 	require.NoError(t, err)
 
-	_, adaptorPub := btcec.PrivKeyFromBytes(adaptorPrivKey)
+	adaptorPrivKey, err := keys.ParsePrivateKey(adaptorPrivKeyBytes)
+	require.NoError(t, err)
+	adaptorPub := adaptorPrivKey.Public()
 
-	err = common.ValidateOutboundAdaptorSignature(pk, msgHash[:], adaptorSig, adaptorPub.SerializeCompressed())
+	err = common.ValidateOutboundAdaptorSignature(pk, msgHash[:], adaptorSig, adaptorPub.Serialize())
 	require.NoError(t, err)
 
 	// Step 1: Setup config
@@ -286,17 +288,16 @@ func TestFrostSignWithAdaptor(t *testing.T) {
 	operatorKeyShares, err := ent.GetUnusedSigningKeyshares(ctx, config, 1)
 	require.NoError(t, err)
 	operatorKeyShare := operatorKeyShares[0]
-	operatorPubKeyBytes := operatorKeyShare.PublicKey
+	operatorPubKey, err := keys.ParsePublicKey(operatorKeyShare.PublicKey)
+	require.NoError(t, err)
 
 	// Step 3: Get user key pubkey
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
 
 	// Step 4: Calculate verifying key
-	verifyingKeyBytes, err := common.AddPublicKeys(operatorPubKeyBytes, userPubKeyBytes)
-	require.NoError(t, err)
+	verifyingKey := operatorPubKey.Add(userPubKey)
 
 	// User identifier will not be used in this test, so we can use any string.
 	userIdentifier := "0000000000000000000000000000000000000000000000000000000000000063"
@@ -304,9 +305,9 @@ func TestFrostSignWithAdaptor(t *testing.T) {
 		Identifier:  userIdentifier,
 		SecretShare: privKey.Serialize(),
 		PublicShares: map[string][]byte{
-			userIdentifier: userPubKeyBytes,
+			userIdentifier: userPubKey.Serialize(),
 		},
-		PublicKey:  verifyingKeyBytes,
+		PublicKey:  verifyingKey.Serialize(),
 		MinSigners: uint32(config.Threshold),
 	}
 
@@ -331,9 +332,9 @@ func TestFrostSignWithAdaptor(t *testing.T) {
 		JobID:             uuid.New().String(),
 		SigningKeyshareID: operatorKeyShare.ID,
 		Message:           msgHash[:],
-		VerifyingKey:      verifyingKeyBytes,
+		VerifyingKey:      &verifyingKey,
 		UserCommitment:    userNonceCommitment,
-		AdaptorPublicKey:  adaptorPub.SerializeCompressed(),
+		AdaptorPublicKey:  &adaptorPub,
 	}}
 	signingResult, err := helper.SignFrost(ctx, config, signingJobs)
 	require.NoError(t, err)
@@ -355,11 +356,11 @@ func TestFrostSignWithAdaptor(t *testing.T) {
 		JobId:            userJobID,
 		Message:          msgHash[:],
 		KeyPackage:       &userKeyPackage,
-		VerifyingKey:     verifyingKeyBytes,
+		VerifyingKey:     verifyingKey.Serialize(),
 		Nonce:            userNonceProto,
 		Commitments:      operatorCommitmentsProto,
 		UserCommitments:  userNonceCommitmentProto,
-		AdaptorPublicKey: adaptorPub.SerializeCompressed(),
+		AdaptorPublicKey: adaptorPub.Serialize(),
 	}}
 	userSignatures, err := client.SignFrost(ctx, &pbfrost.SignFrostRequest{
 		SigningJobs: userSigningJobs,
@@ -374,20 +375,17 @@ func TestFrostSignWithAdaptor(t *testing.T) {
 		Message:            msgHash[:],
 		SignatureShares:    signatureShares,
 		PublicShares:       publicKeys,
-		VerifyingKey:       verifyingKeyBytes,
+		VerifyingKey:       verifyingKey.Serialize(),
 		Commitments:        operatorCommitmentsProto,
 		UserCommitments:    userNonceCommitmentProto,
-		UserPublicKey:      userPubKeyBytes,
+		UserPublicKey:      userPubKey.Serialize(),
 		UserSignatureShare: userSignatures.Results[userJobID].SignatureShare,
-		AdaptorPublicKey:   adaptorPub.SerializeCompressed(),
+		AdaptorPublicKey:   adaptorPub.Serialize(),
 	})
 	require.NoError(t, err)
 
-	pubKey, err := btcec.ParsePubKey(verifyingKeyBytes)
-	require.NoError(t, err)
-	taprootKey := txscript.ComputeTaprootKeyNoScript(pubKey)
-
-	_, err = common.ApplyAdaptorToSignature(taprootKey, msgHash[:], signatureResp.Signature, adaptorPrivKey)
+	taprootKey := txscript.ComputeTaprootKeyNoScript(verifyingKey.ToBTCEC())
+	_, err = common.ApplyAdaptorToSignature(taprootKey, msgHash[:], signatureResp.Signature, adaptorPrivKeyBytes)
 	require.NoError(t, err)
 }
 
@@ -448,17 +446,16 @@ func TestFrostSigningWithPregeneratedNonce(t *testing.T) {
 	operatorKeyShares, err := ent.GetUnusedSigningKeyshares(ctx, config, 1)
 	require.NoError(t, err)
 	operatorKeyShare := operatorKeyShares[0]
-	operatorPubKeyBytes := operatorKeyShare.PublicKey
+	operatorPubKey, err := keys.ParsePublicKey(operatorKeyShare.PublicKey)
+	require.NoError(t, err)
 
 	// Step 3: Get user key pubkey
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
 
 	// Step 4: Calculate verifying key
-	verifyingKeyBytes, err := common.AddPublicKeys(operatorPubKeyBytes, userPubKeyBytes)
-	require.NoError(t, err)
+	verifyingKey := operatorPubKey.Add(userPubKey)
 
 	// User identifier will not be used in this test, so we can use any string.
 	userIdentifier := "0000000000000000000000000000000000000000000000000000000000000063"
@@ -466,9 +463,9 @@ func TestFrostSigningWithPregeneratedNonce(t *testing.T) {
 		Identifier:  userIdentifier,
 		SecretShare: privKey.Serialize(),
 		PublicShares: map[string][]byte{
-			userIdentifier: userPubKeyBytes,
+			userIdentifier: userPubKey.Serialize(),
 		},
-		PublicKey:  verifyingKeyBytes,
+		PublicKey:  verifyingKey.Serialize(),
 		MinSigners: uint32(config.Threshold),
 	}
 
@@ -509,7 +506,7 @@ func TestFrostSigningWithPregeneratedNonce(t *testing.T) {
 		JobId:           userJobID,
 		Message:         msgHash[:],
 		KeyPackage:      &userKeyPackage,
-		VerifyingKey:    verifyingKeyBytes,
+		VerifyingKey:    verifyingKey.Serialize(),
 		Nonce:           userNonceProto,
 		Commitments:     operatorCommitmentsProto,
 		UserCommitments: userNonceCommitmentProto,
@@ -526,7 +523,7 @@ func TestFrostSigningWithPregeneratedNonce(t *testing.T) {
 			JobID:             uuid.New().String(),
 			SigningKeyshareID: operatorKeyShare.ID,
 			Message:           msgHash[:],
-			VerifyingKey:      verifyingKeyBytes,
+			VerifyingKey:      &verifyingKey,
 			UserCommitment:    userNonceCommitment,
 		},
 		Round1Packages: operatorNonceCommitmentArray[0],
@@ -543,7 +540,7 @@ func TestFrostSigningWithPregeneratedNonce(t *testing.T) {
 			Message:         msgHash[:],
 			SignatureShare:  signature,
 			PublicShare:     signingResult[0].PublicKeys[identifier],
-			VerifyingKey:    verifyingKeyBytes,
+			VerifyingKey:    verifyingKey.Serialize(),
 			Commitments:     operatorCommitmentsProto,
 			UserCommitments: userNonceCommitmentProto,
 		})
@@ -555,8 +552,8 @@ func TestFrostSigningWithPregeneratedNonce(t *testing.T) {
 		Role:            pbfrost.SigningRole_USER,
 		Message:         msgHash[:],
 		SignatureShare:  userSignatures.Results[userJobID].SignatureShare,
-		PublicShare:     userPubKeyBytes,
-		VerifyingKey:    verifyingKeyBytes,
+		PublicShare:     userPubKey.Serialize(),
+		VerifyingKey:    verifyingKey.Serialize(),
 		Commitments:     operatorCommitmentsProto,
 		UserCommitments: userNonceCommitmentProto,
 	})
@@ -569,10 +566,10 @@ func TestFrostSigningWithPregeneratedNonce(t *testing.T) {
 		Message:            msgHash[:],
 		SignatureShares:    signatureShares,
 		PublicShares:       publicKeys,
-		VerifyingKey:       verifyingKeyBytes,
+		VerifyingKey:       verifyingKey.Serialize(),
 		Commitments:        operatorCommitmentsProto,
 		UserCommitments:    userNonceCommitmentProto,
-		UserPublicKey:      userPubKeyBytes,
+		UserPublicKey:      userPubKey.Serialize(),
 		UserSignatureShare: userSignatures.Results[userJobID].SignatureShare,
 	})
 	require.NoError(t, err)
@@ -580,10 +577,6 @@ func TestFrostSigningWithPregeneratedNonce(t *testing.T) {
 	// Step 11: Verify signature using go lib.
 	sig, err := schnorr.ParseSignature(signatureResult.Signature)
 	require.NoError(t, err)
-
-	pubKey, err := btcec.ParsePubKey(verifyingKeyBytes)
-	require.NoError(t, err)
-	taprootKey := txscript.ComputeTaprootKeyNoScript(pubKey)
-
+	taprootKey := txscript.ComputeTaprootKeyNoScript(verifyingKey.ToBTCEC())
 	require.True(t, sig.Verify(msgHash[:], taprootKey), "signature verification failed")
 }

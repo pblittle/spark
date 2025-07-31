@@ -117,6 +117,9 @@ func (p Private) String() string {
 
 // Serialize returns the key as a 256-bit big-endian binary-encoded number.
 func (p Private) Serialize() []byte {
+	if p.key.Key.IsZero() {
+		return nil
+	}
 	return p.key.Serialize()
 }
 
