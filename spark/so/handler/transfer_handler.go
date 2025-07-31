@@ -1568,7 +1568,12 @@ func (h *TransferHandler) queryTransfers(ctx context.Context, filter *pb.Transfe
 		baseQuery = baseQuery.Where(enttransfer.And(transferPredicate...))
 	}
 
-	query := baseQuery.Order(ent.Desc(enttransfer.FieldUpdateTime))
+	var query *ent.TransferQuery
+	if filter.Order == pb.Order_ASCENDING {
+		query = baseQuery.Order(ent.Asc(enttransfer.FieldUpdateTime))
+	} else {
+		query = baseQuery.Order(ent.Desc(enttransfer.FieldUpdateTime))
+	}
 
 	if filter.Limit > 100 || filter.Limit == 0 {
 		filter.Limit = 100
