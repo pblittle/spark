@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log" //nolint:depguard
 	"log/slog"
 	"net"
@@ -216,6 +217,35 @@ func dangerousStartNonTLSServer(args *args, grpcServer *grpc.Server) StartServer
 		}
 		return nil, nil
 	}
+}
+
+type BufferedBody struct {
+	BodyReader io.ReadCloser
+	Body       []byte
+	Position   int
+}
+
+func (body *BufferedBody) Read(p []byte) (n int, err error) {
+	err = nil
+	if body.Body == nil {
+		body.Body, err = io.ReadAll(body.BodyReader)
+	}
+
+	n = copy(p, body.Body[body.Position:])
+	body.Position += n
+	if err == nil && body.Position == len(body.Body) {
+		err = io.EOF
+	}
+
+	return n, err
+}
+
+func (body *BufferedBody) Close() error {
+	return body.BodyReader.Close()
+}
+
+func NewBufferedBody(bodyReader io.ReadCloser) *BufferedBody {
+	return &BufferedBody{bodyReader, nil, 0}
 }
 
 func main() {
@@ -499,6 +529,14 @@ func main() {
 	}))
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// The gRPC server doesn't read the request body until EOF before processing
+		// the request. This can result in the HTTP server receiving a DATA(END_FRAME)
+		// frame after sending the response, which elicits a RST_STREAM(STREAM_CLOSED)
+		// frame. ALB and nginx then respond to the client with RST_STREAM(INTERNAL_ERROR)
+		// which causes the request to fail. The workaround is to buffer the entire
+		// request body before passing to the gRPC server.
+		r.Body = NewBufferedBody(r.Body)
+
 		if strings.ToLower(r.Header.Get("Content-Type")) == "application/grpc" {
 			grpcServer.ServeHTTP(w, r)
 			return
