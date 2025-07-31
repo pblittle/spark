@@ -71,22 +71,34 @@ func CreateTransferPackage(
 func SendTransferWithKeyTweaks(
 	ctx context.Context,
 	config *Config,
-	client pb.SparkServiceClient,
 	leaves []LeafKeyTweak,
 	receiverIdentityPubkey []byte,
 	expiryTime time.Time,
 ) (*pb.Transfer, error) {
+	sparkConn, err := common.NewGRPCConnectionWithTestTLS(config.CoodinatorAddress(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer sparkConn.Close()
+
+	token, err := AuthenticateWithConnection(ctx, config, sparkConn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate with server: %w", err)
+	}
+	authCtx := ContextWithToken(ctx, token)
+
+	client := pb.NewSparkServiceClient(sparkConn)
 	transferID, err := uuid.NewV7()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate transfer id: %w", err)
 	}
 
-	transferPackage, err := CreateTransferPackage(ctx, transferID, config, client, leaves, receiverIdentityPubkey)
+	transferPackage, err := CreateTransferPackage(authCtx, transferID, config, client, leaves, receiverIdentityPubkey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare transfer data: %w", err)
 	}
 
-	resp, err := client.StartTransfer(ctx, &pb.StartTransferRequest{
+	resp, err := client.StartTransfer(authCtx, &pb.StartTransferRequest{
 		TransferId:                transferID.String(),
 		OwnerIdentityPublicKey:    config.IdentityPublicKey(),
 		ReceiverIdentityPublicKey: receiverIdentityPubkey,

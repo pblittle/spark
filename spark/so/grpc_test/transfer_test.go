@@ -42,8 +42,17 @@ func TestTransfer(t *testing.T) {
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
-	senderTransfer, err := wallet.SendTransfer(
-		context.Background(),
+
+	conn, err := common.NewGRPCConnectionWithTestTLS(senderConfig.CoodinatorAddress(), nil)
+	require.NoError(t, err, "failed to create grpc connection")
+	defer conn.Close()
+
+	authToken, err := wallet.AuthenticateWithServer(context.Background(), senderConfig)
+	require.NoError(t, err, "failed to authenticate sender")
+	senderCtx := wallet.ContextWithToken(context.Background(), authToken)
+
+	senderTransfer, err := wallet.SendTransferWithKeyTweaks(
+		senderCtx,
 		senderConfig,
 		leavesToTransfer[:],
 		receiverPrivKey.PubKey().SerializeCompressed(),
@@ -106,8 +115,17 @@ func TestQueryPendingTransferByNetwork(t *testing.T) {
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
-	_, err = wallet.SendTransfer(
-		context.Background(),
+
+	conn, err := common.NewGRPCConnectionWithTestTLS(senderConfig.CoodinatorAddress(), nil)
+	require.NoError(t, err, "failed to create grpc connection")
+	defer conn.Close()
+
+	authToken, err := wallet.AuthenticateWithServer(context.Background(), senderConfig)
+	require.NoError(t, err, "failed to authenticate sender")
+	senderCtx := wallet.ContextWithToken(context.Background(), authToken)
+
+	_, err = wallet.SendTransferWithKeyTweaks(
+		senderCtx,
 		senderConfig,
 		leavesToTransfer[:],
 		receiverPrivKey.PubKey().SerializeCompressed(),
@@ -156,8 +174,17 @@ func TestTransferInterrupt(t *testing.T) {
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
-	senderTransfer, err := wallet.SendTransfer(
-		context.Background(),
+
+	conn, err := common.NewGRPCConnectionWithTestTLS(senderConfig.CoodinatorAddress(), nil)
+	require.NoError(t, err, "failed to create grpc connection")
+	defer conn.Close()
+
+	authToken, err := wallet.AuthenticateWithServer(context.Background(), senderConfig)
+	require.NoError(t, err, "failed to authenticate sender")
+	senderCtx := wallet.ContextWithToken(context.Background(), authToken)
+
+	senderTransfer, err := wallet.SendTransferWithKeyTweaks(
+		senderCtx,
 		senderConfig,
 		leavesToTransfer[:],
 		receiverPrivKey.PubKey().SerializeCompressed(),
@@ -181,9 +208,6 @@ func TestTransferInterrupt(t *testing.T) {
 	leafPrivKeyMap, err := wallet.VerifyPendingTransfer(context.Background(), receiverConfig, receiverTransfer)
 	assertVerifiedPendingTransfer(t, err, leafPrivKeyMap, rootNode, newLeafPrivKey)
 
-	conn, err := common.NewGRPCConnectionWithTestTLS(senderConfig.CoodinatorAddress(), nil)
-	require.NoError(t, err, "failed to create grpc connection")
-	defer conn.Close()
 	mockClient := pbmock.NewMockServiceClient(conn)
 	_, err = mockClient.InterruptTransfer(context.Background(), &pbmock.InterruptTransferRequest{
 		Action: pbmock.InterruptTransferRequest_INTERRUPT,

@@ -187,9 +187,13 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 	}
 	leavesToTransfer := []wallet.LeafKeyTweak{transferNode}
 
+	authToken, err := wallet.AuthenticateWithServer(context.Background(), walletConfig)
+	require.NoError(t, err, "failed to authenticate sender")
+	senderCtx := wallet.ContextWithToken(context.Background(), authToken)
+
 	// Sender initiates transfer
-	senderTransfer, err := wallet.SendTransfer(
-		context.Background(),
+	senderTransfer, err := wallet.SendTransferWithKeyTweaks(
+		senderCtx,
 		walletConfig,
 		leavesToTransfer,
 		receiverPrivKey.PubKey().SerializeCompressed(),

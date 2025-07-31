@@ -703,7 +703,8 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
-	_, err = wallet.SendTransfer(
+
+	_, err = wallet.SendTransferWithKeyTweaks(
 		context.Background(),
 		config,
 		leavesToTransfer[:],
@@ -734,12 +735,11 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 		t.Fatalf("failed to generate to address: %v", err)
 	}
 
-	sparkClient := pb.NewSparkServiceClient(conn)
-	_, err = testutil.WaitForPendingDepositNode(ctx, sparkClient, rootNode)
+	_, err = testutil.WaitForPendingDepositNode(ctx, pb.NewSparkServiceClient(conn), rootNode)
 	require.NoError(t, err)
 
 	// After L1 tx confirms, user should be able to transfer funds
-	_, err = wallet.SendTransfer(
+	_, err = wallet.SendTransferWithKeyTweaks(
 		context.Background(),
 		config,
 		leavesToTransfer[:],
