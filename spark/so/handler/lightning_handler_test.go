@@ -20,6 +20,7 @@ import (
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -934,5 +935,99 @@ func TestPreimageSwapAuthorizationBugRegression(t *testing.T) {
 		)
 
 		require.ErrorContains(t, err, "not owned by the authenticated identity public key")
+	})
+}
+
+// Regression test for https://linear.app/lightsparkdev/issue/LIG-8043
+// Validates that duplicate leaves are rejected in the SendLightning flow,
+// since otherwise they would allow double-spending of Spark leaves via
+// Lightning.
+func TestSendLightningLeafDuplicationBug(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	defer dbCtx.Close()
+
+	config := &so.Config{}
+	lightningHandler := NewLightningHandler(config)
+
+	createMockSigningJob := func(leafID string, value uint64) *pb.UserSignedTxSigningJob {
+		mockTx := []byte{
+			0x02, 0x00, 0x00, 0x00, // version
+			0x01, // input count
+			// Input (simplified)
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0xFF, 0xFF, 0xFF, 0xFF, // previous output index
+			0x00,                   // script length
+			0xFF, 0xFF, 0xFF, 0xFF, // sequence
+			0x01, // output count
+		}
+		valueBytes := make([]byte, 8)
+		for i := 0; i < 8; i++ {
+			valueBytes[i] = byte(value >> (i * 8))
+		}
+		mockTx = append(mockTx, valueBytes...)
+		// Add minimal script (P2TR-like)
+		mockScript := []byte{
+			0x22,       // script length (34 bytes)
+			0x51, 0x20, // OP_1 + 32-byte key
+		}
+		mockScript = append(mockScript, make([]byte, 32)...) // 32-byte pubkey
+		mockTx = append(mockTx, mockScript...)
+		// Add locktime
+		mockTx = append(mockTx, 0x00, 0x00, 0x00, 0x00)
+
+		return &pb.UserSignedTxSigningJob{
+			LeafId: leafID,
+			SigningCommitments: &pb.SigningCommitments{
+				SigningCommitments: map[string]*pbcommon.SigningCommitment{
+					"test": {
+						Hiding:  []byte("test_hiding"),
+						Binding: []byte("test_binding"),
+					},
+				},
+			},
+			SigningNonceCommitment: &pbcommon.SigningCommitment{
+				Hiding:  []byte("test_nonce_hiding"),
+				Binding: []byte("test_nonce_binding"),
+			},
+			UserSignature: []byte("test_signature"),
+			RawTx:         mockTx,
+		}
+	}
+
+	t.Run("duplicate leaves should not bypass amount validation", func(t *testing.T) {
+		const leafID = "550e8400-e29b-41d4-a716-446655440000"
+
+		// Create a single leaf worth 1000 sats
+		originalLeaf := createMockSigningJob(leafID, 1000)
+
+		// Duplicate the same leaf to artificially double the amount
+		duplicatedLeaf := createMockSigningJob(leafID, 1000)
+
+		// Create request with duplicated leaves
+		req := &pb.InitiatePreimageSwapRequest{
+			PaymentHash: []byte("payment_hash_32_bytes_long______"),
+			Transfer: &pb.StartUserSignedTransferRequest{
+				TransferId: "transfer-id-123",
+				LeavesToSend: []*pb.UserSignedTxSigningJob{
+					originalLeaf,
+					duplicatedLeaf, // Same leaf ID - this should be rejected but currently isn't
+				},
+				OwnerIdentityPublicKey:    []byte("owner_identity_key_32_bytes_long"),
+				ReceiverIdentityPublicKey: []byte("receiver_identity_key_32_bytes__"),
+			},
+			InvoiceAmount: &pb.InvoiceAmount{
+				ValueSats: 1000, // Invoice is for 1000 sats, but we're attempting to send 2000 sats due to duplication
+			},
+			Reason:  pb.InitiatePreimageSwapRequest_REASON_SEND,
+			FeeSats: 0,
+		}
+
+		_, err := lightningHandler.InitiatePreimageSwap(ctx, req)
+
+		require.ErrorContains(t, err, "duplicate leaf id")
 	})
 }
