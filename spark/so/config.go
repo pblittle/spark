@@ -22,6 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/rds/auth"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/exaring/otelpgx"
+	"github.com/goccy/go-yaml"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -32,7 +33,6 @@ import (
 	"github.com/lightsparkdev/spark/so/middleware"
 	"github.com/lightsparkdev/spark/so/utils"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"gopkg.in/yaml.v3"
 )
 
 var (
