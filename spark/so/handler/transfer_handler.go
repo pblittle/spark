@@ -1726,6 +1726,9 @@ func (h *TransferHandler) ClaimTransferTweakKeys(ctx context.Context, req *pb.Cl
 	if !bytes.Equal(transfer.ReceiverIdentityPubkey, req.OwnerIdentityPublicKey) {
 		return fmt.Errorf("cannot claim transfer %s, receiver identity public key mismatch", req.TransferId)
 	}
+	if transfer.Status == st.TransferStatusCompleted {
+		return errors.AlreadyExistsErrorf("transfer %s has already been claimed", req.TransferId)
+	}
 	if transfer.Status != st.TransferStatusSenderKeyTweaked {
 		return errors.FailedPreconditionErrorf("please call ClaimTransferSignRefunds to claim the transfer %s, the transfer is not in SENDER_KEY_TWEAKED status. transferstatus: %s,", req.TransferId, transfer.Status)
 	}
