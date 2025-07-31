@@ -129,8 +129,7 @@ func (h *InternalSignTokenHandler) SignAndPersistTokenTransaction(
 		return nil, fmt.Errorf("token transaction type unknown")
 	}
 
-	identityPrivateKey := secp256k1.PrivKeyFromBytes(h.config.IdentityPrivateKey)
-	operatorSignature := ecdsa.Sign(identityPrivateKey, finalTokenTransactionHash)
+	operatorSignature := ecdsa.Sign(h.config.IdentityPrivateKey.ToBTCEC(), finalTokenTransactionHash)
 
 	// Order the signatures according to their index before updating the DB.
 	operatorSpecificSignatureMap := make(map[int][]byte, len(operatorSpecificSignatures))

@@ -24,9 +24,8 @@ import (
 )
 
 var (
-	seededRand           = rand.NewChaCha8([32]byte{1})
-	testIdentityKey      = keys.MustGeneratePrivateKeyFromRand(seededRand)
-	testIdentityKeyBytes = testIdentityKey.Serialize()
+	seededRand      = rand.NewChaCha8([32]byte{1})
+	testIdentityKey = keys.MustGeneratePrivateKeyFromRand(seededRand)
 )
 
 const (
@@ -51,11 +50,11 @@ func newTestServerAndTokenVerifier(
 		opt(cfg)
 	}
 
-	tokenVerifier, err := authninternal.NewSessionTokenCreatorVerifier(testIdentityKeyBytes, cfg.clock)
+	tokenVerifier, err := authninternal.NewSessionTokenCreatorVerifier(testIdentityKey, cfg.clock)
 	require.NoError(t, err)
 
 	config := AuthnServerConfig{
-		IdentityPrivateKey: testIdentityKeyBytes,
+		IdentityPrivateKey: testIdentityKey.Serialize(),
 		ChallengeTimeout:   testChallengeTimeout,
 		SessionDuration:    testSessionDuration,
 		Clock:              cfg.clock,
@@ -287,13 +286,13 @@ func TestVerifyChallenge_CacheExpiration(t *testing.T) {
 	// Use a very short challenge timeout for testing cache expiration
 	shortTimeout := 1 * time.Second
 	config := AuthnServerConfig{
-		IdentityPrivateKey: testIdentityKeyBytes,
+		IdentityPrivateKey: testIdentityKey.Serialize(),
 		ChallengeTimeout:   shortTimeout,
 		SessionDuration:    testSessionDuration,
 		Clock:              authninternal.RealClock{},
 	}
 
-	tokenVerifier, err := authninternal.NewSessionTokenCreatorVerifier(testIdentityKeyBytes, authninternal.RealClock{})
+	tokenVerifier, err := authninternal.NewSessionTokenCreatorVerifier(testIdentityKey, authninternal.RealClock{})
 	require.NoError(t, err)
 
 	server, err := NewAuthnServer(config, tokenVerifier)
@@ -372,7 +371,7 @@ func assertNoSessionInContext(ctx context.Context, t *testing.T) {
 }
 
 func newTestTokenVerifier(t *testing.T) *authninternal.SessionTokenCreatorVerifier {
-	tokenVerifier, err := authninternal.NewSessionTokenCreatorVerifier(testIdentityKeyBytes, authninternal.RealClock{})
+	tokenVerifier, err := authninternal.NewSessionTokenCreatorVerifier(testIdentityKey, authninternal.RealClock{})
 	require.NoError(t, err)
 	return tokenVerifier
 }
@@ -436,11 +435,11 @@ func TestVerifyChallenge_InvalidAuth(t *testing.T) {
 }
 
 func TestNewAuthnServer_InvalidChallengeTimeoutFails(t *testing.T) {
-	tokenVerifier, err := authninternal.NewSessionTokenCreatorVerifier(testIdentityKeyBytes, authninternal.RealClock{})
+	tokenVerifier, err := authninternal.NewSessionTokenCreatorVerifier(testIdentityKey, authninternal.RealClock{})
 	require.NoError(t, err)
 
 	config := AuthnServerConfig{
-		IdentityPrivateKey: testIdentityKeyBytes,
+		IdentityPrivateKey: testIdentityKey.Serialize(),
 		ChallengeTimeout:   500 * time.Millisecond, // Less than one second
 		SessionDuration:    testSessionDuration,
 		Clock:              authninternal.RealClock{},

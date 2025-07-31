@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
@@ -101,8 +100,7 @@ func (h *InternalTreeCreationHandler) generateAndStoreDepositAddress(ctx context
 	}
 
 	addressHash := sha256.Sum256([]byte(*address))
-	privKey := secp256k1.PrivKeyFromBytes(h.config.IdentityPrivateKey)
-	signature := ecdsa.Sign(privKey, addressHash[:])
+	signature := ecdsa.Sign(h.config.IdentityPrivateKey.ToBTCEC(), addressHash[:])
 	return *address, signature.Serialize(), nil
 }
 

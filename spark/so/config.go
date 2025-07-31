@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/XSAM/otelsql"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -48,7 +50,7 @@ type Config struct {
 	// Used as shamir secret share identifier in DKG key shares.
 	Identifier string
 	// IdentityPrivateKey is the identity private key of the signing operator.
-	IdentityPrivateKey []byte
+	IdentityPrivateKey keys.Private
 	// SigningOperatorMap is the map of signing operators.
 	SigningOperatorMap map[string]*SigningOperator
 	// Threshold is the threshold for the signing operator.
@@ -252,6 +254,10 @@ func NewConfig(
 	if err != nil {
 		return nil, err
 	}
+	identityPrivateKey, err := keys.ParsePrivateKey(identityPrivateKeyBytes)
+	if err != nil {
+		return nil, err
+	}
 
 	signingOperatorMap, err := LoadOperators(operatorsFilePath)
 	if err != nil {
@@ -298,10 +304,10 @@ func NewConfig(
 		operatorConfig.XffClientIpPosition = 0
 	}
 
-	config := &Config{
+	conf := &Config{
 		Index:                     index,
 		Identifier:                identifier,
-		IdentityPrivateKey:        identityPrivateKeyBytes,
+		IdentityPrivateKey:        identityPrivateKey,
 		SigningOperatorMap:        signingOperatorMap,
 		Threshold:                 threshold,
 		SignerAddress:             signerAddress,
@@ -325,8 +331,8 @@ func NewConfig(
 		XffClientIpPosition:       operatorConfig.XffClientIpPosition,
 	}
 
-	config.buildIdentityPubkeyMap()
-	return config, nil
+	conf.buildIdentityPubkeyMap()
+	return conf, nil
 }
 
 func (c *Config) IsNetworkSupported(network common.Network) bool {

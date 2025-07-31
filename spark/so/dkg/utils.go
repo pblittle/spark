@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 	"github.com/google/uuid"
@@ -31,12 +33,11 @@ func round1PackageHash(packageMaps []map[string][]byte) []byte {
 	return finalHasher.Sum(nil)
 }
 
-func signHash(privateKey []byte, hash []byte) []byte {
-	priv := secp256k1.PrivKeyFromBytes(privateKey)
-	return ecdsa.Sign(priv, hash).Serialize()
+func signHash(privateKey keys.Private, hash []byte) []byte {
+	return ecdsa.Sign(privateKey.ToBTCEC(), hash).Serialize()
 }
 
-func signRound1Packages(privateKey []byte, round1Packages []map[string][]byte) []byte {
+func signRound1Packages(privateKey keys.Private, round1Packages []map[string][]byte) []byte {
 	hash := round1PackageHash(round1Packages)
 	return signHash(privateKey, hash)
 }
@@ -80,7 +81,7 @@ func round2PackageHash(round2Packages [][]byte) []byte {
 	return hasher.Sum(nil)
 }
 
-func signRound2Packages(privateKey []byte, round2Packages [][]byte) []byte {
+func signRound2Packages(privateKey keys.Private, round2Packages [][]byte) []byte {
 	hash := round2PackageHash(round2Packages)
 	return signHash(privateKey, hash)
 }

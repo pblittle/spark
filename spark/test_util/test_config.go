@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/so"
@@ -173,6 +175,10 @@ func SpecificOperatorTestConfig(operatorIndex int) (*so.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	identityPrivateKey, err := keys.ParsePrivateKey(identityPrivateKeyBytes)
+	if err != nil {
+		return nil, err
+	}
 
 	signingOperators, err := GetAllSigningOperators()
 	if err != nil {
@@ -185,7 +191,7 @@ func SpecificOperatorTestConfig(operatorIndex int) (*so.Config, error) {
 	config := so.Config{
 		Index:              uint64(operatorIndex),
 		Identifier:         identifier,
-		IdentityPrivateKey: identityPrivateKeyBytes,
+		IdentityPrivateKey: identityPrivateKey,
 		SigningOperatorMap: signingOperators,
 		Threshold:          uint64(threshold),
 		SignerAddress:      getLocalFrostSignerAddress(),

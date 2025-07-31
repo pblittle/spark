@@ -11,7 +11,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
-	eciesgo "github.com/ecies/go/v2"
+	"github.com/ecies/go/v2"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark"
 	"github.com/lightsparkdev/spark/common"
@@ -773,7 +773,7 @@ func (h *BaseTransferHandler) validateTransferPackage(_ context.Context, transfe
 		return nil, fmt.Errorf("no key tweaks found for SO %s", h.config.Identifier)
 	}
 
-	decryptionPrivateKey := eciesgo.NewPrivateKeyFromBytes(h.config.IdentityPrivateKey)
+	decryptionPrivateKey := eciesgo.NewPrivateKeyFromBytes(h.config.IdentityPrivateKey.Serialize())
 	leafTweaksBinary, err := eciesgo.Decrypt(decryptionPrivateKey, leafTweaksCipherText)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt key tweaks: %w", err)

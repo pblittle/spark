@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/common/keys"
@@ -816,14 +815,13 @@ func TestPreimageSwapAuthorizationBugRegression(t *testing.T) {
 		lightningHandler := NewLightningHandler(baseConfig)
 
 		// Create an authentication session with a specific identity (different from node owner)
-		sessionIdentityKey := []byte{0x02, 0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x99} // Different from node owner
-
+		sessionIdentityKey := keys.MustGeneratePrivateKeyFromRand(rng) // Different from node owner
 		// Create token verifier using the session identity key so the token will validate properly
 		tokenVerifier, err := authninternal.NewSessionTokenCreatorVerifier(sessionIdentityKey, authninternal.RealClock{})
 		require.NoError(t, err)
 
 		// Create a valid session token for the session identity
-		tokenResult, err := tokenVerifier.CreateToken(sessionIdentityKey, time.Hour)
+		tokenResult, err := tokenVerifier.CreateToken(sessionIdentityKey.Public().Serialize(), time.Hour)
 		require.NoError(t, err)
 
 		// Create context with authorization header like real gRPC requests
@@ -843,7 +841,7 @@ func TestPreimageSwapAuthorizationBugRegression(t *testing.T) {
 		// Verify the session was set correctly
 		session, err := authn.GetSessionFromContext(authenticatedCtx)
 		require.NoError(t, err)
-		require.Equal(t, sessionIdentityKey, session.IdentityPublicKeyBytes())
+		require.Equal(t, session.IdentityPublicKey(), sessionIdentityKey.Public())
 
 		// Create a tree node in the database for the test
 		tx, err := ent.GetDbFromContext(authenticatedCtx)
@@ -859,12 +857,13 @@ func TestPreimageSwapAuthorizationBugRegression(t *testing.T) {
 			Save(authenticatedCtx)
 		require.NoError(t, err)
 
+		wrongKey := keys.MustGeneratePrivateKeyFromRand(rng).Public()
 		// Create a keyshare with proper 33-byte public keys
 		keyshare, err := tx.SigningKeyshare.Create().
 			SetStatus(st.KeyshareStatusInUse).
 			SetSecretShare([]byte("test_secret_share_32_bytes_long_")).
-			SetPublicShares(map[string][]byte{"operator1": {0x02, 0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x98}}).
-			SetPublicKey([]byte{0x02, 0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x99}).
+			SetPublicShares(map[string][]byte{"operator1": wrongKey.Serialize()}).
+			SetPublicKey(sessionIdentityKey.Public().Serialize()).
 			SetMinSigners(2).
 			SetCoordinatorIndex(1).
 			Save(authenticatedCtx)
@@ -875,14 +874,9 @@ func TestPreimageSwapAuthorizationBugRegression(t *testing.T) {
 		require.NoError(t, err)
 
 		// First, let's create a transaction that will match our destination pubkey
-		// Let's use Go code to generate the correct P2TR script for our test pubkey
-		testDestinationPubkey := []byte{0x02, 0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC, 0x55, 0xA0, 0x62, 0x95, 0xCE, 0x87, 0x0B, 0x07, 0x02, 0x9B, 0xFC, 0xDB, 0x2D, 0xCE, 0x28, 0xD9, 0x59, 0xF2, 0x81, 0x5B, 0x16, 0xF8, 0x17, 0x98}
+		destPubkey := wrongKey
 
-		// Parse the pubkey and generate the correct P2TR script
-		destPubkey, err := secp256k1.ParsePubKey(testDestinationPubkey)
-		require.NoError(t, err)
-
-		correctScript, err := common.P2TRScriptFromPubKey(destPubkey)
+		correctScript, err := common.P2TRScriptFromPubKey(destPubkey.ToBTCEC())
 		require.NoError(t, err)
 
 		// Create a minimal transaction with the correct P2TR output script
@@ -928,7 +922,7 @@ func TestPreimageSwapAuthorizationBugRegression(t *testing.T) {
 			[]*pb.UserSignedTxSigningJob{},
 			[]*pb.UserSignedTxSigningJob{},
 			&pb.InvoiceAmount{ValueSats: 1000},
-			testDestinationPubkey,
+			wrongKey.Serialize(),
 			0,
 			pb.InitiatePreimageSwapRequest_REASON_SEND,
 			true, // validateNodeOwnership = true

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	pb "github.com/lightsparkdev/spark/proto/spark_authn_internal"
 	"google.golang.org/protobuf/proto"
 )
@@ -52,18 +54,18 @@ type SessionTokenCreatorVerifier struct {
 
 // NewSessionTokenCreatorVerifier creates a new SessionTokenCreatorVerifier.
 // If the clock is nil, it will use the real clock.
-func NewSessionTokenCreatorVerifier(identityPrivateKey []byte, clock Clock) (*SessionTokenCreatorVerifier, error) {
+func NewSessionTokenCreatorVerifier(identityPrivateKey keys.Private, clock Clock) (*SessionTokenCreatorVerifier, error) {
 	if clock == nil {
 		clock = RealClock{}
 	}
 
-	if len(identityPrivateKey) == 0 {
+	if identityPrivateKey == (keys.Private{}) {
 		return nil, ErrInvalidIdentityKey
 	}
 
 	// Derive session HMAC key from identity key
 	h := sha256.New()
-	h.Write(identityPrivateKey)
+	h.Write(identityPrivateKey.Serialize())
 	h.Write([]byte(sessionSecretConstant))
 	sessionHmacKey := h.Sum(nil)
 

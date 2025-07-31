@@ -72,9 +72,9 @@ func (h *InternalDepositHandler) MarkKeyshareForDepositAddress(ctx context.Conte
 
 	logger.Info("Marked keyshare for deposit address", "keyshare_id", req.KeyshareId)
 
-	signingKey := secp256k1.PrivKeyFromBytes(h.config.IdentityPrivateKey)
+	signingKey := h.config.IdentityPrivateKey
 	addrHash := sha256.Sum256([]byte(req.Address))
-	addressSignature := ecdsa.Sign(signingKey, addrHash[:])
+	addressSignature := ecdsa.Sign(signingKey.ToBTCEC(), addrHash[:])
 	return &pbinternal.MarkKeyshareForDepositAddressResponse{
 		AddressSignature: addressSignature.Serialize(),
 	}, nil
@@ -829,7 +829,7 @@ func CreateCompleteSwapForUtxoRequest(config *so.Config, utxo *pb.UTXO) (*pbinte
 	if err != nil {
 		return nil, fmt.Errorf("failed to create utxo swap statement: %w", err)
 	}
-	completedUtxoSwapRequestSignature := ecdsa.Sign(secp256k1.PrivKeyFromBytes(config.IdentityPrivateKey), completedUtxoSwapRequestMessageHash)
+	completedUtxoSwapRequestSignature := ecdsa.Sign(config.IdentityPrivateKey.ToBTCEC(), completedUtxoSwapRequestMessageHash)
 	return &pbinternal.UtxoSwapCompletedRequest{
 		OnChainUtxo:          utxo,
 		Signature:            completedUtxoSwapRequestSignature.Serialize(),
@@ -882,7 +882,7 @@ func CreateCreateSwapForUtxoRequest(config *so.Config, req *pb.InitiateUtxoSwapR
 	if err != nil {
 		return nil, fmt.Errorf("failed to create utxo swap statement: %w", err)
 	}
-	createUtxoSwapRequestSignature := ecdsa.Sign(secp256k1.PrivKeyFromBytes(config.IdentityPrivateKey), createUtxoSwapRequestMessageHash)
+	createUtxoSwapRequestSignature := ecdsa.Sign(config.IdentityPrivateKey.ToBTCEC(), createUtxoSwapRequestMessageHash)
 
 	return &pbinternal.CreateUtxoSwapRequest{
 		Request:              req,
@@ -939,7 +939,7 @@ func (h *InternalDepositHandler) RollbackSwapForAllOperators(ctx context.Context
 	if err != nil {
 		return fmt.Errorf("failed to create rollback utxo swap statement: %w", err)
 	}
-	rollbackUtxoSwapRequestSignature := ecdsa.Sign(secp256k1.PrivKeyFromBytes(config.IdentityPrivateKey), rollbackUtxoSwapRequestMessageHash)
+	rollbackUtxoSwapRequestSignature := ecdsa.Sign(config.IdentityPrivateKey.ToBTCEC(), rollbackUtxoSwapRequestMessageHash)
 	logger.Debug("Rollback utxo swap request signature", "signature", hex.EncodeToString(rollbackUtxoSwapRequestSignature.Serialize()), "txid", hex.EncodeToString(req.OnChainUtxo.Txid), "vout", req.OnChainUtxo.Vout, "network", common.Network(req.OnChainUtxo.Network).String(), "coordinator", config.IdentityPublicKey(), "message_hash", hex.EncodeToString(rollbackUtxoSwapRequestMessageHash))
 	allSelection := helper.OperatorSelection{Option: helper.OperatorSelectionOptionAll}
 	_, err = helper.ExecuteTaskWithAllOperators(ctx, config, &allSelection, func(ctx context.Context, operator *so.SigningOperator) (any, error) {

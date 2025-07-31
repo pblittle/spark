@@ -1,16 +1,20 @@
 package authninternal
 
 import (
+	"math/rand/v2"
 	"testing"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+var seededRand = rand.NewChaCha8([32]byte{})
+
 func TestSessionTokenCreatorVerifier_VerifyToken_InvalidBase64(t *testing.T) {
-	identityKey, _ := secp256k1.GeneratePrivateKey()
-	verifier, err := NewSessionTokenCreatorVerifier(identityKey.Serialize(), RealClock{})
+	identityKey := keys.MustGeneratePrivateKeyFromRand(seededRand)
+	verifier, err := NewSessionTokenCreatorVerifier(identityKey, RealClock{})
 	require.NoError(t, err)
 
 	session, err := verifier.VerifyToken("not-base64!@#$")
@@ -20,8 +24,8 @@ func TestSessionTokenCreatorVerifier_VerifyToken_InvalidBase64(t *testing.T) {
 }
 
 func TestSessionTokenCreatorVerifier_VerifyToken_ValidBase64InvalidProtobuf(t *testing.T) {
-	identityKey, _ := secp256k1.GeneratePrivateKey()
-	verifier, err := NewSessionTokenCreatorVerifier(identityKey.Serialize(), RealClock{})
+	identityKey := keys.MustGeneratePrivateKeyFromRand(seededRand)
+	verifier, err := NewSessionTokenCreatorVerifier(identityKey, RealClock{})
 	require.NoError(t, err)
 
 	session, err := verifier.VerifyToken("SGVsbG8gV29ybGQ=") // "Hello World" in base64

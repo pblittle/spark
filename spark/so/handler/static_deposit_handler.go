@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/common/logging"
@@ -78,7 +77,7 @@ func GenerateRollbackStaticDepositUtxoSwapForUtxoRequest(ctx context.Context, co
 	if err != nil {
 		return nil, fmt.Errorf("failed to create utxo swap statement: %w", err)
 	}
-	rollbackUtxoSwapRequestSignature := ecdsa.Sign(secp256k1.PrivKeyFromBytes(config.IdentityPrivateKey), rollbackUtxoSwapRequestMessageHash)
+	rollbackUtxoSwapRequestSignature := ecdsa.Sign(config.IdentityPrivateKey.ToBTCEC(), rollbackUtxoSwapRequestMessageHash)
 	logger.Debug("Rollback utxo swap request signature", "signature", hex.EncodeToString(rollbackUtxoSwapRequestSignature.Serialize()), "txid", hex.EncodeToString(utxo.Txid), "vout", utxo.Vout, "network", common.Network(utxo.Network).String(), "coordinator", config.IdentityPublicKey(), "message_hash", hex.EncodeToString(rollbackUtxoSwapRequestMessageHash))
 	return &pbinternal.RollbackUtxoSwapRequest{
 		OnChainUtxo:          utxo,
@@ -265,7 +264,7 @@ func GenerateCreateStaticDepositUtxoRefundRequest(ctx context.Context, config *s
 	if err != nil {
 		return nil, fmt.Errorf("failed to create utxo swap statement: %w", err)
 	}
-	createUtxoSwapRequestSignature := ecdsa.Sign(secp256k1.PrivKeyFromBytes(config.IdentityPrivateKey), createUtxoSwapRequestMessageHash)
+	createUtxoSwapRequestSignature := ecdsa.Sign(config.IdentityPrivateKey.ToBTCEC(), createUtxoSwapRequestMessageHash)
 
 	return &pbinternal.CreateStaticDepositUtxoRefundRequest{
 		Request:              req,
