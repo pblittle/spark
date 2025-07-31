@@ -48,7 +48,7 @@ export class WalletConfigService
 
   public getCoordinatorAddress(): string {
     const coordinator =
-      this.config.signingOperators[this.config.coodinatorIdentifier];
+      this.config.signingOperators[this.config.coordinatorIdentifier];
     if (!coordinator) {
       throw new ConfigurationError(
         "Coordinator not found in signing operators",
@@ -73,7 +73,7 @@ export class WalletConfigService
   }
 
   public getCoordinatorIdentifier(): string {
-    return this.config.coodinatorIdentifier;
+    return this.config.coordinatorIdentifier;
   }
 
   public getExpectedWithdrawBondSats(): number {

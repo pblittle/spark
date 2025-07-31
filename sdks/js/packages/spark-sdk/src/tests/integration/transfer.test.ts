@@ -592,7 +592,7 @@ describe.each(walletTypes)(
           await SparkWalletTesting.initialize({
             options: {
               ...WalletConfig.LOCAL,
-              coodinatorIdentifier: soToRemove,
+              coordinatorIdentifier: soToRemove,
             },
             mnemonicOrSeed: mnemonic,
             signer: new Signer(),

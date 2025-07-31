@@ -141,7 +141,7 @@ export type ConfigOptions = MayHaveLrc20WalletApiConfig &
   MayHaveSspClientOptions & {
     readonly network?: NetworkType;
     readonly signingOperators?: Readonly<Record<string, SigningOperator>>;
-    readonly coodinatorIdentifier?: string;
+    readonly coordinatorIdentifier?: string;
     readonly frostSignerAddress?: string;
     readonly lrc20Address?: string;
     readonly threshold?: number;
@@ -175,7 +175,7 @@ function getLocalFrostSignerAddress(): string {
 const BASE_CONFIG: Required<ConfigOptions> = {
   network: "LOCAL",
   lrc20Address: getLrc20Url("LOCAL"),
-  coodinatorIdentifier:
+  coordinatorIdentifier:
     "0000000000000000000000000000000000000000000000000000000000000001",
   frostSignerAddress: getLocalFrostSignerAddress(),
   threshold: 2,
