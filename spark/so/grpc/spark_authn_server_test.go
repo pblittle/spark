@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"math/rand/v2"
 	"testing"
 	"time"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,7 +24,8 @@ import (
 )
 
 var (
-	testIdentityKey, _   = secp256k1.GeneratePrivateKey()
+	seededRand           = rand.NewChaCha8([32]byte{1})
+	testIdentityKey      = keys.MustGeneratePrivateKeyFromRand(seededRand)
 	testIdentityKeyBytes = testIdentityKey.Serialize()
 )
 
@@ -101,10 +104,9 @@ func TestGetChallenge_InvalidPublicKey(t *testing.T) {
 func TestVerifyChallenge_ValidToken(t *testing.T) {
 	clock := authninternal.NewTestClock(time.Now())
 	server, tokenVerifier := newTestServerAndTokenVerifier(t, withClock(clock))
-	privKey, pubKey := createTestKeyPair()
-
+	privKey := keys.MustGeneratePrivateKeyFromRand(seededRand)
 	challengeResp, signature := createSignedChallenge(t, server, privKey)
-	verifyResp := verifyChallenge(t, server, challengeResp, pubKey, signature)
+	verifyResp := verifyChallenge(t, server, challengeResp, privKey.Public(), signature)
 
 	assert.NotNil(t, verifyResp)
 	assert.NotEmpty(t, verifyResp.SessionToken)
@@ -123,28 +125,28 @@ func TestVerifyChallenge_ValidToken(t *testing.T) {
 
 	session, err := authn.GetSessionFromContext(capturedCtx)
 	require.NoError(t, err)
-	assert.Equal(t, session.IdentityPublicKey(), pubKey)
-	assert.Equal(t, session.IdentityPublicKeyBytes(), pubKey.SerializeCompressed())
+	assert.Equal(t, session.IdentityPublicKey(), privKey.Public())
 	assert.Equal(t, session.ExpirationTimestamp(), clock.Now().Add(testSessionDuration).Unix())
 }
 
 func TestVerifyChallenge_InvalidSignature(t *testing.T) {
 	server, _ := newTestServerAndTokenVerifier(t)
-	privKey, pubKey := createTestKeyPair()
+	privKey := keys.MustGeneratePrivateKeyFromRand(seededRand)
+	pubKey := privKey.Public()
 
 	challengeResp, _ := createSignedChallenge(t, server, privKey)
 
-	wrongPrivKey, _ := createTestKeyPair()
+	wrongPrivKey := keys.MustGeneratePrivateKeyFromRand(seededRand)
 	challengeBytes, _ := proto.Marshal(challengeResp.ProtectedChallenge.Challenge)
 	hash := sha256.Sum256(challengeBytes)
-	wrongSignature := ecdsa.Sign(wrongPrivKey, hash[:])
+	wrongSignature := ecdsa.Sign(wrongPrivKey.ToBTCEC(), hash[:])
 
 	resp, err := server.VerifyChallenge(
 		context.Background(),
 		&pb.VerifyChallengeRequest{
 			ProtectedChallenge: challengeResp.ProtectedChallenge,
 			Signature:          wrongSignature.Serialize(),
-			PublicKey:          pubKey.SerializeCompressed(),
+			PublicKey:          pubKey.Serialize(),
 		},
 	)
 
@@ -155,10 +157,10 @@ func TestVerifyChallenge_InvalidSignature(t *testing.T) {
 func TestVerifyChallenge_ExpiredSessionToken(t *testing.T) {
 	clock := authninternal.NewTestClock(time.Now())
 	server, tokenVerifier := newTestServerAndTokenVerifier(t, withClock(clock))
-	privKey, pubKey := createTestKeyPair()
+	privKey := keys.MustGeneratePrivateKeyFromRand(seededRand)
 
 	challengeResp, signature := createSignedChallenge(t, server, privKey)
-	resp := verifyChallenge(t, server, challengeResp, pubKey, signature)
+	resp := verifyChallenge(t, server, challengeResp, privKey.Public(), signature)
 
 	clock.Advance(testSessionDuration + time.Second)
 
@@ -180,7 +182,7 @@ func TestVerifyChallenge_ExpiredSessionToken(t *testing.T) {
 func TestVerifyChallenge_ExpiredChallenge(t *testing.T) {
 	clock := authninternal.NewTestClock(time.Now())
 	server, _ := newTestServerAndTokenVerifier(t, withClock(clock))
-	privKey, pubKey := createTestKeyPair()
+	privKey := keys.MustGeneratePrivateKeyFromRand(seededRand)
 
 	challengeResp, signature := createSignedChallenge(t, server, privKey)
 
@@ -191,7 +193,7 @@ func TestVerifyChallenge_ExpiredChallenge(t *testing.T) {
 		&pb.VerifyChallengeRequest{
 			ProtectedChallenge: challengeResp.ProtectedChallenge,
 			Signature:          signature,
-			PublicKey:          pubKey.SerializeCompressed(),
+			PublicKey:          privKey.Public().Serialize(),
 		},
 	)
 
@@ -201,10 +203,10 @@ func TestVerifyChallenge_ExpiredChallenge(t *testing.T) {
 
 func TestVerifyChallenge_TamperedToken(t *testing.T) {
 	server, tokenVerifier := newTestServerAndTokenVerifier(t)
-	privKey, pubKey := createTestKeyPair()
+	privKey := keys.MustGeneratePrivateKeyFromRand(seededRand)
 
 	challengeResp, signature := createSignedChallenge(t, server, privKey)
-	verifyResp := verifyChallenge(t, server, challengeResp, pubKey, signature)
+	verifyResp := verifyChallenge(t, server, challengeResp, privKey.Public(), signature)
 
 	sessionToken := verifyResp.SessionToken
 	protectedBytes, _ := base64.URLEncoding.DecodeString(sessionToken)
@@ -265,17 +267,17 @@ func TestVerifyChallenge_TamperedToken(t *testing.T) {
 func TestVerifyChallenge_ReusedChallenge(t *testing.T) {
 	clock := authninternal.NewTestClock(time.Now())
 	server, _ := newTestServerAndTokenVerifier(t, withClock(clock))
-	privKey, pubKey := createTestKeyPair()
+	privKey := keys.MustGeneratePrivateKeyFromRand(seededRand)
 
 	challengeResp, signature := createSignedChallenge(t, server, privKey)
 
-	verifyResp := verifyChallenge(t, server, challengeResp, pubKey, signature)
+	verifyResp := verifyChallenge(t, server, challengeResp, privKey.Public(), signature)
 	assert.NotNil(t, verifyResp)
 	assert.NotEmpty(t, verifyResp.SessionToken)
 
 	_, err := server.VerifyChallenge(context.Background(), &pb.VerifyChallengeRequest{
 		ProtectedChallenge: challengeResp.ProtectedChallenge,
-		PublicKey:          pubKey.SerializeCompressed(),
+		PublicKey:          privKey.Public().Serialize(),
 		Signature:          signature,
 	})
 	assert.ErrorIs(t, err, ErrChallengeReused)
@@ -297,7 +299,8 @@ func TestVerifyChallenge_CacheExpiration(t *testing.T) {
 	server, err := NewAuthnServer(config, tokenVerifier)
 	require.NoError(t, err)
 
-	privKey, pubKey := createTestKeyPair()
+	privKey := keys.MustGeneratePrivateKeyFromRand(seededRand)
+	pubKey := privKey.Public()
 	challengeResp, signature := createSignedChallenge(t, server, privKey)
 
 	verifyResp := verifyChallenge(t, server, challengeResp, pubKey, signature)
@@ -306,7 +309,7 @@ func TestVerifyChallenge_CacheExpiration(t *testing.T) {
 
 	_, err = server.VerifyChallenge(context.Background(), &pb.VerifyChallengeRequest{
 		ProtectedChallenge: challengeResp.ProtectedChallenge,
-		PublicKey:          pubKey.SerializeCompressed(),
+		PublicKey:          pubKey.Serialize(),
 		Signature:          signature,
 	})
 	require.ErrorIs(t, err, ErrChallengeReused)
@@ -316,22 +319,17 @@ func TestVerifyChallenge_CacheExpiration(t *testing.T) {
 
 	_, err = server.VerifyChallenge(context.Background(), &pb.VerifyChallengeRequest{
 		ProtectedChallenge: challengeResp.ProtectedChallenge,
-		PublicKey:          pubKey.SerializeCompressed(),
+		PublicKey:          pubKey.Serialize(),
 		Signature:          signature,
 	})
 	require.ErrorIs(t, err, ErrChallengeExpired)
 }
 
-func createTestKeyPair() (*secp256k1.PrivateKey, *secp256k1.PublicKey) {
-	privKey, _ := secp256k1.GeneratePrivateKey()
-	return privKey, privKey.PubKey()
-}
-
-func createSignedChallenge(t *testing.T, server *AuthnServer, privKey *secp256k1.PrivateKey) (*pb.GetChallengeResponse, []byte) {
-	pubKey := privKey.PubKey()
+func createSignedChallenge(t *testing.T, server *AuthnServer, privKey keys.Private) (*pb.GetChallengeResponse, []byte) {
+	pubKey := privKey.Public()
 
 	challengeResp, err := server.GetChallenge(context.Background(), &pb.GetChallengeRequest{
-		PublicKey: pubKey.SerializeCompressed(),
+		PublicKey: pubKey.Serialize(),
 	})
 	require.NoError(t, err)
 
@@ -339,18 +337,18 @@ func createSignedChallenge(t *testing.T, server *AuthnServer, privKey *secp256k1
 	require.NoError(t, err)
 
 	hash := sha256.Sum256(challengeBytes)
-	signature := ecdsa.Sign(privKey, hash[:])
+	signature := ecdsa.Sign(privKey.ToBTCEC(), hash[:])
 
 	return challengeResp, signature.Serialize()
 }
 
-func verifyChallenge(t *testing.T, server *AuthnServer, challengeResp *pb.GetChallengeResponse, pubKey *secp256k1.PublicKey, signature []byte) *pb.VerifyChallengeResponse {
+func verifyChallenge(t *testing.T, server *AuthnServer, challengeResp *pb.GetChallengeResponse, pubKey keys.Public, signature []byte) *pb.VerifyChallengeResponse {
 	resp, err := server.VerifyChallenge(
 		context.Background(),
 		&pb.VerifyChallengeRequest{
 			ProtectedChallenge: challengeResp.ProtectedChallenge,
 			Signature:          signature,
-			PublicKey:          pubKey.SerializeCompressed(),
+			PublicKey:          pubKey.Serialize(),
 		},
 	)
 	require.NoError(t, err)
@@ -369,8 +367,8 @@ func assertNoSessionInContext(ctx context.Context, t *testing.T) {
 
 	require.NoError(t, err)
 	noSession, err := authn.GetSessionFromContext(capturedCtx)
+	require.Error(t, err)
 	assert.Nil(t, noSession)
-	assert.Error(t, err)
 }
 
 func newTestTokenVerifier(t *testing.T) *authninternal.SessionTokenCreatorVerifier {

@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightsparkdev/spark/common/logging"
 	"github.com/lightsparkdev/spark/so/authninternal"
 )
@@ -29,13 +30,13 @@ type Context struct {
 
 // Session represents the session information to be used within the product.
 type Session struct {
-	identityPublicKey      *secp256k1.PublicKey
+	identityPublicKey      keys.Public
 	identityPublicKeyBytes []byte
 	expirationTimestamp    int64
 }
 
 // IdentityPublicKey returns the public key
-func (s *Session) IdentityPublicKey() *secp256k1.PublicKey {
+func (s *Session) IdentityPublicKey() keys.Public {
 	return s.identityPublicKey
 }
 
@@ -116,7 +117,7 @@ func (i *Interceptor) authenticateContext(ctx context.Context) context.Context {
 		})
 	}
 
-	key, err := secp256k1.ParsePubKey(sessionInfo.PublicKey)
+	key, err := keys.ParsePublicKey(sessionInfo.PublicKey)
 	if err != nil {
 		wrappedErr := fmt.Errorf("failed to parse public key: %w", err)
 		logger.Info("Authentication error", "error", wrappedErr)
