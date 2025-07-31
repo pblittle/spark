@@ -705,6 +705,14 @@ func handleBlock(
 				continue
 			}
 			if len(treeNode.RawRefundTx) > 0 {
+				tx, err := common.TxFromRawTxBytes(treeNode.RawRefundTx)
+				if err != nil {
+					return err
+				}
+				if !tx.HasWitness() {
+					logger.Debug("Tree node has not been signed", "node", treeNode.ID)
+					continue
+				}
 				_, err = dbTx.TreeNode.UpdateOne(treeNode).
 					SetStatus(st.TreeNodeStatusAvailable).
 					Save(ctx)
