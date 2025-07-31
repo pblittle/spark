@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/stretchr/testify/assert"
 )
 
 // Helper function to create a point from a scalar (g^scalar)
@@ -237,30 +238,33 @@ func TestThresholdSecretSharing(t *testing.T) {
 	}
 }
 
-// Test edge cases and error conditions
-func TestPolynomialEdgeCases(t *testing.T) {
-	// Test empty polynomial
+func TestScalarPolynomialEmpty(t *testing.T) {
 	emptyPoly := &ScalarPolynomial{Coefs: []*secp256k1.ModNScalar{}}
-	x := scalarFromInt(5)
-	result := emptyPoly.Eval(x)
-	zero := scalarFromInt(0)
+	assert.Equal(t, scalarFromInt(0), emptyPoly.Eval(scalarFromInt(5)))
+}
 
-	if !result.Equals(zero) {
-		t.Errorf("Empty polynomial should evaluate to zero")
-	}
+func TestPointPolynomialEmpty(t *testing.T) {
+	emptyPoly := &PointPolynomial{Coefs: []*secp256k1.JacobianPoint{}}
 
-	// Test single point interpolation
-	singlePoint := []*ScalarEval{
+	var zeroPoint secp256k1.JacobianPoint
+	assert.True(t, PointEqual(emptyPoly.Eval(scalarFromInt(5)), &zeroPoint), "empty point polynomial should evaluate to zero")
+}
+
+func TestScalarPolynomialSingeton(t *testing.T) {
+	singleton := []*ScalarEval{
 		{X: scalarFromInt(5), Y: scalarFromInt(42)},
 	}
 
-	// This should reconstruct a constant polynomial
-	reconstructed := ReconstructScalar(singlePoint)
-	expected := scalarFromInt(42)
+	assert.Equal(t, scalarFromInt(42), ReconstructScalar(singleton), "single eval interpolation failed")
+}
 
-	if !reconstructed.Equals(expected) {
-		t.Errorf("Single point interpolation failed")
+func TestPointPolynomialSingleton(t *testing.T) {
+	height := pointFromScalar(scalarFromInt(42))
+	singleton := []*PointEval{
+		{X: scalarFromInt(5), Y: height},
 	}
+
+	assert.True(t, PointEqual(height, ReconstructPoint(singleton)), "single eval interpolation failed")
 }
 
 // Test Lagrange basis function
