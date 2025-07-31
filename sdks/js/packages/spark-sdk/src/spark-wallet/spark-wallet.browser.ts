@@ -33,30 +33,40 @@ export class SparkWalletBrowser extends BaseSparkWallet {
 
   protected initializeTracerEnv({
     spanProcessors,
+    traceUrls,
   }: Parameters<BaseSparkWallet["initializeTracerEnv"]>[0]) {
-    const provider = new WebTracerProvider({ spanProcessors });
-    provider.register();
-
-    propagation.setGlobalPropagator(new W3CTraceContextPropagator());
-
-    const otelTraceUrls = this.getOtelTraceUrls();
-    registerInstrumentations({
-      instrumentations: [
-        new FetchInstrumentation({
-          ignoreUrls: [
-            /* Since we're wrapping global fetch we should be careful to avoid
-               adding headers for unrelated requests */
-            new RegExp(
-              `^(?!(${otelTraceUrls
-                .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-                .join("|")}))`,
-            ),
-          ],
-          propagateTraceHeaderCorsUrls: /.*/,
-        }),
-      ],
-    });
+    initializeTracerEnvBrowser({ spanProcessors, traceUrls });
   }
 }
 
-export { SparkWalletBrowser as SparkWallet };
+export function initializeTracerEnvBrowser({
+  spanProcessors,
+  traceUrls,
+}: Parameters<BaseSparkWallet["initializeTracerEnv"]>[0]) {
+  const provider = new WebTracerProvider({ spanProcessors });
+  provider.register();
+
+  propagation.setGlobalPropagator(new W3CTraceContextPropagator());
+
+  registerInstrumentations({
+    instrumentations: [
+      new FetchInstrumentation({
+        ignoreUrls: [
+          /* Since we're wrapping global fetch we should be careful to avoid
+             adding headers for unrelated requests */
+          new RegExp(
+            `^(?!(${traceUrls
+              .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+              .join("|")}))`,
+          ),
+        ],
+        propagateTraceHeaderCorsUrls: /.*/,
+      }),
+    ],
+  });
+}
+
+export {
+  SparkWalletBrowser as SparkWallet,
+  initializeTracerEnvBrowser as initializeTracerEnv,
+};

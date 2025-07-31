@@ -229,7 +229,7 @@ export class SparkWallet extends EventEmitter {
     );
 
     this.tracer = trace.getTracer(this.tracerId);
-    this.wrapSparkWalletWithTracing();
+    this.wrapSparkWalletMethodsWithTracing();
   }
 
   public static async initialize({
@@ -4434,13 +4434,16 @@ export class SparkWallet extends EventEmitter {
       console.log("OpenTelemetry client logging enabled.");
       spanProcessors.push(new SimpleSpanProcessor(new ConsoleSpanExporter()));
     }
-    wallet.initializeTracerEnv({ spanProcessors });
+    const traceUrls = this.getOtelTraceUrls();
+    wallet.initializeTracerEnv({ spanProcessors, traceUrls });
   }
 
   protected initializeTracerEnv({
     spanProcessors,
+    traceUrls,
   }: {
     spanProcessors: SpanProcessor[];
+    traceUrls: string[];
   }) {
     /* This needs to be implemented differently depending on platform due to
        incompatible dependencies in both */
@@ -4474,11 +4477,11 @@ export class SparkWallet extends EventEmitter {
     };
   }
 
-  private getTraceName(methodName: string) {
+  protected getTraceName(methodName: string) {
     return `SparkWallet.${methodName}`;
   }
 
-  private wrapPublicMethodsWithOtelSpan<M extends keyof SparkWallet>(
+  private wrapPublicSparkWalletMethodsWithOtelSpan<M extends keyof SparkWallet>(
     methodName: M,
   ) {
     const original = this[methodName];
@@ -4495,7 +4498,7 @@ export class SparkWallet extends EventEmitter {
     (this as SparkWallet)[methodName] = wrapped;
   }
 
-  private wrapSparkWalletWithTracing() {
+  private wrapSparkWalletMethodsWithTracing() {
     const methods = [
       "getLeaves",
       "getIdentityPublicKey",
@@ -4531,7 +4534,7 @@ export class SparkWallet extends EventEmitter {
       "testOnly_expireTimelock",
     ] as const;
 
-    methods.forEach((m) => this.wrapPublicMethodsWithOtelSpan(m));
+    methods.forEach((m) => this.wrapPublicSparkWalletMethodsWithOtelSpan(m));
 
     /* Private methods can't be indexed on `this` and need to be wrapped individually: */
     this.initWallet = this.wrapWithOtelSpan(

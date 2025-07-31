@@ -57,60 +57,14 @@ export class IssuerSparkWallet extends SparkWallet {
     options,
   }: SparkWalletProps) {
     const wallet = new IssuerSparkWallet(options, signer);
+    wallet.initializeTracer(wallet);
 
     const initResponse = await wallet.initWallet(mnemonicOrSeed, accountNumber);
-
-    if (isNode) {
-      wallet.wrapIssuerSparkWalletWithTracing();
-    }
 
     return {
       wallet,
       ...initResponse,
     };
-  }
-
-  private wrapIssuerSparkWalletWithTracing() {
-    this.getIssuerTokenBalance = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.getIssuerTokenBalance",
-      this.getIssuerTokenBalance.bind(this),
-    );
-    this.getIssuerTokenMetadata = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.getIssuerTokenMetadata",
-      this.getIssuerTokenMetadata.bind(this),
-    );
-    this.getIssuerTokenIdentifier = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.getIssuerTokenIdentifier",
-      this.getIssuerTokenIdentifier.bind(this),
-    );
-    this.createToken = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.createToken",
-      this.createToken.bind(this),
-    );
-    this.mintTokens = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.mintTokens",
-      this.mintTokens.bind(this),
-    );
-    this.burnTokens = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.burnTokens",
-      this.burnTokens.bind(this),
-    );
-    this.freezeTokens = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.freezeTokens",
-      this.freezeTokens.bind(this),
-    );
-    this.unfreezeTokens = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.unfreezeTokens",
-      this.unfreezeTokens.bind(this),
-    );
-    this.getIssuerTokenDistribution = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.getIssuerTokenDistribution",
-      this.getIssuerTokenDistribution.bind(this),
-    );
-    this.announceTokenL1 = this.wrapWithOtelSpan(
-      "SparkIssuerWallet.announceTokenL1",
-      this.announceTokenL1.bind(this),
-    );
   }
 
   protected constructor(configOptions?: ConfigOptions, signer?: SparkSigner) {
@@ -123,6 +77,7 @@ export class IssuerSparkWallet extends SparkWallet {
       this.config,
       this.connectionManager,
     );
+    this.wrapIssuerSparkWalletMethodsWithTracing();
   }
 
   /**
@@ -497,5 +452,47 @@ export class IssuerSparkWallet extends SparkWallet {
         },
       );
     }
+  }
+
+  protected getTraceName(methodName: string) {
+    return `SparkIssuerWallet.${methodName}`;
+  }
+
+  private wrapPublicIssuerSparkWalletMethodsWithOtelSpan<
+    M extends keyof IssuerSparkWallet,
+  >(methodName: M) {
+    const original = this[methodName];
+
+    if (typeof original !== "function") {
+      throw new Error(
+        `Method ${methodName} is not a function on IssuerSparkWallet.`,
+      );
+    }
+
+    const wrapped = this.wrapWithOtelSpan(
+      this.getTraceName(methodName),
+      original.bind(this) as (...args: unknown[]) => Promise<unknown>,
+    ) as IssuerSparkWallet[M];
+
+    (this as IssuerSparkWallet)[methodName] = wrapped;
+  }
+
+  private wrapIssuerSparkWalletMethodsWithTracing() {
+    const methods = [
+      "getIssuerTokenBalance",
+      "getIssuerTokenMetadata",
+      "getIssuerTokenIdentifier",
+      "createToken",
+      "mintTokens",
+      "burnTokens",
+      "freezeTokens",
+      "unfreezeTokens",
+      "getIssuerTokenDistribution",
+      "announceTokenL1",
+    ] as const;
+
+    methods.forEach((m) =>
+      this.wrapPublicIssuerSparkWalletMethodsWithOtelSpan(m),
+    );
   }
 }

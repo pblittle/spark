@@ -1,2 +1,2 @@
-export * from "./issuer-wallet/issuer-spark-wallet.js";
+export { IssuerSparkWalletBrowser as IssuerSparkWallet } from "./issuer-wallet/issuer-spark-wallet.browser.js";
 export * from "./issuer-wallet/types.js";

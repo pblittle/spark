@@ -9,8 +9,26 @@
   "homepage": "https://github.com/buildonspark/spark",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "node": {
+          "types": "./dist/index.node.d.ts",
+          "default": "./dist/index.node.js"
+        },
+        "default": {
+          "types": "./dist/index.d.ts",
+          "default": "./dist/index.js"
+        }
+      },
+      "require": {
+        "node": {
+          "types": "./dist/index.node.d.cts",
+          "default": "./dist/index.node.cjs"
+        },
+        "default": {
+          "types": "./dist/index.d.cts",
+          "default": "./dist/index.cjs"
+        }
+      }
     },
     "./proto/spark": {
       "import": "./dist/proto/spark.js",

@@ -7,7 +7,7 @@ import { jest } from "@jest/globals";
 import { IssuerSparkWalletTesting } from "../utils/issuer-test-wallet.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "@buildonspark/spark-sdk/test-utils";
-import { IssuerSparkWallet } from "../../index.js";
+import { IssuerSparkWallet } from "../../issuer-wallet/issuer-spark-wallet.node.js";
 
 export const TOKENS_V0_SCHNORR_CONFIG: Required<ConfigOptions> = {
   ...WalletConfig.LOCAL,

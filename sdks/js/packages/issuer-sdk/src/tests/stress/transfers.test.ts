@@ -1,4 +1,4 @@
-import { IssuerSparkWallet } from "../../issuer-wallet/issuer-spark-wallet.js";
+import { IssuerSparkWallet } from "../../issuer-wallet/issuer-spark-wallet.node.js";
 import { jest } from "@jest/globals";
 import {
   SparkWallet,
