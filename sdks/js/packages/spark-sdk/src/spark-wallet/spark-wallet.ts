@@ -4414,6 +4414,19 @@ export class SparkWallet extends EventEmitter {
     }
   }
 
+  protected getOtelTraceUrls() {
+    const soConfig = this.config.getSigningOperators();
+    const sspBaseUrl = this.config.getSspBaseUrl();
+    const domains: string[] = [];
+    Object.values(soConfig).forEach((so) => {
+      domains.push(so.address);
+    });
+    if (sspBaseUrl) {
+      domains.push(sspBaseUrl);
+    }
+    return domains;
+  }
+
   protected initializeTracer(wallet: SparkWallet) {
     const consoleOptions = wallet.config.getConsoleOptions();
     const spanProcessors: SpanProcessor[] = [];

@@ -125,6 +125,10 @@ export class WalletConfigService
     return this.config.electrsUrl;
   }
 
+  public getSspBaseUrl(): string {
+    return this.config.sspClientOptions.baseUrl;
+  }
+
   public getSspIdentityPublicKey(): string {
     return this.config.sspClientOptions.identityPublicKey;
   }

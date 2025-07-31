@@ -15,7 +15,6 @@ import {
   ConsoleSpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { otelTraceDomains } from "../constants.js";
 import { SparkWalletProps } from "./types.js";
 
 export class SparkWalletNodeJS extends BaseSparkWallet {
@@ -45,6 +44,7 @@ export class SparkWalletNodeJS extends BaseSparkWallet {
       propagator: new W3CTraceContextPropagator(),
     });
 
+    const otelTraceUrls = this.getOtelTraceUrls();
     registerInstrumentations({
       instrumentations: [
         new UndiciInstrumentation({
@@ -55,8 +55,8 @@ export class SparkWalletNodeJS extends BaseSparkWallet {
             /* Since we're wrapping global fetch we should be careful to avoid
                adding headers or causing errors for unrelated requests */
             try {
-              return !otelTraceDomains.some((prefix) =>
-                request.origin.startsWith(`https://${prefix}`),
+              return !otelTraceUrls.some((prefix) =>
+                request.origin.startsWith(prefix),
               );
             } catch {
               return true;
