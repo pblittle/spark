@@ -343,7 +343,11 @@ export class BitcoinFaucet {
     return getP2TRAddressFromPublicKey(pubKey, Network.LOCAL);
   }
 
-  async sendToAddress(address: string, amount: bigint): Promise<Transaction> {
+  async sendToAddress(
+    address: string,
+    amount: bigint,
+    blocksToGenerate: number = 1,
+  ): Promise<Transaction> {
     const coin = await this.fund();
     if (!coin) {
       throw new Error("No coins available");
@@ -388,7 +392,7 @@ export class BitcoinFaucet {
       Network.LOCAL,
     );
 
-    await this.generateToAddress(1, randomAddress);
+    await this.generateToAddress(blocksToGenerate, randomAddress);
 
     return signedTx;
   }

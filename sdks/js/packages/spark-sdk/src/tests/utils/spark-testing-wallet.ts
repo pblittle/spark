@@ -3,6 +3,9 @@ import { ConfigOptions } from "../../services/wallet-config.js";
 import { SparkSigner } from "../../signer/signer.js";
 import { SparkWallet } from "../../spark-wallet/spark-wallet.node.js";
 import type { SparkWalletProps } from "../../spark-wallet/types.js";
+import { BitcoinFaucet } from "./test-faucet.js";
+import { Transaction } from "@scure/btc-signer";
+import { NetworkType } from "../../index.node.js";
 
 interface ISparkWalletTesting extends SparkWallet {
   getSigner(): SparkSigner;
@@ -62,4 +65,43 @@ export class SparkWalletTesting
   ): Promise<Map<string, Uint8Array>> {
     return await this.transferService.verifyPendingTransfer(transfer);
   }
+}
+
+export async function initWallet(
+  amount: bigint,
+  network: NetworkType,
+): Promise<{
+  wallet: SparkWalletTesting;
+  depositAddress: string;
+  signedTx: Transaction;
+  vout?: number;
+  faucet: BitcoinFaucet;
+}> {
+  const faucet = BitcoinFaucet.getInstance();
+  const { wallet: userWallet } = await SparkWalletTesting.initialize(
+    {
+      options: {
+        network: network,
+      },
+    },
+    false,
+  );
+
+  const depositAddress = await userWallet.getStaticDepositAddress();
+
+  const signedTx = await faucet.sendToAddress(depositAddress, amount);
+
+  const outputs = Array.from({ length: signedTx.outputsLength }, (_, i) => ({
+    output: signedTx.getOutput(i),
+    index: i,
+  }));
+  const match = outputs.find(({ output }) => output.amount === amount);
+  const vout = match ? match.index : undefined;
+  return {
+    wallet: userWallet,
+    depositAddress,
+    signedTx,
+    vout,
+    faucet,
+  };
 }

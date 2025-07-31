@@ -1,41 +1,61 @@
 import { describe, expect, it } from "@jest/globals";
 import { ExitSpeed } from "../../../types/index.js";
-import { SparkWalletTesting } from "../../utils/spark-testing-wallet.js";
-import { BitcoinFaucet } from "../../utils/test-faucet.js";
+import {
+  initWallet,
+  SparkWalletTesting,
+} from "../../utils/spark-testing-wallet.js";
+import { getNewAddress } from "../../utils/regtest-test-faucet.js";
+import { ValidationError } from "../../../index.node.js";
 
-const DEPOSIT_AMOUNT = 10_000n;
+export const DEPOSIT_AMOUNT = 30_000n;
 
 describe("SSP coop exit integration", () => {
-  it("should estimate coop exit fee", async () => {
-    const faucet = BitcoinFaucet.getInstance();
+  let userWallet!: SparkWalletTesting;
+  let withdrawalAddress: string;
+  let quoteAmount: number;
 
-    const { wallet: userWallet } = await SparkWalletTesting.initialize(
-      {
-        options: {
-          network: "LOCAL",
-        },
-      },
-      false,
+  beforeEach(async () => {
+    const { wallet, depositAddress, signedTx, vout, faucet } = await initWallet(
+      DEPOSIT_AMOUNT,
+      "LOCAL",
     );
 
-    const depositAddress = await userWallet.getSingleUseDepositAddress();
-    expect(depositAddress).toBeDefined();
+    // Wait for the transaction to be mined
+    await new Promise((resolve) => setTimeout(resolve, 30000));
 
-    const signedTx = await faucet.sendToAddress(depositAddress, DEPOSIT_AMOUNT);
     expect(signedTx).toBeDefined();
-    await faucet.mineBlocks(6);
 
-    await userWallet.claimDeposit(signedTx.id);
+    const transactionId = signedTx.id;
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    userWallet = wallet;
+
+    console.log("Fetching claim quote for static deposit...");
+    const quote = await userWallet.getClaimStaticDepositQuote(
+      transactionId,
+      vout!,
+    );
+
+    quoteAmount = quote!.creditAmountSats;
+    const sspSignature = quote!.signature;
+
+    console.log("Attempting to claim static deposit...");
+    await userWallet.claimStaticDeposit({
+      transactionId,
+      creditAmountSats: quoteAmount,
+      sspSignature,
+      outputIndex: vout!,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 30000));
 
     const { balance } = await userWallet.getBalance();
-    expect(balance).toBe(DEPOSIT_AMOUNT);
+    expect(balance).toBe(BigInt(quoteAmount));
 
-    const withdrawalAddress = await faucet.getNewAddress();
-
+    withdrawalAddress = await getNewAddress();
+  }, 600000);
+  it("should estimate coop exit fee", async () => {
     const feeEstimate = await userWallet.getWithdrawalFeeQuote({
-      amountSats: Number(DEPOSIT_AMOUNT),
+      amountSats: Number(quoteAmount),
       withdrawalAddress,
     });
 
@@ -54,74 +74,73 @@ describe("SSP coop exit integration", () => {
     expect(feeEstimate?.l1BroadcastFeeSlow.originalValue).toBeGreaterThan(0);
     expect(feeEstimate?.userFeeSlow).toBeDefined();
     expect(feeEstimate?.userFeeSlow.originalValue).toBeGreaterThan(0);
-  }, 60000);
+  }, 600000);
 
-  it.skip("should complete coop exit without deducting fees from withdrawal amount", async () => {
-    const faucet = BitcoinFaucet.getInstance();
+  // it("should complete coop exit without deducting fees from withdrawal amount", async () => {
+  //   const { balance } = await userWallet.getBalance();
+  //   expect(balance).toBe(BigInt(quoteAmount));
 
-    const { wallet: userWallet } = await SparkWalletTesting.initialize(
-      {
-        options: {
-          network: "LOCAL",
-        },
-      },
-      false,
-    );
+  //   const feeQuote = await userWallet.getWithdrawalFeeQuote({
+  //     amountSats: 5000,
+  //     withdrawalAddress,
+  //   });
 
-    const depositAddress = await userWallet.getSingleUseDepositAddress();
-    expect(depositAddress).toBeDefined();
+  //   expect(feeQuote).toBeDefined();
 
-    const signedTx = await faucet.sendToAddress(depositAddress, DEPOSIT_AMOUNT);
-    expect(signedTx).toBeDefined();
-    await faucet.mineBlocks(6);
+  //   const coopExit = await userWallet.withdraw({
+  //     amountSats: 5000,
+  //     onchainAddress: withdrawalAddress,
+  //     feeQuote: feeQuote!,
+  //     exitSpeed: ExitSpeed.FAST,
+  //     deductFeeFromWithdrawalAmount: false,
+  //   });
 
-    await userWallet.claimDeposit(signedTx.id);
+  //   const fee =
+  //     (coopExit?.l1BroadcastFee?.originalValue ?? 0) +
+  //     (coopExit?.fee?.originalValue ?? 0);
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  //   expect(fee).toBeGreaterThan(0);
 
-    const { balance } = await userWallet.getBalance();
-    expect(balance).toBe(DEPOSIT_AMOUNT);
+  //   const { balance: balanceAfter } = await userWallet.getBalance();
 
-    const withdrawalAddress = await faucet.getNewAddress();
+  //   expect(balanceAfter).toBe(balance - 5000n - BigInt(fee));
+  //   expect(coopExit).toBeDefined();
+  //   expect(coopExit?.coopExitTxid).toBeDefined();
+  // }, 600000);
 
-    const feeQuote = await userWallet.getWithdrawalFeeQuote({
-      amountSats: 5000,
-      withdrawalAddress,
-    });
+  // it("CoopExit with spent leaves", async () => {
+  //   const { balance } = await userWallet.getBalance();
 
-    expect(feeQuote).toBeDefined();
+  //   const feeQuote = await userWallet.getWithdrawalFeeQuote({
+  //     amountSats: Number(balance),
+  //     withdrawalAddress,
+  //   });
 
-    const coopExit = await userWallet.withdraw({
-      amountSats: 5000,
-      onchainAddress: withdrawalAddress,
-      feeQuote: feeQuote!,
-      exitSpeed: ExitSpeed.FAST,
-      deductFeeFromWithdrawalAmount: false,
-    });
+  //   expect(feeQuote).toBeDefined();
 
-    const fee =
-      (coopExit?.l1BroadcastFee?.originalValue ?? 0) +
-      (coopExit?.fee?.originalValue ?? 0);
+  //   const coopExit = await userWallet.withdraw({
+  //     amountSats: Number(balance),
+  //     onchainAddress: withdrawalAddress,
+  //     feeQuote: feeQuote!,
+  //     exitSpeed: ExitSpeed.FAST,
+  //     deductFeeFromWithdrawalAmount: true,
+  //   });
 
-    expect(fee).toBeGreaterThan(0);
+  //   expect(coopExit).toBeDefined();
+  //   expect(coopExit?.coopExitTxid).toBeDefined();
 
-    const { balance: balanceAfter } = await userWallet.getBalance();
-
-    expect(balanceAfter).toBe(DEPOSIT_AMOUNT - 5000n - BigInt(fee));
-    expect(coopExit).toBeDefined();
-    expect(coopExit?.coopExitTxid).toBeDefined();
-
-    await faucet.mineBlocks(6);
-
-    const deposit = await userWallet.claimDeposit(coopExit!.coopExitTxid);
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    expect(deposit).toBeDefined();
-    expect(deposit?.reduce((acc, leaf) => acc + leaf.value, 0)).toBe(5000);
-
-    const { balance: balance2 } = await userWallet.getBalance();
-
-    expect(balance2).toBe(DEPOSIT_AMOUNT - BigInt(fee));
-  }, 60000);
+  //   const sparkAddress = await userWallet.getSparkAddress();
+  //   await expect(
+  //     userWallet.transfer({
+  //       amountSats: Number(balance),
+  //       receiverSparkAddress: sparkAddress,
+  //     }),
+  //   ).rejects.toMatchObject({
+  //     name: ValidationError.name,
+  //     message: expect.stringContaining("No owned leaves found"),
+  //     context: expect.objectContaining({
+  //       field: "leaves",
+  //     }),
+  //   });
+  // }, 600000);
 });
