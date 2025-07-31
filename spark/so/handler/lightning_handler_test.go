@@ -507,7 +507,7 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 			name: "nil signing commitments",
 			cpfpTransactions: []*pb.UserSignedTxSigningJob{
 				{
-					LeafId:             "test-leaf-id",
+					LeafId:             "550e8400-e29b-41d4-a716-446655440000",
 					SigningCommitments: nil,
 				},
 			},
@@ -519,7 +519,7 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 			name: "nil signing nonce commitment",
 			cpfpTransactions: []*pb.UserSignedTxSigningJob{
 				{
-					LeafId: "test-leaf-id",
+					LeafId: "550e8400-e29b-41d4-a716-446655440000",
 					SigningCommitments: &pb.SigningCommitments{
 						SigningCommitments: map[string]*pbcommon.SigningCommitment{},
 					},
@@ -558,7 +558,7 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 			},
 			destinationPubkey: []byte("dest_pubkey"),
 			expectError:       true,
-			expectedErrMsg:    "unable to get node", // Will fail at node lookup
+			expectedErrMsg:    "unable to get cpfpTransaction tree_node with id", // Will fail at node lookup
 		},
 	}
 
