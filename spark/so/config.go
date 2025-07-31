@@ -123,6 +123,8 @@ type TokenConfig struct {
 	EnableBackfillTokenOutputTask bool `yaml:"enable_backfill_token_output_task"`
 	// EnableBackfillTokenFreezesTokenIdentifierTask enables the backfill token freezes token_identifier task.
 	EnableBackfillTokenFreezesTokenIdentifierTask bool `yaml:"enable_backfill_token_freezes_token_identifier_task"`
+	// EnableDeleteLegacyTokenOutputDataTask enables the delete legacy token output data task.
+	EnableDeleteLegacyTokenOutputDataTask bool `yaml:"enable_delete_legacy_token_output_data_task"`
 }
 
 // OperatorConfig contains the configuration for a signing operator.

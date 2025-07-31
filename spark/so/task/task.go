@@ -733,6 +733,113 @@ func AllStartupTasks() []StartupTaskSpec {
 				},
 			},
 		},
+		{
+			RetryInterval: &backfillTokenOutputInterval,
+			BaseTaskSpec: BaseTaskSpec{
+				Name:         "delete_legacy_token_output_data",
+				RunInTestEnv: true,
+				Task: func(ctx context.Context, config *so.Config) error {
+					logger := logging.GetLoggerFromContext(ctx)
+
+					if !config.Token.EnableDeleteLegacyTokenOutputDataTask {
+						logger.Info("Delete legacy token output data is disabled, skipping")
+						return nil
+					}
+
+					tx, err := ent.GetDbFromContext(ctx)
+					if err != nil {
+						return fmt.Errorf("failed to get or create current tx for request: %w", err)
+					}
+
+					tokenOutputs, err := tx.TokenOutput.Query().
+						Where(
+							tokenoutput.And(
+								tokenoutput.CreateTimeLT(time.Date(2025, time.April, 28, 0, 0, 0, 0, time.UTC)),
+								tokenoutput.TokenIdentifierIsNil(),
+							),
+						).
+						WithOutputCreatedTokenTransaction().
+						WithOutputSpentTokenTransaction().
+						All(ctx)
+					if err != nil {
+						return fmt.Errorf("failed to get token outputs: %w", err)
+					}
+
+					logger.Info("Found legacy token outputs to delete", "count", len(tokenOutputs))
+					if len(tokenOutputs) == 0 {
+						logger.Info("No legacy token outputs found, task complete")
+						return nil
+					}
+
+					var (
+						tokenTransactionIDs []uuid.UUID
+						tokenOutputIDs      []uuid.UUID
+						issuerPubKeys       [][]byte
+					)
+
+					transactionIDSet := make(map[uuid.UUID]bool)
+					issuerPubKeySet := make(map[string][]byte)
+
+					for _, output := range tokenOutputs {
+						tokenOutputIDs = append(tokenOutputIDs, output.ID)
+						if output.Edges.OutputCreatedTokenTransaction != nil {
+							transactionIDSet[output.Edges.OutputCreatedTokenTransaction.ID] = true
+						}
+						if output.Edges.OutputSpentTokenTransaction != nil {
+							transactionIDSet[output.Edges.OutputSpentTokenTransaction.ID] = true
+						}
+						issuerPubKeySet[string(output.TokenPublicKey)] = output.TokenPublicKey
+					}
+
+					for txID := range transactionIDSet {
+						tokenTransactionIDs = append(tokenTransactionIDs, txID)
+					}
+					for _, issuerPubKey := range issuerPubKeySet {
+						issuerPubKeys = append(issuerPubKeys, issuerPubKey)
+					}
+
+					logger.Info("Collected entity IDs for deletion",
+						"token_outputs", len(tokenOutputIDs),
+						"token_transactions", len(tokenTransactionIDs),
+						"issuer_pub_keys_for_freeze", len(issuerPubKeys))
+
+					deletedOutputs, err := tx.TokenOutput.Delete().
+						Where(tokenoutput.IDIn(tokenOutputIDs...)).
+						Exec(ctx)
+					if err != nil {
+						return fmt.Errorf("failed to delete token outputs: %w", err)
+					}
+					logger.Info("Deleted token outputs", "count", deletedOutputs)
+
+					if len(tokenTransactionIDs) > 0 {
+						deletedTransactions, err := tx.TokenTransaction.Delete().
+							Where(tokentransaction.IDIn(tokenTransactionIDs...)).
+							Exec(ctx)
+						if err != nil {
+							return fmt.Errorf("failed to delete token transactions: %w", err)
+						}
+						logger.Info("Deleted token transactions", "count", deletedTransactions)
+					}
+
+					if len(issuerPubKeys) > 0 {
+						deletedTokenFreezes, err := tx.TokenFreeze.Delete().
+							Where(tokenfreeze.TokenPublicKeyIn(issuerPubKeys...)).
+							Exec(ctx)
+						if err != nil {
+							return fmt.Errorf("failed to delete token freezes: %w", err)
+						}
+						logger.Info("Deleted token freezes", "count", deletedTokenFreezes)
+					}
+
+					logger.Info("Successfully completed deletion of legacy token output data",
+						"total_token_outputs_deleted", deletedOutputs,
+						"total_token_transactions_deleted", len(tokenTransactionIDs),
+						"total_token_freezes_deleted", len(issuerPubKeys))
+
+					return nil
+				},
+			},
+		},
 	}
 }
 
