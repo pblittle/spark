@@ -455,10 +455,10 @@ export class IssuerSparkWallet extends SparkWallet {
   }
 
   protected getTraceName(methodName: string) {
-    return `SparkIssuerWallet.${methodName}`;
+    return `IssuerSparkWallet.${methodName}`;
   }
 
-  private wrapPublicIssuerSparkWalletMethodsWithOtelSpan<
+  private wrapPublicIssuerSparkWalletMethodWithOtelSpan<
     M extends keyof IssuerSparkWallet,
   >(methodName: M) {
     const original = this[methodName];
@@ -492,7 +492,7 @@ export class IssuerSparkWallet extends SparkWallet {
     ] as const;
 
     methods.forEach((m) =>
-      this.wrapPublicIssuerSparkWalletMethodsWithOtelSpan(m),
+      this.wrapPublicIssuerSparkWalletMethodWithOtelSpan(m),
     );
   }
 }

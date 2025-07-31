@@ -4481,7 +4481,7 @@ export class SparkWallet extends EventEmitter {
     return `SparkWallet.${methodName}`;
   }
 
-  private wrapPublicSparkWalletMethodsWithOtelSpan<M extends keyof SparkWallet>(
+  private wrapPublicSparkWalletMethodWithOtelSpan<M extends keyof SparkWallet>(
     methodName: M,
   ) {
     const original = this[methodName];
@@ -4534,7 +4534,7 @@ export class SparkWallet extends EventEmitter {
       "testOnly_expireTimelock",
     ] as const;
 
-    methods.forEach((m) => this.wrapPublicSparkWalletMethodsWithOtelSpan(m));
+    methods.forEach((m) => this.wrapPublicSparkWalletMethodWithOtelSpan(m));
 
     /* Private methods can't be indexed on `this` and need to be wrapped individually: */
     this.initWallet = this.wrapWithOtelSpan(
