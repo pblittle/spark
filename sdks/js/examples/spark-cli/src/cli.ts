@@ -3,6 +3,8 @@ import {
   Bech32mTokenIdentifier,
   ConfigOptions,
   constructUnilateralExitFeeBumpPackages,
+  decodeBech32mTokenIdentifier,
+  getNetworkFromBech32mTokenIdentifier,
   decodeSparkAddress,
   encodeBech32mTokenIdentifier,
   encodeSparkAddress,
@@ -595,6 +597,7 @@ async function runCLI() {
   unfreezetokens <sparkAddress>                                       - Unfreeze tokens for a specific address
   announcetoken <tokenName> <tokenTicker> <decimals> <maxSupply> <isFreezable> - Announce token on L1
   createtoken <tokenName> <tokenTicker> <decimals> <maxSupply> <isFreezable> - Create a new token
+  decodetokenidentifier <tokenIdentifier>                             - Returns the raw token identifier as a hex string
 
   help                                                                - Show this help message
   exit/quit                                                           - Exit the program
@@ -1419,6 +1422,21 @@ async function runCLI() {
             isFreezable: isFreezable.toLowerCase() === "true",
           });
           console.log("Create Token Transaction ID:", result);
+          break;
+        }
+        case "decodetokenidentifier": {
+          const bech32mTokenIdentifier = args[0];
+          const network = getNetworkFromBech32mTokenIdentifier(
+            bech32mTokenIdentifier as Bech32mTokenIdentifier,
+          );
+          const decodedTokenIdentifier = decodeBech32mTokenIdentifier(
+            bech32mTokenIdentifier as Bech32mTokenIdentifier,
+            network,
+          );
+          console.log(
+            "Decoded Raw Token Identifier:",
+            bytesToHex(decodedTokenIdentifier.tokenIdentifier),
+          );
           break;
         }
         case "announcetoken": {

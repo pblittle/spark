@@ -92,3 +92,33 @@ export function decodeBech32mTokenIdentifier(
     );
   }
 }
+
+export function getNetworkFromBech32mTokenIdentifier(
+  bech32mTokenIdentifier: Bech32mTokenIdentifier,
+): NetworkType {
+  const separatorIndex = bech32mTokenIdentifier.indexOf("1");
+  if (separatorIndex === -1) {
+    throw new ValidationError(
+      "Invalid bech32m token identifier: no separator found",
+      {
+        field: "bech32mTokenIdentifier",
+        value: bech32mTokenIdentifier,
+      },
+    );
+  }
+
+  const prefix = bech32mTokenIdentifier.slice(0, separatorIndex);
+
+  for (const [network, networkPrefix] of Object.entries(
+    Bech32mTokenIdentifierTokenIdentifierNetworkPrefix,
+  )) {
+    if (networkPrefix === prefix) {
+      return network as NetworkType;
+    }
+  }
+
+  throw new ValidationError("Unknown bech32m token identifier prefix", {
+    field: "bech32mTokenIdentifier",
+    value: bech32mTokenIdentifier,
+  });
+}
