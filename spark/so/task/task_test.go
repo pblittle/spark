@@ -1,11 +1,12 @@
 package task
 
 import (
-	"bytes"
 	"context"
-	"crypto/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
+
+	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -15,14 +16,9 @@ import (
 	testutil "github.com/lightsparkdev/spark/test_util"
 )
 
-func TestBackfillTokenOutputTokenIdentifiersAndTokenCreateEdges(t *testing.T) {
-	randomBytes := func(n int) []byte {
-		b := make([]byte, n)
-		_, err := rand.Read(b)
-		require.NoError(t, err)
-		return b
-	}
+var seededRand = rand.NewChaCha8([32]byte{})
 
+func TestBackfillTokenOutputTokenIdentifiersAndTokenCreateEdges(t *testing.T) {
 	ctx, dbCtx := db.NewTestSQLiteContext(t, context.Background())
 	defer dbCtx.Close()
 
@@ -30,24 +26,24 @@ func TestBackfillTokenOutputTokenIdentifiersAndTokenCreateEdges(t *testing.T) {
 		SetStatus(st.KeyshareStatusAvailable).
 		SetSecretShare(randomBytes(32)).
 		SetPublicShares(map[string][]byte{}).
-		SetPublicKey(randomBytes(33)).
+		SetPublicKey(keys.MustGeneratePrivateKeyFromRand(seededRand).Public().Serialize()).
 		SetMinSigners(1).
 		SetCoordinatorIndex(0).
 		Save(ctx)
 	require.NoError(t, err)
 
-	issuerPubKey := randomBytes(33)
+	issuerPubKey := keys.MustGeneratePrivateKeyFromRand(seededRand).Public()
 	tokenIdentifier := randomBytes(32)
 
 	tokenCreate, err := dbCtx.Client.TokenCreate.Create().
-		SetIssuerPublicKey(issuerPubKey).
+		SetIssuerPublicKey(issuerPubKey.Serialize()).
 		SetTokenName("TestToken").
 		SetTokenTicker("TST").
 		SetDecimals(0).
 		SetMaxSupply(randomBytes(16)).
 		SetIsFreezable(false).
 		SetNetwork(st.NetworkRegtest).
-		SetCreationEntityPublicKey(randomBytes(33)).
+		SetCreationEntityPublicKey(keys.MustGeneratePrivateKeyFromRand(seededRand).Public().Serialize()).
 		SetTokenIdentifier(tokenIdentifier).
 		Save(ctx)
 	require.NoError(t, err)
@@ -55,11 +51,11 @@ func TestBackfillTokenOutputTokenIdentifiersAndTokenCreateEdges(t *testing.T) {
 	// Create a token output that is missing the TokenIdentifier and TokenCreate
 	tokenOutput, err := dbCtx.Client.TokenOutput.Create().
 		SetStatus(st.TokenOutputStatusCreatedFinalized).
-		SetOwnerPublicKey(randomBytes(33)).
+		SetOwnerPublicKey(keys.MustGeneratePrivateKeyFromRand(seededRand).Public().Serialize()).
 		SetWithdrawBondSats(1000).
 		SetWithdrawRelativeBlockLocktime(10).
 		SetWithdrawRevocationCommitment(randomBytes(33)).
-		SetTokenPublicKey(issuerPubKey).
+		SetTokenPublicKey(issuerPubKey.Serialize()).
 		SetTokenAmount(randomBytes(16)).
 		SetCreatedTransactionOutputVout(0).
 		SetRevocationKeyshareID(signingKeyshare.ID).
@@ -68,21 +64,19 @@ func TestBackfillTokenOutputTokenIdentifiersAndTokenCreateEdges(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate a new random public key - that has no matching token_create
-	var legacyTokenOutputPubkey []byte
+	var legacyTokenOutputPubkey keys.Public
 	for {
-		candidateBytes := randomBytes(33)
-		if bytes.Equal(candidateBytes, issuerPubKey) {
-			continue
+		if candidate := keys.MustGeneratePrivateKeyFromRand(seededRand).Public(); !candidate.Equals(issuerPubKey) {
+			legacyTokenOutputPubkey = candidate
+			break
 		}
-		legacyTokenOutputPubkey = candidateBytes
-		break
 	}
 
 	// Create a legacy token output from prior to april 28th
 	legacyTokenOutput, err := dbCtx.Client.TokenOutput.Create().
 		SetStatus(st.TokenOutputStatusCreatedFinalized).
 		SetCreateTime(time.Date(2025, time.April, 27, 0, 0, 0, 0, time.UTC)). // Create time prior to april 28th
-		SetTokenPublicKey(legacyTokenOutputPubkey).                           // New random public key - no matching token_create
+		SetTokenPublicKey(legacyTokenOutputPubkey.Serialize()).               // New random public key - no matching token_create
 		SetOwnerPublicKey(randomBytes(33)).
 		SetWithdrawBondSats(1000).
 		SetWithdrawRelativeBlockLocktime(10).
@@ -141,4 +135,10 @@ func TestBackfillTokenOutputTokenIdentifiersAndTokenCreateEdges(t *testing.T) {
 
 	// If the task is run again, there should be no errors.
 	require.NoError(t, backfillTask.RunOnce(cfg, dbCtx.Client))
+}
+
+func randomBytes(n int) []byte {
+	b := make([]byte, n)
+	_, _ = seededRand.Read(b)
+	return b
 }
