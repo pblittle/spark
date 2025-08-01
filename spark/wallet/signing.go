@@ -38,6 +38,9 @@ func prepareFrostSigningJobsForUserSignedRefund(
 	signingJobs := []*pbfrost.FrostSigningJob{}
 	refundTxs := make([][]byte, len(leaves))
 	userCommitments := make([]*objects.SigningCommitment, len(leaves))
+	if len(leaves) != len(signingCommitments) {
+		return nil, nil, nil, fmt.Errorf("mismatched lengths: leaves: %d, commitments: %d", len(leaves), len(signingCommitments))
+	}
 	for i, leaf := range leaves {
 		nodeTx, err := common.TxFromRawTxBytes(leaf.Leaf.NodeTx)
 		if err != nil {
@@ -106,6 +109,18 @@ func prepareLeafSigningJobs(
 	signingCommitments []*pb.RequestedSigningCommitments,
 ) ([]*pb.UserSignedTxSigningJob, error) {
 	leafSigningJobs := []*pb.UserSignedTxSigningJob{}
+	if len(leaves) != len(refundTxs) {
+		return nil, fmt.Errorf("mismatched lengths: leaves: %d, refund txs: %d", len(leaves), len(refundTxs))
+	}
+	if len(leaves) != len(signingResults) {
+		return nil, fmt.Errorf("mismatched lengths: leaves: %d, results: %d", len(leaves), len(signingResults))
+	}
+	if len(leaves) != len(userCommitments) {
+		return nil, fmt.Errorf("mismatched lengths: leaves: %d, user commitments: %d", len(leaves), len(userCommitments))
+	}
+	if len(leaves) != len(signingCommitments) {
+		return nil, fmt.Errorf("mismatched lengths: leaves: %d, commitments: %d", len(leaves), len(signingCommitments))
+	}
 	for i, leaf := range leaves {
 		userCommitmentProto, err := userCommitments[i].MarshalProto()
 		if err != nil {
