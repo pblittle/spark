@@ -73,8 +73,6 @@ func (m *mockFrostServiceClient) ValidateSignatureShare(ctx context.Context, in 
 	return &emptypb.Empty{}, nil
 }
 
-var rng = rand.NewChaCha8([32]byte{1})
-
 func TestValidateDuplicateLeaves(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -512,6 +510,8 @@ func TestReturnLightningPayment(t *testing.T) {
 // so we test them indirectly through GetSigningCommitments which calls validateHasSession
 
 func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
+	rng := rand.NewChaCha8([32]byte{1})
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -759,6 +759,8 @@ func TestInitiatePreimageSwapEdgeCases(t *testing.T) {
 // Regression test for https://linear.app/lightsparkdev/issue/LIG-8044
 // Ensure that only a node owner can initiate a preimage swap for that node.
 func TestPreimageSwapAuthorizationBugRegression(t *testing.T) {
+	rng := rand.NewChaCha8([32]byte{1})
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
