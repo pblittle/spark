@@ -641,7 +641,7 @@ func createSspFixedQuoteSignature(
 	return signature.Serialize(), nil
 }
 
-func TestStaticDepositSSP(t *testing.T) {
+func TestStaticDepositSSPV1(t *testing.T) {
 	bitcoinClient := testutil.GetBitcoinClient()
 
 	coin, err := faucet.Fund()
@@ -728,15 +728,6 @@ func TestStaticDepositSSP(t *testing.T) {
 	}
 	signedDepositTx, err := testutil.SignFaucetCoin(unsignedDepositTx, coin.TxOut, coin.Key)
 	require.NoError(t, err)
-	_, err = bitcoinClient.SendRawTransaction(signedDepositTx, true)
-	require.NoError(t, err)
-
-	// Make sure the deposit tx gets enough confirmations
-	// Confirm extra buffer to scan more blocks than needed
-	// So that we don't race the chain watcher in this test
-	_, err = bitcoinClient.GenerateToAddress(6, randomAddress, nil)
-	require.NoError(t, err)
-	time.Sleep(10000 * time.Millisecond)
 
 	// *********************************************************************************
 	// Create request signatures
@@ -803,6 +794,36 @@ func TestStaticDepositSSP(t *testing.T) {
 	// *********************************************************************************
 	// Claim Static Deposit
 	// *********************************************************************************
+	// Claim when the deposit is not yet confirmed results in error
+	_, _, err = wallet.ClaimStaticDeposit(
+		sspCtx,
+		sspConfig,
+		common.Regtest,
+		leavesToTransfer[:],
+		spendTx,
+		pb.UtxoSwapRequestType_Fixed,
+		aliceDepositPrivKey.ToBTCEC(),
+		userSignature,
+		sspSignature,
+		aliceConfig.IdentityPrivateKey.PubKey(),
+		sspConn,
+		signedDepositTx.TxOut[vout],
+	)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "utxo not found")
+
+	// Confirm the deposit on chain
+	_, err = bitcoinClient.SendRawTransaction(signedDepositTx, true)
+	require.NoError(t, err)
+
+	// Make sure the deposit tx gets enough confirmations
+	// Confirm extra buffer to scan more blocks than needed
+	// So that we don't race the chain watcher in this test
+	_, err = bitcoinClient.GenerateToAddress(6, randomAddress, nil)
+	require.NoError(t, err)
+	time.Sleep(1000 * time.Millisecond)
+
+	// Claim when the deposit is confirmed results in success
 	signedSpendTx, transfer, err := wallet.ClaimStaticDeposit(
 		sspCtx,
 		sspConfig,
@@ -906,31 +927,26 @@ func TestStaticDepositSSP(t *testing.T) {
 		SpendTxSigningJob: nil,
 	})
 
-	require.Error(t, err)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "utxo swap is already registered")
 
 	// *********************************************************************************
-	// A call to rollback should fail
+	// A call to refund should fail
 	// *********************************************************************************
-	sparkInternalClient := pbinternal.NewSparkInternalServiceClient(sspConn)
-	rollbackUtxoSwapRequestMessageHash, err := handler.CreateUtxoSwapStatement(
-		handler.UtxoSwapStatementTypeRollback,
-		hex.EncodeToString(depositOutPoint.Hash[:]),
-		depositOutPoint.Index,
+	signedRefundTx, err := wallet.RefundStaticDeposit(
+		aliceCtx,
+		aliceConfig,
 		common.Regtest,
+		spendTx,
+		aliceDepositPrivKey.ToBTCEC(),
+		userSignature,
+		aliceConfig.IdentityPrivateKey.PubKey(),
+		signedDepositTx.TxOut[vout],
+		aliceConn,
 	)
-	require.NoError(t, err)
-	rollbackUtxoSwapRequestSignature := ecdsa.Sign(&sspConfig.IdentityPrivateKey, rollbackUtxoSwapRequestMessageHash)
-
-	_, err = sparkInternalClient.RollbackUtxoSwap(sspCtx, &pbinternal.RollbackUtxoSwapRequest{
-		OnChainUtxo: &pb.UTXO{
-			Txid:    depositOutPoint.Hash[:],
-			Vout:    depositOutPoint.Index,
-			Network: pb.Network_REGTEST,
-		},
-		Signature:            rollbackUtxoSwapRequestSignature.Serialize(),
-		CoordinatorPublicKey: aliceConfig.IdentityPublicKey(),
-	})
-	require.Error(t, err)
+	assert.Error(t, err)
+	assert.Nil(t, signedRefundTx)
+	assert.ErrorContains(t, err, "utxo swap is already registered")
 }
 
 func TestStaticDepositUserRefund(t *testing.T) {
