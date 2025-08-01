@@ -71,8 +71,8 @@ export interface QueryTokenTransactionsParams {
   tokenTransactionHashes?: string[];
   tokenIdentifiers?: string[];
   outputIds?: string[];
-  pageSize: number;
-  offset: number;
+  pageSize?: number;
+  offset?: number;
 }
 
 export class TokenTransactionService {
@@ -1043,6 +1043,8 @@ export class TokenTransactionService {
       tokenTransactionHashes,
       tokenIdentifiers,
       outputIds,
+      pageSize,
+      offset,
     } = params;
 
     const sparkClient = await this.connectionManager.createSparkClient(
@@ -1052,11 +1054,17 @@ export class TokenTransactionService {
     let queryParams: QueryTokenTransactionsRequestV0 = {
       tokenPublicKeys: issuerPublicKeys?.map(hexToBytes)!,
       ownerPublicKeys: ownerPublicKeys?.map(hexToBytes)!,
-      tokenIdentifiers: tokenIdentifiers?.map(hexToBytes)!,
+      tokenIdentifiers: tokenIdentifiers?.map((identifier) => {
+        const { tokenIdentifier } = decodeBech32mTokenIdentifier(
+          identifier as Bech32mTokenIdentifier,
+          this.config.getNetworkType(),
+        );
+        return tokenIdentifier;
+      })!,
       tokenTransactionHashes: tokenTransactionHashes?.map(hexToBytes)!,
       outputIds: outputIds || [],
-      limit: 100,
-      offset: 0,
+      limit: pageSize!,
+      offset: offset!,
     };
 
     try {
@@ -1120,11 +1128,17 @@ export class TokenTransactionService {
     let queryParams: QueryTokenTransactionsRequestV1 = {
       issuerPublicKeys: issuerPublicKeys?.map(hexToBytes)!,
       ownerPublicKeys: ownerPublicKeys?.map(hexToBytes)!,
-      tokenIdentifiers: tokenIdentifiers?.map(hexToBytes)!,
+      tokenIdentifiers: tokenIdentifiers?.map((identifier) => {
+        const { tokenIdentifier } = decodeBech32mTokenIdentifier(
+          identifier as Bech32mTokenIdentifier,
+          this.config.getNetworkType(),
+        );
+        return tokenIdentifier;
+      })!,
       tokenTransactionHashes: tokenTransactionHashes?.map(hexToBytes)!,
       outputIds: outputIds || [],
-      limit: pageSize,
-      offset: offset,
+      limit: pageSize!,
+      offset: offset!,
     };
 
     try {

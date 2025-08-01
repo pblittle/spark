@@ -2,11 +2,13 @@ import {
   WalletConfig,
   ConfigOptions,
   filterTokenBalanceForTokenPublicKey,
+  encodeSparkAddress,
 } from "@buildonspark/spark-sdk";
 import { jest } from "@jest/globals";
 import { IssuerSparkWalletTesting } from "../utils/issuer-test-wallet.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
 import { BitcoinFaucet } from "@buildonspark/spark-sdk/test-utils";
+import { bytesToHex } from "@noble/curves/abstract/utils";
 import { IssuerSparkWallet } from "../../issuer-wallet/issuer-spark-wallet.node.js";
 
 export const TOKENS_V0_SCHNORR_CONFIG: Required<ConfigOptions> = {
@@ -225,141 +227,6 @@ describe.each(TEST_CONFIGS)(
       expect(userBalance.balance).toBeGreaterThanOrEqual(tokenAmount);
     });
 
-    // it("should announce, mint, get list all transactions, and transfer tokens multiple times, get list all transactions again and check difference", async () => {
-    //   const tokenAmount: bigint = 100n;
-
-    //   const { wallet: issuerWallet } =
-    //     await IssuerSparkWalletTesting.initialize({
-    //       options: config,
-    //     });
-
-    //   const { wallet: destinationWallet } = await SparkWalletTesting.initialize(
-    //     {
-    //       options: config,
-    //     },
-    //   );
-
-    //   await fundAndAnnounce(issuerWallet, 100000n, 0, `${name}Transfer`, "TTO");
-
-    //   {
-    //     const transactions = await issuerWallet.getIssuerTokenActivity();
-    //     const amount_of_transactions = transactions.transactions.length;
-    //     expect(amount_of_transactions).toEqual(0);
-    //   }
-
-    //   await issuerWallet.mintTokens(tokenAmount);
-
-    //   {
-    //     const transactions = await issuerWallet.getIssuerTokenActivity();
-    //     const amount_of_transactions = transactions.transactions.length;
-    //     expect(amount_of_transactions).toEqual(1);
-    //   }
-
-    //   await issuerWallet.transferTokens({
-    //     tokenAmount,
-    //     tokenPublicKey: await issuerWallet.getIdentityPublicKey(),
-    //     receiverSparkAddress: await destinationWallet.getSparkAddress(),
-    //   });
-
-    //   {
-    //     const transactions = await issuerWallet.getIssuerTokenActivity();
-    //     const amount_of_transactions = transactions.transactions.length;
-    //     expect(amount_of_transactions).toEqual(2);
-    //   }
-
-    //   for (let index = 0; index < 100; ++index) {
-    //     await issuerWallet.mintTokens(tokenAmount);
-    //     await issuerWallet.transferTokens({
-    //       tokenAmount,
-    //       tokenPublicKey: await issuerWallet.getIdentityPublicKey(),
-    //       receiverSparkAddress: await destinationWallet.getSparkAddress(),
-    //     });
-    //   } // 202 in total
-
-    //   let all_transactions = await issuerWallet.getIssuerTokenActivity(250);
-    //   const amount_of_transactions = all_transactions.transactions.length;
-    //   expect(amount_of_transactions).toEqual(202);
-
-    //   {
-    //     const transactions = await issuerWallet.getIssuerTokenActivity(10);
-    //     const amount_of_transactions = transactions.transactions.length;
-    //     expect(amount_of_transactions).toEqual(10);
-    //   }
-
-    //   {
-    //     let hashset_of_all_transactions: Set<String> = new Set();
-
-    //     let transactions = await issuerWallet.getIssuerTokenActivity(10);
-    //     let amount_of_transactions = transactions.transactions.length;
-    //     expect(amount_of_transactions).toEqual(10);
-    //     let page_num = 0;
-    //     for (let index = 0; index < transactions.transactions.length; ++index) {
-    //       const element = transactions.transactions[index];
-    //       if (!(element.transaction === undefined)) {
-    //         let hash: String = "";
-    //         if (element.transaction.$case === "spark") {
-    //           hash = element.transaction.spark.transactionHash;
-    //         } else if (element.transaction.$case === "onChain") {
-    //           hash = element.transaction.onChain.transactionHash;
-    //         }
-    //         if (hashset_of_all_transactions.has(hash)) {
-    //           expect(
-    //             `Dublicate found. Pagination is broken? Index of transaction: ${index} ; page №: ${page_num} ; page size: 10 ; hash_dublicate: ${hash}`,
-    //           ).toEqual("");
-    //         } else {
-    //           hashset_of_all_transactions.add(hash);
-    //         }
-    //       } else {
-    //         expect(
-    //           `Transaction is undefined. Something is really wrong. Index of transaction: ${index} ; page №: ${page_num} ; page size: 10`,
-    //         ).toEqual("");
-    //       }
-    //     }
-
-    //     while (!(undefined === transactions.nextCursor)) {
-    //       let transactions_2 = await issuerWallet.getIssuerTokenActivity(10, {
-    //         lastTransactionHash: hexToBytes(
-    //           transactions.nextCursor.lastTransactionHash,
-    //         ),
-    //         layer: transactions.nextCursor.layer,
-    //       });
-
-    //       ++page_num;
-
-    //       for (
-    //         let index = 0;
-    //         index < transactions_2.transactions.length;
-    //         ++index
-    //       ) {
-    //         const element = transactions_2.transactions[index];
-    //         if (!(element.transaction === undefined)) {
-    //           let hash: String = "";
-    //           if (element.transaction.$case === "spark") {
-    //             hash = element.transaction.spark.transactionHash;
-    //           } else if (element.transaction.$case === "onChain") {
-    //             hash = element.transaction.onChain.transactionHash;
-    //           }
-    //           if (hashset_of_all_transactions.has(hash)) {
-    //             expect(
-    //               `Dublicate found. Pagination is broken? Index of transaction: ${index} ; page №: ${page_num} ; page size: 10 ; hash_dublicate: ${hash}`,
-    //             ).toEqual("");
-    //           } else {
-    //             hashset_of_all_transactions.add(hash);
-    //           }
-    //         } else {
-    //           expect(
-    //             `Transaction is undefined. Something is really wrong. Index of transaction: ${index} ; page №: ${page_num} ; page size: 10`,
-    //           ).toEqual("");
-    //         }
-    //       }
-
-    //       transactions = transactions_2;
-    //     }
-
-    //     expect(hashset_of_all_transactions.size == 202);
-    //   }
-    // });
-
     it("should create, mint, and batchtransfer tokens", async () => {
       const tokenAmount: bigint = 999n;
 
@@ -443,43 +310,241 @@ describe.each(TEST_CONFIGS)(
       expect(destinationBalance3.balance).toEqual(tokenAmount / 3n);
     });
 
-    // it("should track token operations in monitoring", async () => {
-    //   const tokenAmount: bigint = 1000n;
+    it("should track token operations in monitoring", async () => {
+      const tokenAmount: bigint = 1000n;
 
-    //   await sharedIssuerWallet.mintTokens(tokenAmount);
-    //   await sharedIssuerWallet.transferTokens({
-    //     tokenAmount,
-    //     tokenPublicKey: sharedTokenPublicKey,
-    //     receiverSparkAddress: await sharedUserWallet.getSparkAddress(),
-    //   });
+      const { wallet: issuerWallet } =
+        await IssuerSparkWalletTesting.initialize({
+          options: config,
+        });
 
-    //   const balanceObj = await sharedUserWallet.getBalance();
-    //   const destinationBalance = filterTokenBalanceForTokenPublicKey(
-    //     balanceObj?.tokenBalances,
-    //     sharedTokenPublicKey,
-    //   );
-    //   expect(destinationBalance.balance).toBeGreaterThanOrEqual(tokenAmount);
+      const { wallet: userWallet } = await SparkWalletTesting.initialize({
+        options: config,
+      });
 
-    //   const issuerOperations =
-    //     await sharedIssuerWallet.getIssuerTokenActivity();
-    //   expect(issuerOperations.transactions.length).toBeGreaterThanOrEqual(2);
+      await issuerWallet.createToken({
+        tokenName: `${name}FRZ`,
+        tokenTicker: "FRZ",
+        decimals: 0,
+        isFreezable: true,
+        maxSupply: 100000n,
+      });
+      await issuerWallet.mintTokens(tokenAmount);
+      const tokenIdentifier = await issuerWallet.getIssuerTokenIdentifier();
+      const issuerPublicKey = await issuerWallet.getIdentityPublicKey();
 
-    //   let mint_operation = 0;
-    //   let transfer_operation = 0;
-    //   issuerOperations.transactions.forEach((transaction) => {
-    //     if (transaction.transaction?.$case === "spark") {
-    //       if (transaction.transaction.spark.operationType === "ISSUER_MINT") {
-    //         mint_operation++;
-    //       } else if (
-    //         transaction.transaction.spark.operationType === "ISSUER_TRANSFER"
-    //       ) {
-    //         transfer_operation++;
-    //       }
-    //     }
-    //   });
-    //   expect(mint_operation).toBeGreaterThanOrEqual(1);
-    //   expect(transfer_operation).toBeGreaterThanOrEqual(1);
-    // });
+      await issuerWallet.transferTokens({
+        tokenAmount,
+        tokenIdentifier: tokenIdentifier!,
+        receiverSparkAddress: await userWallet.getSparkAddress(),
+      });
+
+      const userBalanceObj = await userWallet.getBalance();
+      const userBalance = filterTokenBalanceForTokenPublicKey(
+        userBalanceObj?.tokenBalances,
+        issuerPublicKey,
+      );
+      expect(userBalance.balance).toBeGreaterThanOrEqual(tokenAmount);
+
+      const transactions = await issuerWallet.queryTokenTransactions({
+        tokenIdentifiers: [tokenIdentifier!],
+        ownerPublicKeys: [issuerPublicKey],
+      });
+      expect(transactions.length).toBeGreaterThanOrEqual(2);
+
+      let mint_operation = 0;
+      let transfer_operation = 0;
+      transactions.forEach((transaction) => {
+        if (transaction.tokenTransaction?.tokenInputs?.$case === "mintInput") {
+          mint_operation++;
+        } else if (
+          transaction.tokenTransaction?.tokenInputs?.$case === "transferInput"
+        ) {
+          transfer_operation++;
+        }
+      });
+      expect(mint_operation).toBeGreaterThanOrEqual(1);
+      expect(transfer_operation).toBeGreaterThanOrEqual(1);
+    });
+
+    it("should correctly assign operation types for complete token lifecycle operations", async () => {
+      const tokenAmount = 1000n;
+
+      const { wallet: issuerWallet } =
+        await IssuerSparkWalletTesting.initialize({
+          options: config,
+        });
+
+      const { wallet: userWallet } = await SparkWalletTesting.initialize({
+        options: config,
+      });
+
+      await issuerWallet.createToken({
+        tokenName: `${name}LFC`,
+        tokenTicker: "LFC",
+        decimals: 0,
+        isFreezable: false,
+        maxSupply: 1_000_000n,
+      });
+
+      await issuerWallet.mintTokens(tokenAmount);
+
+      const tokenIdentifier = await issuerWallet.getIssuerTokenIdentifier();
+      const issuerPublicKey = await issuerWallet.getIdentityPublicKey();
+
+      await issuerWallet.transferTokens({
+        tokenAmount: 500n,
+        tokenIdentifier: tokenIdentifier!,
+        receiverSparkAddress: await userWallet.getSparkAddress(),
+      });
+
+      await userWallet.transferTokens({
+        tokenAmount: 250n,
+        tokenIdentifier: tokenIdentifier!,
+        receiverSparkAddress: await issuerWallet.getSparkAddress(),
+      });
+
+      const BURN_ADDRESS = "02".repeat(33);
+
+      await issuerWallet.burnTokens(250n);
+
+      const transactions = await issuerWallet.queryTokenTransactions({
+        tokenIdentifiers: [tokenIdentifier!],
+        ownerPublicKeys: [issuerPublicKey],
+      });
+
+      const mintTransaction = transactions.find(
+        (tx) => tx.tokenTransaction?.tokenInputs?.$case === "mintInput",
+      );
+
+      const transferTransaction = transactions.find(
+        (tx) => tx.tokenTransaction?.tokenInputs?.$case === "transferInput",
+      );
+
+      const burnTransaction = transactions.find(
+        (tx) =>
+          tx.tokenTransaction?.tokenInputs?.$case === "transferInput" &&
+          bytesToHex(tx.tokenTransaction?.tokenOutputs?.[0]?.ownerPublicKey) ===
+            BURN_ADDRESS,
+      );
+
+      expect(mintTransaction).toBeDefined();
+      expect(transferTransaction).toBeDefined();
+      expect(burnTransaction).toBeDefined();
+    });
+
+    it("should create, mint, get all transactions, transfer tokens multiple times, get all transactions again, and check difference", async () => {
+      const tokenAmount: bigint = 100n;
+
+      const { wallet: issuerWallet } =
+        await IssuerSparkWalletTesting.initialize({
+          options: config,
+        });
+
+      const { wallet: userWallet } = await SparkWalletTesting.initialize({
+        options: config,
+      });
+
+      await issuerWallet.createToken({
+        tokenName: `${name}Transfer`,
+        tokenTicker: "TTO",
+        decimals: 0,
+        isFreezable: false,
+        maxSupply: 100000n,
+      });
+
+      const tokenIdentifier = await issuerWallet.getIssuerTokenIdentifier();
+
+      await issuerWallet.mintTokens(tokenAmount);
+
+      {
+        const transactions = await issuerWallet.queryTokenTransactions({
+          tokenIdentifiers: [tokenIdentifier!],
+        });
+        const amount_of_transactions = transactions.length;
+        expect(amount_of_transactions).toEqual(1);
+      }
+
+      await issuerWallet.transferTokens({
+        tokenAmount,
+        tokenIdentifier: tokenIdentifier!,
+        receiverSparkAddress: await userWallet.getSparkAddress(),
+      });
+
+      {
+        const transactions = await issuerWallet.queryTokenTransactions({
+          tokenIdentifiers: [tokenIdentifier!],
+        });
+        const amount_of_transactions = transactions.length;
+        expect(amount_of_transactions).toEqual(2);
+      }
+
+      for (let index = 0; index < 100; ++index) {
+        await issuerWallet.mintTokens(tokenAmount);
+        await issuerWallet.transferTokens({
+          tokenAmount,
+          tokenIdentifier: tokenIdentifier!,
+          receiverSparkAddress: await userWallet.getSparkAddress(),
+        });
+      } // 202 in total
+
+      {
+        const transactions = await issuerWallet.queryTokenTransactions({
+          tokenIdentifiers: [tokenIdentifier!],
+          pageSize: 10,
+        });
+        const amount_of_transactions = transactions.length;
+        expect(amount_of_transactions).toEqual(10);
+      }
+
+      {
+        let hashset_of_all_transactions: Set<String> = new Set();
+
+        let pageSize = 10;
+        let offset = 0;
+        let page_num = 0;
+
+        while (true) {
+          const transactionsPage = await issuerWallet.queryTokenTransactions({
+            tokenIdentifiers: [tokenIdentifier!],
+            pageSize,
+            offset,
+          });
+
+          if (transactionsPage.length === 0) {
+            break;
+          }
+
+          if (offset === 0) {
+            expect(transactionsPage.length).toEqual(pageSize);
+          }
+
+          for (let index = 0; index < transactionsPage.length; ++index) {
+            const element = transactionsPage[index];
+            if (element.tokenTransaction !== undefined) {
+              const hash: String = bytesToHex(element.tokenTransactionHash);
+              if (hashset_of_all_transactions.has(hash)) {
+                expect(
+                  `Duplicate found. Pagination is broken? Index of transaction: ${index} ; page №: ${page_num} ; page size: ${pageSize} ; hash_duplicate: ${hash}`,
+                ).toEqual("");
+              } else {
+                hashset_of_all_transactions.add(hash);
+              }
+            } else {
+              expect(
+                `Transaction is undefined. Something is really wrong. Index of transaction: ${index} ; page №: ${page_num} ; page size: ${pageSize}`,
+              ).toEqual("");
+            }
+          }
+
+          // Prepare for next iteration.
+          offset += transactionsPage.length;
+          page_num += 1;
+        }
+
+        expect(hashset_of_all_transactions.size).toEqual(202);
+      }
+    });
 
     it("it should mint token with 1 max supply without issue", async () => {
       const tokenAmount: bigint = 1n;
@@ -724,81 +789,6 @@ describe.each(TEST_CONFIGS)(
       ).balance;
       expect(issuerTokenBalanceAfterBurn).toEqual(initialBalance);
     });
-
-    // it("should correctly assign operation types for complete token lifecycle operations", async () => {
-    //   const { wallet: userWallet } = await SparkWalletTesting.initialize({
-    //     options: config,
-    //   });
-
-    //   const tokenAmount = 1000n;
-
-    //   await sharedIssuerWallet.mintTokens(tokenAmount);
-
-    //   await sharedIssuerWallet.transferTokens({
-    //     tokenAmount: 500n,
-    //     tokenPublicKey: sharedTokenPublicKey,
-    //     receiverSparkAddress: await userWallet.getSparkAddress(),
-    //   });
-
-    //   await userWallet.transferTokens({
-    //     tokenPublicKey: sharedTokenPublicKey,
-    //     tokenAmount: 250n,
-    //     receiverSparkAddress: await sharedIssuerWallet.getSparkAddress(),
-    //   });
-
-    //   // as in userWallet we didn't have burnTokens method, we need to transfer tokens to burn address manually
-    //   const BURN_ADDRESS = "02".repeat(33);
-    //   const burnAddress = encodeSparkAddress({
-    //     identityPublicKey: BURN_ADDRESS,
-    //     network: "LOCAL",
-    //   });
-
-    //   await userWallet.transferTokens({
-    //     tokenPublicKey: sharedTokenPublicKey,
-    //     tokenAmount: 250n,
-    //     receiverSparkAddress: burnAddress,
-    //   });
-
-    //   await sharedIssuerWallet.burnTokens(250n);
-
-    //   const activity = await sharedIssuerWallet.getIssuerTokenActivity();
-
-    //   const mintTransaction = activity.transactions.find(
-    //     (tx) =>
-    //       tx.transaction?.$case === "spark" &&
-    //       tx.transaction.spark.operationType === "ISSUER_MINT",
-    //   );
-
-    //   const transferTransaction = activity.transactions.find(
-    //     (tx) =>
-    //       tx.transaction?.$case === "spark" &&
-    //       tx.transaction.spark.operationType === "ISSUER_TRANSFER",
-    //   );
-
-    //   const burnTransaction = activity.transactions.find(
-    //     (tx) =>
-    //       tx.transaction?.$case === "spark" &&
-    //       tx.transaction.spark.operationType === "ISSUER_BURN",
-    //   );
-
-    //   const transferBackTransaction = activity.transactions.find(
-    //     (tx) =>
-    //       tx.transaction?.$case === "spark" &&
-    //       tx.transaction.spark.operationType === "USER_TRANSFER",
-    //   );
-
-    //   const userBurnTransaction = activity.transactions.find(
-    //     (tx) =>
-    //       tx.transaction?.$case === "spark" &&
-    //       tx.transaction.spark.operationType === "USER_BURN",
-    //   );
-
-    //   expect(mintTransaction).toBeDefined();
-    //   expect(transferTransaction).toBeDefined();
-    //   expect(burnTransaction).toBeDefined();
-    //   expect(transferBackTransaction).toBeDefined();
-    //   expect(userBurnTransaction).toBeDefined();
-    // });
   },
 );
 

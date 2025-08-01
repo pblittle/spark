@@ -3845,8 +3845,8 @@ export class SparkWallet extends EventEmitter {
     tokenTransactionHashes,
     tokenIdentifiers,
     outputIds,
-    pageSize = 100,
-    offset = 0,
+    pageSize,
+    offset,
   }: {
     ownerPublicKeys?: string[];
     issuerPublicKeys?: string[];
@@ -3862,8 +3862,8 @@ export class SparkWallet extends EventEmitter {
       tokenTransactionHashes,
       tokenIdentifiers,
       outputIds,
-      pageSize,
-      offset,
+      pageSize: pageSize ?? 100,
+      offset: offset ?? 0,
     }) as Promise<TokenTransactionWithStatus[]>;
   }
 
