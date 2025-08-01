@@ -198,40 +198,31 @@ func TestNewSigningJob_InvalidInputs(t *testing.T) {
 	}
 }
 
-type MockSparkServiceClientFactory struct {
-	conn *MockSparkSvcConnection
+type MockSparkServiceFrostSignerFactory struct {
+	conn *MockSparkServiceFrostSigner
 }
 
-func (m *MockSparkServiceClientFactory) NewConnection(_ *so.SigningOperator) (helper.SparkServiceConnection, error) {
+func (m *MockSparkServiceFrostSignerFactory) NewFrostSigner(_ *so.Config) (helper.SparkServiceFrostSigner, error) {
 	return m.conn, nil
 }
 
-func (m *MockSparkServiceClientFactory) IsMock() bool {
+func (m *MockSparkServiceFrostSignerFactory) IsMock() bool {
 	return true
 }
 
-// MockSparkSvcConnection is a mock implementation of SparkSvcConnection for testing
-type MockSparkSvcConnection struct {
+type MockSparkServiceFrostSigner struct {
 	frostRound1Response *pbinternal.FrostRound1Response
 	frostRound2Response *pbinternal.FrostRound2Response
 	frostRound1Error    error
 	frostRound2Error    error
 }
 
-func (m *MockSparkSvcConnection) Connection() *grpc.ClientConn {
-	return nil
+func (m *MockSparkServiceFrostSigner) CallFrostRound1(ctx context.Context, operator *so.SigningOperator, req *pbinternal.FrostRound1Request) (*pbinternal.FrostRound1Response, error) {
+	return m.frostRound1Response, m.frostRound1Error
 }
 
-func (m *MockSparkSvcConnection) Close() {
-}
-
-func (m *MockSparkSvcConnection) NewClient() pbinternal.SparkInternalServiceClient {
-	return &MockSparkInternalServiceClient{
-		frostRound1Response: m.frostRound1Response,
-		frostRound2Response: m.frostRound2Response,
-		frostRound1Error:    m.frostRound1Error,
-		frostRound2Error:    m.frostRound2Error,
-	}
+func (m *MockSparkServiceFrostSigner) CallFrostRound2(ctx context.Context, operator *so.SigningOperator, req *pbinternal.FrostRound2Request) (*pbinternal.FrostRound2Response, error) {
+	return m.frostRound2Response, m.frostRound2Error
 }
 
 // MockSparkInternalServiceClient is a mock implementation for testing
@@ -538,7 +529,7 @@ func TestSignFrostInternal(t *testing.T) {
 		}
 
 		// Create a mock connection that returns predefined responses
-		mockConnection := &MockSparkSvcConnection{
+		mockFrostSigner := &MockSparkServiceFrostSigner{
 			frostRound1Response: &pbinternal.FrostRound1Response{
 				SigningCommitments: []*pbcommon.SigningCommitment{
 					{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
@@ -553,12 +544,12 @@ func TestSignFrostInternal(t *testing.T) {
 			},
 		}
 
-		mockConnectionFactory := &MockSparkServiceClientFactory{
-			conn: mockConnection,
+		mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+			conn: mockFrostSigner,
 		}
 
 		// Call SignFrostInternal with our mock
-		results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
+		results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockFrostSignerFactory)
 		// Verify the results
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
@@ -603,17 +594,17 @@ func TestSignFrostInternal(t *testing.T) {
 				return make(map[uuid.UUID]*pbfrost.KeyPackage), nil
 			}
 
-			mockConnection := &MockSparkSvcConnection{
+			mockFrostSigner := &MockSparkServiceFrostSigner{
 				frostRound1Response: &pbinternal.FrostRound1Response{},
 				frostRound2Response: &pbinternal.FrostRound2Response{},
 			}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			// TODO Should we actually be successful on a frost sign with an empty jobs list?
-			results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{}, mockGetKeyPackages, mockConnectionFactory)
+			results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{}, mockGetKeyPackages, mockFrostSignerFactory)
 			if err != nil {
 				t.Fatalf("Expected no error for empty jobs list, got %v", err)
 			}
@@ -635,10 +626,10 @@ func TestSignFrostInternal(t *testing.T) {
 				return nil, errors.New("database connection failed")
 			}
 
-			mockConnection := &MockSparkSvcConnection{}
+			mockFrostSigner := &MockSparkServiceFrostSigner{}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			job := &helper.SigningJob{
@@ -649,7 +640,7 @@ func TestSignFrostInternal(t *testing.T) {
 				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			}
 
-			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
+			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockFrostSignerFactory)
 			if err == nil {
 				t.Fatal("Expected error when getKeyPackages fails, got nil")
 			}
@@ -667,9 +658,11 @@ func TestSignFrostInternal(t *testing.T) {
 				return make(map[uuid.UUID]*pbfrost.KeyPackage), nil
 			}
 
-			mockConnection := &MockSparkSvcConnection{}
+			mockFrostSigner := &MockSparkServiceFrostSigner{}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{conn: mockConnection}
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
+			}
 
 			job := &helper.SigningJob{
 				JobID:             "test-job-id",
@@ -679,7 +672,7 @@ func TestSignFrostInternal(t *testing.T) {
 				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			}
 
-			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
+			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockFrostSignerFactory)
 			if err == nil {
 				t.Fatal("Expected error when keyshare is missing, got nil")
 			}
@@ -705,12 +698,12 @@ func TestSignFrostInternal(t *testing.T) {
 			}
 
 			// Mock connection that returns error in FrostRound1
-			mockConnection := &MockSparkSvcConnection{
+			mockFrostSigner := &MockSparkServiceFrostSigner{
 				frostRound1Error: errors.New("frost round 1 failed"),
 			}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			job := &helper.SigningJob{
@@ -721,7 +714,7 @@ func TestSignFrostInternal(t *testing.T) {
 				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			}
 
-			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
+			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockFrostSignerFactory)
 			if err == nil {
 				t.Fatal("Expected error when frostRound1 fails, got nil")
 			}
@@ -751,7 +744,7 @@ func TestSignFrostInternal(t *testing.T) {
 			}
 
 			// Mock connection that returns error in FrostRound2
-			mockConnection := &MockSparkSvcConnection{
+			mockFrostSigner := &MockSparkServiceFrostSigner{
 				frostRound1Response: &pbinternal.FrostRound1Response{
 					SigningCommitments: []*pbcommon.SigningCommitment{
 						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
@@ -760,8 +753,8 @@ func TestSignFrostInternal(t *testing.T) {
 				frostRound2Error: errors.New("frost round 2 failed"),
 			}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			// Add a mock operator to the config with identifier "operator1"
@@ -778,7 +771,7 @@ func TestSignFrostInternal(t *testing.T) {
 				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			}
 
-			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
+			_, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockFrostSignerFactory)
 			if err == nil {
 				t.Fatal("Expected error when frostRound2 fails, got nil")
 			}
@@ -817,7 +810,7 @@ func TestSignFrostInternal(t *testing.T) {
 				return result, nil
 			}
 
-			mockConnection := &MockSparkSvcConnection{
+			mockFrostSigner := &MockSparkServiceFrostSigner{
 				frostRound1Response: &pbinternal.FrostRound1Response{
 					SigningCommitments: []*pbcommon.SigningCommitment{
 						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
@@ -836,8 +829,8 @@ func TestSignFrostInternal(t *testing.T) {
 				},
 			}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			jobs := []*helper.SigningJob{
@@ -857,7 +850,7 @@ func TestSignFrostInternal(t *testing.T) {
 				},
 			}
 
-			results, err := helper.SignFrostInternal(context.Background(), config, jobs, mockGetKeyPackages, mockConnectionFactory)
+			results, err := helper.SignFrostInternal(context.Background(), config, jobs, mockGetKeyPackages, mockFrostSignerFactory)
 			if err != nil {
 				t.Fatalf("Expected no error, got %v", err)
 			}
@@ -897,7 +890,7 @@ func TestSignFrostInternal(t *testing.T) {
 				return result, nil
 			}
 
-			mockConnection := &MockSparkSvcConnection{
+			mockFrostSigner := &MockSparkServiceFrostSigner{
 				frostRound1Response: &pbinternal.FrostRound1Response{
 					SigningCommitments: []*pbcommon.SigningCommitment{
 						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
@@ -912,8 +905,8 @@ func TestSignFrostInternal(t *testing.T) {
 				},
 			}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			job := &helper.SigningJob{
@@ -925,7 +918,7 @@ func TestSignFrostInternal(t *testing.T) {
 				AdaptorPublicKey:  nil,
 			}
 
-			results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
+			results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockFrostSignerFactory)
 			if err != nil {
 				t.Fatalf("Expected no error with nil user commitment, got %v", err)
 			}
@@ -956,7 +949,7 @@ func TestSignFrostInternal(t *testing.T) {
 				return result, nil
 			}
 
-			mockConnection := &MockSparkSvcConnection{
+			mockFrostSigner := &MockSparkServiceFrostSigner{
 				frostRound1Response: &pbinternal.FrostRound1Response{
 					SigningCommitments: []*pbcommon.SigningCommitment{
 						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
@@ -971,8 +964,8 @@ func TestSignFrostInternal(t *testing.T) {
 				},
 			}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			job := &helper.SigningJob{
@@ -984,7 +977,7 @@ func TestSignFrostInternal(t *testing.T) {
 				AdaptorPublicKey:  &adaptorPubKey,
 			}
 
-			results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
+			results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockFrostSignerFactory)
 			if err != nil {
 				t.Fatalf("Expected no error with adaptor public key, got %v", err)
 			}
@@ -1014,7 +1007,7 @@ func TestSignFrostInternal(t *testing.T) {
 				return result, nil
 			}
 
-			mockConnection := &MockSparkSvcConnection{
+			mockFrostSigner := &MockSparkServiceFrostSigner{
 				frostRound1Response: &pbinternal.FrostRound1Response{
 					SigningCommitments: []*pbcommon.SigningCommitment{
 						{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
@@ -1029,8 +1022,8 @@ func TestSignFrostInternal(t *testing.T) {
 				},
 			}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			job := &helper.SigningJob{
@@ -1041,7 +1034,7 @@ func TestSignFrostInternal(t *testing.T) {
 				UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 			}
 
-			results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
+			results, err := helper.SignFrostInternal(context.Background(), config, []*helper.SigningJob{job}, mockGetKeyPackages, mockFrostSignerFactory)
 			if err != nil {
 				t.Fatalf("Expected no error with different threshold, got %v", err)
 			}
@@ -1107,12 +1100,12 @@ func TestSignFrostInternal(t *testing.T) {
 			return result, nil
 		}
 
-		mockConnection := &MockSparkSvcConnection{
+		mockFrostSigner := &MockSparkServiceFrostSigner{
 			frostRound1Error: context.Canceled,
 		}
 
-		mockConnectionFactory := &MockSparkServiceClientFactory{
-			conn: mockConnection,
+		mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+			conn: mockFrostSigner,
 		}
 
 		job := &helper.SigningJob{
@@ -1123,7 +1116,7 @@ func TestSignFrostInternal(t *testing.T) {
 			UserCommitment:    &objects.SigningCommitment{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
 		}
 
-		_, err = helper.SignFrostInternal(ctx, config, []*helper.SigningJob{job}, mockGetKeyPackages, mockConnectionFactory)
+		_, err = helper.SignFrostInternal(ctx, config, []*helper.SigningJob{job}, mockGetKeyPackages, mockFrostSignerFactory)
 		if err == nil {
 			t.Fatal("Expected error when context is cancelled, got nil")
 		}
@@ -1181,7 +1174,7 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 			return result, nil
 		}
 
-		mockConnection := &MockSparkSvcConnection{
+		mockFrostSigner := &MockSparkServiceFrostSigner{
 			frostRound1Response: &pbinternal.FrostRound1Response{
 				SigningCommitments: []*pbcommon.SigningCommitment{
 					{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
@@ -1196,11 +1189,11 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 			},
 		}
 
-		mockConnectionFactory := &MockSparkServiceClientFactory{
-			conn: mockConnection,
+		mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+			conn: mockFrostSigner,
 		}
 
-		results, err := helper.SignFrostWithPregeneratedNonceInternal(context.Background(), config, []*helper.SigningJobWithPregeneratedNonce{job}, mockGetKeyPackages, mockConnectionFactory)
+		results, err := helper.SignFrostWithPregeneratedNonceInternal(context.Background(), config, []*helper.SigningJobWithPregeneratedNonce{job}, mockGetKeyPackages, mockFrostSignerFactory)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
@@ -1232,10 +1225,10 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 				return nil, errors.New("database connection failed")
 			}
 
-			mockConnection := &MockSparkSvcConnection{}
+			mockFrostSigner := &MockSparkServiceFrostSigner{}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			job := &helper.SigningJobWithPregeneratedNonce{
@@ -1251,7 +1244,7 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 				},
 			}
 
-			_, err := helper.SignFrostWithPregeneratedNonceInternal(context.Background(), config, []*helper.SigningJobWithPregeneratedNonce{job}, mockGetKeyPackages, mockConnectionFactory)
+			_, err := helper.SignFrostWithPregeneratedNonceInternal(context.Background(), config, []*helper.SigningJobWithPregeneratedNonce{job}, mockGetKeyPackages, mockFrostSignerFactory)
 			if err == nil {
 				t.Fatal("Expected error when getKeyPackages fails, got nil")
 			}
@@ -1279,12 +1272,12 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 				return result, nil
 			}
 
-			mockConnection := &MockSparkSvcConnection{
+			mockFrostSigner := &MockSparkServiceFrostSigner{
 				frostRound2Error: errors.New("frost round 2 failed"),
 			}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			job := &helper.SigningJobWithPregeneratedNonce{
@@ -1300,7 +1293,7 @@ func TestSignFrostWithPregeneratedNonce(t *testing.T) {
 				},
 			}
 
-			_, err := helper.SignFrostWithPregeneratedNonceInternal(context.Background(), config, []*helper.SigningJobWithPregeneratedNonce{job}, mockGetKeyPackages, mockConnectionFactory)
+			_, err := helper.SignFrostWithPregeneratedNonceInternal(context.Background(), config, []*helper.SigningJobWithPregeneratedNonce{job}, mockGetKeyPackages, mockFrostSignerFactory)
 			if err == nil {
 				t.Fatal("Expected error when frostRound2 fails, got nil")
 			}
@@ -1327,7 +1320,7 @@ func TestGetSigningCommitments(t *testing.T) {
 
 		keyshareIDs := []uuid.UUID{uuid.New(), uuid.New()}
 
-		mockConnection := &MockSparkSvcConnection{
+		mockFrostSigner := &MockSparkServiceFrostSigner{
 			frostRound1Response: &pbinternal.FrostRound1Response{
 				SigningCommitments: []*pbcommon.SigningCommitment{
 					{Binding: pubKey.Serialize(), Hiding: pubKey.Serialize()},
@@ -1336,8 +1329,8 @@ func TestGetSigningCommitments(t *testing.T) {
 			},
 		}
 
-		mockConnectionFactory := &MockSparkServiceClientFactory{
-			conn: mockConnection,
+		mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+			conn: mockFrostSigner,
 		}
 
 		// Create a mock getKeyPackages function
@@ -1358,7 +1351,7 @@ func TestGetSigningCommitments(t *testing.T) {
 		}
 
 		// Test the function with our mock
-		_, err = helper.GetSigningCommitmentsInternal(context.Background(), config, keyshareIDs, mockGetKeyPackages, 1, mockConnectionFactory)
+		_, err = helper.GetSigningCommitmentsInternal(context.Background(), config, keyshareIDs, mockGetKeyPackages, 1, mockFrostSignerFactory)
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
@@ -1372,12 +1365,12 @@ func TestGetSigningCommitments(t *testing.T) {
 
 		// Test with frostRound1 error
 		t.Run("FrostRound1Error", func(t *testing.T) {
-			mockConnection := &MockSparkSvcConnection{
+			mockFrostSigner := &MockSparkServiceFrostSigner{
 				frostRound1Error: errors.New("frost round 1 failed"),
 			}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			keyshareIDs := []uuid.UUID{uuid.New()}
@@ -1398,7 +1391,7 @@ func TestGetSigningCommitments(t *testing.T) {
 				return result, nil
 			}
 
-			_, err := helper.GetSigningCommitmentsInternal(context.Background(), config, keyshareIDs, mockGetKeyPackages, 1, mockConnectionFactory)
+			_, err := helper.GetSigningCommitmentsInternal(context.Background(), config, keyshareIDs, mockGetKeyPackages, 1, mockFrostSignerFactory)
 			if err == nil {
 				t.Fatal("Expected error when frostRound1 fails, got nil")
 			}
@@ -1410,10 +1403,10 @@ func TestGetSigningCommitments(t *testing.T) {
 
 		// Test with getKeyPackages error
 		t.Run("GetKeyPackagesError", func(t *testing.T) {
-			mockConnection := &MockSparkSvcConnection{}
+			mockFrostSigner := &MockSparkServiceFrostSigner{}
 
-			mockConnectionFactory := &MockSparkServiceClientFactory{
-				conn: mockConnection,
+			mockFrostSignerFactory := &MockSparkServiceFrostSignerFactory{
+				conn: mockFrostSigner,
 			}
 
 			keyshareIDs := []uuid.UUID{uuid.New()}
@@ -1422,7 +1415,7 @@ func TestGetSigningCommitments(t *testing.T) {
 				return nil, errors.New("database connection failed")
 			}
 
-			_, err := helper.GetSigningCommitmentsInternal(context.Background(), config, keyshareIDs, mockGetKeyPackages, 1, mockConnectionFactory)
+			_, err := helper.GetSigningCommitmentsInternal(context.Background(), config, keyshareIDs, mockGetKeyPackages, 1, mockFrostSignerFactory)
 			if err == nil {
 				t.Fatal("Expected error when getKeyPackages fails, got nil")
 			}

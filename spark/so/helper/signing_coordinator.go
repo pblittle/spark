@@ -17,7 +17,6 @@ import (
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/handler/signing_handler"
 	"github.com/lightsparkdev/spark/so/objects"
-	"google.golang.org/grpc"
 
 	pbcommon "github.com/lightsparkdev/spark/proto/common"
 	pbfrost "github.com/lightsparkdev/spark/proto/frost"
@@ -68,51 +67,64 @@ func (s *SigningResult) MarshalProto() (*pbspark.SigningResult, error) {
 	}, nil
 }
 
-type SparkServiceConnection interface {
-	Connection() *grpc.ClientConn
-	Close()
-	NewClient() pbinternal.SparkInternalServiceClient
+type SparkServiceFrostSigner interface {
+	CallFrostRound1(ctx context.Context, operator *so.SigningOperator, req *pbinternal.FrostRound1Request) (*pbinternal.FrostRound1Response, error)
+	CallFrostRound2(ctx context.Context, operator *so.SigningOperator, req *pbinternal.FrostRound2Request) (*pbinternal.FrostRound2Response, error)
 }
 
-type SparkServiceClientFactory interface {
-	NewConnection(operator *so.SigningOperator) (SparkServiceConnection, error)
-	IsMock() bool
+type SparkServiceFrostSignerFactory interface {
+	NewFrostSigner(config *so.Config) (SparkServiceFrostSigner, error)
 }
 
-type SparkServiceConnectionImpl struct {
-	conn *grpc.ClientConn
+type SparkServiceFrostSignerImpl struct {
+	config *so.Config
 }
 
-type SparkServiceClientFactoryImpl struct{}
+type SparkServiceFrostSignerFactoryImpl struct {
+}
 
-func (c *SparkServiceClientFactoryImpl) NewConnection(operator *so.SigningOperator) (SparkServiceConnection, error) {
-	conn, err := operator.NewGRPCConnection()
-	if err != nil {
-		return nil, err
+func (c *SparkServiceFrostSignerFactoryImpl) NewFrostSigner(config *so.Config) (SparkServiceFrostSigner, error) {
+	return &SparkServiceFrostSignerImpl{config: config}, nil
+}
+
+func (c *SparkServiceFrostSignerImpl) CallFrostRound1(ctx context.Context, operator *so.SigningOperator, req *pbinternal.FrostRound1Request) (*pbinternal.FrostRound1Response, error) {
+	// This is a shortcut to avoid an unnecessary round trip when we're asking
+	// for signing from the current SO. That is, no need for a gRPC call to
+	// ourself.
+	if operator.Identifier == c.config.Identifier {
+		handler := signing_handler.NewFrostSigningHandler(c.config)
+		return handler.FrostRound1(ctx, req)
+	} else {
+		conn, err := operator.NewGRPCConnection()
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		client := pbinternal.NewSparkInternalServiceClient(conn)
+		return client.FrostRound1(ctx, req)
 	}
-	return &SparkServiceConnectionImpl{conn: conn}, nil
 }
 
-func (c *SparkServiceClientFactoryImpl) IsMock() bool {
-	return false
-}
-
-func (c *SparkServiceConnectionImpl) Connection() *grpc.ClientConn {
-	return c.conn
-}
-
-func (c *SparkServiceConnectionImpl) Close() {
-	// Note that conn.Close() actually does return an error, but in all our use
-	// cases, we ignore it anyway, so we don't bother to return it here.
-	c.conn.Close()
-}
-
-func (c *SparkServiceConnectionImpl) NewClient() pbinternal.SparkInternalServiceClient {
-	return pbinternal.NewSparkInternalServiceClient(c.conn)
+func (c *SparkServiceFrostSignerImpl) CallFrostRound2(ctx context.Context, operator *so.SigningOperator, req *pbinternal.FrostRound2Request) (*pbinternal.FrostRound2Response, error) {
+	// This is a shortcut to avoid an unnecessary round trip when we're asking
+	// for signing from the current SO. That is, no need for a gRPC call to
+	// ourself.
+	if operator.Identifier == c.config.Identifier {
+		handler := signing_handler.NewFrostSigningHandler(c.config)
+		return handler.FrostRound2(ctx, req)
+	} else {
+		conn, err := operator.NewGRPCConnection()
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		client := pbinternal.NewSparkInternalServiceClient(conn)
+		return client.FrostRound2(ctx, req)
+	}
 }
 
 // frostRound1 performs the first round of the Frost signing. It gathers the signing commitments from all operators.
-func frostRound1(ctx context.Context, config *so.Config, signingKeyshareIDs []uuid.UUID, operatorSelection *OperatorSelection, publicKeyMap map[string][]byte, count uint32, sparkServiceClientFactory SparkServiceClientFactory) (map[string][]objects.SigningCommitment, error) {
+func frostRound1(ctx context.Context, config *so.Config, signingKeyshareIDs []uuid.UUID, operatorSelection *OperatorSelection, publicKeyMap map[string][]byte, count uint32, sparkServiceClientFactory SparkServiceFrostSignerFactory) (map[string][]objects.SigningCommitment, error) {
 	return ExecuteTaskWithAllOperators(ctx, config, operatorSelection, func(ctx context.Context, operator *so.SigningOperator) ([]objects.SigningCommitment, error) {
 		keyshareIDs := make([]string, len(signingKeyshareIDs))
 		for i, id := range signingKeyshareIDs {
@@ -125,25 +137,13 @@ func frostRound1(ctx context.Context, config *so.Config, signingKeyshareIDs []uu
 			Count:       count,
 		}
 
-		var response *pbinternal.FrostRound1Response
-		if operator.Identifier == config.Identifier && !sparkServiceClientFactory.IsMock() {
-			var err error
-			handler := signing_handler.NewFrostSigningHandler(config)
-			response, err = handler.FrostRound1(ctx, request)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			conn, err := sparkServiceClientFactory.NewConnection(operator)
-			if err != nil {
-				return nil, err
-			}
-			defer conn.Close()
-			client := conn.NewClient()
-			response, err = client.FrostRound1(ctx, request)
-			if err != nil {
-				return nil, err
-			}
+		signer, err := sparkServiceClientFactory.NewFrostSigner(config)
+		if err != nil {
+			return nil, err
+		}
+		response, err := signer.CallFrostRound1(ctx, operator, request)
+		if err != nil {
+			return nil, err
 		}
 
 		commitments := make([]objects.SigningCommitment, len(response.SigningCommitments))
@@ -165,7 +165,7 @@ func frostRound2(
 	jobs []*SigningJob,
 	round1 map[string][]objects.SigningCommitment,
 	operatorSelection *OperatorSelection,
-	sparkServiceClientFactory SparkServiceClientFactory,
+	sparkServiceClientFactory SparkServiceFrostSignerFactory,
 ) (map[string]map[string][]byte, error) {
 	logger := logging.GetLoggerFromContext(ctx)
 	for _, job := range jobs {
@@ -212,25 +212,13 @@ func frostRound2(
 			SigningJobs: signingJobs,
 		}
 
-		var response *pbinternal.FrostRound2Response
-		if operator.Identifier == config.Identifier && !sparkServiceClientFactory.IsMock() {
-			handler := signing_handler.NewFrostSigningHandler(config)
-			var err error
-			response, err = handler.FrostRound2(ctx, request)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			conn, err := sparkServiceClientFactory.NewConnection(operator)
-			if err != nil {
-				return nil, err
-			}
-			defer conn.Close()
-			client := conn.NewClient()
-			response, err = client.FrostRound2(ctx, request)
-			if err != nil {
-				return nil, err
-			}
+		signer, err := sparkServiceClientFactory.NewFrostSigner(config)
+		if err != nil {
+			return nil, err
+		}
+		response, err := signer.CallFrostRound2(ctx, operator, request)
+		if err != nil {
+			return nil, err
 		}
 
 		results := make(map[string][]byte)
@@ -362,12 +350,12 @@ func SignFrost(
 	config *so.Config,
 	jobs []*SigningJob,
 ) ([]*SigningResult, error) {
-	return SignFrostInternal(ctx, config, jobs, ent.GetKeyPackages, &SparkServiceClientFactoryImpl{})
+	return SignFrostInternal(ctx, config, jobs, ent.GetKeyPackages, &SparkServiceFrostSignerFactoryImpl{})
 }
 
 type KeyPackageProvider func(ctx context.Context, config *so.Config, keyshareIDs []uuid.UUID) (map[uuid.UUID]*pbfrost.KeyPackage, error)
 
-func SignFrostInternal(ctx context.Context, config *so.Config, jobs []*SigningJob, getKeyPackages KeyPackageProvider, sparkServiceClientFactory SparkServiceClientFactory) ([]*SigningResult, error) {
+func SignFrostInternal(ctx context.Context, config *so.Config, jobs []*SigningJob, getKeyPackages KeyPackageProvider, sparkServiceClientFactory SparkServiceFrostSignerFactory) ([]*SigningResult, error) {
 	selection := OperatorSelection{Option: OperatorSelectionOptionThreshold, Threshold: int(config.Threshold)}
 	signingKeyshareIDs := SigningKeyshareIDsFromSigningJobs(jobs)
 	signingKeyshares, err := getKeyPackages(ctx, config, signingKeyshareIDs)
@@ -400,10 +388,10 @@ func SignFrostInternal(ctx context.Context, config *so.Config, jobs []*SigningJo
 }
 
 func SignFrostWithPregeneratedNonce(ctx context.Context, config *so.Config, jobs []*SigningJobWithPregeneratedNonce) ([]*SigningResult, error) {
-	return SignFrostWithPregeneratedNonceInternal(ctx, config, jobs, ent.GetKeyPackages, &SparkServiceClientFactoryImpl{})
+	return SignFrostWithPregeneratedNonceInternal(ctx, config, jobs, ent.GetKeyPackages, &SparkServiceFrostSignerFactoryImpl{})
 }
 
-func SignFrostWithPregeneratedNonceInternal(ctx context.Context, config *so.Config, jobs []*SigningJobWithPregeneratedNonce, getKeyPackages KeyPackageProvider, sparkServiceClientFactory SparkServiceClientFactory) ([]*SigningResult, error) {
+func SignFrostWithPregeneratedNonceInternal(ctx context.Context, config *so.Config, jobs []*SigningJobWithPregeneratedNonce, getKeyPackages KeyPackageProvider, sparkServiceClientFactory SparkServiceFrostSignerFactory) ([]*SigningResult, error) {
 	signingJobs := make([]*SigningJob, len(jobs))
 	for i, job := range jobs {
 		signingJobs[i] = &job.SigningJob
@@ -476,10 +464,10 @@ func prepareResults(
 
 // GetSigningCommitments gets the signing commitments for the given keyshare ids.
 func GetSigningCommitments(ctx context.Context, config *so.Config, keyshareIDs []uuid.UUID, count uint32) (map[string][]objects.SigningCommitment, error) {
-	return GetSigningCommitmentsInternal(ctx, config, keyshareIDs, ent.GetKeyPackages, count, &SparkServiceClientFactoryImpl{})
+	return GetSigningCommitmentsInternal(ctx, config, keyshareIDs, ent.GetKeyPackages, count, &SparkServiceFrostSignerFactoryImpl{})
 }
 
-func GetSigningCommitmentsInternal(ctx context.Context, config *so.Config, keyshareIDs []uuid.UUID, getKeyPackages KeyPackageProvider, count uint32, sparkServiceClientFactory SparkServiceClientFactory) (map[string][]objects.SigningCommitment, error) {
+func GetSigningCommitmentsInternal(ctx context.Context, config *so.Config, keyshareIDs []uuid.UUID, getKeyPackages KeyPackageProvider, count uint32, sparkServiceClientFactory SparkServiceFrostSignerFactory) (map[string][]objects.SigningCommitment, error) {
 	if count == 0 {
 		return nil, errors.New("count cannot be 0")
 	}
