@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	testutil "github.com/lightsparkdev/spark/test_util"
@@ -19,22 +21,21 @@ func TestExitSingleNodeTrees(t *testing.T) {
 	}
 	client := testutil.GetBitcoinClient()
 
-	roots := make([]*pb.TreeNode, 0)
-	privKeys := make([]*secp256k1.PrivateKey, 0)
+	var roots []*pb.TreeNode
+	var privKeys []*secp256k1.PrivateKey
 	treeAmountSats := 100_000
 	for range 5 {
-		priKey, err := secp256k1.GeneratePrivateKey()
+		priKey, err := keys.GeneratePrivateKey()
 		require.NoError(t, err, "failed to create node signing private key")
-		root, err := testutil.CreateNewTree(config, faucet, priKey, int64(treeAmountSats))
+		root, err := testutil.CreateNewTree(config, faucet, priKey.ToBTCEC(), int64(treeAmountSats))
 		require.NoError(t, err, "failed to create new tree")
 		roots = append(roots, root)
-		privKeys = append(privKeys, priKey)
+		privKeys = append(privKeys, priKey.ToBTCEC())
 	}
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	require.NoError(t, err, "failed to create random address")
 
 	conn, err := common.NewGRPCConnectionWithTestTLS(config.CoodinatorAddress(), nil)

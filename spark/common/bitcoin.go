@@ -5,13 +5,13 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
 )
@@ -210,43 +210,28 @@ func SchemaNetwork(network Network) st.Network {
 }
 
 // P2TRScriptFromPubKey returns a P2TR script from a public key.
-func P2TRScriptFromPubKey(pubKey *secp256k1.PublicKey) ([]byte, error) {
-	taprootKey := txscript.ComputeTaprootKeyNoScript(pubKey)
+func P2TRScriptFromPubKey(pubKey keys.Public) ([]byte, error) {
+	taprootKey := txscript.ComputeTaprootKeyNoScript(pubKey.ToBTCEC())
 	return txscript.PayToTaprootScript(taprootKey)
 }
 
-func P2TRRawAddressFromPublicKey(pubKey []byte, network Network) (btcutil.Address, error) {
-	if len(pubKey) != 33 {
-		return nil, fmt.Errorf("public key must be 33 bytes")
-	}
-
-	internalKey, err := btcec.ParsePubKey(pubKey)
-	if err != nil {
-		return nil, err
-	}
-
+func P2TRRawAddressFromPublicKey(pubKey keys.Public, network Network) (btcutil.Address, error) {
 	// Tweak the internal key with empty merkle root
-	taprootKey := txscript.ComputeTaprootKeyNoScript(internalKey)
-	taprootAddress, err := btcutil.NewAddressTaproot(
+	taprootKey := txscript.ComputeTaprootKeyNoScript(pubKey.ToBTCEC())
+	return btcutil.NewAddressTaproot(
 		// Convert a 33 byte public key to a 32 byte x-only public key
 		schnorr.SerializePubKey(taprootKey),
 		NetworkParams(network),
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	return taprootAddress, nil
 }
 
 // P2TRAddressFromPublicKey returns a P2TR address from a public key.
-func P2TRAddressFromPublicKey(pubKey []byte, network Network) (*string, error) {
+func P2TRAddressFromPublicKey(pubKey keys.Public, network Network) (string, error) {
 	addrRaw, err := P2TRRawAddressFromPublicKey(pubKey, network)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	addr := addrRaw.EncodeAddress()
-	return &addr, nil
+	return addrRaw.EncodeAddress(), nil
 }
 
 // P2TRAddressFromPkScript returns a P2TR address from a public script.

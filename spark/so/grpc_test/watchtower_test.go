@@ -5,7 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/lightsparkdev/spark"
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
@@ -31,9 +32,9 @@ func TestTimelockExpirationHappyPath(t *testing.T) {
 	err = faucet.Refill()
 	require.NoError(t, err)
 
-	leafPrivKey, err := secp256k1.GeneratePrivateKey()
+	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	rootNode, err := testutil.CreateNewTree(walletConfig, faucet, leafPrivKey, 100_000)
+	rootNode, err := testutil.CreateNewTree(walletConfig, faucet, leafPrivKey.ToBTCEC(), 100_000)
 	require.NoError(t, err)
 
 	// Reduce timelock
@@ -44,7 +45,7 @@ func TestTimelockExpirationHappyPath(t *testing.T) {
 	}
 
 	for getCurrentTimelock(rootNode) > spark.TimeLockInterval*2 {
-		rootNode, err = wallet.RefreshTimelockRefundTx(context.Background(), walletConfig, rootNode, leafPrivKey)
+		rootNode, err = wallet.RefreshTimelockRefundTx(context.Background(), walletConfig, rootNode, leafPrivKey.ToBTCEC())
 		require.NoError(t, err)
 	}
 	require.LessOrEqual(t, getCurrentTimelock(rootNode), int64(spark.TimeLockInterval*2))
@@ -65,7 +66,7 @@ func TestTimelockExpirationHappyPath(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate a block to start
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(leafPrivKey.PubKey().SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(leafPrivKey.Public(), common.Regtest)
 	require.NoError(t, err)
 	_, err = client.GenerateToAddress(1, randomAddress, nil)
 	require.NoError(t, err)
@@ -165,19 +166,19 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create sender wallet and tree
-	senderLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	senderLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	senderRootNode, err := testutil.CreateNewTree(walletConfig, faucet, senderLeafPrivKey, 100_000)
+	senderRootNode, err := testutil.CreateNewTree(walletConfig, faucet, senderLeafPrivKey.ToBTCEC(), 100_000)
 	require.NoError(t, err)
 
 	// Create receiver wallet
-	receiverPrivKey, err := secp256k1.GeneratePrivateKey()
+	receiverPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	receiverConfig, err := testutil.TestWalletConfigWithIdentityKey(*receiverPrivKey)
+	receiverConfig, err := testutil.TestWalletConfigWithIdentityKey(*receiverPrivKey.ToBTCEC())
 	require.NoError(t, err)
 
 	// Prepare transfer - sender creates new signing key for the transfer
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	transferNode := wallet.LeafKeyTweak{
@@ -196,7 +197,7 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 		senderCtx,
 		walletConfig,
 		leavesToTransfer,
-		receiverPrivKey.PubKey().SerializeCompressed(),
+		receiverPrivKey.Public().Serialize(),
 		time.Now().Add(10*time.Minute),
 	)
 	require.NoError(t, err, "failed to transfer tree node")
@@ -218,7 +219,7 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 	require.Equal(t, newLeafPrivKey.Serialize(), leafPrivKeyMap[senderRootNode.Id])
 
 	// Receiver claims the transfer with a final signing key
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create final node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
@@ -259,7 +260,7 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate a block to start
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(finalLeafPrivKey.PubKey().SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(finalLeafPrivKey.Public(), common.Regtest)
 	require.NoError(t, err)
 	_, err = client.GenerateToAddress(1, randomAddress, nil)
 	require.NoError(t, err)
@@ -302,7 +303,7 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 
 	// Now reduce the timelock on the refund transaction
 	for getCurrentTimelock(transferredNode.RefundTx) > spark.TimeLockInterval*2 {
-		transferredNode, err = wallet.RefreshTimelockRefundTx(context.Background(), receiverConfig, transferredNode, finalLeafPrivKey)
+		transferredNode, err = wallet.RefreshTimelockRefundTx(context.Background(), receiverConfig, transferredNode, finalLeafPrivKey.ToBTCEC())
 		require.NoError(t, err)
 	}
 	require.LessOrEqual(t, getCurrentTimelock(transferredNode.RefundTx), int64(spark.TimeLockInterval*2))
@@ -366,11 +367,11 @@ func TestTimelockExpirationMultiLevelTree(t *testing.T) {
 	err = faucet.Refill()
 	require.NoError(t, err)
 
-	leafPrivKey, err := secp256k1.GeneratePrivateKey()
+	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	// Create a multi-level tree with 1 level (root + 2 children + 2 leaves = 5 nodes total)
-	tree, nodes, err := testutil.CreateNewTreeWithLevels(walletConfig, faucet, leafPrivKey, 100_000, 1)
+	tree, nodes, err := testutil.CreateNewTreeWithLevels(walletConfig, faucet, leafPrivKey.ToBTCEC(), 100_000, 1)
 	require.NoError(t, err)
 	require.Len(t, nodes, 5)
 
@@ -382,7 +383,8 @@ func TestTimelockExpirationMultiLevelTree(t *testing.T) {
 
 	// Get the signing key for the leaf node
 	signingKeyBytes := tree.Children[1].SigningPrivateKey
-	signingKey := secp256k1.PrivKeyFromBytes(signingKeyBytes)
+	signingKey, err := keys.ParsePrivateKey(signingKeyBytes)
+	require.NoError(t, err)
 
 	// Reduce timelock for both root and leaf nodes
 	getCurrentTimelock := func(txBytes []byte) int64 {
@@ -393,7 +395,7 @@ func TestTimelockExpirationMultiLevelTree(t *testing.T) {
 
 	// Reduce timelock on leaf node transaction
 	for getCurrentTimelock(leafNode.NodeTx) > spark.TimeLockInterval*2 {
-		updatedNodes, err := wallet.RefreshTimelockNodes(context.Background(), walletConfig, []*pb.TreeNode{leafNode}, parentNode, signingKey)
+		updatedNodes, err := wallet.RefreshTimelockNodes(context.Background(), walletConfig, []*pb.TreeNode{leafNode}, parentNode, signingKey.ToBTCEC())
 		require.NoError(t, err)
 		leafNode = updatedNodes[0]
 	}
@@ -425,7 +427,7 @@ func TestTimelockExpirationMultiLevelTree(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate a block to start
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(leafPrivKey.PubKey().SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(leafPrivKey.Public(), common.Regtest)
 	require.NoError(t, err)
 	_, err = client.GenerateToAddress(1, randomAddress, nil)
 	require.NoError(t, err)
@@ -473,7 +475,7 @@ func TestTimelockExpirationMultiLevelTree(t *testing.T) {
 
 	// Generate blocks until parent node timelock expires
 	for getCurrentTimelock(leafNode.NodeTx) > spark.TimeLockInterval*2 {
-		updatedNodes, err := wallet.RefreshTimelockNodes(context.Background(), walletConfig, []*pb.TreeNode{leafNode}, parentNode, signingKey)
+		updatedNodes, err := wallet.RefreshTimelockNodes(context.Background(), walletConfig, []*pb.TreeNode{leafNode}, parentNode, signingKey.ToBTCEC())
 		require.NoError(t, err)
 		leafNode = updatedNodes[0]
 	}
@@ -589,21 +591,20 @@ func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
 	require.NotNil(t, invoice)
 
 	// SSP creates a node of 12345 sats
-	sspLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 12345)
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 12345)
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	leaves := []wallet.LeafKeyTweak{}
-	leaves = append(leaves, wallet.LeafKeyTweak{
+	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
 		SigningPrivKey:    sspLeafPrivKey.Serialize(),
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
-	})
+	}}
 
 	// SSP swaps nodes for preimage (lightning receive)
 	response, err := wallet.SwapNodesForPreimage(
@@ -644,7 +645,7 @@ func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
 	require.Equal(t, leafPrivKeyMap[nodeToSend.Id], newLeafPrivKey.Serialize(), "wrong leaf signing private key")
 
 	// User claims the transfer with a final signing key
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create final node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
@@ -671,7 +672,7 @@ func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
 
 	// Reduce timelock on the transferred node's refund transaction
 	for getCurrentTimelock(transferredNode.RefundTx) > spark.TimeLockInterval*2 {
-		transferredNode, err = wallet.RefreshTimelockRefundTx(context.Background(), userConfig, transferredNode, finalLeafPrivKey)
+		transferredNode, err = wallet.RefreshTimelockRefundTx(context.Background(), userConfig, transferredNode, finalLeafPrivKey.ToBTCEC())
 		require.NoError(t, err)
 	}
 	require.LessOrEqual(t, getCurrentTimelock(transferredNode.RefundTx), int64(spark.TimeLockInterval*2))
@@ -680,9 +681,7 @@ func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
 	defer cancel()
 
 	ctx, dbCtx, err := db.NewTestContext(t, ctx, config.DatabaseDriver(), config.DatabasePath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer dbCtx.Close()
 
 	// Serialize the node transaction for database queries
@@ -692,7 +691,7 @@ func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate a block to start
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(finalLeafPrivKey.PubKey().SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(finalLeafPrivKey.Public(), common.Regtest)
 	require.NoError(t, err)
 	_, err = client.GenerateToAddress(1, randomAddress, nil)
 	require.NoError(t, err)

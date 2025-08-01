@@ -10,7 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
@@ -205,12 +206,12 @@ func TestStartDepositTreeCreationBasic(t *testing.T) {
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
+	userPubKeyBytes := userPubKey.Serialize()
 
 	leafID := uuid.New().String()
 	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
@@ -265,10 +266,9 @@ func TestStartDepositTreeCreationBasic(t *testing.T) {
 	_, err = client.SendRawTransaction(signedDepositTx, true)
 	require.NoError(t, err)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	if err != nil {
 		t.Fatalf("failed to get p2tr raw address: %v", err)
 	}
@@ -319,12 +319,12 @@ func TestStartDepositTreeCreationUnknownAddress(t *testing.T) {
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
+	userPubKeyBytes := userPubKey.Serialize()
 
 	leafID := uuid.New().String()
 	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
@@ -378,10 +378,9 @@ func TestStartDepositTreeCreationUnknownAddress(t *testing.T) {
 	_, err = client.SendRawTransaction(signedDepositTx, true)
 	require.NoError(t, err)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	if err != nil {
 		t.Fatalf("failed to get p2tr raw address: %v", err)
 	}
@@ -396,7 +395,7 @@ func TestStartDepositTreeCreationUnknownAddress(t *testing.T) {
 	depositTx.TxOut[0].PkScript[30] = depositTx.TxOut[0].PkScript[30] ^ 1
 
 	_, err = wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
-	assert.Error(t, err)
+	require.Error(t, err)
 	grpcStatus, ok := status.FromError(err)
 	assert.True(t, ok)
 	assert.Equal(t, codes.NotFound, grpcStatus.Code())
@@ -421,12 +420,12 @@ func TestStartDepositTreeCreationWithoutCustomLeafID(t *testing.T) {
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
+	userPubKeyBytes := userPubKey.Serialize()
 
 	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, nil, false)
 	if err != nil {
@@ -466,10 +465,9 @@ func TestStartDepositTreeCreationWithoutCustomLeafID(t *testing.T) {
 	_, err = client.SendRawTransaction(signedDepositTx, true)
 	require.NoError(t, err)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	if err != nil {
 		t.Fatalf("failed to get p2tr raw address: %v", err)
 	}
@@ -509,12 +507,12 @@ func TestStartDepositTreeCreationConcurrentWithSameTx(t *testing.T) {
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
+	userPubKeyBytes := userPubKey.Serialize()
 
 	leafID := uuid.New().String()
 	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
@@ -555,10 +553,9 @@ func TestStartDepositTreeCreationConcurrentWithSameTx(t *testing.T) {
 	_, err = client.SendRawTransaction(signedDepositTx, true)
 	require.NoError(t, err)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	if err != nil {
 		t.Fatalf("failed to get p2tr raw address: %v", err)
 	}
@@ -644,12 +641,12 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
+	userPubKeyBytes := userPubKey.Serialize()
 
 	leafID := uuid.New().String()
 	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
@@ -687,12 +684,12 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 	// User should not be able to transfer funds since
 	// L1 tx has not confirmed
 	rootNode := resp.Nodes[0]
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatalf("failed to create new node signing private key: %v", err)
 	}
 
-	receiverPrivKey, err := secp256k1.GeneratePrivateKey()
+	receiverPrivKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatalf("failed to create receiver private key: %v", err)
 	}
@@ -708,7 +705,7 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 		context.Background(),
 		config,
 		leavesToTransfer[:],
-		receiverPrivKey.PubKey().SerializeCompressed(),
+		receiverPrivKey.Public().Serialize(),
 		time.Now().Add(10*time.Minute),
 	)
 	if err == nil {
@@ -723,10 +720,9 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 	_, err = client.SendRawTransaction(signedDepositTx, true)
 	require.NoError(t, err)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	if err != nil {
 		t.Fatalf("failed to get p2tr raw address: %v", err)
 	}
@@ -743,7 +739,7 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 		context.Background(),
 		config,
 		leavesToTransfer[:],
-		receiverPrivKey.PubKey().SerializeCompressed(),
+		receiverPrivKey.Public().Serialize(),
 		time.Now().Add(10*time.Minute),
 	)
 	if err != nil {
@@ -776,12 +772,12 @@ func TestStartDepositTreeCreationUnconfirmed(t *testing.T) {
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
+	userPubKeyBytes := userPubKey.Serialize()
 
 	leafID := uuid.New().String()
 	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
@@ -819,12 +815,12 @@ func TestStartDepositTreeCreationUnconfirmed(t *testing.T) {
 	// User should not be able to transfer funds since
 	// L1 tx has not confirmed
 	rootNode := resp.Nodes[0]
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatalf("failed to create new node signing private key: %v", err)
 	}
 
-	receiverPrivKey, err := secp256k1.GeneratePrivateKey()
+	receiverPrivKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatalf("failed to create receiver private key: %v", err)
 	}
@@ -846,7 +842,7 @@ func TestStartDepositTreeCreationUnconfirmed(t *testing.T) {
 		context.Background(),
 		config,
 		leavesToTransfer[:],
-		receiverPrivKey.PubKey().SerializeCompressed(),
+		receiverPrivKey.Public().Serialize(),
 		time.Now().Add(10*time.Minute),
 	)
 	assert.ErrorContains(t, err, "failed to start transfer")
@@ -870,12 +866,12 @@ func TestStartDepositTreeCreationIdempotency(t *testing.T) {
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
+	userPubKeyBytes := userPubKey.Serialize()
 
 	leafID := uuid.New().String()
 	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
@@ -930,10 +926,10 @@ func TestStartDepositTreeCreationIdempotency(t *testing.T) {
 	_, err = client.SendRawTransaction(signedDepositTx, true)
 	require.NoError(t, err)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomPubKey := randomKey.Public()
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey, common.Regtest)
 	if err != nil {
 		t.Fatalf("failed to get p2tr raw address: %v", err)
 	}
@@ -990,12 +986,12 @@ func TestStartDepositTreeCreationDoubleClaim(t *testing.T) {
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
+	userPubKeyBytes := userPubKey.Serialize()
 
 	leafID := uuid.New().String()
 	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
@@ -1050,10 +1046,10 @@ func TestStartDepositTreeCreationDoubleClaim(t *testing.T) {
 	_, err = client.SendRawTransaction(signedDepositTx, true)
 	require.NoError(t, err)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomPubKey := randomKey.Public()
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey, common.Regtest)
 	if err != nil {
 		t.Fatalf("failed to get p2tr raw address: %v", err)
 	}
@@ -1122,12 +1118,12 @@ func TestQueryUnusedDepositAddresses(t *testing.T) {
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
+	userPubKeyBytes := userPubKey.Serialize()
 
 	for i := 0; i < 225; i++ {
 		leafID := uuid.New().String()
@@ -1175,12 +1171,12 @@ func TestQueryUnusedDepositAddressesBackwardsCompatibility(t *testing.T) {
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
+	userPubKey := privKey.Public()
+	userPubKeyBytes := userPubKey.Serialize()
 
 	for i := 0; i < 225; i++ {
 		leafID := uuid.New().String()

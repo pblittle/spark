@@ -5,6 +5,8 @@ package wallet
 import (
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -125,7 +127,7 @@ func createRefundTxs(
 		Sequence:         sequence,
 	})
 
-	refundPkScript, err := common.P2TRScriptFromPubKey(receivingPubkey)
+	refundPkScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*receivingPubkey))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create refund pkscript: %w", err)
 	}
@@ -165,7 +167,7 @@ func createConnectorRefundTransaction(
 		Sequence:         sequence,
 	})
 	refundTx.AddTxIn(wire.NewTxIn(connectorOutput, nil, nil))
-	receiverScript, err := common.P2TRScriptFromPubKey(receiverPubKey)
+	receiverScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*receiverPubKey))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create receiver script: %w", err)
 	}

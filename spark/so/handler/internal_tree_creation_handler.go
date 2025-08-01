@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
@@ -75,7 +77,11 @@ func (h *InternalTreeCreationHandler) markExistingSigningKeysharesAsUsed(ctx con
 }
 
 func (h *InternalTreeCreationHandler) generateAndStoreDepositAddress(ctx context.Context, network common.Network, seKeyshare *ent.SigningKeyshare, userPubkey, identityPubkey []byte, save bool) (string, []byte, error) {
-	combinedPublicKey, err := common.AddPublicKeys(seKeyshare.PublicKey, userPubkey)
+	combinedPublicKeyBytes, err := common.AddPublicKeys(seKeyshare.PublicKey, userPubkey)
+	if err != nil {
+		return "", nil, err
+	}
+	combinedPublicKey, err := keys.ParsePublicKey(combinedPublicKeyBytes)
 	if err != nil {
 		return "", nil, err
 	}
@@ -92,16 +98,16 @@ func (h *InternalTreeCreationHandler) generateAndStoreDepositAddress(ctx context
 			SetSigningKeyshareID(seKeyshare.ID).
 			SetOwnerIdentityPubkey(identityPubkey).
 			SetOwnerSigningPubkey(userPubkey).
-			SetAddress(*address).
+			SetAddress(address).
 			Save(ctx)
 		if err != nil {
 			return "", nil, err
 		}
 	}
 
-	addressHash := sha256.Sum256([]byte(*address))
+	addressHash := sha256.Sum256([]byte(address))
 	signature := ecdsa.Sign(h.config.IdentityPrivateKey.ToBTCEC(), addressHash[:])
-	return *address, signature.Serialize(), nil
+	return address, signature.Serialize(), nil
 }
 
 func (h *InternalTreeCreationHandler) prepareDepositAddress(ctx context.Context, req *pbinternal.PrepareTreeAddressRequest, existingSigningKeyshares map[string]*ent.SigningKeyshare) (map[string][]byte, error) {

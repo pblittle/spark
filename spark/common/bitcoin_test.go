@@ -5,12 +5,13 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/go-playground/assert/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -26,19 +27,15 @@ func TestP2TRAddressFromPublicKey(t *testing.T) {
 	}
 
 	for _, tv := range testVectors {
-		pubKey, err := hex.DecodeString(tv.pubKeyHex)
-		if err != nil {
-			t.Fatalf("Failed to decode public key: %v", err)
-		}
+		pubKeyBytes, err := hex.DecodeString(tv.pubKeyHex)
+		require.NoError(t, err)
+		pubKey, err := keys.ParsePublicKey(pubKeyBytes)
+		require.NoError(t, err)
 
 		addr, err := P2TRAddressFromPublicKey(pubKey, tv.network)
-		if err != nil {
-			t.Fatalf("Failed to get P2TR address: %v", err)
-		}
+		require.NoError(t, err)
 
-		if *addr != tv.p2trAddr {
-			t.Fatalf("P2TR address mismatch: got %s, want %s", *addr, tv.p2trAddr)
-		}
+		assert.Equal(t, tv.p2trAddr, addr)
 	}
 }
 
@@ -54,27 +51,19 @@ func TestP2TRAddressFromPkScript(t *testing.T) {
 
 	for _, tv := range testVectors {
 		pkScript, err := hex.DecodeString(tv.pkScriptHex)
-		if err != nil {
-			t.Fatalf("Failed to decode pubkey script: %v", err)
-		}
+		require.NoError(t, err)
 
 		addr, err := P2TRAddressFromPkScript(pkScript, tv.network)
-		if err != nil {
-			t.Fatalf("Failed to get P2TR address: %v", err)
-		}
+		require.NoError(t, err)
 
-		if *addr != tv.p2trAddr {
-			t.Fatalf("P2TR address mismatch: got %s, want %s", *addr, tv.p2trAddr)
-		}
+		assert.Equal(t, tv.p2trAddr, *addr)
 	}
 }
 
 func TestTxFromRawTxHex(t *testing.T) {
 	rawTxHex := "02000000000102dc552c6c0ef5ed0d8cd64bd1d2d1ffd7cf0ec0b5ad8df2a4c6269b59cffcc696010000000000000000603fbd40e86ee82258c57571c557b89a444aabf5b6a05574e6c6848379febe9a00000000000000000002e86905000000000022512024741d89092c5965f35a63802352fa9c7fae4a23d471b9dceb3379e8ff6b7dd1d054080000000000220020aea091435e74e3c1eba0bd964e67a05f300ace9e73efa66fe54767908f3e68800140f607486d87f59af453d62cffe00b6836d8cca2c89a340fab5fe842b20696908c77fd2f64900feb0cbb1c14da3e02271503fc465fcfb1b043c8187dccdd494558014067dff0f0c321fc8abc28bf555acfdfa5ee889b6909b24bc66cedf05e8cc2750a4d95037c3dc9c24f1e502198bade56fef61a2504809f5b2a60a62afeaf8bf52e00000000"
 	_, err := TxFromRawTxHex(rawTxHex)
-	if err != nil {
-		t.Fatalf("Failed to decode raw transaction: %v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestSigHashFromTx(t *testing.T) {
@@ -93,18 +82,15 @@ func TestSigHashFromTx(t *testing.T) {
 
 	sighash, _ := SigHashFromTx(tx, 0, prevTx.TxOut[0])
 
-	if hex.EncodeToString(sighash) != "8da5e7aa2b03491d7c2f4359ea4968dd58f69adf9af1a2c6881be0295591c293" {
-		t.Fatalf("Sighash mismatch")
-	}
+	require.Equal(t, "8da5e7aa2b03491d7c2f4359ea4968dd58f69adf9af1a2c6881be0295591c293", hex.EncodeToString(sighash))
 }
 
 func TestVerifySignature(t *testing.T) {
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	pubKey := privKey.PubKey()
-	addr, err := P2TRAddressFromPublicKey(pubKey.SerializeCompressed(), Regtest)
+	addr, err := P2TRAddressFromPublicKey(privKey.Public(), Regtest)
 	require.NoError(t, err)
-	address, err := btcutil.DecodeAddress(*addr, &chaincfg.RegressionNetParams)
+	address, err := btcutil.DecodeAddress(addr, &chaincfg.RegressionNetParams)
 	require.NoError(t, err)
 	script, _ := txscript.PayToAddrScript(address)
 	require.NoError(t, err)
@@ -126,7 +112,7 @@ func TestVerifySignature(t *testing.T) {
 	sighash, err := SigHashFromTx(debitTx, 0, creditTx.TxOut[0])
 	require.NoError(t, err)
 	// secp vs. schnorr.sign...?
-	taprootKey := txscript.TweakTaprootPrivKey(*privKey, []byte{})
+	taprootKey := txscript.TweakTaprootPrivKey(*privKey.ToBTCEC(), []byte{})
 	sig, err := schnorr.Sign(taprootKey, sighash)
 	require.NoError(t, err)
 	require.True(t, sig.Verify(sighash, taprootKey.PubKey()))

@@ -114,9 +114,13 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 		return nil, err
 	}
 
-	combinedPublicKey, err := common.AddPublicKeys(keyshare.PublicKey, req.SigningPublicKey)
+	combinedPublicKeyBytes, err := common.AddPublicKeys(keyshare.PublicKey, req.SigningPublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add public keys for request %s: %w", logging.FormatProto("generate_deposit_address_request", req), err)
+	}
+	combinedPublicKey, err := keys.ParsePublicKey(combinedPublicKeyBytes)
+	if err != nil {
+		return nil, err
 	}
 	depositAddress, err := common.P2TRAddressFromPublicKey(combinedPublicKey, network)
 	if err != nil {
@@ -132,7 +136,7 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 		SetSigningKeyshareID(keyshare.ID).
 		SetOwnerIdentityPubkey(req.IdentityPublicKey).
 		SetOwnerSigningPubkey(req.SigningPublicKey).
-		SetAddress(*depositAddress)
+		SetAddress(depositAddress)
 	// Confirmation height is not set since nothing has been confirmed yet.
 
 	if req.IsStatic != nil && *req.IsStatic {
@@ -162,7 +166,7 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 		client := pbinternal.NewSparkInternalServiceClient(conn)
 		response, err := client.MarkKeyshareForDepositAddress(ctx, &pbinternal.MarkKeyshareForDepositAddressRequest{
 			KeyshareId:             keyshare.ID.String(),
-			Address:                *depositAddress,
+			Address:                depositAddress,
 			OwnerIdentityPublicKey: req.IdentityPublicKey,
 			OwnerSigningPublicKey:  req.SigningPublicKey,
 			IsStatic:               req.IsStatic,
@@ -181,14 +185,14 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 		return nil, fmt.Errorf("failed to generate proof of possession signatures for request %s: %w", logging.FormatProto("generate_deposit_address_request", req), err)
 	}
 
-	msg := common.ProofOfPossessionMessageHashForDepositAddress(req.IdentityPublicKey, keyshare.PublicKey, []byte(*depositAddress))
+	msg := common.ProofOfPossessionMessageHashForDepositAddress(req.IdentityPublicKey, keyshare.PublicKey, []byte(depositAddress))
 	proofOfPossessionSignature, err := helper.GenerateProofOfPossessionSignatures(ctx, config, [][]byte{msg}, []*ent.SigningKeyshare{keyshare})
 	if err != nil {
 		return nil, err
 	}
 	return &pb.GenerateDepositAddressResponse{
 		DepositAddress: &pb.Address{
-			Address:      *depositAddress,
+			Address:      depositAddress,
 			VerifyingKey: verifyingKeyBytes,
 			DepositAddressProof: &pb.DepositAddressProof{
 				AddressSignatures:          response,

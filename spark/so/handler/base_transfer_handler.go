@@ -8,6 +8,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
@@ -61,7 +63,7 @@ func validateLeafRefundTxOutput(refundTx *wire.MsgTx, receiverIdentityPublicKey 
 	if len(refundTx.TxOut) == 0 {
 		return fmt.Errorf("refund tx must have at least 1 output")
 	}
-	receiverIdentityPubkey, err := secp256k1.ParsePubKey(receiverIdentityPublicKey)
+	receiverIdentityPubkey, err := keys.ParsePublicKey(receiverIdentityPublicKey)
 	if err != nil {
 		return fmt.Errorf("unable to parse receiver pubkey: %w", err)
 	}

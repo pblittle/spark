@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
@@ -32,13 +33,10 @@ func TestTreeCreationAddressGeneration(t *testing.T) {
 	require.NoError(t, err, "failed to authenticate")
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
-
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public().Serialize(), &leafID, false)
 	require.NoError(t, err, "failed to generate deposit address")
 
 	depositTx, err := testutil.CreateTestP2TRTransaction(depositResp.DepositAddress.Address, 65536)
@@ -53,7 +51,7 @@ func TestTreeCreationAddressGeneration(t *testing.T) {
 	depositTx, err = common.TxFromRawTxBytes(decodedBytes)
 	require.NoError(t, err)
 
-	log.Printf("deposit public key: %x", hex.EncodeToString(privKey.PubKey().SerializeCompressed()))
+	log.Printf("deposit public key: %s", privKey.Public().ToHex())
 	tree, err := wallet.GenerateDepositAddressesForTree(ctx, config, depositTx, nil, uint32(vout), privKey.Serialize(), 3)
 	require.NoError(t, err)
 
@@ -77,13 +75,10 @@ func TestTreeCreationWithMultiLevels(t *testing.T) {
 	require.NoError(t, err)
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
-
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public().Serialize(), &leafID, false)
 	require.NoError(t, err)
 
 	client := testutil.GetBitcoinClient()
@@ -101,7 +96,7 @@ func TestTreeCreationWithMultiLevels(t *testing.T) {
 	depositTx, err = common.TxFromRawTxBytes(decodedBytes)
 	require.NoError(t, err)
 
-	log.Printf("deposit public key: %x", hex.EncodeToString(privKey.PubKey().SerializeCompressed()))
+	log.Printf("deposit public key: %x", hex.EncodeToString(privKey.Public().Serialize()))
 	tree, err := wallet.GenerateDepositAddressesForTree(ctx, config, depositTx, nil, uint32(vout), privKey.Serialize(), 2)
 	require.NoError(t, err)
 
@@ -141,10 +136,9 @@ func TestTreeCreationWithMultiLevels(t *testing.T) {
 	_, err = client.SendRawTransaction(signedDepositTx, true)
 	require.NoError(t, err)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	require.NoError(t, err)
 	_, err = client.GenerateToAddress(1, randomAddress, nil)
 	require.NoError(t, err)
@@ -176,13 +170,10 @@ func TestTreeCreationSplitMultipleTimes(t *testing.T) {
 	require.NoError(t, err)
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	privKey, err := secp256k1.GeneratePrivateKey()
+	privKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
-
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public().Serialize(), &leafID, false)
 	require.NoError(t, err)
 
 	depositTx, err := testutil.CreateTestP2TRTransaction(depositResp.DepositAddress.Address, 65536)
@@ -197,7 +188,7 @@ func TestTreeCreationSplitMultipleTimes(t *testing.T) {
 	depositTx, err = common.TxFromRawTxBytes(decodedBytes)
 	require.NoError(t, err)
 
-	log.Printf("deposit public key: %x", hex.EncodeToString(privKey.PubKey().SerializeCompressed()))
+	log.Printf("deposit public key: %x", hex.EncodeToString(privKey.Public().Serialize()))
 	tree, err := wallet.GenerateDepositAddressesForTree(ctx, config, depositTx, nil, uint32(vout), privKey.Serialize(), 2)
 	require.NoError(t, err)
 

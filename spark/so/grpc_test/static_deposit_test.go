@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -46,10 +48,9 @@ func TestValidateUtxoIsNotSpent(t *testing.T) {
 	}
 
 	// Spend the faucet transaction and test with a new one
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	require.NoError(t, err)
 
 	pkScript, err := txscript.PayToAddrScript(randomAddress)
@@ -62,17 +63,17 @@ func TestValidateUtxoIsNotSpent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make sure the deposit tx gets enough confirmations
-	randomKey, err = secp256k1.GeneratePrivateKey()
+	randomKey, err = keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey = randomKey.PubKey()
-	randomAddress, err = common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+
+	randomAddress, err = common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	require.NoError(t, err)
 	_, err = bitcoinClient.GenerateToAddress(1, randomAddress, nil)
 	require.NoError(t, err)
 
 	// faucet coin is spent
 	err = handler.ValidateUtxoIsNotSpent(bitcoinClient, txIDBytes, 0)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// deposit tx is not spent
 	err = handler.ValidateUtxoIsNotSpent(bitcoinClient, newTxID[:], 0)
@@ -92,9 +93,9 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 	aliceConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
-	aliceLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	aliceLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey, 100_000)
+	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey.ToBTCEC(), 100_000)
 	require.NoError(t, err)
 
 	aliceConn, err := common.NewGRPCConnectionWithTestTLS(aliceConfig.CoodinatorAddress(), nil)
@@ -109,9 +110,9 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 	sspConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
-	sspLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	sspRootNode, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 90_000)
+	sspRootNode, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 90_000)
 	require.NoError(t, err)
 
 	sspConn, err := common.NewGRPCConnectionWithTestTLS(sspConfig.CoodinatorAddress(), nil)
@@ -128,10 +129,10 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 
 	// Generate a new private key for Alice. In a real Wallet that key would be derived from
 	// a Signing key using derivation schema
-	aliceDepositPrivKey, err := secp256k1.GeneratePrivateKey()
+	aliceDepositPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	aliceDepositPubKey := aliceDepositPrivKey.PubKey()
-	aliceDepositPubKeyBytes := aliceDepositPubKey.SerializeCompressed()
+	aliceDepositPubKey := aliceDepositPrivKey.Public()
+	aliceDepositPubKeyBytes := aliceDepositPubKey.Serialize()
 
 	leafID := uuid.New().String()
 
@@ -151,10 +152,9 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 	depositAmount := uint64(100_000)
 	quoteAmount := uint64(90_000)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	require.NoError(t, err)
 
 	unsignedDepositTx, err := testutil.CreateTestDepositTransactionManyOutputs(
@@ -208,7 +208,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 	// *********************************************************************************
 	// Create a Transfer from SSP to Alice
 	// *********************************************************************************
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	transferNode := wallet.LeafKeyTweak{
@@ -229,7 +229,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(sspConfig.IdentityPrivateKey.PubKey())
+	spendPkScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*sspConfig.IdentityPrivateKey.PubKey()))
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -251,7 +251,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 		leavesToTransfer[:],
 		spendTx,
 		pb.UtxoSwapRequestType_Fixed,
-		aliceDepositPrivKey,
+		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
 		sspSignature,
 		aliceConfig.IdentityPrivateKey.PubKey(),
@@ -305,7 +305,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 	receiverTransfer := pendingTransfer.Transfers[0]
 	assert.Equal(t, pb.TransferType_UTXO_SWAP, receiverTransfer.Type)
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
@@ -333,12 +333,12 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 	var spendTxBytes bytes.Buffer
 	err = spendTx.Serialize(&spendTxBytes)
 	require.NoError(t, err)
-	hidingPriv, err := secp256k1.GeneratePrivateKey()
+	hidingPriv, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	bindingPriv, err := secp256k1.GeneratePrivateKey()
+	bindingPriv, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	hidingPubBytes := hidingPriv.PubKey().SerializeCompressed()
-	bindingPubBytes := bindingPriv.PubKey().SerializeCompressed()
+	hidingPubBytes := hidingPriv.Public().Serialize()
+	bindingPubBytes := bindingPriv.Public().Serialize()
 	spendTxNonceCommitment, err := objects.NewSigningCommitment(bindingPubBytes, hidingPubBytes)
 	require.NoError(t, err)
 	spendTxNonceCommitmentProto, err := spendTxNonceCommitment.MarshalProto()
@@ -346,7 +346,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 
 	spendTxSigningJob := &pb.SigningJob{
 		RawTx:                  spendTxBytes.Bytes(),
-		SigningPublicKey:       aliceDepositPrivKey.PubKey().SerializeCompressed(),
+		SigningPublicKey:       aliceDepositPrivKey.Public().Serialize(),
 		SigningNonceCommitment: spendTxNonceCommitmentProto,
 	}
 
@@ -412,9 +412,9 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 	aliceConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
-	aliceLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	aliceLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey, 100_000)
+	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey.ToBTCEC(), 100_000)
 	require.NoError(t, err)
 
 	aliceConn, err := common.NewGRPCConnectionWithTestTLS(aliceConfig.CoodinatorAddress(), nil)
@@ -431,17 +431,15 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 
 	// Generate a new private key for Alice. In a real Wallet that key would be derived from
 	// a Signing key using derivation schema
-	aliceDepositPrivKey, err := secp256k1.GeneratePrivateKey()
+	aliceDepositPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	aliceDepositPubKey := aliceDepositPrivKey.PubKey()
-	aliceDepositPubKeyBytes := aliceDepositPubKey.SerializeCompressed()
-
+	aliceDepositPubKey := aliceDepositPrivKey.Public()
 	leafID := uuid.New().String()
 
 	depositResp, err := wallet.GenerateDepositAddress(
 		aliceCtx,
 		aliceConfig,
-		aliceDepositPubKeyBytes,
+		aliceDepositPubKey.Serialize(),
 		&leafID,
 		true,
 	)
@@ -454,10 +452,9 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 	depositAmount := uint64(100_000)
 	quoteAmount := uint64(90_000)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	require.NoError(t, err)
 
 	unsignedDepositTx, err := testutil.CreateTestDepositTransactionManyOutputs(
@@ -493,7 +490,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(aliceConfig.IdentityPrivateKey.PubKey())
+	spendPkScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*aliceConfig.IdentityPrivateKey.PubKey()))
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -525,7 +522,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		aliceConfig,
 		common.Regtest,
 		spendTx,
-		aliceDepositPrivKey,
+		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
 		aliceConfig.IdentityPrivateKey.PubKey(),
 		signedDepositTx.TxOut[vout],
@@ -550,13 +547,13 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		aliceConfig,
 		common.Regtest,
 		spendTx,
-		aliceDepositPrivKey,
+		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
 		aliceConfig.IdentityPrivateKey.PubKey(),
 		signedDepositTx.TxOut[vout],
 		aliceConn,
 	)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// *********************************************************************************
 	// A call to rollback should fail
@@ -580,7 +577,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		Signature:            rollbackUtxoSwapRequestSignature.Serialize(),
 		CoordinatorPublicKey: aliceConfig.IdentityPublicKey(),
 	})
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func createUserSignature(
@@ -657,9 +654,9 @@ func TestStaticDepositSSP(t *testing.T) {
 	aliceConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
-	aliceLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	aliceLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey, 100_000)
+	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey.ToBTCEC(), 100_000)
 	require.NoError(t, err)
 
 	aliceConn, err := common.NewGRPCConnectionWithTestTLS(aliceConfig.CoodinatorAddress(), nil)
@@ -674,9 +671,9 @@ func TestStaticDepositSSP(t *testing.T) {
 	sspConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
-	sspLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	sspRootNode, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 90_000)
+	sspRootNode, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 90_000)
 	require.NoError(t, err)
 
 	sspConn, err := common.NewGRPCConnectionWithTestTLS(sspConfig.CoodinatorAddress(), nil)
@@ -693,17 +690,15 @@ func TestStaticDepositSSP(t *testing.T) {
 
 	// Generate a new private key for Alice. In a real Wallet that key would be derived from
 	// a Signing key using derivation schema
-	aliceDepositPrivKey, err := secp256k1.GeneratePrivateKey()
+	aliceDepositPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	aliceDepositPubKey := aliceDepositPrivKey.PubKey()
-	aliceDepositPubKeyBytes := aliceDepositPubKey.SerializeCompressed()
-
+	aliceDepositPubKey := aliceDepositPrivKey.Public()
 	leafID := uuid.New().String()
 
 	depositResp, err := wallet.GenerateDepositAddress(
 		aliceCtx,
 		aliceConfig,
-		aliceDepositPubKeyBytes,
+		aliceDepositPubKey.Serialize(),
 		&leafID,
 		true,
 	)
@@ -716,10 +711,9 @@ func TestStaticDepositSSP(t *testing.T) {
 	depositAmount := uint64(100_000)
 	quoteAmount := uint64(90_000)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	require.NoError(t, err)
 
 	unsignedDepositTx, err := testutil.CreateTestDepositTransactionManyOutputs(
@@ -773,7 +767,7 @@ func TestStaticDepositSSP(t *testing.T) {
 	// *********************************************************************************
 	// Create a Transfer from SSP to Alice
 	// *********************************************************************************
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	transferNode := wallet.LeafKeyTweak{
@@ -794,7 +788,7 @@ func TestStaticDepositSSP(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(sspConfig.IdentityPrivateKey.PubKey())
+	spendPkScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*sspConfig.IdentityPrivateKey.PubKey()))
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -816,7 +810,7 @@ func TestStaticDepositSSP(t *testing.T) {
 		leavesToTransfer[:],
 		spendTx,
 		pb.UtxoSwapRequestType_Fixed,
-		aliceDepositPrivKey,
+		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
 		sspSignature,
 		aliceConfig.IdentityPrivateKey.PubKey(),
@@ -871,7 +865,7 @@ func TestStaticDepositSSP(t *testing.T) {
 	receiverTransfer := pendingTransfer.Transfers[0]
 	assert.Equal(t, pb.TransferType_UTXO_SWAP, receiverTransfer.Type)
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
@@ -936,7 +930,7 @@ func TestStaticDepositSSP(t *testing.T) {
 		Signature:            rollbackUtxoSwapRequestSignature.Serialize(),
 		CoordinatorPublicKey: aliceConfig.IdentityPublicKey(),
 	})
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestStaticDepositUserRefund(t *testing.T) {
@@ -952,9 +946,9 @@ func TestStaticDepositUserRefund(t *testing.T) {
 	aliceConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
-	aliceLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	aliceLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey, 100_000)
+	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey.ToBTCEC(), 100_000)
 	require.NoError(t, err)
 
 	aliceConn, err := common.NewGRPCConnectionWithTestTLS(aliceConfig.CoodinatorAddress(), nil)
@@ -971,17 +965,15 @@ func TestStaticDepositUserRefund(t *testing.T) {
 
 	// Generate a new private key for Alice. In a real Wallet that key would be derived from
 	// a Signing key using derivation schema
-	aliceDepositPrivKey, err := secp256k1.GeneratePrivateKey()
+	aliceDepositPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	aliceDepositPubKey := aliceDepositPrivKey.PubKey()
-	aliceDepositPubKeyBytes := aliceDepositPubKey.SerializeCompressed()
-
+	aliceDepositPubKey := aliceDepositPrivKey.Public()
 	leafID := uuid.New().String()
 
 	depositResp, err := wallet.GenerateDepositAddress(
 		aliceCtx,
 		aliceConfig,
-		aliceDepositPubKeyBytes,
+		aliceDepositPubKey.Serialize(),
 		&leafID,
 		true,
 	)
@@ -994,10 +986,9 @@ func TestStaticDepositUserRefund(t *testing.T) {
 	depositAmount := uint64(100_000)
 	quoteAmount := uint64(90_000)
 
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	require.NoError(t, err)
 
 	unsignedDepositTx, err := testutil.CreateTestDepositTransactionManyOutputs(
@@ -1033,7 +1024,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(aliceConfig.IdentityPrivateKey.PubKey())
+	spendPkScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*aliceConfig.IdentityPrivateKey.PubKey()))
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -1065,7 +1056,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		aliceConfig,
 		common.Regtest,
 		spendTx,
-		aliceDepositPrivKey,
+		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
 		aliceConfig.IdentityPrivateKey.PubKey(),
 		signedDepositTx.TxOut[vout],
@@ -1094,7 +1085,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 	})
 	pubkeyBytes, err := hex.DecodeString("0252f2cfa8d1f87718c0f3f61b581b7a3dce6bf9a14efd0a501d8969d6ace73a3d")
 	require.NoError(t, err)
-	withdrawalPubKey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	withdrawalPubKey, err := keys.ParsePublicKey(pubkeyBytes)
 	require.NoError(t, err)
 	spendPkScript2, err := common.P2TRScriptFromPubKey(withdrawalPubKey)
 	require.NoError(t, err)
@@ -1122,7 +1113,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		aliceConfig,
 		common.Regtest,
 		spendTx2,
-		aliceDepositPrivKey,
+		aliceDepositPrivKey.ToBTCEC(),
 		userSignature2,
 		aliceConfig.IdentityPrivateKey.PubKey(),
 		signedDepositTx.TxOut[vout],
@@ -1163,9 +1154,9 @@ func TestStaticDepositUserRefund(t *testing.T) {
 	bobConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
-	bobLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	bobLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	_, err = testutil.CreateNewTree(bobConfig, faucet, bobLeafPrivKey, 100_000)
+	_, err = testutil.CreateNewTree(bobConfig, faucet, bobLeafPrivKey.ToBTCEC(), 100_000)
 	require.NoError(t, err)
 
 	bobConn, err := common.NewGRPCConnectionWithTestTLS(bobConfig.CoodinatorAddress(), nil)
@@ -1181,7 +1172,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		bobConfig,
 		common.Regtest,
 		spendTx2,
-		aliceDepositPrivKey,
+		aliceDepositPrivKey.ToBTCEC(),
 		userSignature2,
 		aliceConfig.IdentityPrivateKey.PubKey(),
 		signedDepositTx.TxOut[vout],

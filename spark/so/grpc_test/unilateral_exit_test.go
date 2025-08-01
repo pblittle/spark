@@ -5,6 +5,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -50,9 +52,9 @@ func serializeTx(tx *wire.MsgTx) ([]byte, error) {
 // If the tx has a timelock of X blocks, we'll assume the parent tx just confirmed,
 // and mine X blocks before broadcasting the tx.
 func broadcastAndConfirmTx(t *testing.T, client *rpcclient.Client, tx *wire.MsgTx) {
-	randPrivKey, err := secp256k1.GeneratePrivateKey()
+	randPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randPrivKey.PubKey().SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randPrivKey.Public(), common.Regtest)
 	require.NoError(t, err)
 
 	// https://github.com/bitcoin/bips/blob/master/bip-0068.mediawiki

@@ -9,6 +9,8 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
@@ -277,12 +279,12 @@ func (h *LightningHandler) ValidateGetPreimageRequest(
 	directTransactions []*pb.UserSignedTxSigningJob,
 	directFromCpfpTransactions []*pb.UserSignedTxSigningJob,
 	amount *pb.InvoiceAmount,
-	destinationPubkey []byte,
+	destinationPubkeyBytes []byte,
 	feeSats uint64,
 	reason pb.InitiatePreimageSwapRequest_Reason,
 	validateNodeOwnership bool,
 ) error {
-	return h.validateGetPreimageRequestWithFrostServiceClientFactory(ctx, &defaultFrostServiceClientConnection{}, paymentHash, cpfpTransactions, directTransactions, directFromCpfpTransactions, amount, destinationPubkey, feeSats, reason, validateNodeOwnership)
+	return h.validateGetPreimageRequestWithFrostServiceClientFactory(ctx, &defaultFrostServiceClientConnection{}, paymentHash, cpfpTransactions, directTransactions, directFromCpfpTransactions, amount, destinationPubkeyBytes, feeSats, reason, validateNodeOwnership)
 }
 
 func (h *LightningHandler) validateGetPreimageRequestWithFrostServiceClientFactory(
@@ -293,13 +295,16 @@ func (h *LightningHandler) validateGetPreimageRequestWithFrostServiceClientFacto
 	directTransactions []*pb.UserSignedTxSigningJob,
 	directFromCpfpTransactions []*pb.UserSignedTxSigningJob,
 	amount *pb.InvoiceAmount,
-	destinationPubkey []byte,
+	destinationPubKeyBytes []byte,
 	feeSats uint64,
 	reason pb.InitiatePreimageSwapRequest_Reason,
 	validateNodeOwnership bool,
 ) error {
 	logger := logging.GetLoggerFromContext(ctx)
-
+	destinationPubKey, err := keys.ParsePublicKey(destinationPubKeyBytes)
+	if err != nil {
+		return fmt.Errorf("invalid destination public key: %w", err)
+	}
 	// Step 0 Validate that there's no existing preimage request for this payment hash
 	tx, err := ent.GetDbFromContext(ctx)
 	if err != nil {
@@ -307,7 +312,7 @@ func (h *LightningHandler) validateGetPreimageRequestWithFrostServiceClientFacto
 	}
 	preimageRequests, err := tx.PreimageRequest.Query().Where(
 		preimagerequest.PaymentHashEQ(paymentHash),
-		preimagerequest.ReceiverIdentityPubkeyEQ(destinationPubkey),
+		preimagerequest.ReceiverIdentityPubkeyEQ(destinationPubKey.Serialize()),
 		preimagerequest.StatusNEQ(st.PreimageRequestStatusReturned),
 	).All(ctx)
 	if err != nil {
@@ -523,7 +528,6 @@ func (h *LightningHandler) validateGetPreimageRequestWithFrostServiceClientFacto
 	}
 
 	// Step 2 validate the amount is correct and paid to the destination pubkey
-	destinationPubkeyBytes, err := secp256k1.ParsePubKey(destinationPubkey)
 	if err != nil {
 		return fmt.Errorf("unable to parse destination pubkey: %w", err)
 	}
@@ -537,7 +541,7 @@ func (h *LightningHandler) validateGetPreimageRequestWithFrostServiceClientFacto
 			return fmt.Errorf("unable to get cpfp refund tx: %w", err)
 		}
 
-		pubkeyScript, err := common.P2TRScriptFromPubKey(destinationPubkeyBytes)
+		pubkeyScript, err := common.P2TRScriptFromPubKey(destinationPubKey)
 		if err != nil {
 			return fmt.Errorf("unable to extract pubkey from tx: %w", err)
 		}
@@ -558,7 +562,7 @@ func (h *LightningHandler) validateGetPreimageRequestWithFrostServiceClientFacto
 			return fmt.Errorf("unable to get direct refund tx for directTransaction leaf_id: %s: %w", directTransaction.LeafId, err)
 		}
 
-		pubkeyScript, err := common.P2TRScriptFromPubKey(destinationPubkeyBytes)
+		pubkeyScript, err := common.P2TRScriptFromPubKey(destinationPubKey)
 		if err != nil {
 			return fmt.Errorf("unable to extract pubkey from tx for directTransaction leaf_id: %s: %w", directTransaction.LeafId, err)
 		}
@@ -578,7 +582,7 @@ func (h *LightningHandler) validateGetPreimageRequestWithFrostServiceClientFacto
 			return fmt.Errorf("unable to get direct from cpfp refund tx for directFromCpfpTransaction leaf_id: %s: %w", directFromCpfpTransaction.LeafId, err)
 		}
 
-		pubkeyScript, err := common.P2TRScriptFromPubKey(destinationPubkeyBytes)
+		pubkeyScript, err := common.P2TRScriptFromPubKey(destinationPubKey)
 		if err != nil {
 			return fmt.Errorf("unable to extract pubkey from tx for directFromCpfpTransaction leaf_id: %s: %w", directFromCpfpTransaction.LeafId, err)
 		}

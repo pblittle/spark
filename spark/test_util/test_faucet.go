@@ -8,6 +8,8 @@ import (
 	"log"
 	"sync"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
@@ -22,20 +24,22 @@ var (
 	// Static keys for deterministic testing
 	// P2TRAddress: bcrt1p2uy9zw5ltayucsuzl4tet6ckelzawp08qrtunacscsszflye907q62uqhl
 	staticFaucetKeyBytes, _ = hex.DecodeString("deadbeef1337cafe4242424242424242deadbeef1337cafe4242424242424242")
-	staticFaucetKey         = secp256k1.PrivKeyFromBytes(staticFaucetKeyBytes)
+	staticFaucetKey, _      = keys.ParsePrivateKey(staticFaucetKeyBytes)
 
 	// P2TRAddress: bcrt1pwr5k38p68ceyrnm2tvrp50dvmg3grh6uvayjl3urwtxejhd3dw4swz6p58
 	staticMiningKeyBytes, _ = hex.DecodeString("1337cafe4242deadbeef4242424242421337cafe4242deadbeef424242424242")
-	staticMiningKey         = secp256k1.PrivKeyFromBytes(staticMiningKeyBytes)
-
-	// Constants for coin amounts
-	coinAmountSats int64 = 10_000_000
-	feeAmountSats  int64 = 1_000
-	targetNumCoins       = 20
+	staticMiningKey, _      = keys.ParsePrivateKey(staticMiningKeyBytes)
 
 	// Singleton instance
 	instance *Faucet
 	once     sync.Once
+)
+
+const (
+	// Constants for coin amounts
+	coinAmountSats int64 = 10_000_000
+	feeAmountSats  int64 = 1_000
+	targetNumCoins       = 20
 )
 
 // scanUnspent represents an unspent output found by scanning
@@ -131,8 +135,7 @@ func btcToSats(btc json.Number) (int64, error) {
 
 // scanForSpendableUTXOs scans for any spendable UTXOs at the mining address
 func (f *Faucet) scanForSpendableUTXOs() ([]uTXO, int64, error) {
-	miningPubKey := staticMiningKey.PubKey()
-	miningAddress, err := common.P2TRRawAddressFromPublicKey(miningPubKey.SerializeCompressed(), common.Regtest)
+	miningAddress, err := common.P2TRRawAddressFromPublicKey(staticMiningKey.Public(), common.Regtest)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -222,8 +225,7 @@ func (f *Faucet) Refill() error {
 		fundingTxOut = fundingTx.TxOut[selectedUTXO.Vout]
 	} else {
 		// No suitable UTXO found, need to mine a new block
-		miningPubKey := staticMiningKey.PubKey()
-		miningAddress, err := common.P2TRRawAddressFromPublicKey(miningPubKey.SerializeCompressed(), common.Regtest)
+		miningAddress, err := common.P2TRRawAddressFromPublicKey(staticMiningKey.Public(), common.Regtest)
 		if err != nil {
 			return err
 		}
@@ -278,7 +280,7 @@ func (f *Faucet) Refill() error {
 		return nil
 	}
 
-	faucetPubKey := staticFaucetKey.PubKey()
+	faucetPubKey := staticFaucetKey.Public()
 	faucetScript, err := common.P2TRScriptFromPubKey(faucetPubKey)
 	if err != nil {
 		return err
@@ -290,14 +292,14 @@ func (f *Faucet) Refill() error {
 
 	remainingValue := initialValueSats - (numCoinsToCreate * coinAmountSats) - feeAmountSats
 	if remainingValue > 0 {
-		miningScript, err := common.P2TRScriptFromPubKey(staticMiningKey.PubKey())
+		miningScript, err := common.P2TRScriptFromPubKey(staticMiningKey.Public())
 		if err != nil {
 			return err
 		}
 		splitTx.AddTxOut(wire.NewTxOut(remainingValue, miningScript))
 	}
 
-	signedSplitTx, err := SignFaucetCoin(splitTx, fundingTxOut, staticMiningKey)
+	signedSplitTx, err := SignFaucetCoin(splitTx, fundingTxOut, staticMiningKey.ToBTCEC())
 	if err != nil {
 		return err
 	}
@@ -309,7 +311,7 @@ func (f *Faucet) Refill() error {
 	splitTxid := signedSplitTx.TxHash()
 	for i := 0; i < int(numCoinsToCreate); i++ {
 		faucetCoin := FaucetCoin{
-			Key:      staticFaucetKey,
+			Key:      staticFaucetKey.ToBTCEC(),
 			OutPoint: wire.NewOutPoint(&splitTxid, uint32(i)),
 			TxOut:    signedSplitTx.TxOut[i],
 		}

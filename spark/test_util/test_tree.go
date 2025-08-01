@@ -1,10 +1,11 @@
 package testutil
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
@@ -73,11 +74,6 @@ func CreateNewTree(config *wallet.Config, faucet *Faucet, privKey *secp256k1.Pri
 		return nil, fmt.Errorf("failed to create deposit tx: %w", err)
 	}
 	vout := 0
-	var buf bytes.Buffer
-	err = depositTx.Serialize(&buf)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize deposit tx: %w", err)
-	}
 
 	resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	if err != nil {
@@ -98,12 +94,11 @@ func CreateNewTree(config *wallet.Config, faucet *Faucet, privKey *secp256k1.Pri
 	if err != nil {
 		return nil, fmt.Errorf("failed to broadcast deposit tx: %w", err)
 	}
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random key: %w", err)
 	}
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random address: %w", err)
 	}
@@ -117,7 +112,7 @@ func CreateNewTree(config *wallet.Config, faucet *Faucet, privKey *secp256k1.Pri
 	return WaitForPendingDepositNode(ctx, sparkClient, resp.Nodes[0])
 }
 
-// CreateNewTree creates a new Tree
+// CreateNewTreeWithLevels creates a new Tree
 func CreateNewTreeWithLevels(config *wallet.Config, faucet *Faucet, privKey *secp256k1.PrivateKey, amountSats int64, levels uint32) (*wallet.DepositAddressTree, []*pb.TreeNode, error) {
 	coin, err := faucet.Fund()
 	if err != nil {
@@ -150,11 +145,6 @@ func CreateNewTreeWithLevels(config *wallet.Config, faucet *Faucet, privKey *sec
 		return nil, nil, fmt.Errorf("failed to create deposit tx: %w", err)
 	}
 	vout := 0
-	var buf bytes.Buffer
-	err = depositTx.Serialize(&buf)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to serialize deposit tx: %w", err)
-	}
 
 	tree, err := wallet.GenerateDepositAddressesForTree(ctx, config, depositTx, nil, uint32(vout), privKey.Serialize(), levels)
 	if err != nil {
@@ -177,12 +167,12 @@ func CreateNewTreeWithLevels(config *wallet.Config, faucet *Faucet, privKey *sec
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to broadcast deposit tx: %w", err)
 	}
-	randomKey, err := secp256k1.GeneratePrivateKey()
+	randomKey, err := keys.GeneratePrivateKey()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate random key: %w", err)
 	}
-	randomPubKey := randomKey.PubKey()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey.SerializeCompressed(), common.Regtest)
+	randomPubKey := randomKey.Public()
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey, common.Regtest)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate random address: %w", err)
 	}

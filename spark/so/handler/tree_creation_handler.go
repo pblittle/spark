@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
@@ -258,7 +260,11 @@ func (h *TreeCreationHandler) createAddressNodeFromPrepareTreeAddressNode(
 	userIdentityPublicKey []byte,
 	save bool,
 ) (addressNode *pb.AddressNode, err error) {
-	combinedPublicKey, err := common.AddPublicKeys(keysharesMap[node.SigningKeyshareId].PublicKey, node.UserPublicKey)
+	combinedPublicKeyBytes, err := common.AddPublicKeys(keysharesMap[node.SigningKeyshareId].PublicKey, node.UserPublicKey)
+	if err != nil {
+		return nil, err
+	}
+	combinedPublicKey, err := keys.ParsePublicKey(combinedPublicKeyBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +283,7 @@ func (h *TreeCreationHandler) createAddressNodeFromPrepareTreeAddressNode(
 			SetSigningKeyshareID(keysharesMap[node.SigningKeyshareId].ID).
 			SetOwnerIdentityPubkey(userIdentityPublicKey).
 			SetOwnerSigningPubkey(node.UserPublicKey).
-			SetAddress(*depositAddress).
+			SetAddress(depositAddress).
 			Save(ctx)
 		if err != nil {
 			return nil, err
@@ -286,8 +292,8 @@ func (h *TreeCreationHandler) createAddressNodeFromPrepareTreeAddressNode(
 	if len(node.Children) == 0 {
 		return &pb.AddressNode{
 			Address: &pb.Address{
-				Address:      *depositAddress,
-				VerifyingKey: combinedPublicKey,
+				Address:      depositAddress,
+				VerifyingKey: combinedPublicKey.Serialize(),
 			},
 		}, nil
 	}
@@ -300,8 +306,8 @@ func (h *TreeCreationHandler) createAddressNodeFromPrepareTreeAddressNode(
 	}
 	return &pb.AddressNode{
 		Address: &pb.Address{
-			Address:      *depositAddress,
-			VerifyingKey: combinedPublicKey,
+			Address:      depositAddress,
+			VerifyingKey: combinedPublicKey.Serialize(),
 		},
 		Children: children,
 	}, nil

@@ -3,7 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/hex"
-	rand2 "math/rand/v2"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -73,7 +73,7 @@ func (m *mockFrostServiceClient) ValidateSignatureShare(ctx context.Context, in 
 	return &emptypb.Empty{}, nil
 }
 
-var rng = rand2.NewChaCha8([32]byte{1})
+var rng = rand.NewChaCha8([32]byte{1})
 
 func TestValidateDuplicateLeaves(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -122,12 +122,12 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, leavesToSend, directLeavesToSend, directFromCpfpLeavesToSend)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("successful validation with empty arrays", func(t *testing.T) {
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, []*pb.UserSignedTxSigningJob{}, []*pb.UserSignedTxSigningJob{}, []*pb.UserSignedTxSigningJob{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("successful validation with only leavesToSend", func(t *testing.T) {
@@ -137,7 +137,7 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, leavesToSend, []*pb.UserSignedTxSigningJob{}, []*pb.UserSignedTxSigningJob{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("duplicate in leavesToSend", func(t *testing.T) {
@@ -148,8 +148,7 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, leavesToSend, []*pb.UserSignedTxSigningJob{}, []*pb.UserSignedTxSigningJob{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "duplicate leaf id: leaf1")
+		require.ErrorContains(t, err, "duplicate leaf id: leaf1")
 	})
 
 	t.Run("duplicate in directLeavesToSend", func(t *testing.T) {
@@ -163,8 +162,7 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, leavesToSend, directLeavesToSend, []*pb.UserSignedTxSigningJob{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "duplicate leaf id: leaf1")
+		require.ErrorContains(t, err, "duplicate leaf id: leaf1")
 	})
 
 	t.Run("duplicate in directFromCpfpLeavesToSend", func(t *testing.T) {
@@ -178,8 +176,7 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, leavesToSend, []*pb.UserSignedTxSigningJob{}, directFromCpfpLeavesToSend)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "duplicate leaf id: leaf1")
+		require.ErrorContains(t, err, "duplicate leaf id: leaf1")
 	})
 
 	t.Run("leaf id not found in leavesToSend for directLeavesToSend", func(t *testing.T) {
@@ -193,8 +190,7 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, leavesToSend, directLeavesToSend, []*pb.UserSignedTxSigningJob{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "leaf id leaf3 not found in leaves to send")
+		require.ErrorContains(t, err, "leaf id leaf3 not found in leaves to send")
 	})
 
 	t.Run("leaf id not found in leavesToSend for directFromCpfpLeavesToSend", func(t *testing.T) {
@@ -208,8 +204,7 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, leavesToSend, []*pb.UserSignedTxSigningJob{}, directFromCpfpLeavesToSend)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "leaf id leaf3 not found in leaves to send")
+		require.ErrorContains(t, err, "leaf id leaf3 not found in leaves to send")
 	})
 
 	t.Run("multiple duplicates across different arrays", func(t *testing.T) {
@@ -228,9 +223,8 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, leavesToSend, directLeavesToSend, directFromCpfpLeavesToSend)
-		assert.Error(t, err)
 		// Should detect the first duplicate it encounters (in leavesToSend)
-		assert.Contains(t, err.Error(), "duplicate leaf id: leaf1")
+		require.ErrorContains(t, err, "duplicate leaf id: leaf1")
 	})
 
 	t.Run("complex scenario with all arrays populated", func(t *testing.T) {
@@ -251,12 +245,12 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, leavesToSend, directLeavesToSend, directFromCpfpLeavesToSend)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("nil arrays", func(t *testing.T) {
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, nil, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("mixed nil and non-nil arrays", func(t *testing.T) {
@@ -266,7 +260,7 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, leavesToSend, nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("empty leavesToSend with non-empty other arrays", func(t *testing.T) {
@@ -275,8 +269,7 @@ func TestValidateDuplicateLeaves(t *testing.T) {
 		}
 
 		err := lightningHandler.ValidateDuplicateLeaves(ctx, []*pb.UserSignedTxSigningJob{}, directLeavesToSend, []*pb.UserSignedTxSigningJob{})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "leaf id leaf1 not found in leaves to send")
+		require.ErrorContains(t, err, "leaf id leaf1 not found in leaves to send")
 	})
 }
 
@@ -305,7 +298,7 @@ func TestStorePreimageShareEdgeCases(t *testing.T) {
 		}
 
 		err := lightningHandler.StorePreimageShare(ctx, req)
-		assert.ErrorContains(t, err, "preimage share is nil")
+		require.ErrorContains(t, err, "preimage share is nil")
 	})
 
 	t.Run("empty proofs array returns error", func(t *testing.T) {
@@ -318,7 +311,7 @@ func TestStorePreimageShareEdgeCases(t *testing.T) {
 		}
 
 		err := lightningHandler.StorePreimageShare(ctx, req)
-		assert.ErrorContains(t, err, "preimage share proofs is empty")
+		require.ErrorContains(t, err, "preimage share proofs is empty")
 	})
 }
 
@@ -388,13 +381,10 @@ func TestGetSigningCommitments(t *testing.T) {
 			resp, err := lightningHandler.GetSigningCommitments(ctx, req)
 
 			if tt.expectError {
-				assert.Error(t, err)
+				require.ErrorContains(t, err, tt.expectedErrMsg)
 				assert.Nil(t, resp)
-				if tt.expectedErrMsg != "" {
-					assert.Contains(t, err.Error(), tt.expectedErrMsg)
-				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, resp)
 				if tt.expectEmpty {
 					assert.Empty(t, resp.SigningCommitments)
@@ -475,7 +465,7 @@ func TestValidatePreimage(t *testing.T) {
 			transfer, err := lightningHandler.ValidatePreimage(ctx, req)
 
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, transfer)
 
 				// Check if error message contains one of the expected messages
@@ -489,7 +479,7 @@ func TestValidatePreimage(t *testing.T) {
 				assert.True(t, errorMatches,
 					"Expected one of %v, got: %v", tt.expectedErrMsgs, err.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, transfer)
 			}
 		})
@@ -513,9 +503,8 @@ func TestReturnLightningPayment(t *testing.T) {
 		}
 
 		resp, err := lightningHandler.ReturnLightningPayment(ctx, req, true) // internal=true to skip auth
-		assert.Error(t, err)
+		require.ErrorContains(t, err, "unable to get preimage request")
 		assert.Nil(t, resp)
-		assert.Contains(t, err.Error(), "unable to get preimage request")
 	})
 }
 
@@ -534,7 +523,6 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 	}
 	lightningHandler := NewLightningHandler(config)
 
-	// Valid 33-byte compressed secp256k1 public key for destination
 	validPubKey := keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize()
 
 	tests := []struct {
@@ -561,7 +549,7 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 		{
 			name:              "nil transaction in cpfp array",
 			cpfpTransactions:  []*pb.UserSignedTxSigningJob{nil},
-			destinationPubkey: []byte("dest_pubkey"),
+			destinationPubkey: validPubKey,
 			expectError:       true,
 			expectedErrMsg:    "cpfp transaction is nil",
 		},
@@ -573,7 +561,7 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 					SigningCommitments: nil,
 				},
 			},
-			destinationPubkey: []byte("dest_pubkey"),
+			destinationPubkey: validPubKey,
 			expectError:       true,
 			expectedErrMsg:    "signing commitments is nil",
 		},
@@ -588,7 +576,7 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 					SigningNonceCommitment: nil,
 				},
 			},
-			destinationPubkey: []byte("dest_pubkey"),
+			destinationPubkey: validPubKey,
 			expectError:       true,
 			expectedErrMsg:    "signing nonce commitment is nil",
 		},
@@ -603,7 +591,7 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 					SigningNonceCommitment: &pbcommon.SigningCommitment{},
 				},
 			},
-			destinationPubkey: []byte("dest_pubkey"),
+			destinationPubkey: validPubKey,
 			expectError:       true,
 			expectedErrMsg:    "unable to parse node id",
 		},
@@ -618,7 +606,7 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 					SigningNonceCommitment: &pbcommon.SigningCommitment{},
 				},
 			},
-			destinationPubkey: []byte("dest_pubkey"),
+			destinationPubkey: validPubKey,
 			expectError:       true,
 			expectedErrMsg:    "unable to get cpfpTransaction tree_node with id", // Will fail at node lookup
 		},
@@ -640,12 +628,9 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 			)
 
 			if tt.expectError {
-				assert.Error(t, err)
-				if tt.expectedErrMsg != "" {
-					assert.Contains(t, err.Error(), tt.expectedErrMsg)
-				}
+				require.ErrorContains(t, err, tt.expectedErrMsg)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -761,11 +746,10 @@ func TestInitiatePreimageSwapEdgeCases(t *testing.T) {
 			resp, err := lightningHandler.InitiatePreimageSwap(ctx, req)
 
 			if tt.expectError {
-				assert.Error(t, err)
+				require.ErrorContains(t, err, tt.expectedErrMsg)
 				assert.Nil(t, resp)
-				assert.Contains(t, err.Error(), tt.expectedErrMsg)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, resp)
 			}
 		})
@@ -873,10 +857,7 @@ func TestPreimageSwapAuthorizationBugRegression(t *testing.T) {
 		nodeID, err := uuid.Parse(validTx.LeafId)
 		require.NoError(t, err)
 
-		// First, let's create a transaction that will match our destination pubkey
-		destPubkey := wrongKey
-
-		correctScript, err := common.P2TRScriptFromPubKey(destPubkey.ToBTCEC())
+		correctScript, err := common.P2TRScriptFromPubKey(wrongKey)
 		require.NoError(t, err)
 
 		// Create a minimal transaction with the correct P2TR output script
