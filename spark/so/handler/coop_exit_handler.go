@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+
 	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/google/uuid"

@@ -166,8 +166,12 @@ func (h *QueryTokenHandler) queryTokenTransactionsInternal(ctx context.Context, 
 	// Apply sorting, limit and offset
 	query := baseQuery.Order(ent.Desc(tokentransaction.FieldUpdateTime))
 
-	if req.Limit > 100 || req.Limit == 0 {
+	if req.Limit == 0 {
 		req.Limit = 100
+	}
+
+	if req.Limit > 1000 {
+		req.Limit = 1000
 	}
 	query = query.Limit(int(req.Limit))
 

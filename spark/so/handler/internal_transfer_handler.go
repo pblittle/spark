@@ -118,7 +118,6 @@ func (h *InternalTransferHandler) FinalizeTransfer(ctx context.Context, req *pbi
 				SetDirectFromCpfpRefundTx(node.DirectFromCpfpRefundTx).
 				SetStatus(st.TreeNodeStatusAvailable).
 				Save(ctx)
-
 			if err != nil {
 				return fmt.Errorf("failed to update dbNode. transfer id: %s. with status: %s. node id: %s with uuid: %s and error: %w", req.TransferId, transfer.Status, node.Id, nodeID, err)
 			}
