@@ -185,7 +185,14 @@ func TestGenerateStaticDepositAddress(t *testing.T) {
 
 	// Generating a new static deposit address should return an error
 	_, err = wallet.GenerateStaticDepositAddress(ctx, config, pubkey)
-	assert.ErrorContains(t, err, "static deposit address already exists")
+	assert.ErrorContains(t, err, fmt.Sprintf("static deposit address already exists: %s", resp.DepositAddress.Address))
+
+	// No new address should be created
+	queryStaticDepositAddresses, err = wallet.QueryStaticDepositAddresses(ctx, config)
+	require.NoError(t, err)
+	assert.Len(t, queryStaticDepositAddresses.DepositAddresses, 1)
+	assert.Equal(t, resp.DepositAddress.Address, queryStaticDepositAddresses.DepositAddresses[0].DepositAddress)
+
 }
 
 func TestStartDepositTreeCreationBasic(t *testing.T) {
