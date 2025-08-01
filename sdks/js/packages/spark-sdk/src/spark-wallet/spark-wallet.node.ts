@@ -49,9 +49,6 @@ export function initializeTracerEnvNodeJS({
   registerInstrumentations({
     instrumentations: [
       new UndiciInstrumentation({
-        requestHook: (span, request) => {
-          console.log("tmp in Node requestHook", span, request);
-        },
         ignoreRequestHook: (request) => {
           /* Since we're wrapping global fetch we should be careful to avoid
                adding headers or causing errors for unrelated requests */
