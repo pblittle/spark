@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/lightsparkdev/spark/common/keys"
 	"log/slog"
 	"time"
+
+	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/handler/tokens"
@@ -756,6 +757,14 @@ func AllStartupTasks() []StartupTaskSpec {
 						return fmt.Errorf("failed to get or create current tx for request: %w", err)
 					}
 
+					deletedTokenFreezes, err := tx.TokenFreeze.Delete().
+						Where(tokenfreeze.TokenCreateIDIsNil()).
+						Exec(ctx)
+					if err != nil {
+						return fmt.Errorf("failed to delete token freezes: %w", err)
+					}
+					logger.Info("Deleted token freezes", "count", deletedTokenFreezes)
+
 					tokenOutputs, err := tx.TokenOutput.Query().
 						Where(
 							tokenoutput.And(
@@ -770,11 +779,11 @@ func AllStartupTasks() []StartupTaskSpec {
 						return fmt.Errorf("failed to get token outputs: %w", err)
 					}
 
-					logger.Info("Found legacy token outputs to delete", "count", len(tokenOutputs))
 					if len(tokenOutputs) == 0 {
 						logger.Info("No legacy token outputs found, task complete")
 						return nil
 					}
+					logger.Info("Found legacy token outputs to delete", "count", len(tokenOutputs))
 
 					var (
 						tokenTransactionIDs []uuid.UUID
@@ -818,14 +827,6 @@ func AllStartupTasks() []StartupTaskSpec {
 						}
 						logger.Info("Deleted token transactions", "count", deletedTransactions)
 					}
-
-					deletedTokenFreezes, err := tx.TokenFreeze.Delete().
-						Where(tokenfreeze.TokenCreateIDIsNil()).
-						Exec(ctx)
-					if err != nil {
-						return fmt.Errorf("failed to delete token freezes: %w", err)
-					}
-					logger.Info("Deleted token freezes", "count", deletedTokenFreezes)
 
 					logger.Info("Successfully completed deletion of legacy token output data",
 						"total_token_outputs_deleted", deletedOutputs,
