@@ -7,7 +7,7 @@ const DEPOSIT_AMOUNT = 10000n;
 const SECOND_DEPOSIT_AMOUNT = 20000n;
 
 describe("SSP Transfers Test", () => {
-  it("getTransfers should return the corresponding ssp request if it exists", async () => {
+  it("getTransfers and getTransfer should return the corresponding ssp request if it exists", async () => {
     const faucet = BitcoinFaucet.getInstance();
 
     const { wallet: userWallet } = await SparkWalletTesting.initialize(
@@ -75,7 +75,6 @@ describe("SSP Transfers Test", () => {
       receiverSparkAddress: await userWallet2.getSparkAddress(),
     });
 
-    // Get transfers should include static deposit transfers.
     const transfers = await userWallet.getTransfers();
     expect(transfers.transfers.length).toBe(2);
 
@@ -86,6 +85,9 @@ describe("SSP Transfers Test", () => {
       transferTypeToJSON(TransferType.TRANSFER),
     );
 
+    const sparkTransfer = await userWallet.getTransfer(firstTransfer!.id);
+    expect(sparkTransfer?.userRequest).not.toBeDefined();
+
     const secondTransfer = transfers.transfers[1];
     expect(secondTransfer).toBeDefined();
     expect(secondTransfer?.userRequest).toBeDefined();
@@ -93,5 +95,8 @@ describe("SSP Transfers Test", () => {
       transferTypeToJSON(TransferType.UTXO_SWAP),
     );
     expect(secondTransfer?.userRequest?.typename).toBe("ClaimStaticDeposit");
+
+    const utxoSwapTransfer = await userWallet.getTransfer(secondTransfer!.id);
+    expect(utxoSwapTransfer?.userRequest).toBeDefined();
   }, 60000);
 });

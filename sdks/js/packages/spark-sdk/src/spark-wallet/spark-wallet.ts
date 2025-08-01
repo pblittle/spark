@@ -74,10 +74,10 @@ import {
   getP2TRScriptFromPublicKey,
   getP2WPKHAddressFromPublicKey,
   getSigHashFromTx,
+  getTxEstimatedVbytesSizeByNumberOfInputsOutputs,
   getTxFromRawTxBytes,
   getTxFromRawTxHex,
   getTxId,
-  getTxEstimatedVbytesSizeByNumberOfInputsOutputs,
 } from "../utils/bitcoin.js";
 import {
   getNetwork,
@@ -95,9 +95,16 @@ import {
 
 import { LRCWallet } from "@buildonspark/lrc20-sdk";
 import { sha256 } from "@noble/hashes/sha2";
+import { trace, Tracer } from "@opentelemetry/api";
+import {
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+  SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import { EventEmitter } from "eventemitter3";
 import { isReactNative } from "../constants.js";
 import { Network as NetworkProto, networkToJSON } from "../proto/spark.js";
+import { TokenTransactionWithStatus } from "../proto/spark_token.js";
 import {
   decodeInvoice,
   getNetworkFromInvoice,
@@ -121,6 +128,7 @@ import {
   SparkAddressFormat,
 } from "../utils/address.js";
 import { chunkArray } from "../utils/chunkArray.js";
+import { getFetch } from "../utils/fetch.js";
 import { addPublicKeys } from "../utils/keys.js";
 import {
   Bech32mTokenIdentifier,
@@ -139,17 +147,6 @@ import type {
   TransferParams,
   UserTokenMetadata,
 } from "./types.js";
-import {
-  TokenTransactionWithStatus,
-  TokenMetadata,
-} from "../proto/spark_token.js";
-import { getFetch } from "../utils/fetch.js";
-import { Tracer, trace } from "@opentelemetry/api";
-import {
-  ConsoleSpanExporter,
-  SimpleSpanProcessor,
-  SpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
 
 /**
  * The SparkWallet class is the primary interface for interacting with the Spark network.
@@ -1457,54 +1454,6 @@ export class SparkWallet extends EventEmitter {
       await this.cancelAllSenderInitiatedTransfers();
       throw new Error(`Failed to request leaves swap: ${e}`);
     }
-  }
-
-  /**
-   * Gets all transfers for the wallet.
-   *
-   * @param {number} [limit=20] - Maximum number of transfers to return
-   * @param {number} [offset=0] - Offset for pagination
-   * @returns {Promise<QueryTransfersResponse>} Response containing the list of transfers
-   */
-  public async getTransfers(
-    limit: number = 20,
-    offset: number = 0,
-  ): Promise<{
-    transfers: WalletTransfer[];
-    offset: number;
-  }> {
-    const transfers = await this.transferService.queryAllTransfers(
-      limit,
-      offset,
-    );
-    const identityPublicKey = bytesToHex(
-      await this.config.signer.getIdentityPublicKey(),
-    );
-
-    const userRequests = await this.sspClient?.getTransfers(
-      transfers.transfers.map((transfer) => transfer.id),
-    );
-
-    const userRequestsMap = new Map<
-      string,
-      Omit<UserRequestType, "transfer">
-    >();
-    for (const userRequest of userRequests || []) {
-      if (userRequest && userRequest.sparkId && userRequest.userRequest) {
-        userRequestsMap.set(userRequest.sparkId, userRequest.userRequest);
-      }
-    }
-
-    return {
-      transfers: transfers.transfers.map((transfer) =>
-        mapTransferToWalletTransfer(
-          transfer,
-          identityPublicKey,
-          userRequestsMap.get(transfer.id),
-        ),
-      ),
-      offset: transfers.offset,
-    };
   }
 
   /**
@@ -3661,6 +3610,46 @@ export class SparkWallet extends EventEmitter {
     return transfers?.[0];
   }
 
+  private async constructTransfersWithUserRequest(
+    transfers: Transfer[],
+  ): Promise<WalletTransfer[]> {
+    const identityPublicKey = bytesToHex(
+      await this.config.signer.getIdentityPublicKey(),
+    );
+
+    const userRequests = await this.sspClient?.getTransfers(
+      transfers
+        .filter((transfer) =>
+          [
+            TransferType.COOPERATIVE_EXIT,
+            TransferType.COUNTER_SWAP,
+            TransferType.PREIMAGE_SWAP,
+            TransferType.SWAP,
+            TransferType.UTXO_SWAP,
+          ].includes(transfer.type),
+        )
+        .map((transfer) => transfer.id),
+    );
+
+    const userRequestsMap = new Map<
+      string,
+      Omit<UserRequestType, "transfer">
+    >();
+    for (const userRequest of userRequests || []) {
+      if (userRequest && userRequest.sparkId && userRequest.userRequest) {
+        userRequestsMap.set(userRequest.sparkId, userRequest.userRequest);
+      }
+    }
+
+    return transfers.map((transfer) =>
+      mapTransferToWalletTransfer(
+        transfer,
+        identityPublicKey,
+        userRequestsMap.get(transfer.id),
+      ),
+    );
+  }
+
   /**
    * Gets a transfer, that the wallet is a participant of, in the Spark network.
    * Only contains data about the spark->spark transfer, use getTransferFromSsp if you're
@@ -3674,10 +3663,35 @@ export class SparkWallet extends EventEmitter {
     if (!transfer) {
       return undefined;
     }
-    return mapTransferToWalletTransfer(
-      transfer,
-      bytesToHex(await this.config.signer.getIdentityPublicKey()),
+
+    return (await this.constructTransfersWithUserRequest([transfer]))[0];
+  }
+
+  /**
+   * Gets all transfers for the wallet.
+   *
+   * @param {number} [limit=20] - Maximum number of transfers to return
+   * @param {number} [offset=0] - Offset for pagination
+   * @returns {Promise<QueryTransfersResponse>} Response containing the list of transfers
+   */
+  public async getTransfers(
+    limit: number = 20,
+    offset: number = 0,
+  ): Promise<{
+    transfers: WalletTransfer[];
+    offset: number;
+  }> {
+    const transfers = await this.transferService.queryAllTransfers(
+      limit,
+      offset,
     );
+
+    return {
+      transfers: await this.constructTransfersWithUserRequest(
+        transfers.transfers,
+      ),
+      offset: transfers.offset,
+    };
   }
 
   // ***** Token Flow *****
