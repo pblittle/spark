@@ -779,34 +779,27 @@ func AllStartupTasks() []StartupTaskSpec {
 					var (
 						tokenTransactionIDs []uuid.UUID
 						tokenOutputIDs      []uuid.UUID
-						issuerPubKeys       [][]byte
 					)
 
-					transactionIDSet := make(map[uuid.UUID]bool)
-					issuerPubKeySet := make(map[string][]byte)
+					transactionIDSet := make(map[uuid.UUID]struct{})
 
 					for _, output := range tokenOutputs {
 						tokenOutputIDs = append(tokenOutputIDs, output.ID)
 						if output.Edges.OutputCreatedTokenTransaction != nil {
-							transactionIDSet[output.Edges.OutputCreatedTokenTransaction.ID] = true
+							transactionIDSet[output.Edges.OutputCreatedTokenTransaction.ID] = struct{}{}
 						}
 						if output.Edges.OutputSpentTokenTransaction != nil {
-							transactionIDSet[output.Edges.OutputSpentTokenTransaction.ID] = true
+							transactionIDSet[output.Edges.OutputSpentTokenTransaction.ID] = struct{}{}
 						}
-						issuerPubKeySet[string(output.TokenPublicKey)] = output.TokenPublicKey
 					}
 
 					for txID := range transactionIDSet {
 						tokenTransactionIDs = append(tokenTransactionIDs, txID)
 					}
-					for _, issuerPubKey := range issuerPubKeySet {
-						issuerPubKeys = append(issuerPubKeys, issuerPubKey)
-					}
 
 					logger.Info("Collected entity IDs for deletion",
 						"token_outputs", len(tokenOutputIDs),
-						"token_transactions", len(tokenTransactionIDs),
-						"issuer_pub_keys_for_freeze", len(issuerPubKeys))
+						"token_transactions", len(tokenTransactionIDs))
 
 					deletedOutputs, err := tx.TokenOutput.Delete().
 						Where(tokenoutput.IDIn(tokenOutputIDs...)).
@@ -826,20 +819,17 @@ func AllStartupTasks() []StartupTaskSpec {
 						logger.Info("Deleted token transactions", "count", deletedTransactions)
 					}
 
-					if len(issuerPubKeys) > 0 {
-						deletedTokenFreezes, err := tx.TokenFreeze.Delete().
-							Where(tokenfreeze.TokenPublicKeyIn(issuerPubKeys...)).
-							Exec(ctx)
-						if err != nil {
-							return fmt.Errorf("failed to delete token freezes: %w", err)
-						}
-						logger.Info("Deleted token freezes", "count", deletedTokenFreezes)
+					deletedTokenFreezes, err := tx.TokenFreeze.Delete().
+						Where(tokenfreeze.TokenCreateIDIsNil()).
+						Exec(ctx)
+					if err != nil {
+						return fmt.Errorf("failed to delete token freezes: %w", err)
 					}
+					logger.Info("Deleted token freezes", "count", deletedTokenFreezes)
 
 					logger.Info("Successfully completed deletion of legacy token output data",
 						"total_token_outputs_deleted", deletedOutputs,
-						"total_token_transactions_deleted", len(tokenTransactionIDs),
-						"total_token_freezes_deleted", len(issuerPubKeys))
+						"total_token_transactions_deleted", len(tokenTransactionIDs))
 
 					return nil
 				},
