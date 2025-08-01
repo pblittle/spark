@@ -2,179 +2,327 @@ import {
   SparkWalletTesting,
   initWallet,
 } from "../../utils/spark-testing-wallet.js";
-import { ValidationError } from "../../../errors/types.js";
 import { bytesToHex } from "@noble/hashes/utils";
 import { BitcoinFaucet } from "../../utils/test-faucet.js";
 
+const SMALL_DEPOSIT_AMOUNT = 10n;
 export const DEPOSIT_AMOUNT = 10000n;
 const SECOND_DEPOSIT_AMOUNT = 20000n;
 const THIRD_DEPOSIT_AMOUNT = 30000n;
 
 describe("SSP static deposit address integration", () => {
-  // it("should claim deposits to a static deposit address", async () => {
-  //   console.log("Initializing user wallet for static deposit claim test...");
-  //   const faucet = BitcoinFaucet.getInstance();
+  describe("Happy path testing", () => {
+    it("should claim deposits to a static deposit address", async () => {
+      const faucet = BitcoinFaucet.getInstance();
+      const { wallet: userWallet } = await SparkWalletTesting.initialize(
+        {
+          options: {
+            network: "LOCAL",
+          },
+        },
+        false,
+      );
 
-  //   const { wallet: userWallet } = await SparkWalletTesting.initialize(
-  //     {
-  //       options: {
-  //         network: "LOCAL",
-  //       },
-  //     },
-  //     false,
-  //   );
+      const depositAddress = await userWallet.getStaticDepositAddress();
+      expect(depositAddress).toBeDefined();
+      const signedTx = await faucet.sendToAddress(
+        depositAddress,
+        DEPOSIT_AMOUNT,
+      );
 
-  //   const depositAddress = await userWallet.getStaticDepositAddress();
-  //   expect(depositAddress).toBeDefined();
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
+      expect(signedTx).toBeDefined();
+      const transactionId = signedTx.id;
+      let vout;
+      for (let i = 0; i < signedTx.outputsLength; i++) {
+        const output = signedTx.getOutput(i);
+        if (output.amount === DEPOSIT_AMOUNT) {
+          vout = i;
+          break;
+        }
+      }
 
-  //   const signedTx = await faucet.sendToAddress(depositAddress, DEPOSIT_AMOUNT);
+      const quote = await userWallet.getClaimStaticDepositQuote(
+        transactionId,
+        vout!,
+      );
 
-  //   expect(signedTx).toBeDefined();
-  //   const transactionId = signedTx.id;
-  //   const outputs = Array.from({ length: signedTx.outputsLength }, (_, i) => ({
-  //     output: signedTx.getOutput(i),
-  //     index: i,
-  //   }));
-  //   const match = outputs.find(
-  //     ({ output }) => output.amount === DEPOSIT_AMOUNT,
-  //   );
-  //   const vout = match ? match.index : undefined;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-  //   // Wait for the transaction to be mined
-  //   await faucet.mineBlocks(6);
+      const quoteAmount = quote!.creditAmountSats;
+      const sspSignature = quote!.signature;
 
-  //   console.log("Fetching claim quote for static deposit...");
-  //   const quote = await userWallet.getClaimStaticDepositQuote(
-  //     transactionId,
-  //     vout!,
-  //   );
+      await userWallet.claimStaticDeposit({
+        transactionId,
+        creditAmountSats: quoteAmount,
+        sspSignature,
+        outputIndex: vout!,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const { balance } = await userWallet.getBalance();
+      expect(balance).toBe(BigInt(quoteAmount));
 
-  //   console.log("Attempting to claim static deposit...");
-  //   await userWallet.claimStaticDeposit({
-  //     transactionId: transactionId,
-  //     creditAmountSats: quote.creditAmountSats,
-  //     sspSignature: quote.signature,
-  //   });
-  //   await new Promise((resolve) => setTimeout(resolve, 40000));
+      // Test depositing money to the same address and second time and claiming.
+      const signedTx2 = await faucet.sendToAddress(
+        depositAddress,
+        SECOND_DEPOSIT_AMOUNT,
+      );
+      const transactionId2 = signedTx2.id;
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
+      // Test claiming and getting the quote without passing in the output index.
+      const quote2 =
+        await userWallet.getClaimStaticDepositQuote(transactionId2);
+      const quoteAmount2 = quote2!.creditAmountSats;
+      const sspSignature2 = quote2!.signature;
+      await userWallet.claimStaticDeposit({
+        transactionId: transactionId2,
+        creditAmountSats: quoteAmount2,
+        sspSignature: sspSignature2,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const { balance: balance2 } = await userWallet.getBalance();
+      expect(balance2).toBe(BigInt(quoteAmount + quoteAmount2));
 
-  //   console.log("Fetching wallet balance after claim...");
-  //   const { balance } = await userWallet.getBalance();
+      // Test depositing money to the same address and test claim with max fee flow.
+      const signedTx3 = await faucet.sendToAddress(
+        depositAddress,
+        THIRD_DEPOSIT_AMOUNT,
+      );
+      const transactionId3 = signedTx3.id;
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
+      // Get quote so we can calculate the expected balance. Not needed for actual flow.
+      const quote3 =
+        await userWallet.getClaimStaticDepositQuote(transactionId3);
+      const quoteAmount3 = quote3!.creditAmountSats;
+      await userWallet.claimStaticDepositWithMaxFee({
+        transactionId: transactionId3,
+        maxFee: 1000,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const { balance: balance3 } = await userWallet.getBalance();
+      expect(balance3).toBe(BigInt(quoteAmount + quoteAmount2 + quoteAmount3));
+      // Get transfers should include static deposit transfers.
+      const transfers = await userWallet.getTransfers();
+      expect(transfers.transfers.length).toBe(3);
+    }, 60000);
 
-  //   expect(balance).toBe(BigInt(quote.creditAmountSats));
+    it("should create a refund transaction", async () => {
+      const faucet = BitcoinFaucet.getInstance();
 
-  //   // Test depositing money to the same address and second time and claiming.
-  //   const signedTx2 = await faucet.sendToAddress(
-  //     depositAddress,
-  //     SECOND_DEPOSIT_AMOUNT,
-  //   );
-  //   const transactionId2 = signedTx2.id;
-  //   // Wait for the transaction to be mined
-  //   await faucet.mineBlocks(6);
+      const { wallet: userWallet } = await SparkWalletTesting.initialize(
+        {
+          options: {
+            network: "LOCAL",
+          },
+        },
+        false,
+      );
 
-  //   // Test claiming and getting the quote without passing in the output index.
-  //   const quote2 = await userWallet.getClaimStaticDepositQuote(transactionId2);
+      const depositAddress = await userWallet.getStaticDepositAddress();
+      expect(depositAddress).toBeDefined();
 
-  //   const quoteAmount2 = quote2!.creditAmountSats;
-  //   const sspSignature2 = quote2!.signature;
+      const signedTx = await faucet.sendToAddress(
+        depositAddress,
+        DEPOSIT_AMOUNT,
+      );
 
-  //   await userWallet.claimStaticDeposit({
-  //     transactionId: transactionId2,
-  //     creditAmountSats: quoteAmount2,
-  //     sspSignature: sspSignature2,
-  //   });
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
 
-  //   await new Promise((resolve) => setTimeout(resolve, 1000));
+      expect(signedTx).toBeDefined();
 
-  //   const { balance: balance2 } = await userWallet.getBalance();
-  //   expect(balance2).toBe(balance + BigInt(quoteAmount2));
+      const transactionId = signedTx.id;
 
-  //   // Test depositing money to the same address and test claim with max fee flow.
-  //   const signedTx3 = await faucet.sendToAddress(
-  //     depositAddress,
-  //     THIRD_DEPOSIT_AMOUNT,
-  //   );
-  //   const transactionId3 = signedTx3.id;
-  //   // Wait for the transaction to be mined
-  //   await faucet.mineBlocks(6);
+      let vout: number | undefined;
 
-  //   // Get quote so we can calculate the expected balance. Not needed for actual flow.
-  //   const quote3 = await userWallet.getClaimStaticDepositQuote(transactionId3);
+      for (let i = 0; i < signedTx.outputsLength; i++) {
+        const output = signedTx.getOutput(i);
+        if (output.amount === DEPOSIT_AMOUNT) {
+          vout = i;
+          break;
+        }
+      }
 
-  //   const quoteAmount3 = quote3!.creditAmountSats;
+      const refundAddress = await faucet.getNewAddress();
 
-  //   await userWallet.claimStaticDepositWithMaxFee({
-  //     transactionId: transactionId3,
-  //     maxFee: 1000,
-  //   });
+      const refundTx = await userWallet.refundStaticDeposit({
+        depositTransactionId: transactionId,
+        destinationAddress: refundAddress,
+        satsPerVbyteFee: 2,
+      });
 
-  //   await new Promise((resolve) => setTimeout(resolve, 1000));
+      expect(refundTx).toBeDefined();
 
-  //   const { balance: balance3 } = await userWallet.getBalance();
-  //   expect(balance3).toBe(
-  //     BigInt(quote.creditAmountSats + quoteAmount2 + quoteAmount3),
-  //   );
+      // Calling it again should create a new transaction.
+      const refundTx2 = await userWallet.refundStaticDeposit({
+        depositTransactionId: transactionId,
+        destinationAddress: refundAddress,
+        outputIndex: vout!,
+        satsPerVbyteFee: 2,
+      });
 
-  //   // Get transfers should include static deposit transfers.
-  //   const transfers = await userWallet.getTransfers();
-  //   expect(transfers.transfers.length).toBe(3);
-  // }, 60000);
+      expect(refundTx2).toBeDefined();
 
-  // it("should create a refund transaction", async () => {
-  //   const faucet = BitcoinFaucet.getInstance();
+      expect(refundTx).not.toBe(refundTx2);
+    }, 60000);
+  });
 
-  //   const { wallet: userWallet } = await SparkWalletTesting.initialize(
-  //     {
-  //       options: {
-  //         network: "LOCAL",
-  //       },
-  //     },
-  //     false,
-  //   );
+  describe("Quote unhappy path testing", () => {
+    it("should error claim quote from a different wallet", async () => {
+      const { wallet: aliceWallet } = await SparkWalletTesting.initialize(
+        {
+          options: {
+            network: "LOCAL",
+          },
+        },
+        false,
+      );
 
-  //   const depositAddress = await userWallet.getStaticDepositAddress();
-  //   expect(depositAddress).toBeDefined();
+      const { wallet: bobWallet } = await SparkWalletTesting.initialize(
+        {
+          options: {
+            network: "LOCAL",
+          },
+        },
+        false,
+      );
 
-  //   const signedTx = await faucet.sendToAddress(depositAddress, DEPOSIT_AMOUNT);
+      const faucet = BitcoinFaucet.getInstance();
 
-  //   // Wait for the transaction to be mined
-  //   await faucet.mineBlocks(6);
+      const depositAddress = await aliceWallet.getStaticDepositAddress();
+      expect(depositAddress).toBeDefined();
 
-  //   expect(signedTx).toBeDefined();
+      const signedTx = await faucet.sendToAddress(
+        depositAddress,
+        DEPOSIT_AMOUNT,
+      );
 
-  //   const transactionId = signedTx.id;
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
 
-  //   let vout: number | undefined;
+      expect(signedTx).toBeDefined();
 
-  //   for (let i = 0; i < signedTx.outputsLength; i++) {
-  //     const output = signedTx.getOutput(i);
-  //     if (output.amount === DEPOSIT_AMOUNT) {
-  //       vout = i;
-  //       break;
-  //     }
-  //   }
+      const transactionId = signedTx.id;
 
-  //   const refundAddress = await faucet.getNewAddress();
+      await expect(
+        bobWallet.getClaimStaticDepositQuote(transactionId),
+      ).rejects.toThrow();
+    }, 60000);
 
-  //   const refundTx = await userWallet.refundStaticDeposit({
-  //     depositTransactionId: transactionId,
-  //     destinationAddress: refundAddress,
-  //     satsPerVbyteFee: 2,
-  //   });
+    it("should error if txid does not exist", async () => {
+      const { wallet: aliceWallet } = await SparkWalletTesting.initialize(
+        {
+          options: {
+            network: "LOCAL",
+          },
+        },
+        false,
+      );
 
-  //   expect(refundTx).toBeDefined();
+      const faucet = BitcoinFaucet.getInstance();
 
-  //   // Calling it again should create a new transaction.
-  //   const refundTx2 = await userWallet.refundStaticDeposit({
-  //     depositTransactionId: transactionId,
-  //     destinationAddress: refundAddress,
-  //     outputIndex: vout!,
-  //     satsPerVbyteFee: 2,
-  //   });
+      const depositAddress = await aliceWallet.getStaticDepositAddress();
+      expect(depositAddress).toBeDefined();
 
-  //   expect(refundTx2).toBeDefined();
+      const signedTx = await faucet.sendToAddress(
+        depositAddress,
+        DEPOSIT_AMOUNT,
+      );
 
-  //   expect(refundTx).not.toBe(refundTx2);
-  // }, 60000);
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
+
+      expect(signedTx).toBeDefined();
+
+      const transactionId = signedTx.id;
+
+      await expect(
+        aliceWallet.getClaimStaticDepositQuote(
+          `${transactionId.slice(0, -6)}abcdef`,
+        ),
+      ).rejects.toThrow();
+    });
+
+    it("should error if tx amount does not cover fees", async () => {
+      const { wallet: aliceWallet } = await SparkWalletTesting.initialize(
+        {
+          options: {
+            network: "LOCAL",
+          },
+        },
+        false,
+      );
+
+      const faucet = BitcoinFaucet.getInstance();
+
+      const depositAddress = await aliceWallet.getStaticDepositAddress();
+      expect(depositAddress).toBeDefined();
+
+      const signedTx = await faucet.sendToAddress(
+        depositAddress,
+        SMALL_DEPOSIT_AMOUNT,
+      );
+
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
+
+      expect(signedTx).toBeDefined();
+
+      const transactionId = signedTx.id;
+
+      await expect(
+        aliceWallet.getClaimStaticDepositQuote(transactionId),
+      ).rejects.toThrow();
+    }, 60000);
+
+    it("should error claim quote if tx already claimed", async () => {
+      const { wallet: aliceWallet } = await SparkWalletTesting.initialize(
+        {
+          options: {
+            network: "LOCAL",
+          },
+        },
+        false,
+      );
+
+      const faucet = BitcoinFaucet.getInstance();
+
+      const depositAddress = await aliceWallet.getStaticDepositAddress();
+      expect(depositAddress).toBeDefined();
+
+      const signedTx = await faucet.sendToAddress(
+        depositAddress,
+        DEPOSIT_AMOUNT,
+      );
+
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
+
+      expect(signedTx).toBeDefined();
+
+      const transactionId = signedTx.id;
+
+      const quote = await aliceWallet.getClaimStaticDepositQuote(transactionId);
+
+      await aliceWallet.claimStaticDeposit({
+        transactionId: transactionId,
+        creditAmountSats: quote.creditAmountSats,
+        sspSignature: quote.signature,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 40000));
+
+      const { balance } = await aliceWallet.getBalance();
+
+      expect(balance).toBe(BigInt(quote.creditAmountSats));
+
+      await expect(
+        aliceWallet.getClaimStaticDepositQuote(transactionId),
+      ).rejects.toThrow();
+    }, 60000);
+  });
 
   // it("Claim, then try to refund.", async () => {
   //   console.log("Initializing wallet for claim and refund test...");
