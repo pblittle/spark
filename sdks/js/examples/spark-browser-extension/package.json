@@ -1,0 +1,22 @@
+{
+  "name": "spark-browser-extension",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "yarn tsc && rm -rf dist && yarn build:chrome",
+    "build:chrome": "node build.mjs",
+    "watch:chrome": "node build.mjs --watch",
+    "format:fix": "prettier src --write",
+    "format": "prettier src --check"
+  },
+  "dependencies": {
+    "@buildonspark/spark-sdk": "^0.2.5"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.276",
+    "esbuild": "^0.20.0",
+    "prettier": "^3.5.1",
+    "typescript": "^5.7.3"
+  }
+}
