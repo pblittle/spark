@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/common/keys"
+	pbcommon "github.com/lightsparkdev/spark/proto/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/db"
@@ -829,4 +830,118 @@ func TestEdgeCases(t *testing.T) {
 		require.Error(t, err) // Should fail due to nil parent key
 		assert.Equal(t, 0, count)
 	})
+}
+
+// Ensures that the confirmation txid matches the utxo id in tree creation.
+// Regression test for https://linear.app/lightsparkdev/issue/LIG-8038
+func TestPrepareSigningJobs_EnsureConfTxidMatchesUtxoId(t *testing.T) {
+	rng := rand.NewChaCha8([32]byte{1})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	defer dbCtx.Close()
+
+	handler := createTestHandler(t)
+
+	db, err := ent.GetDbFromContext(ctx)
+	require.NoError(t, err)
+
+	keysharePrivkey := keys.MustGeneratePrivateKeyFromRand(rng)
+	publicSharePrivkey := keys.MustGeneratePrivateKeyFromRand(rng)
+	identityPrivkey := keys.MustGeneratePrivateKeyFromRand(rng)
+	signingPrivkey := keys.MustGeneratePrivateKeyFromRand(rng)
+
+	signingKeyshare, err := db.SigningKeyshare.Create().
+		SetStatus(st.KeyshareStatusAvailable).
+		SetSecretShare(keysharePrivkey.Serialize()).
+		SetPublicShares(map[string][]byte{"test": publicSharePrivkey.Public().Serialize()}).
+		SetPublicKey(keysharePrivkey.Public().Serialize()).
+		SetMinSigners(2).
+		SetCoordinatorIndex(0).
+		Save(ctx)
+	require.NoError(t, err)
+
+	testPubKey := keys.MustGeneratePrivateKeyFromRand(rng).Public()
+
+	taprootScript, err := common.P2TRScriptFromPubKey(testPubKey)
+	require.NoError(t, err)
+
+	legitimateTx := wire.NewMsgTx(wire.TxVersion)
+	legitimateTx.AddTxIn(&wire.TxIn{
+		PreviousOutPoint: wire.OutPoint{Hash: [32]byte{1, 2, 3}, Index: 0},
+		Sequence:         wire.MaxTxInSequenceNum,
+	})
+	legitimateTxOutput := &wire.TxOut{Value: 100000, PkScript: taprootScript}
+	legitimateTx.AddTxOut(legitimateTxOutput)
+	legitimateTxHash := legitimateTx.TxHash()
+
+	// Create DIFFERENT (malicious) transaction with same UTXO structure but different TXID
+	maliciousTx := wire.NewMsgTx(wire.TxVersion)
+	maliciousTx.AddTxIn(&wire.TxIn{
+		PreviousOutPoint: wire.OutPoint{Hash: [32]byte{9, 8, 7}, Index: 0}, // Different input!
+		Sequence:         wire.MaxTxInSequenceNum,
+	})
+	maliciousTx.AddTxOut(legitimateTxOutput) // Same output value and script
+	maliciousTxBuf, err := common.SerializeTx(maliciousTx)
+	require.NoError(t, err)
+	maliciousTxHash := maliciousTx.TxHash()
+
+	// Verify the TXIDs are actually different (sanity check)
+	require.NotEqual(t, legitimateTxHash, maliciousTxHash, "Test setup error: TXIDs should be different")
+
+	outputAddress, err := common.P2TRAddressFromPkScript(legitimateTxOutput.PkScript, common.Regtest)
+	require.NoError(t, err)
+
+	// Create a deposit address that's confirmed with the LEGITIMATE transaction
+	_, err = db.DepositAddress.Create().
+		SetAddress(*outputAddress).
+		SetOwnerIdentityPubkey(identityPrivkey.Public().Serialize()).
+		SetOwnerSigningPubkey(signingPrivkey.Public().Serialize()).
+		SetSigningKeyshare(signingKeyshare).
+		SetConfirmationHeight(100).                     // Confirmed at height 100
+		SetConfirmationTxid(legitimateTxHash.String()). // CONFIRMED with legitimate TX
+		Save(ctx)
+	require.NoError(t, err)
+
+	nodePrivKey := keys.MustGeneratePrivateKeyFromRand(rng)
+	nodeTaprootScript, err := common.P2TRScriptFromPubKey(nodePrivKey.Public())
+	require.NoError(t, err)
+
+	nodeTx := wire.NewMsgTx(wire.TxVersion)
+	nodeTx.AddTxIn(&wire.TxIn{
+		PreviousOutPoint: wire.OutPoint{Hash: maliciousTxHash, Index: 0}, // References the malicious UTXO
+		Sequence:         wire.MaxTxInSequenceNum,
+	})
+	nodeTx.AddTxOut(&wire.TxOut{Value: 50000, PkScript: nodeTaprootScript})
+	nodeTxBuf, err := common.SerializeTx(nodeTx)
+	require.NoError(t, err)
+
+	// Create a CreateTreeRequest that tries to use the MALICIOUS transaction
+	// This should be rejected because the TXID doesn't match the confirmed TXID
+	req := &pb.CreateTreeRequest{
+		UserIdentityPublicKey: identityPrivkey.Public().Serialize(),
+		Source: &pb.CreateTreeRequest_OnChainUtxo{
+			OnChainUtxo: &pb.UTXO{
+				RawTx:   maliciousTxBuf,     // MALICIOUS transaction bytes
+				Txid:    maliciousTxHash[:], // MALICIOUS TXID
+				Vout:    0,
+				Network: pb.Network_REGTEST,
+			},
+		},
+		Node: &pb.CreationNode{
+			NodeTxSigningJob: &pb.SigningJob{
+				RawTx:                  nodeTxBuf,
+				SigningPublicKey:       signingPrivkey.Public().Serialize(),
+				SigningNonceCommitment: &pbcommon.SigningCommitment{Hiding: make([]byte, 33), Binding: make([]byte, 33)},
+			},
+		},
+	}
+
+	signingJobs, nodes, err := handler.prepareSigningJobs(ctx, req, false)
+
+	require.ErrorContains(t, err, "onfirmation txid does not match utxo txid")
+	assert.Empty(t, signingJobs)
+	assert.Empty(t, nodes)
 }
