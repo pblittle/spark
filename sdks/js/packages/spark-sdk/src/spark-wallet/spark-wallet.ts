@@ -1859,13 +1859,6 @@ export class SparkWallet extends EventEmitter {
     /** @deprecated use `satsPerVbyteFee` */ fee?: number;
     satsPerVbyteFee?: number;
   }): Promise<string> {
-    if (fee !== undefined) {
-      console.warn(
-        `refundStaticDeposit(): \`fee\` parameter is deprecated and will be removed; ` +
-          `please switch to \`satsPerVbyteFee\`.`,
-      );
-    }
-
     if (fee === undefined && satsPerVbyteFee === undefined) {
       throw new ValidationError("Fee or satsPerVbyteFee must be provided");
     }
@@ -1879,8 +1872,8 @@ export class SparkWallet extends EventEmitter {
       ? satsPerVbyteFee * getTxEstimatedVbytesSizeByNumberOfInputsOutputs(1, 1)
       : fee!;
 
-    if (finalFee <= 200) {
-      throw new ValidationError("Fee must be greater than 300", {
+    if (finalFee < 194) {
+      throw new ValidationError("Fee must be at least 194", {
         field: "fee",
         value: finalFee,
       });

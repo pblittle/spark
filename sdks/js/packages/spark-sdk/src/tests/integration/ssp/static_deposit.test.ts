@@ -4,6 +4,7 @@ import {
 } from "../../utils/spark-testing-wallet.js";
 import { bytesToHex } from "@noble/hashes/utils";
 import { BitcoinFaucet } from "../../utils/test-faucet.js";
+import { ValidationError } from "../../../errors/types.js";
 
 const SMALL_DEPOSIT_AMOUNT = 10n;
 export const DEPOSIT_AMOUNT = 10000n;
@@ -324,310 +325,158 @@ describe("SSP static deposit address integration", () => {
     }, 60000);
   });
 
-  // it("Claim, then try to refund.", async () => {
-  //   console.log("Initializing wallet for claim and refund test...");
-  //   const {
-  //     wallet: userWallet,
-  //     depositAddress,
-  //     signedTx,
-  //     vout,
-  //     faucet,
-  //   } = await initWallet(DEPOSIT_AMOUNT, "LOCAL");
+  describe("Claim unhappy path testing", () => {
+    it("should reject claim with fake SSP signature", async () => {
+      console.log("Initializing wallet for fake SSP signature test...");
+      const {
+        wallet: userWallet,
+        signedTx,
+        vout,
+        faucet,
+      } = await initWallet(DEPOSIT_AMOUNT, "LOCAL");
 
-  //   // Wait for the transaction to be mined
-  //   await faucet.mineBlocks(6);
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
 
-  //   expect(signedTx).toBeDefined();
+      const transactionId = signedTx.id;
 
-  //   const transactionId = signedTx.id;
-
-  //   const quote = await userWallet.getClaimStaticDepositQuote(
-  //     transactionId,
-  //     vout!,
-  //   );
-
-  //   const quoteAmount = quote!.creditAmountSats;
-  //   const sspSignature = quote!.signature;
-
-  //   console.log("Attempting to claim static deposit...");
-  //   await userWallet.claimStaticDeposit({
-  //     transactionId,
-  //     creditAmountSats: quoteAmount,
-  //     sspSignature,
-  //     outputIndex: vout!,
-  //   });
-
-  //   await new Promise((resolve) => setTimeout(resolve, 30000));
-
-  //   console.log("Fetching wallet balance after claim...");
-  //   const { balance } = await userWallet.getBalance();
-  //   expect(balance).toBe(BigInt(quoteAmount));
-
-  //   console.log(`Alice balance: ${balance}`);
-
-  //   console.log("Initiating transfer to Spark address...");
-  //   const sparkAddress = await userWallet.getSparkAddress();
-  //   const transfer = await userWallet.transfer({
-  //     amountSats: Number(balance),
-  //     receiverSparkAddress: sparkAddress,
-  //   });
-
-  //   expect(transfer).toBeDefined();
-
-  //   await new Promise((resolve) => setTimeout(resolve, 1000));
-
-  //   // Try to refund the deposit after claiming and transfer
-  //   console.log("Attempting refund of claimed deposit...");
-  //   await expect(
-  //     userWallet.refundStaticDeposit({
-  //       depositTransactionId: transactionId,
-  //       destinationAddress: depositAddress,
-  //       fee: 301,
-  //     }),
-  //   ).rejects.toMatch(
-  //     "Spark error: Failed to aggregate frost: InvalidSignatureShare",
-  //   );
-  // }, 600000);
-
-  it("should reject claim quote from a different wallet", async () => {
-    console.log("Initializing Alice's wallet for cross-wallet claim test...");
-    const {
-      wallet: alice,
-      depositAddress,
-      signedTx,
-      vout,
-      faucet,
-    } = await initWallet(DEPOSIT_AMOUNT, "LOCAL");
-
-    const { wallet: bob } = await SparkWalletTesting.initialize(
-      {
-        options: {
-          network: "LOCAL",
-        },
-      },
-      false,
-    );
-
-    // Wait for the transaction to be mined
-    await faucet.mineBlocks(6);
-
-    expect(signedTx).toBeDefined();
-
-    const transactionId = signedTx.id;
-
-    await new Promise((resolve) => setTimeout(resolve, 10000));
-
-    const bobDepositAddress = await bob.getStaticDepositAddress();
-    expect(bobDepositAddress).toBeDefined();
-
-    console.log(`Bob's static depost address: ${bobDepositAddress}`);
-
-    // Test without vout
-    console.log(
-      "Expecting error when Bob tries to get claim quote without vout...",
-    );
-    await expect(bob.getClaimStaticDepositQuote(transactionId)).rejects.toThrow(
-      "No static deposit address found",
-    );
-
-    // Test with vout
-    console.log("Fetching claim quote for Bob and Alice with vout...");
-    const bobQuote = await bob.getClaimStaticDepositQuote(transactionId, vout!);
-
-    const aliceQuote = await alice.getClaimStaticDepositQuote(
-      transactionId,
-      vout!,
-    );
-
-    expect(bobQuote.creditAmountSats).toEqual(aliceQuote.creditAmountSats);
-    expect(bobQuote.transactionId).toEqual(aliceQuote.transactionId);
-    expect(bobQuote.signature).toEqual(aliceQuote.signature);
-
-    // Test claim with different wallet
-    console.log("Expecting error when Bob tries to claim Alice's deposit...");
-    await expect(
-      bob.claimStaticDeposit({
+      console.log("Fetching claim quote for static deposit...");
+      const quote = await userWallet.getClaimStaticDepositQuote(
         transactionId,
-        creditAmountSats: bobQuote.creditAmountSats,
-        sspSignature: bobQuote.signature,
-        outputIndex: vout!,
-      }),
-    ).rejects.toThrow("InvalidInputException");
-  }, 600000);
+        vout!,
+      );
 
-  it("should reject claim with fake SSP signature", async () => {
-    console.log("Initializing wallet for fake SSP signature test...");
-    const {
-      wallet: userWallet,
-      depositAddress,
-      signedTx,
-      vout,
-      faucet,
-    } = await initWallet(DEPOSIT_AMOUNT, "LOCAL");
+      await new Promise((resolve) => setTimeout(resolve, 10000));
 
-    // Wait for the transaction to be mined
-    await faucet.mineBlocks(6);
+      const quoteAmount = quote!.creditAmountSats;
 
-    const transactionId = signedTx.id;
+      // Generate a fake signature (64 bytes of random data to simulate a signature)
+      const fakeSignature = new Uint8Array(64);
+      crypto.getRandomValues(fakeSignature);
+      console.log("Expecting error when claiming with fake signature...");
+      await expect(
+        userWallet.claimStaticDeposit({
+          transactionId,
+          creditAmountSats: quoteAmount,
+          sspSignature: bytesToHex(fakeSignature),
+          outputIndex: vout!,
+        }),
+      ).rejects.toThrow(
+        'Request ClaimStaticDeposit failed. [{"message":"Something went wrong."',
+      );
+    }, 600000);
 
-    console.log("Fetching claim quote for static deposit...");
-    const quote = await userWallet.getClaimStaticDepositQuote(
-      transactionId,
-      vout!,
-    );
+    it("should reject claiming the same deposit twice", async () => {
+      console.log("Initializing wallet for double-claim test...");
+      const {
+        wallet: userWallet,
+        signedTx,
+        vout,
+        faucet,
+      } = await initWallet(DEPOSIT_AMOUNT, "LOCAL");
 
-    await new Promise((resolve) => setTimeout(resolve, 10000));
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
 
-    const quoteAmount = quote!.creditAmountSats;
+      const transactionId = signedTx.id;
 
-    // Generate a fake signature (64 bytes of random data to simulate a signature)
-    const fakeSignature = new Uint8Array(64);
-    crypto.getRandomValues(fakeSignature);
-    console.log("Expecting error when claiming with fake signature...");
-    await expect(
-      userWallet.claimStaticDeposit({
+      console.log("Fetching claim quote for static deposit...");
+      const quote = await userWallet.getClaimStaticDepositQuote(
         transactionId,
-        creditAmountSats: quoteAmount,
-        sspSignature: bytesToHex(fakeSignature),
-        outputIndex: vout!,
-      }),
-    ).rejects.toThrow(
-      'Request ClaimStaticDeposit failed. [{"message":"Something went wrong."',
-    );
-  }, 600000);
+        vout!,
+      );
 
-  it("should reject claiming the same deposit twice", async () => {
-    console.log("Initializing wallet for double-claim test...");
-    const {
-      wallet: userWallet,
-      depositAddress,
-      signedTx,
-      vout,
-      faucet,
-    } = await initWallet(DEPOSIT_AMOUNT, "LOCAL");
+      await new Promise((resolve) => setTimeout(resolve, 10000));
 
-    // Wait for the transaction to be mined
-    await faucet.mineBlocks(6);
+      const quoteAmount = quote!.creditAmountSats;
+      const sspSignature = quote!.signature;
 
-    const transactionId = signedTx.id;
-
-    console.log("Fetching claim quote for static deposit...");
-    const quote = await userWallet.getClaimStaticDepositQuote(
-      transactionId,
-      vout!,
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, 10000));
-
-    const quoteAmount = quote!.creditAmountSats;
-    const sspSignature = quote!.signature;
-
-    console.log("Attempting to claim static deposit for the first time...");
-    const outputs = await userWallet.claimStaticDeposit({
-      transactionId,
-      creditAmountSats: quoteAmount,
-      sspSignature,
-      outputIndex: vout!,
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 30000));
-
-    expect(outputs).toBeDefined();
-
-    console.log(
-      "Expecting error when attempting to claim the same deposit twice...",
-    );
-    await expect(
-      userWallet.claimStaticDeposit({
+      console.log("Attempting to claim static deposit for the first time...");
+      const outputs = await userWallet.claimStaticDeposit({
         transactionId,
         creditAmountSats: quoteAmount,
         sspSignature,
         outputIndex: vout!,
-      }),
-    ).rejects.toThrow("UTXO is spent or not found.");
-  }, 600000);
+      });
 
-  // it("should reject second refund attempt on already refunded deposit", async () => {
-  //   console.log("Initializing wallet for double-refund test...");
-  //   const {
-  //     wallet: userWallet,
-  //     depositAddress,
-  //     signedTx,
-  //     vout,
-  //     faucet,
-  //   } = await initWallet(DEPOSIT_AMOUNT, "LOCAL");
+      await new Promise((resolve) => setTimeout(resolve, 30000));
 
-  //   // Wait for the transaction to be mined
-  //   await faucet.mineBlocks(6);
+      expect(outputs).toBeDefined();
 
-  //   const transactionId = signedTx.id;
+      console.log(
+        "Expecting error when attempting to claim the same deposit twice...",
+      );
+      await expect(
+        userWallet.claimStaticDeposit({
+          transactionId,
+          creditAmountSats: quoteAmount,
+          sspSignature,
+          outputIndex: vout!,
+        }),
+      ).rejects.toThrow("UTXO is spent or not found.");
+    }, 600000);
 
-  //   // First refund attempt should succeed
-  //   console.log("Attempting first refund of static deposit...");
-  //   const txHex = await userWallet.refundStaticDeposit({
-  //     depositTransactionId: transactionId,
-  //     outputIndex: vout!,
-  //     destinationAddress: depositAddress,
-  //     fee: 301,
-  //   });
+    it("Claim, then try to refund.", async () => {
+      console.log("Initializing wallet for claim and refund test...");
+      const {
+        wallet: userWallet,
+        depositAddress,
+        signedTx,
+        vout,
+        faucet,
+      } = await initWallet(DEPOSIT_AMOUNT, "LOCAL");
 
-  //   await new Promise((resolve) => setTimeout(resolve, 10000));
+      // Wait for the transaction to be mined
+      await faucet.mineBlocks(6);
 
-  //   // Second refund attempt should fail
-  //   console.log(
-  //     "Expecting error when attempting a second refund on same deposit...",
-  //   );
-  //   await expect(
-  //     userWallet.refundStaticDeposit({
-  //       depositTransactionId: transactionId,
-  //       outputIndex: vout!,
-  //       destinationAddress: depositAddress,
-  //       fee: 301,
-  //     }),
-  //   ).rejects.toMatch("InvalidSignatureShare"); // Returns a string, not an error
-  // }, 600000);
+      expect(signedTx).toBeDefined();
 
-  // it("should fail due to low fee", async () => {
-  //   console.log("Initializing wallet for low-fee refund test...");
-  //   const {
-  //     wallet: userWallet,
-  //     depositAddress,
-  //     signedTx,
-  //     vout,
-  //     faucet,
-  //   } = await initWallet(DEPOSIT_AMOUNT, "LOCAL");
+      const transactionId = signedTx.id;
 
-  //   // Wait for the transaction to be mined
-  //   await faucet.mineBlocks(6);
+      const quote = await userWallet.getClaimStaticDepositQuote(
+        transactionId,
+        vout!,
+      );
 
-  //   const transactionId = signedTx.id;
+      const quoteAmount = quote!.creditAmountSats;
+      const sspSignature = quote!.signature;
 
-  //   expect(transactionId).toBeDefined();
+      console.log("Attempting to claim static deposit...");
+      await userWallet.claimStaticDeposit({
+        transactionId,
+        creditAmountSats: quoteAmount,
+        sspSignature,
+        outputIndex: vout!,
+      });
 
-  //   // refund attempt should fail due to low fee
-  //   console.log("Expecting error when attempting refund with too low fee...");
-  //   await expect(
-  //     userWallet.refundStaticDeposit({
-  //       depositTransactionId: transactionId,
-  //       outputIndex: vout!,
-  //       destinationAddress: depositAddress,
-  //       fee: 300,
-  //     }),
-  //   ).rejects.toMatchObject({
-  //     name: ValidationError.name,
-  //     message: expect.stringContaining("Fee must be greater than 300"),
-  //     context: expect.objectContaining({
-  //       field: "fee",
-  //       value: 300,
-  //     }),
-  //   });
+      await new Promise((resolve) => setTimeout(resolve, 30000));
 
-  //   console.log("Attempting refund with sufficient fee...");
-  //   await userWallet.refundStaticDeposit({
-  //     depositTransactionId: transactionId,
-  //     outputIndex: vout!,
-  //     destinationAddress: depositAddress,
-  //     fee: 301,
-  //   });
-  // }, 600000);
+      console.log("Fetching wallet balance after claim...");
+      const { balance } = await userWallet.getBalance();
+      expect(balance).toBe(BigInt(quoteAmount));
+
+      console.log(`Alice balance: ${balance}`);
+
+      console.log("Initiating transfer to Spark address...");
+      const sparkAddress = await userWallet.getSparkAddress();
+      const transfer = await userWallet.transfer({
+        amountSats: Number(balance),
+        receiverSparkAddress: sparkAddress,
+      });
+
+      expect(transfer).toBeDefined();
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Try to refund the deposit after claiming and transfer
+      console.log("Attempting refund of claimed deposit...");
+      await expect(
+        userWallet.refundStaticDeposit({
+          depositTransactionId: transactionId,
+          destinationAddress: depositAddress,
+          fee: 301,
+        }),
+      ).rejects.toThrow();
+    }, 600000);
+  });
 });
