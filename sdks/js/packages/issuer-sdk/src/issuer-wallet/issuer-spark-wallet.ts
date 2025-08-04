@@ -181,7 +181,7 @@ export class IssuerSparkWallet extends SparkWallet {
    * @returns The bech32m encoded token identifier for the issuer's token
    * @throws {NetworkError} If the token identifier cannot be retrieved
    */
-  public async getIssuerTokenIdentifier(): Promise<Bech32mTokenIdentifier | null> {
+  public async getIssuerTokenIdentifier(): Promise<Bech32mTokenIdentifier> {
     const tokenMetadata = await this.getIssuerTokenMetadata();
 
     return encodeBech32mTokenIdentifier({
@@ -284,11 +284,8 @@ export class IssuerSparkWallet extends SparkWallet {
       identityPublicKey: BURN_ADDRESS,
       network: this.config.getNetworkType(),
     });
-    const issuerTokenIdentifier: Bech32mTokenIdentifier | null =
+    const issuerTokenIdentifier: Bech32mTokenIdentifier =
       await this.getIssuerTokenIdentifier();
-    if (issuerTokenIdentifier === null) {
-      throw new ValidationError("Issuer token identifier not found");
-    }
 
     return await this.transferTokens({
       tokenIdentifier: issuerTokenIdentifier,
@@ -313,13 +310,6 @@ export class IssuerSparkWallet extends SparkWallet {
     );
 
     const issuerTokenIdentifier = await this.getIssuerTokenIdentifier();
-    if (issuerTokenIdentifier === null) {
-      throw new ValidationError("Issuer token identifier not found", {
-        field: "issuerTokenIdentifier",
-        value: issuerTokenIdentifier,
-        expected: "non-null token identifier",
-      });
-    }
 
     const rawTokenIdentifier = decodeBech32mTokenIdentifier(
       issuerTokenIdentifier,
@@ -355,13 +345,6 @@ export class IssuerSparkWallet extends SparkWallet {
     );
 
     const issuerTokenIdentifier = await this.getIssuerTokenIdentifier();
-    if (issuerTokenIdentifier === null) {
-      throw new ValidationError("Issuer token identifier not found", {
-        field: "issuerTokenIdentifier",
-        value: issuerTokenIdentifier,
-        expected: "non-null token identifier",
-      });
-    }
 
     const rawTokenIdentifier = decodeBech32mTokenIdentifier(
       issuerTokenIdentifier,
