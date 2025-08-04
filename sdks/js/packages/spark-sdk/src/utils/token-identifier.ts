@@ -31,8 +31,19 @@ export function encodeBech32mTokenIdentifier(
 ): Bech32mTokenIdentifier {
   try {
     const words = bech32m.toWords(payload.tokenIdentifier);
+
+    if (!payload.network) {
+      throw new ValidationError(
+        "Network is required to encode bech32m encoded token identifier",
+        {
+          field: "network",
+          value: payload.network,
+        },
+      );
+    }
+
     return bech32m.encode(
-      Bech32mTokenIdentifierTokenIdentifierNetworkPrefix[payload.network],
+      Bech32mTokenIdentifierTokenIdentifierNetworkPrefix[payload.network!],
       words,
       500,
     ) as Bech32mTokenIdentifier;
@@ -50,7 +61,7 @@ export function encodeBech32mTokenIdentifier(
 
 export function decodeBech32mTokenIdentifier(
   bech32mTokenIdentifier: Bech32mTokenIdentifier,
-  network: NetworkType,
+  network?: NetworkType,
 ): Bech32mTokenIdentifierData {
   try {
     const decoded = bech32m.decode(
@@ -59,8 +70,9 @@ export function decodeBech32mTokenIdentifier(
     );
 
     if (
+      network &&
       decoded.prefix !==
-      Bech32mTokenIdentifierTokenIdentifierNetworkPrefix[network]
+        Bech32mTokenIdentifierTokenIdentifierNetworkPrefix[network]
     ) {
       throw new ValidationError(
         "Invalid bech32m encoded token identifier prefix",
@@ -76,7 +88,8 @@ export function decodeBech32mTokenIdentifier(
 
     return {
       tokenIdentifier,
-      network,
+      network:
+        network ?? getNetworkFromBech32mTokenIdentifier(bech32mTokenIdentifier),
     };
   } catch (error) {
     if (error instanceof ValidationError) {

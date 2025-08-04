@@ -1,11 +1,12 @@
 import { bytesToHex, bytesToNumberBE } from "@noble/curves/abstract/utils";
+import { equalBytes } from "@scure/btc-signer/utils";
 import { OutputWithPreviousTransactionData } from "../proto/spark.js";
+import { TokenBalanceMap, TokenOutputsMap } from "../spark-wallet/types.js";
 import {
-  TokenBalanceMap,
-  TokenOutputsMap,
-  RawTokenIdentifierHex,
-} from "../spark-wallet/types.js";
-import { Bech32mTokenIdentifier } from "./token-identifier.js";
+  Bech32mTokenIdentifier,
+  decodeBech32mTokenIdentifier,
+} from "./token-identifier.js";
+import { NetworkType } from "./network.js";
 
 export function sumAvailableTokens(
   outputs: OutputWithPreviousTransactionData[],
@@ -49,16 +50,19 @@ export function checkIfSelectedOutputsAreAvailable(
   return true;
 }
 
-export function filterTokenBalanceForTokenPublicKey(
+export function filterTokenBalanceForTokenIdentifier(
   tokenBalances: TokenBalanceMap,
-  publicKey: string,
+  tokenIdentifier: Bech32mTokenIdentifier,
 ): { balance: bigint } {
   if (!tokenBalances) {
     return { balance: 0n };
   }
 
-  const tokenBalance = [...tokenBalances.entries()].find(
-    ([, info]) => info.tokenMetadata.tokenPublicKey === publicKey,
+  const tokenIdentifierBytes =
+    decodeBech32mTokenIdentifier(tokenIdentifier).tokenIdentifier;
+
+  const tokenBalance = [...tokenBalances.entries()].find(([, info]) =>
+    equalBytes(info.tokenMetadata.rawTokenIdentifier, tokenIdentifierBytes),
   );
 
   if (!tokenBalance) {

@@ -2,10 +2,9 @@ import { IssuerSparkWallet } from "../../issuer-wallet/issuer-spark-wallet.node.
 import { jest } from "@jest/globals";
 import {
   SparkWallet,
-  filterTokenBalanceForTokenPublicKey,
+  filterTokenBalanceForTokenIdentifier,
   WalletConfig,
 } from "@buildonspark/spark-sdk";
-import { bytesToHex, hexToBytes } from "@noble/curves/abstract/utils";
 
 const TEST_TIMEOUT = 600_000; // 10 minutes
 const TOKEN_AMOUNT: bigint = 1000n;
@@ -42,13 +41,9 @@ describe("Stress test for token transfers", () => {
 
     await issuerWallet.mintTokens(TOKEN_AMOUNT);
     await sleep(1000);
-    const tokenPublicKey = await issuerWallet.getIdentityPublicKey();
+    const tokenIdentifier = await issuerWallet.getIssuerTokenIdentifier();
     const userWalletSparkAddress = await userWallet.getSparkAddress();
     const issuerWalletSparkAddress = await issuerWallet.getSparkAddress();
-    const issuerBalanceObj = await issuerWallet.getIssuerTokenBalance();
-    expect(issuerBalanceObj).toBeDefined();
-    expect(issuerBalanceObj.tokenIdentifier).toBeDefined();
-    const tokenIdentifier = issuerBalanceObj.tokenIdentifier!;
 
     for (let i = 0; i < maxTransactionCycles; i++) {
       if (timeoutReached) {
@@ -63,32 +58,32 @@ describe("Stress test for token transfers", () => {
       try {
         // Transfer tokens from issuer to user
         await issuerWallet.transferTokens({
-          tokenIdentifier,
+          tokenIdentifier: tokenIdentifier!,
           tokenAmount: TOKEN_AMOUNT,
           receiverSparkAddress: userWalletSparkAddress,
         });
         await sleep(1000);
         const issuerBalance = await issuerWallet.getIssuerTokenBalance();
         const userBalanceObj = await userWallet.getBalance();
-        const userBalance = filterTokenBalanceForTokenPublicKey(
+        const userBalance = filterTokenBalanceForTokenIdentifier(
           userBalanceObj?.tokenBalances,
-          tokenPublicKey,
+          tokenIdentifier!,
         );
         expect(issuerBalance.balance).toEqual(0n);
         expect(userBalance.balance).toEqual(TOKEN_AMOUNT);
 
         // Transfer tokens from user to issuer
         await userWallet.transferTokens({
-          tokenIdentifier,
+          tokenIdentifier: tokenIdentifier!,
           tokenAmount: TOKEN_AMOUNT,
           receiverSparkAddress: issuerWalletSparkAddress,
         });
         await sleep(1000);
         const userBalanceObjAfterTransferBack = await userWallet.getBalance();
         const userBalanceAfterTransferBack =
-          filterTokenBalanceForTokenPublicKey(
+          filterTokenBalanceForTokenIdentifier(
             userBalanceObjAfterTransferBack?.tokenBalances,
-            tokenPublicKey,
+            tokenIdentifier!,
           );
         const issuerBalanceAfterTransferBack =
           await issuerWallet.getIssuerTokenBalance();
@@ -131,10 +126,8 @@ describe("Stress test for token transfers", () => {
 
           await issuer.wallet.mintTokens(TOKEN_AMOUNT);
           const userAddress = await user.wallet.getSparkAddress();
-          const issuerBalanceObj = await issuer.wallet.getIssuerTokenBalance();
-          expect(issuerBalanceObj).toBeDefined();
-          expect(issuerBalanceObj.tokenIdentifier).toBeDefined();
-          const tokenIdentifier = issuerBalanceObj.tokenIdentifier!;
+          const tokenIdentifier =
+            await issuer.wallet.getIssuerTokenIdentifier();
 
           return { issuer, tokenIdentifier, userAddress };
         }),
@@ -146,7 +139,7 @@ describe("Stress test for token transfers", () => {
           const start_time = Date.now();
           try {
             await issuer.wallet.transferTokens({
-              tokenIdentifier,
+              tokenIdentifier: tokenIdentifier!,
               tokenAmount: TOKEN_AMOUNT,
               receiverSparkAddress: userAddress,
             });
