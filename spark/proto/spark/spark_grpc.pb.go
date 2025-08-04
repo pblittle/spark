@@ -73,6 +73,7 @@ const (
 	SparkService_CounterLeafSwapV2_FullMethodName                   = "/spark.SparkService/counter_leaf_swap_v2"
 	SparkService_StartTransferV2_FullMethodName                     = "/spark.SparkService/start_transfer_v2"
 	SparkService_RefreshTimelockV2_FullMethodName                   = "/spark.SparkService/refresh_timelock_v2"
+	SparkService_GetUtxosForAddress_FullMethodName                  = "/spark.SparkService/get_utxos_for_address"
 )
 
 // SparkServiceClient is the client API for SparkService service.
@@ -154,6 +155,7 @@ type SparkServiceClient interface {
 	CounterLeafSwapV2(ctx context.Context, in *CounterLeafSwapRequest, opts ...grpc.CallOption) (*CounterLeafSwapResponse, error)
 	StartTransferV2(ctx context.Context, in *StartTransferRequest, opts ...grpc.CallOption) (*StartTransferResponse, error)
 	RefreshTimelockV2(ctx context.Context, in *RefreshTimelockRequest, opts ...grpc.CallOption) (*RefreshTimelockResponse, error)
+	GetUtxosForAddress(ctx context.Context, in *GetUtxosForAddressRequest, opts ...grpc.CallOption) (*GetUtxosForAddressResponse, error)
 }
 
 type sparkServiceClient struct {
@@ -707,6 +709,16 @@ func (c *sparkServiceClient) RefreshTimelockV2(ctx context.Context, in *RefreshT
 	return out, nil
 }
 
+func (c *sparkServiceClient) GetUtxosForAddress(ctx context.Context, in *GetUtxosForAddressRequest, opts ...grpc.CallOption) (*GetUtxosForAddressResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUtxosForAddressResponse)
+	err := c.cc.Invoke(ctx, SparkService_GetUtxosForAddress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SparkServiceServer is the server API for SparkService service.
 // All implementations must embed UnimplementedSparkServiceServer
 // for forward compatibility.
@@ -786,6 +798,7 @@ type SparkServiceServer interface {
 	CounterLeafSwapV2(context.Context, *CounterLeafSwapRequest) (*CounterLeafSwapResponse, error)
 	StartTransferV2(context.Context, *StartTransferRequest) (*StartTransferResponse, error)
 	RefreshTimelockV2(context.Context, *RefreshTimelockRequest) (*RefreshTimelockResponse, error)
+	GetUtxosForAddress(context.Context, *GetUtxosForAddressRequest) (*GetUtxosForAddressResponse, error)
 	mustEmbedUnimplementedSparkServiceServer()
 }
 
@@ -954,6 +967,9 @@ func (UnimplementedSparkServiceServer) StartTransferV2(context.Context, *StartTr
 }
 func (UnimplementedSparkServiceServer) RefreshTimelockV2(context.Context, *RefreshTimelockRequest) (*RefreshTimelockResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshTimelockV2 not implemented")
+}
+func (UnimplementedSparkServiceServer) GetUtxosForAddress(context.Context, *GetUtxosForAddressRequest) (*GetUtxosForAddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUtxosForAddress not implemented")
 }
 func (UnimplementedSparkServiceServer) mustEmbedUnimplementedSparkServiceServer() {}
 func (UnimplementedSparkServiceServer) testEmbeddedByValue()                      {}
@@ -1923,6 +1939,24 @@ func _SparkService_RefreshTimelockV2_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SparkService_GetUtxosForAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUtxosForAddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SparkServiceServer).GetUtxosForAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SparkService_GetUtxosForAddress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SparkServiceServer).GetUtxosForAddress(ctx, req.(*GetUtxosForAddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SparkService_ServiceDesc is the grpc.ServiceDesc for SparkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2137,6 +2171,10 @@ var SparkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "refresh_timelock_v2",
 			Handler:    _SparkService_RefreshTimelockV2_Handler,
+		},
+		{
+			MethodName: "get_utxos_for_address",
+			Handler:    _SparkService_GetUtxosForAddress_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

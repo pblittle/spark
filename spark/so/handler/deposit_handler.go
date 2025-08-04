@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/btcsuite/btcd/wire"
@@ -1295,5 +1296,84 @@ func GetSpendTxSigningResult(ctx context.Context, config *so.Config, utxo *pb.UT
 		UserSigningPublicKey: depositAddress.OwnerSigningPubkey,
 		VerifyingPublicKey:   verifyingKey.Serialize(),
 		LeafId:               &nodeIDStr,
+	}, nil
+}
+
+func (o *DepositHandler) GetUtxosForAddress(ctx context.Context, req *pb.GetUtxosForAddressRequest) (*pb.GetUtxosForAddressResponse, error) {
+	db, err := ent.GetDbFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
+	}
+	depositAddress, err := db.DepositAddress.Query().Where(depositaddress.Address(req.Address)).Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deposit address: %w", err)
+	}
+
+	network, err := common.DetermineNetwork(req.Network)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get schema network: %w", err)
+	}
+
+	schemaNetwork, err := common.SchemaNetworkFromProtoNetwork(req.Network)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get schema network: %w", err)
+	}
+
+	if !utils.IsBitcoinAddressForNetwork(req.Address, *network) {
+		return nil, fmt.Errorf("deposit address is not aligned with the requested network")
+	}
+
+	currentBlockHeight, err := db.BlockHeight.Query().Where(blockheight.NetworkEQ(schemaNetwork)).Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current block height: %w", err)
+	}
+
+	threshold := DefaultDepositConfirmationThreshold
+	if bitcoinConfig, ok := o.config.BitcoindConfigs[strings.ToLower(string(schemaNetwork))]; ok {
+		threshold = bitcoinConfig.DepositConfirmationThreshold
+	}
+
+	var utxosResult []*pb.UTXO
+	if depositAddress.IsStatic {
+		if req.Limit > 100 || req.Limit <= 0 {
+			req.Limit = 100
+		}
+		utxos, err := depositAddress.QueryUtxo().
+			Where(utxo.BlockHeightLTE(currentBlockHeight.Height - int64(threshold))).
+			Offset(int(req.Offset)).
+			Limit(int(req.Limit)).
+			Order(utxo.ByBlockHeight(sql.OrderDesc())).
+			All(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get utxo: %w", err)
+		}
+		if len(utxos) == 0 {
+			return &pb.GetUtxosForAddressResponse{
+				Utxos: []*pb.UTXO{},
+			}, nil
+		}
+
+		for _, utxo := range utxos {
+			utxosResult = append(utxosResult, &pb.UTXO{
+				Txid:    utxo.Txid,
+				Vout:    utxo.Vout,
+				Network: req.Network,
+			})
+		}
+	} else if len(depositAddress.ConfirmationTxid) > 0 {
+		txid, err := hex.DecodeString(depositAddress.ConfirmationTxid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode confirmation txid: %w", err)
+		}
+
+		if depositAddress.ConfirmationHeight <= currentBlockHeight.Height-int64(threshold) {
+			utxosResult = append(utxosResult, &pb.UTXO{
+				Txid: txid,
+			})
+		}
+	}
+
+	return &pb.GetUtxosForAddressResponse{
+		Utxos: utxosResult,
 	}, nil
 }

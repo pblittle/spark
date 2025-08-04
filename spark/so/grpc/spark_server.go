@@ -418,3 +418,8 @@ func (s *SparkServer) QueryNodesByValue(ctx context.Context, req *pb.QueryNodesB
 	treeQueryHandler := handler.NewTreeQueryHandler(s.config)
 	return errors.WrapWithGRPCError(treeQueryHandler.QueryNodesByValue(ctx, req))
 }
+
+func (s *SparkServer) GetUtxosForAddress(ctx context.Context, req *pb.GetUtxosForAddressRequest) (*pb.GetUtxosForAddressResponse, error) {
+	depositHandler := handler.NewDepositHandler(s.config)
+	return errors.WrapWithGRPCError(depositHandler.GetUtxosForAddress(ctx, req))
+}

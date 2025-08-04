@@ -103,6 +103,8 @@ service SparkService {
     rpc counter_leaf_swap_v2(CounterLeafSwapRequest) returns (CounterLeafSwapResponse) {}
     rpc start_transfer_v2(StartTransferRequest) returns (StartTransferResponse) {}
     rpc refresh_timelock_v2(RefreshTimelockRequest) returns (RefreshTimelockResponse) {}
+
+    rpc get_utxos_for_address(GetUtxosForAddressRequest) returns (GetUtxosForAddressResponse) {}
 }
 
 message SubscribeToEventsRequest {
@@ -1305,4 +1307,16 @@ message QueryNodesByValueRequest {
 message QueryNodesByValueResponse {
     map<string, TreeNode> nodes = 1;
     int64 offset = 2;
+}
+
+message GetUtxosForAddressRequest {
+    string address = 1;
+    uint64 offset = 2;
+    uint64 limit = 3;
+    Network network = 4;
+}
+
+message GetUtxosForAddressResponse {
+    repeated UTXO utxos = 1;
+    uint64 offset = 2;
 }
