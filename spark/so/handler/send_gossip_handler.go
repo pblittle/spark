@@ -39,10 +39,12 @@ func (h *SendGossipHandler) postSendingGossipMessage(
 		return nil, err
 	}
 
-	handler := NewGossipHandler(h.config)
-	err = handler.HandleGossipMessage(ctx, message, true)
-	if err != nil {
-		return nil, err
+	if bitMap.IsAllSet() {
+		handler := NewGossipHandler(h.config)
+		err = handler.HandleGossipMessage(ctx, message, true)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return gossip, nil
 }
