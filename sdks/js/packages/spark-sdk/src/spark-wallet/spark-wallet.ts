@@ -1330,81 +1330,62 @@ export class SparkWallet extends EventEmitter {
 
         // Apply direct adaptor signature
 
-        if (!leaf.directRawUnsignedRefundTransaction) {
-          throw new Error(
-            `Direct raw unsigned refund transaction missing for node ${nodeId}`,
+        if (leaf.directRawUnsignedRefundTransaction) {
+          const directNodeTx = getTxFromRawTxBytes(node.directTx);
+          const directRefundTxBytes = hexToBytes(
+            leaf.directRawUnsignedRefundTransaction,
           );
-        }
-        if (!leaf.directAdaptorSignedSignature) {
-          throw new Error(
-            `Direct adaptor signed signature missing for node ${nodeId}`,
+          const directRefundTx = getTxFromRawTxBytes(directRefundTxBytes);
+          const directSighash = getSigHashFromTx(
+            directRefundTx,
+            0,
+            directNodeTx.getOutput(0),
           );
-        }
+          if (!leaf.directAdaptorSignedSignature) {
+            throw new Error(
+              `Direct adaptor signed signature missing for node ${nodeId}`,
+            );
+          }
+          const directAdaptorSignatureBytes = hexToBytes(
+            leaf.directAdaptorSignedSignature,
+          );
 
-        const directNodeTx = getTxFromRawTxBytes(node.directTx);
-
-        const directRefundTxBytes = hexToBytes(
-          leaf.directRawUnsignedRefundTransaction,
-        );
-
-        const directRefundTx = getTxFromRawTxBytes(directRefundTxBytes);
-
-        const directSighash = getSigHashFromTx(
-          directRefundTx,
-          0,
-          directNodeTx.getOutput(0),
-        );
-
-        if (!leaf.directFromCpfpAdaptorSignedSignature) {
-          throw new Error(
-            `Direct adaptor signed signature missing for node ${nodeId}`,
+          applyAdaptorToSignature(
+            taprootKey.slice(1),
+            directSighash,
+            directAdaptorSignatureBytes,
+            directAdaptorPrivateKey,
           );
         }
 
-        const directAdaptorSignatureBytes = hexToBytes(
-          leaf.directAdaptorSignedSignature,
-        );
-
-        applyAdaptorToSignature(
-          taprootKey.slice(1),
-          directSighash,
-          directAdaptorSignatureBytes,
-          directAdaptorPrivateKey,
-        );
-
-        if (!leaf.directRawUnsignedRefundTransaction) {
-          throw new Error(
-            `Direct raw unsigned refund transaction missing for node ${nodeId}`,
+        if (leaf.directFromCpfpRawUnsignedRefundTransaction) {
+          const directFromCpfpRefundTxBytes = hexToBytes(
+            leaf.directFromCpfpRawUnsignedRefundTransaction,
+          );
+          const directFromCpfpRefundTx = getTxFromRawTxBytes(
+            directFromCpfpRefundTxBytes,
+          );
+          const directFromCpfpSighash = getSigHashFromTx(
+            directFromCpfpRefundTx,
+            0,
+            cpfpNodeTx.getOutput(0),
+          );
+          if (!leaf.directFromCpfpAdaptorSignedSignature) {
+            throw new Error(
+              `Direct adaptor signed signature missing for node ${nodeId}`,
+            );
+          }
+          const directFromCpfpAdaptorSignatureBytes = hexToBytes(
+            leaf.directFromCpfpAdaptorSignedSignature,
+          );
+          applyAdaptorToSignature(
+            taprootKey.slice(1),
+            directFromCpfpSighash,
+            directFromCpfpAdaptorSignatureBytes,
+            directFromCpfpAdaptorPrivateKey,
           );
         }
-        if (!leaf.directFromCpfpRawUnsignedRefundTransaction) {
-          throw new Error(
-            `Direct raw unsigned refund transaction missing for node ${nodeId}`,
-          );
-        }
-
-        const directFromCpfpRefundTxBytes = hexToBytes(
-          leaf.directFromCpfpRawUnsignedRefundTransaction,
-        );
-        const directFromCpfpRefundTx = getTxFromRawTxBytes(
-          directFromCpfpRefundTxBytes,
-        );
-        const directFromCpfpSighash = getSigHashFromTx(
-          directFromCpfpRefundTx,
-          0,
-          cpfpNodeTx.getOutput(0),
-        );
-        const directFromCpfpAdaptorSignatureBytes = hexToBytes(
-          leaf.directFromCpfpAdaptorSignedSignature,
-        );
-        applyAdaptorToSignature(
-          taprootKey.slice(1),
-          directFromCpfpSighash,
-          directFromCpfpAdaptorSignatureBytes,
-          directFromCpfpAdaptorPrivateKey,
-        );
       }
-
       await this.transferService.deliverTransferPackage(
         transfer,
         leafKeyTweaks,
