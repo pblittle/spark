@@ -1,5 +1,19 @@
 # @buildonspark/issuer-sdk
 
+## 0.0.85
+
+### Patch Changes
+
+- -- Opentelemetry improvements
+  -- Utility function to decode bech32mtokenidentifiers to raw token identifiers
+  -- Add userRequest to transfer in getTransfer() if it exists
+  -- Fixes to getIssuerTokenIdentifier() types
+  -- Migrates some internal filtering logic to key on token identifiers
+  -- Testing improvements
+- Updated dependencies
+  - @buildonspark/lrc20-sdk@0.0.61
+  - @buildonspark/spark-sdk@0.2.6
+
 ## 0.0.84
 
 ### Patch Changes
