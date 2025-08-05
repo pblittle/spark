@@ -13,7 +13,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
-	"github.com/ecies/go/v2"
+	eciesgo "github.com/ecies/go/v2"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark"
 	"github.com/lightsparkdev/spark/common"
@@ -627,6 +627,10 @@ func (h *BaseTransferHandler) executeCancelTransfer(ctx context.Context, transfe
 	if transfer.Status != st.TransferStatusSenderInitiated &&
 		transfer.Status != st.TransferStatusSenderKeyTweakPending {
 		return fmt.Errorf("transfer %s is expected to be at status TransferStatusSenderInitiated, TransferStatusSenderKeyTweakPending but %s found", transfer.ID.String(), transfer.Status)
+	}
+
+	if transfer.Status == st.TransferStatusSenderKeyTweakPending && (transfer.Type != st.TransferTypeCooperativeExit && transfer.Type != st.TransferTypePreimageSwap) {
+		return fmt.Errorf("transfer %s at status TransferStatusSenderKeyTweakPending can only be cancelled for cooperative exit or preimage swap, but %s found", transfer.ID.String(), transfer.Type)
 	}
 	var err error
 	transfer, err = transfer.Update().SetStatus(st.TransferStatusReturned).Save(ctx)
