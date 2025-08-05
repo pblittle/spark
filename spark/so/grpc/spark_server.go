@@ -165,6 +165,9 @@ func (s *SparkServer) InitiatePreimageSwapV2(ctx context.Context, req *pb.Initia
 func (s *SparkServer) CooperativeExit(ctx context.Context, req *pb.CooperativeExitRequest) (*pb.CooperativeExitResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.Transfer.OwnerIdentityPublicKey)
 	coopExitHandler := handler.NewCooperativeExitHandler(s.config)
+	if s.mockAction != nil {
+		coopExitHandler.SetMockAction(s.mockAction)
+	}
 	return errors.WrapWithGRPCError(coopExitHandler.CooperativeExit(ctx, req))
 }
 
@@ -172,6 +175,9 @@ func (s *SparkServer) CooperativeExit(ctx context.Context, req *pb.CooperativeEx
 func (s *SparkServer) CooperativeExitV2(ctx context.Context, req *pb.CooperativeExitRequest) (*pb.CooperativeExitResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.Transfer.OwnerIdentityPublicKey)
 	coopExitHandler := handler.NewCooperativeExitHandler(s.config)
+	if s.mockAction != nil {
+		coopExitHandler.SetMockAction(s.mockAction)
+	}
 	return errors.WrapWithGRPCError(coopExitHandler.CooperativeExit(ctx, req))
 }
 

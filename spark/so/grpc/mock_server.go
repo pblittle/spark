@@ -128,3 +128,18 @@ func (o *MockServer) TriggerTask(_ context.Context, req *pbmock.TriggerTaskReque
 
 	return &emptypb.Empty{}, nil
 }
+
+func (o *MockServer) InterruptCoopExit(_ context.Context, req *pbmock.InterruptCoopExitRequest) (*emptypb.Empty, error) {
+	switch req.Action {
+	case pbmock.InterruptCoopExitRequest_INTERRUPT:
+		o.mockAction.InterruptCoopExit = true
+		if req.TargetOperator != "" {
+			o.mockAction.TargetOperatorID = req.TargetOperator
+		}
+	case pbmock.InterruptCoopExitRequest_RESUME:
+		o.mockAction.InterruptCoopExit = false
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "invalid interrupt coop-exit action: %v", req.Action)
+	}
+	return &emptypb.Empty{}, nil
+}

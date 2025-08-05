@@ -10,6 +10,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightsparkdev/spark/common"
+	pbmock "github.com/lightsparkdev/spark/proto/mock"
 	"github.com/lightsparkdev/spark/proto/spark"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so/handler"
@@ -565,6 +566,120 @@ func TestCoopExitCannotCancelAfterBroadcast(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		if time.Since(startTime) > 15*time.Second {
 			t.Fatalf("timed out waiting for tx to confirm")
+		}
+	}
+}
+
+// This test starts a coop exit, fails for one operator on the sync, and verifies that no transfer was created across all operators
+func TestCoopExitFailureToSync(t *testing.T) {
+	_, err := testutil.NewRegtestClient()
+	require.NoError(t, err)
+
+	coin, err := faucet.Fund()
+	require.NoError(t, err)
+
+	amountSats := int64(100_000)
+	config, sspConfig, transferNode := setupUsers(t, amountSats)
+
+	// Create gRPC client for V2 function
+	conn, err := common.NewGRPCConnectionWithTestTLS(config.CoodinatorAddress(), nil)
+	require.NoError(t, err, "failed to create grpc connection")
+	defer conn.Close()
+
+	mockClient := pbmock.NewMockServiceClient(conn)
+	_, err = mockClient.InterruptCoopExit(context.Background(), &pbmock.InterruptCoopExitRequest{
+		Action: pbmock.InterruptCoopExitRequest_INTERRUPT,
+	})
+	require.NoError(t, err)
+
+	authToken, err := wallet.AuthenticateWithServer(context.Background(), config)
+	require.NoError(t, err, "failed to authenticate sender")
+	tmpCtx := wallet.ContextWithToken(context.Background(), authToken)
+
+	sparkClient := pb.NewSparkServiceClient(conn)
+
+	// Collect existing transfer IDs across all operators before the test
+	existingTransferIDs := make(map[string]map[string]bool) // operator_id -> transfer_id -> exists
+	for id, op := range config.SigningOperators {
+		conn, err := common.NewGRPCConnectionWithTestTLS(op.AddressRpc, nil)
+		require.NoError(t, err, "connect to %s", id)
+		defer conn.Close()
+
+		token, err := wallet.AuthenticateWithServer(context.Background(), config)
+		require.NoError(t, err, "auth token for %s", id)
+
+		ctxWithToken := wallet.ContextWithToken(context.Background(), token)
+		client := pb.NewSparkServiceClient(conn)
+
+		resp, err := client.QueryAllTransfers(ctxWithToken, &pb.TransferFilter{
+			Network: pb.Network_REGTEST,
+			Types:   []pb.TransferType{pb.TransferType_COOPERATIVE_EXIT},
+		})
+		require.NoError(t, err, "query transfers on %s", id)
+
+		transferIDs := make(map[string]bool)
+		for _, tr := range resp.Transfers {
+			transferIDs[tr.Id] = true
+		}
+		existingTransferIDs[id] = transferIDs
+	}
+
+	// SSP creates transactions
+	withdrawPrivKey, err := keys.GeneratePrivateKey()
+	require.NoError(t, err)
+	exitTx, connectorOutputs := createTestCoopExitAndConnectorOutputs(
+		t, sspConfig, 1, coin.OutPoint, withdrawPrivKey.Public(), amountSats,
+	)
+
+	// User creates transfer to SSP on the condition that the tx is confirmed
+	exitTxID, err := hex.DecodeString(exitTx.TxID())
+	require.NoError(t, err)
+	_, _, err = wallet.GetConnectorRefundSignaturesV2(
+		tmpCtx,
+		config,
+		sparkClient,
+		[]wallet.LeafKeyTweak{transferNode},
+		exitTxID,
+		connectorOutputs,
+		sspConfig.IdentityPrivateKey.PubKey(),
+		time.Now().Add(24*time.Hour),
+	)
+	require.Error(t, err)
+
+	_, _ = mockClient.InterruptCoopExit(context.Background(), &pbmock.InterruptCoopExitRequest{
+		Action: pbmock.InterruptCoopExitRequest_RESUME,
+	})
+
+	// Verify that any new transfers created during this test have the correct status
+	for id, op := range config.SigningOperators {
+		conn, err := common.NewGRPCConnectionWithTestTLS(op.AddressRpc, nil)
+		require.NoError(t, err, "connect to %s", id)
+		defer conn.Close()
+
+		token, err := wallet.AuthenticateWithServer(context.Background(), config)
+		require.NoError(t, err, "auth token for %s", id)
+
+		ctxWithToken := wallet.ContextWithToken(context.Background(), token)
+		client := pb.NewSparkServiceClient(conn)
+
+		resp, err := client.QueryAllTransfers(ctxWithToken, &pb.TransferFilter{
+			Network: pb.Network_REGTEST,
+			Types:   []pb.TransferType{pb.TransferType_COOPERATIVE_EXIT},
+		})
+		require.NoError(t, err, "query transfers on %s", id)
+
+		// Check only new transfers that weren't present before this test for their status
+		for _, tr := range resp.Transfers {
+			if tr.Type == pb.TransferType_COOPERATIVE_EXIT {
+				if existingTransferIDs[id][tr.Id] {
+					continue // Skip transfers that existed before this test
+				}
+
+				// This is a new transfer created during this test - it should have correct status
+				if tr.Status != pb.TransferStatus_TRANSFER_STATUS_RETURNED {
+					t.Fatalf("operator %s has new transfer %s with wrong status (want RETURNED/EXPIRED/COMPLETED) got %s", id, tr.Id, tr.Status)
+				}
+			}
 		}
 	}
 }
