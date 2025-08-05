@@ -9,6 +9,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -747,7 +749,7 @@ func HashFreezeTokensPayloadV1(payload *tokenpb.FreezeTokensPayload) ([]byte, er
 	return h.Sum(nil), nil
 }
 
-// HashFreezeTokensPayload generates a hash of the freeze tokens payload by concatenating
+// HashFreezeTokensPayloadV0 generates a hash of the freeze tokens payload by concatenating
 // hashes of the owner public key, token public key, freeze status, timestamp and operator key.
 func HashFreezeTokensPayloadV0(payload *tokenpb.FreezeTokensPayload) ([]byte, error) {
 	if payload == nil {
@@ -823,7 +825,7 @@ func hashFreezePayloadContents(h hash.Hash, payload *tokenpb.FreezeTokensPayload
 	return allHashes, nil
 }
 
-// InferTokenTransactionType validates that exactly one input type is present and returns it
+// InferTokenTransactionTypeSparkProtos validates that exactly one input type is present and returns it
 func InferTokenTransactionTypeSparkProtos(tokenTransaction *sparkpb.TokenTransaction) (TokenTransactionType, error) {
 	hasCreateInput := tokenTransaction.GetCreateInput() != nil
 	hasMintInput := tokenTransaction.GetMintInput() != nil
@@ -1165,7 +1167,7 @@ func ValidateOwnershipSignature(signature []byte, hash []byte, issuerOrOwnerPubl
 	return nil
 }
 
-func ValidateFreezeTokensPayload(payload *tokenpb.FreezeTokensPayload, expectedSparkOperatorPublicKey []byte) error {
+func ValidateFreezeTokensPayload(payload *tokenpb.FreezeTokensPayload, expectedSparkOperatorPublicKey keys.Public) error {
 	if payload == nil {
 		return fmt.Errorf("freeze tokens payload cannot be nil")
 	}
@@ -1194,19 +1196,20 @@ func ValidateFreezeTokensPayload(payload *tokenpb.FreezeTokensPayload, expectedS
 	if payload.GetIssuerProvidedTimestamp() == 0 {
 		return fmt.Errorf("issuer provided timestamp cannot be 0")
 	}
-	if len(payload.GetOperatorIdentityPublicKey()) == 0 {
-		return fmt.Errorf("operator identity public key cannot be empty")
-	}
-	if !bytes.Equal(payload.GetOperatorIdentityPublicKey(), expectedSparkOperatorPublicKey) {
-		return fmt.Errorf("operator identity public key %x does not match expected operator %s from config", payload.GetOperatorIdentityPublicKey(), expectedSparkOperatorPublicKey)
-	}
 
+	payloadOpIDPubKey, err := keys.ParsePublicKey(payload.GetOperatorIdentityPublicKey())
+	if err != nil {
+		return fmt.Errorf("failed to parse operator identity public key: %w", err)
+	}
+	if !payloadOpIDPubKey.Equals(expectedSparkOperatorPublicKey) {
+		return fmt.Errorf("operator identity public key %s does not match expected operator %s from config", payload.GetOperatorIdentityPublicKey(), expectedSparkOperatorPublicKey)
+	}
 	return nil
 }
 
 // ValidateRevocationKeys validates that the provided revocation private keys correspond to the expected public keys.
 // It ensures the private keys can correctly derive the expected public keys, preventing key mismatches.
-func ValidateRevocationKeys(revocationPrivateKeys []*secp256k1.PrivateKey, expectedRevocationPublicKeys [][]byte) error {
+func ValidateRevocationKeys(revocationPrivateKeys []keys.Private, expectedRevocationPublicKeys []keys.Public) error {
 	if revocationPrivateKeys == nil {
 		return fmt.Errorf("revocation private keys cannot be nil")
 	}
@@ -1219,20 +1222,13 @@ func ValidateRevocationKeys(revocationPrivateKeys []*secp256k1.PrivateKey, expec
 	}
 
 	for i, revocationKey := range revocationPrivateKeys {
-		if revocationKey == nil {
-			return fmt.Errorf("revocation private key at index %d cannot be nil", i)
-		}
-
-		if expectedRevocationPublicKeys[i] == nil {
-			return fmt.Errorf("expected revocation public key at index %d cannot be nil", i)
-		}
-
-		revocationPubKey := revocationKey.PubKey()
-		expectedRevocationPubKey, err := secp256k1.ParsePubKey(expectedRevocationPublicKeys[i])
-		if err != nil {
-			return fmt.Errorf("failed to parse expected revocation public key at index %d: %w", i, err)
-		}
-		if !expectedRevocationPubKey.IsEqual(revocationPubKey) {
+		expectedPubKey := expectedRevocationPublicKeys[i]
+		switch {
+		case revocationKey == (keys.Private{}):
+			return fmt.Errorf("revocation private key at index %d cannot be empty", i)
+		case expectedPubKey == (keys.Public{}):
+			return fmt.Errorf("expected revocation public key at index %d cannot be empty", i)
+		case !expectedPubKey.Equals(revocationKey.Public()):
 			return fmt.Errorf("revocation key mismatch at index %d: derived public key does not match expected", i)
 		}
 	}

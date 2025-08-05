@@ -5,14 +5,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+	"github.com/stretchr/testify/require"
+
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/go-cmp/cmp"
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
@@ -42,6 +45,7 @@ var (
 		200, 155, 208, 90, 72, 211, 120, 244, 69, 99, 28, 101, 149, 222, 123, 50,
 		252, 63, 99, 54, 137, 226, 7, 224, 163, 122, 93, 248, 42, 159, 173, 46,
 	}
+	seededRng = rand.NewChaCha8([32]byte{})
 )
 
 type testTokenTransactionData struct {
@@ -1461,85 +1465,70 @@ func TestIsNetworkSupported(t *testing.T) {
 
 func TestValidateRevocationKeys(t *testing.T) {
 	t.Parallel()
-	privKey1, _ := secp256k1.GeneratePrivateKey()
-	privKey2, _ := secp256k1.GeneratePrivateKey()
-	privateKeys := []*secp256k1.PrivateKey{privKey1, privKey2}
-	publicKeys := [][]byte{privKey1.PubKey().SerializeCompressed(), privKey2.PubKey().SerializeCompressed()}
+	privKey1 := keys.MustGeneratePrivateKeyFromRand(seededRng)
+	privKey2 := keys.MustGeneratePrivateKeyFromRand(seededRng)
+	privateKeys := []keys.Private{privKey1, privKey2}
+	publicKeys := []keys.Public{privKey1.Public(), privKey2.Public()}
 
-	if err := ValidateRevocationKeys(privateKeys, publicKeys); err != nil {
-		t.Errorf("ValidateRevocationKeys(%v, %v) unexpected error: %v", privateKeys, publicKeys, err)
-	}
+	require.NoError(t, ValidateRevocationKeys(privateKeys, publicKeys))
 }
 
 func TestValidateRevocationKeysErrors(t *testing.T) {
 	t.Parallel()
-	privKey1, _ := secp256k1.GeneratePrivateKey()
-	privKey2, _ := secp256k1.GeneratePrivateKey()
-	pubKey1 := privKey1.PubKey().SerializeCompressed()
-	pubKey2 := privKey2.PubKey().SerializeCompressed()
-
+	privKey1 := keys.MustGeneratePrivateKeyFromRand(seededRng)
+	privKey2 := keys.MustGeneratePrivateKeyFromRand(seededRng)
 	// Generate a mismatched key pair
-	wrongPrivKey, _ := secp256k1.GeneratePrivateKey()
-	wrongPubKey := wrongPrivKey.PubKey().SerializeCompressed()
+	wrongPrivKey := keys.MustGeneratePrivateKeyFromRand(seededRng)
+	wrongPubKey := wrongPrivKey.Public()
 
 	tests := []struct {
 		name               string
-		privateKeys        []*secp256k1.PrivateKey
-		expectedPublicKeys [][]byte
+		privateKeys        []keys.Private
+		expectedPublicKeys []keys.Public
 		errMsg             string
 	}{
 		{
 			name:               "nil private keys",
 			privateKeys:        nil,
-			expectedPublicKeys: [][]byte{pubKey1},
+			expectedPublicKeys: []keys.Public{privKey1.Public()},
 			errMsg:             "revocation private keys cannot be nil",
 		},
 		{
 			name:               "nil expected public keys",
-			privateKeys:        []*secp256k1.PrivateKey{privKey1},
+			privateKeys:        []keys.Private{privKey1},
 			expectedPublicKeys: nil,
 			errMsg:             "expected revocation public keys cannot be nil",
 		},
 		{
 			name:               "mismatched lengths",
-			privateKeys:        []*secp256k1.PrivateKey{privKey1},
-			expectedPublicKeys: [][]byte{pubKey1, pubKey2},
+			privateKeys:        []keys.Private{privKey1},
+			expectedPublicKeys: []keys.Public{privKey1.Public(), privKey2.Public()},
 			errMsg:             "number of revocation private keys (1) does not match number of expected public keys (2)",
 		},
 		{
 			name:               "nil private key at index",
-			privateKeys:        []*secp256k1.PrivateKey{privKey1, nil},
-			expectedPublicKeys: [][]byte{pubKey1, pubKey2},
-			errMsg:             "revocation private key at index 1 cannot be nil",
+			privateKeys:        []keys.Private{privKey1, {}},
+			expectedPublicKeys: []keys.Public{privKey1.Public(), privKey2.Public()},
+			errMsg:             "revocation private key at index 1 cannot be empty",
 		},
 		{
 			name:               "nil expected public key at index",
-			privateKeys:        []*secp256k1.PrivateKey{privKey1, privKey2},
-			expectedPublicKeys: [][]byte{pubKey1, nil},
-			errMsg:             "expected revocation public key at index 1 cannot be nil",
+			privateKeys:        []keys.Private{privKey1, privKey2},
+			expectedPublicKeys: []keys.Public{privKey1.Public(), {}},
+			errMsg:             "expected revocation public key at index 1 cannot be empty",
 		},
 		{
 			name:               "key mismatch",
-			privateKeys:        []*secp256k1.PrivateKey{privKey1, privKey2},
-			expectedPublicKeys: [][]byte{pubKey1, wrongPubKey},
+			privateKeys:        []keys.Private{privKey1, privKey2},
+			expectedPublicKeys: []keys.Public{privKey1.Public(), wrongPubKey},
 			errMsg:             "revocation key mismatch at index 1: derived public key does not match expected",
-		},
-		{
-			name:               "invalid public key format",
-			privateKeys:        []*secp256k1.PrivateKey{privKey1},
-			expectedPublicKeys: [][]byte{[]byte("invalid")},
-			errMsg:             "failed to parse expected revocation public key at index 0",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if err := ValidateRevocationKeys(tt.privateKeys, tt.expectedPublicKeys); err == nil {
-				t.Errorf("ValidateRevocationKeys(%v, %v) expected error but got nil", tt.privateKeys, tt.expectedPublicKeys)
-			} else if !strings.Contains(err.Error(), tt.errMsg) {
-				t.Errorf("ValidateRevocationKeys(%v, %v) error = %v, want error containing %q", tt.privateKeys, tt.expectedPublicKeys, err, tt.errMsg)
-			}
+			require.ErrorContains(t, ValidateRevocationKeys(tt.privateKeys, tt.expectedPublicKeys), tt.errMsg)
 		})
 	}
 }
@@ -1547,14 +1536,14 @@ func TestValidateRevocationKeysErrors(t *testing.T) {
 func TestHashFreezeTokensPayloadErrors(t *testing.T) {
 	t.Parallel()
 
-	ownerPrivKey, _ := secp256k1.GeneratePrivateKey()
-	ownerPubKey := ownerPrivKey.PubKey().SerializeCompressed()
-	tokenPrivKey, _ := secp256k1.GeneratePrivateKey()
-	tokenPubKey := tokenPrivKey.PubKey().SerializeCompressed()
-	operatorPrivKey, _ := secp256k1.GeneratePrivateKey()
-	operatorPubKey := operatorPrivKey.PubKey().SerializeCompressed()
+	ownerPrivKey, _ := keys.GeneratePrivateKey()
+	ownerPubKey := ownerPrivKey.Public()
+	tokenPrivKey, _ := keys.GeneratePrivateKey()
+	tokenPubKey := tokenPrivKey.Public()
+	operatorPrivKey, _ := keys.GeneratePrivateKey()
+	operatorPubKey := operatorPrivKey.Public()
 	tokenIdentifier := make([]byte, 32)
-	copy(tokenIdentifier, []byte("test_token_identifier_32bytes___"))
+	copy(tokenIdentifier, "test_token_identifier_32bytes___")
 
 	tests := []struct {
 		name    string
@@ -1571,10 +1560,10 @@ func TestHashFreezeTokensPayloadErrors(t *testing.T) {
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
 				OwnerPublicKey:            []byte{},
-				TokenPublicKey:            tokenPubKey,
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			wantErr: "owner public key cannot be empty",
 		},
@@ -1582,11 +1571,11 @@ func TestHashFreezeTokensPayloadErrors(t *testing.T) {
 			name: "empty token public key v0",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
 				TokenPublicKey:            []byte{},
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			wantErr: "token public key cannot be empty",
 		},
@@ -1594,11 +1583,11 @@ func TestHashFreezeTokensPayloadErrors(t *testing.T) {
 			name: "zero timestamp v0",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   0,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			wantErr: "issuer provided timestamp cannot be 0",
 		},
@@ -1606,8 +1595,8 @@ func TestHashFreezeTokensPayloadErrors(t *testing.T) {
 			name: "empty operator public key v0",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
 				OperatorIdentityPublicKey: []byte{},
@@ -1622,7 +1611,7 @@ func TestHashFreezeTokensPayloadErrors(t *testing.T) {
 				TokenIdentifier:           tokenIdentifier,
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			wantErr: "owner public key cannot be empty",
 		},
@@ -1630,10 +1619,10 @@ func TestHashFreezeTokensPayloadErrors(t *testing.T) {
 			name: "missing token identifier v1",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   1,
-				OwnerPublicKey:            ownerPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			wantErr: "token identifier cannot be nil",
 		},
@@ -1656,43 +1645,43 @@ func TestHashFreezeTokensPayloadErrors(t *testing.T) {
 
 func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 	t.Parallel()
-	ownerPrivKey, _ := secp256k1.GeneratePrivateKey()
-	ownerPubKey := ownerPrivKey.PubKey().SerializeCompressed()
-	tokenPrivKey, _ := secp256k1.GeneratePrivateKey()
-	tokenPubKey := tokenPrivKey.PubKey().SerializeCompressed()
-	operatorPrivKey, _ := secp256k1.GeneratePrivateKey()
-	operatorPubKey := operatorPrivKey.PubKey().SerializeCompressed()
+	ownerPrivKey, _ := keys.GeneratePrivateKey()
+	ownerPubKey := ownerPrivKey.Public()
+	tokenPrivKey, _ := keys.GeneratePrivateKey()
+	tokenPubKey := tokenPrivKey.Public()
+	operatorPrivKey, _ := keys.GeneratePrivateKey()
+	operatorPubKey := operatorPrivKey.Public()
 	tokenIdentifier := make([]byte, 32)
-	copy(tokenIdentifier, []byte("test_token_identifier_32bytes___"))
+	copy(tokenIdentifier, "test_token_identifier_32bytes___")
 
-	ownerPrivKey2, _ := secp256k1.GeneratePrivateKey()
-	ownerPubKey2 := ownerPrivKey2.PubKey().SerializeCompressed()
-	tokenPrivKey2, _ := secp256k1.GeneratePrivateKey()
-	tokenPubKey2 := tokenPrivKey2.PubKey().SerializeCompressed()
-	operatorPrivKey2, _ := secp256k1.GeneratePrivateKey()
-	operatorPubKey2 := operatorPrivKey2.PubKey().SerializeCompressed()
+	ownerPrivKey2, _ := keys.GeneratePrivateKey()
+	ownerPubKey2 := ownerPrivKey2.Public()
+	tokenPrivKey2, _ := keys.GeneratePrivateKey()
+	tokenPubKey2 := tokenPrivKey2.Public()
+	operatorPrivKey2, _ := keys.GeneratePrivateKey()
+	operatorPubKey2 := operatorPrivKey2.Public()
 	tokenIdentifier2 := make([]byte, 32)
-	copy(tokenIdentifier2, []byte("different_token_id_32bytes______"))
+	copy(tokenIdentifier2, "different_token_id_32bytes______")
 
 	// Test version 0 base payload with valid values
 	basePayloadV0 := &tokenpb.FreezeTokensPayload{
 		Version:                   0,
-		OwnerPublicKey:            ownerPubKey,
-		TokenPublicKey:            tokenPubKey,
+		OwnerPublicKey:            ownerPubKey.Serialize(),
+		TokenPublicKey:            tokenPubKey.Serialize(),
 		ShouldUnfreeze:            false,
 		IssuerProvidedTimestamp:   1234567890,
-		OperatorIdentityPublicKey: operatorPubKey,
+		OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 	}
 	baseHashV0, _ := HashFreezeTokensPayload(basePayloadV0)
 
 	// Test version 1 base payload with valid values
 	basePayloadV1 := &tokenpb.FreezeTokensPayload{
 		Version:                   1,
-		OwnerPublicKey:            ownerPubKey,
+		OwnerPublicKey:            ownerPubKey.Serialize(),
 		TokenIdentifier:           tokenIdentifier,
 		ShouldUnfreeze:            false,
 		IssuerProvidedTimestamp:   1234567890,
-		OperatorIdentityPublicKey: operatorPubKey,
+		OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 	}
 	baseHashV1, _ := HashFreezeTokensPayload(basePayloadV1)
 
@@ -1711,11 +1700,11 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 			name: "v0 different owner public key",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey2,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey2.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			baseHash: baseHashV0,
 		},
@@ -1723,11 +1712,11 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 			name: "v0 different token public key",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey2,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey2.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			baseHash: baseHashV0,
 		},
@@ -1735,11 +1724,11 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 			name: "v0 different shouldUnfreeze",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            true,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			baseHash: baseHashV0,
 		},
@@ -1747,11 +1736,11 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 			name: "v0 different timestamp",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   9876543210,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			baseHash: baseHashV0,
 		},
@@ -1759,11 +1748,11 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 			name: "v0 different operator public key",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey2,
+				OperatorIdentityPublicKey: operatorPubKey2.Serialize(),
 			},
 			baseHash: baseHashV0,
 		},
@@ -1772,11 +1761,11 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 			name: "v1 different owner public key",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   1,
-				OwnerPublicKey:            ownerPubKey2,
+				OwnerPublicKey:            ownerPubKey2.Serialize(),
 				TokenIdentifier:           tokenIdentifier,
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			baseHash: baseHashV1,
 		},
@@ -1784,11 +1773,11 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 			name: "v1 different token identifier",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   1,
-				OwnerPublicKey:            ownerPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
 				TokenIdentifier:           tokenIdentifier2,
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			baseHash: baseHashV1,
 		},
@@ -1796,11 +1785,11 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 			name: "v1 different shouldUnfreeze",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   1,
-				OwnerPublicKey:            ownerPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
 				TokenIdentifier:           tokenIdentifier,
 				ShouldUnfreeze:            true,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			baseHash: baseHashV1,
 		},
@@ -1808,11 +1797,11 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 			name: "v1 different timestamp",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   1,
-				OwnerPublicKey:            ownerPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
 				TokenIdentifier:           tokenIdentifier,
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   9876543210,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
 			baseHash: baseHashV1,
 		},
@@ -1820,11 +1809,11 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 			name: "v1 different operator public key",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   1,
-				OwnerPublicKey:            ownerPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
 				TokenIdentifier:           tokenIdentifier,
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey2,
+				OperatorIdentityPublicKey: operatorPubKey2.Serialize(),
 			},
 			baseHash: baseHashV1,
 		},
@@ -1850,211 +1839,203 @@ func TestHashFreezeTokensPayloadParameterChanges(t *testing.T) {
 func TestValidateFreezeTokensPayload(t *testing.T) {
 	t.Parallel()
 
-	ownerPrivKey, _ := secp256k1.GeneratePrivateKey()
-	ownerPubKey := ownerPrivKey.PubKey().SerializeCompressed()
-	tokenPrivKey, _ := secp256k1.GeneratePrivateKey()
-	tokenPubKey := tokenPrivKey.PubKey().SerializeCompressed()
-	operatorPrivKey, _ := secp256k1.GeneratePrivateKey()
-	operatorPubKey := operatorPrivKey.PubKey().SerializeCompressed()
+	ownerPrivKey, _ := keys.GeneratePrivateKey()
+	ownerPubKey := ownerPrivKey.Public()
+	tokenPrivKey, _ := keys.GeneratePrivateKey()
+	tokenPubKey := tokenPrivKey.Public()
+	operatorPrivKey, _ := keys.GeneratePrivateKey()
+	operatorPubKey := operatorPrivKey.Public()
 	tokenIdentifier := make([]byte, 32)
-	copy(tokenIdentifier, []byte("test_token_identifier_32bytes___"))
+	copy(tokenIdentifier, "test_token_identifier_32bytes___")
 
 	validPayloadV0 := &tokenpb.FreezeTokensPayload{
 		Version:                   0,
-		OwnerPublicKey:            ownerPubKey,
-		TokenPublicKey:            tokenPubKey,
+		OwnerPublicKey:            ownerPubKey.Serialize(),
+		TokenPublicKey:            tokenPubKey.Serialize(),
 		ShouldUnfreeze:            false,
 		IssuerProvidedTimestamp:   1234567890,
-		OperatorIdentityPublicKey: operatorPubKey,
+		OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 	}
 
 	validPayloadV1 := &tokenpb.FreezeTokensPayload{
 		Version:                   1,
-		OwnerPublicKey:            ownerPubKey,
+		OwnerPublicKey:            ownerPubKey.Serialize(),
 		TokenIdentifier:           tokenIdentifier,
 		ShouldUnfreeze:            false,
 		IssuerProvidedTimestamp:   1234567890,
-		OperatorIdentityPublicKey: operatorPubKey,
+		OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 	}
 
 	tests := []struct {
-		name                string
-		payload             *tokenpb.FreezeTokensPayload
-		expectedOperatorKey []byte
-		wantErr             string
+		name            string
+		payload         *tokenpb.FreezeTokensPayload
+		wantOperatorKey keys.Public
+		wantErr         string
 	}{
 		{
-			name:                "nil payload",
-			payload:             nil,
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "freeze tokens payload cannot be nil",
+			name:            "nil payload",
+			payload:         nil,
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "freeze tokens payload cannot be nil",
 		},
 		{
 			name: "invalid version",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   2,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "invalid freeze tokens payload version: 2",
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "invalid freeze tokens payload version: 2",
 		},
 		{
 			name: "v0 empty owner public key",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
 				OwnerPublicKey:            []byte{},
-				TokenPublicKey:            tokenPubKey,
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "owner public key cannot be empty",
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "owner public key cannot be empty",
 		},
 		{
 			name: "v0 nil token public key",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "token public key cannot be nil for version 0",
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "token public key cannot be nil for version 0",
 		},
 		{
 			name: "v0 with token identifier (should fail)",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				TokenIdentifier:           tokenIdentifier,
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "token identifier must be nil for version 0",
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "token identifier must be nil for version 0",
 		},
 		{
 			name: "v1 nil token identifier",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   1,
-				OwnerPublicKey:            ownerPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "token identifier must be exactly 32 bytes, got 0",
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "token identifier must be exactly 32 bytes, got 0",
 		},
 		{
 			name: "v1 with token public key (should fail)",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   1,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				TokenIdentifier:           tokenIdentifier,
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "token public key must be nil for version 1",
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "token public key must be nil for version 1",
 		},
 		{
 			name: "v1 wrong token identifier length",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   1,
-				OwnerPublicKey:            ownerPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
 				TokenIdentifier:           []byte("short"),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "token identifier must be exactly 32 bytes, got 5",
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "token identifier must be exactly 32 bytes, got 5",
 		},
 		{
 			name: "zero timestamp",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   0,
-				OperatorIdentityPublicKey: operatorPubKey,
+				OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 			},
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "issuer provided timestamp cannot be 0",
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "issuer provided timestamp cannot be 0",
 		},
 		{
 			name: "empty operator public key",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
 				OperatorIdentityPublicKey: []byte{},
 			},
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "operator identity public key cannot be empty",
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "failed to parse operator identity public key",
 		},
 		{
 			name: "operator public key not in config",
 			payload: &tokenpb.FreezeTokensPayload{
 				Version:                   0,
-				OwnerPublicKey:            ownerPubKey,
-				TokenPublicKey:            tokenPubKey,
+				OwnerPublicKey:            ownerPubKey.Serialize(),
+				TokenPublicKey:            tokenPubKey.Serialize(),
 				ShouldUnfreeze:            false,
 				IssuerProvidedTimestamp:   1234567890,
 				OperatorIdentityPublicKey: []byte{0x03, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11, 0x22},
 			},
-			expectedOperatorKey: operatorPubKey, // Different from the payload's operator key
-			wantErr:             "does not match expected operator",
+			wantOperatorKey: operatorPubKey, // Different from the payload's operator key
+			wantErr:         "does not match expected operator",
 		},
 		{
-			name:                "valid v0 payload with matching operator",
-			payload:             validPayloadV0,
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "",
+			name:            "valid v0 payload with matching operator",
+			payload:         validPayloadV0,
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "",
 		},
 		{
-			name:                "valid v1 payload with matching operator",
-			payload:             validPayloadV1,
-			expectedOperatorKey: operatorPubKey,
-			wantErr:             "",
+			name:            "valid v1 payload with matching operator",
+			payload:         validPayloadV1,
+			wantOperatorKey: operatorPubKey,
+			wantErr:         "",
 		},
 		{
-			name:                "valid payload with nil expected operator (should fail)",
-			payload:             validPayloadV0,
-			expectedOperatorKey: nil,
-			wantErr:             "does not match expected operator",
+			name:            "valid payload with nil expected operator (should fail)",
+			payload:         validPayloadV0,
+			wantOperatorKey: keys.Public{},
+			wantErr:         "does not match expected operator",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateFreezeTokensPayload(tt.payload, tt.expectedOperatorKey)
+			err := ValidateFreezeTokensPayload(tt.payload, tt.wantOperatorKey)
 			if tt.wantErr == "" {
-				if err != nil {
-					t.Errorf("ValidateFreezeTokensPayload() unexpected error = %v", err)
-				}
+				require.NoError(t, err)
 			} else {
-				if err == nil {
-					t.Errorf("ValidateFreezeTokensPayload() expected error containing %q, got nil", tt.wantErr)
-					return
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Errorf("ValidateFreezeTokensPayload() error = %v, want error containing %q", err, tt.wantErr)
-				}
+				require.ErrorContains(t, err, tt.wantErr)
 			}
 		})
 	}
@@ -2063,33 +2044,33 @@ func TestValidateFreezeTokensPayload(t *testing.T) {
 func TestHashFreezeTokensPayloadVersionConsistency(t *testing.T) {
 	t.Parallel()
 
-	ownerPrivKey, _ := secp256k1.GeneratePrivateKey()
-	ownerPubKey := ownerPrivKey.PubKey().SerializeCompressed()
-	tokenPrivKey, _ := secp256k1.GeneratePrivateKey()
-	tokenPubKey := tokenPrivKey.PubKey().SerializeCompressed()
-	operatorPrivKey, _ := secp256k1.GeneratePrivateKey()
-	operatorPubKey := operatorPrivKey.PubKey().SerializeCompressed()
+	ownerPrivKey, _ := keys.GeneratePrivateKey()
+	ownerPubKey := ownerPrivKey.Public()
+	tokenPrivKey, _ := keys.GeneratePrivateKey()
+	tokenPubKey := tokenPrivKey.Public()
+	operatorPrivKey, _ := keys.GeneratePrivateKey()
+	operatorPubKey := operatorPrivKey.Public()
 	tokenIdentifier := make([]byte, 32)
-	copy(tokenIdentifier, []byte("test_token_identifier_32bytes___"))
+	copy(tokenIdentifier, "test_token_identifier_32bytes___")
 
 	// Create a v0 payload
 	payloadV0 := &tokenpb.FreezeTokensPayload{
 		Version:                   0,
-		OwnerPublicKey:            ownerPubKey,
-		TokenPublicKey:            tokenPubKey,
+		OwnerPublicKey:            ownerPubKey.Serialize(),
+		TokenPublicKey:            tokenPubKey.Serialize(),
 		ShouldUnfreeze:            false,
 		IssuerProvidedTimestamp:   1234567890,
-		OperatorIdentityPublicKey: operatorPubKey,
+		OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 	}
 
 	// Create a v1 payload
 	payloadV1 := &tokenpb.FreezeTokensPayload{
 		Version:                   1,
-		OwnerPublicKey:            ownerPubKey,
+		OwnerPublicKey:            ownerPubKey.Serialize(),
 		TokenIdentifier:           tokenIdentifier,
 		ShouldUnfreeze:            false,
 		IssuerProvidedTimestamp:   1234567890,
-		OperatorIdentityPublicKey: operatorPubKey,
+		OperatorIdentityPublicKey: operatorPubKey.Serialize(),
 	}
 
 	hashV0, err := HashFreezeTokensPayload(payloadV0)

@@ -582,11 +582,19 @@ func (h *InternalSignTokenHandler) recoverFullRevocationSecretsAndFinalize(ctx c
 			return false, tokens.FormatErrorWithTransactionEnt("failed to recover full revocation secrets", tokenTransaction, err)
 		}
 
-		recoveredSecretsToValidate := make([]*secp256k1.PrivateKey, 0, len(outputRecoveredSecrets))
-		for _, secret := range outputRecoveredSecrets {
-			recoveredSecretsToValidate = append(recoveredSecretsToValidate, secret.RevocationSecret)
+		parsedCommitments := make([]keys.Public, len(outputToSpendRevocationCommitments))
+		for i, commitment := range outputToSpendRevocationCommitments {
+			parsed, err := keys.ParsePublicKey(commitment)
+			if err != nil {
+				return false, fmt.Errorf("failed to parse commitment for output %d: %w", i, err)
+			}
+			parsedCommitments[i] = parsed
 		}
-		if err := utils.ValidateRevocationKeys(recoveredSecretsToValidate, outputToSpendRevocationCommitments); err != nil {
+		recoveredSecretsToValidate := make([]keys.Private, len(outputRecoveredSecrets))
+		for i, secret := range outputRecoveredSecrets {
+			recoveredSecretsToValidate[i] = keys.PrivateFromKey(*secret.RevocationSecret)
+		}
+		if err := utils.ValidateRevocationKeys(recoveredSecretsToValidate, parsedCommitments); err != nil {
 			return false, tokens.FormatErrorWithTransactionEnt("invalid revocation keys found", tokenTransaction, err)
 		}
 

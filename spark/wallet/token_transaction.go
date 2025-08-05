@@ -384,7 +384,7 @@ func FinalizeTokenTransaction(
 	outputToSpendRevocationCommitments []SerializedPublicKey,
 ) error {
 	// Recover secrets from keyshares
-	outputRecoveredSecrets := make([]*secp256k1.PrivateKey, len(finalTx.GetTransferInput().GetOutputsToSpend()))
+	outputRecoveredSecrets := make([]keys.Private, len(finalTx.GetTransferInput().GetOutputsToSpend()))
 	for i, outputKeyshares := range outputRevocationKeyshares {
 		shares := make([]*secretsharing.SecretShare, len(outputKeyshares))
 		for j, keyshareWithOperatorIndex := range outputKeyshares {
@@ -400,7 +400,7 @@ func FinalizeTokenTransaction(
 			return fmt.Errorf("failed to recover keyshare for output %d: %w", i, err)
 		}
 
-		privKey, err := common.PrivateKeyFromBigInt(recoveredKey)
+		privKey, err := keys.PrivateKeyFromBigInt(recoveredKey)
 		if err != nil {
 			return fmt.Errorf("failed to convert recovered keyshare to private key for output %d: %w", i, err)
 		}
@@ -408,8 +408,16 @@ func FinalizeTokenTransaction(
 		outputRecoveredSecrets[i] = privKey
 	}
 
+	parsedCommitments := make([]keys.Public, len(outputToSpendRevocationCommitments))
+	for i, commitment := range outputToSpendRevocationCommitments {
+		parsed, err := keys.ParsePublicKey(commitment)
+		if err != nil {
+			return fmt.Errorf("failed to parse commitment for output %d: %w", i, err)
+		}
+		parsedCommitments[i] = parsed
+	}
 	// Validate revocation keys
-	if err := utils.ValidateRevocationKeys(outputRecoveredSecrets, toByteSlices(outputToSpendRevocationCommitments)); err != nil {
+	if err := utils.ValidateRevocationKeys(outputRecoveredSecrets, parsedCommitments); err != nil {
 		return fmt.Errorf("invalid revocation keys: %w", err)
 	}
 

@@ -30,7 +30,7 @@ func (h *FreezeTokenHandler) FreezeTokens(
 	req *tokenpb.FreezeTokensRequest,
 ) (*tokenpb.FreezeTokensResponse, error) {
 	// Validate freeze tokens payload
-	if err := utils.ValidateFreezeTokensPayload(req.FreezeTokensPayload, h.config.IdentityPublicKey().Serialize()); err != nil {
+	if err := utils.ValidateFreezeTokensPayload(req.FreezeTokensPayload, h.config.IdentityPublicKey()); err != nil {
 		return nil, fmt.Errorf("freeze tokens payload validation failed: %w", err)
 	}
 

@@ -7,7 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/lightsparkdev/spark/common"
+	"github.com/lightsparkdev/spark/common/keys"
+
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/ent"
@@ -17,8 +18,6 @@ import (
 	"github.com/lightsparkdev/spark/so/tokens"
 	"github.com/lightsparkdev/spark/so/utils"
 	"google.golang.org/protobuf/types/known/emptypb"
-
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 type InternalFinalizeTokenHandler struct {
@@ -84,8 +83,8 @@ func (h *InternalFinalizeTokenHandler) FinalizeTokenTransactionInternal(
 		}
 	}
 
-	revocationSecrets := make([]*secp256k1.PrivateKey, len(revocationSecretMap))
-	revocationCommitments := make([][]byte, len(revocationSecretMap))
+	revocationSecrets := make([]keys.Private, len(revocationSecretMap))
+	revocationCommitments := make([]keys.Public, len(revocationSecretMap))
 
 	spentOutputs := slices.SortedFunc(slices.Values(tokenTransaction.Edges.SpentOutput), func(a, b *ent.TokenOutput) int {
 		return cmp.Compare(a.SpentTransactionInputVout, b.SpentTransactionInputVout)
@@ -101,13 +100,17 @@ func (h *InternalFinalizeTokenHandler) FinalizeTokenTransactionInternal(
 				tokenTransaction, nil)
 		}
 
-		revocationPrivateKey, err := common.PrivateKeyFromBytes(revocationSecret)
+		revocationPrivateKey, err := keys.ParsePrivateKey(revocationSecret)
 		if err != nil {
 			return nil, tokens.FormatErrorWithTransactionEnt(tokens.ErrFailedToParseRevocationPrivateKey, tokenTransaction, err)
 		}
+		withdrawCommitment, err := keys.ParsePublicKey(output.WithdrawRevocationCommitment)
+		if err != nil {
+			return nil, tokens.FormatErrorWithTransactionEnt("failed to parse revocation commitment", tokenTransaction, err)
+		}
 
 		revocationSecrets[i] = revocationPrivateKey
-		revocationCommitments[i] = output.WithdrawRevocationCommitment
+		revocationCommitments[i] = withdrawCommitment
 	}
 
 	err = utils.ValidateRevocationKeys(revocationSecrets, revocationCommitments)
