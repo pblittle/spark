@@ -4,7 +4,6 @@ import {
 } from "../../utils/spark-testing-wallet.js";
 import { bytesToHex } from "@noble/hashes/utils";
 import { BitcoinFaucet } from "../../utils/test-faucet.js";
-import { ValidationError } from "../../../errors/types.js";
 
 const SMALL_DEPOSIT_AMOUNT = 10n;
 export const DEPOSIT_AMOUNT = 10000n;
@@ -168,6 +167,149 @@ describe("SSP static deposit address integration", () => {
       expect(refundTx2).toBeDefined();
 
       expect(refundTx).not.toBe(refundTx2);
+    }, 60000);
+  });
+
+  describe("Concurrency testing", () => {
+    it("Wallet balance should be correct after concurrent claims of the same wallet initted in different places", async () => {
+      const faucet = BitcoinFaucet.getInstance();
+      const { wallet: aliceWallet, mnemonic: aliceMnemonic } =
+        await SparkWalletTesting.initialize(
+          {
+            options: {
+              network: "LOCAL",
+            },
+          },
+          false,
+        );
+
+      const { wallet: aliceWallet2, mnemonic: aliceMnemonic2 } =
+        await SparkWalletTesting.initialize(
+          {
+            options: {
+              network: "LOCAL",
+            },
+            mnemonicOrSeed: aliceMnemonic,
+          },
+          false,
+        );
+
+      expect(aliceMnemonic).toEqual(aliceMnemonic2);
+
+      const depositAddress = await aliceWallet.getStaticDepositAddress();
+      const depositAddress2 = await aliceWallet2.getStaticDepositAddress();
+      expect(depositAddress).toEqual(depositAddress2);
+
+      const signedTx = await faucet.sendToAddress(
+        depositAddress,
+        DEPOSIT_AMOUNT,
+      );
+
+      await faucet.mineBlocks(6);
+
+      const [quoteResult, quote2Result] = await Promise.allSettled([
+        aliceWallet.getClaimStaticDepositQuote(signedTx.id),
+        aliceWallet2.getClaimStaticDepositQuote(signedTx.id),
+      ]);
+
+      // Extract the actual quote values
+      const quote =
+        quoteResult.status === "fulfilled" ? quoteResult.value : null;
+      const quote2 =
+        quote2Result.status === "fulfilled" ? quote2Result.value : null;
+
+      expect(JSON.stringify(quote)).toEqual(JSON.stringify(quote2));
+
+      const claims = await Promise.allSettled([
+        aliceWallet.claimStaticDeposit({
+          transactionId: signedTx.id,
+          creditAmountSats: quote!.creditAmountSats,
+          sspSignature: quote!.signature,
+        }),
+        aliceWallet2.claimStaticDeposit({
+          transactionId: signedTx.id,
+          creditAmountSats: quote2!.creditAmountSats,
+          sspSignature: quote2!.signature,
+        }),
+      ]);
+
+      const successes = claims.filter(
+        (result) => result.status === "fulfilled",
+      );
+      const failures = claims.filter((result) => result.status === "rejected");
+
+      expect(successes).toHaveLength(1);
+      expect(failures).toHaveLength(1);
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      const { balance: aliceBalance } = await aliceWallet.getBalance();
+      const { balance: alice2Balance } = await aliceWallet2.getBalance();
+
+      expect(aliceBalance).toBe(BigInt(quote!.creditAmountSats));
+      expect(alice2Balance).toBe(BigInt(quote2!.creditAmountSats));
+
+      expect(aliceBalance).toBe(alice2Balance);
+    }, 60000);
+
+    it("Wallet balance should be correct after concurrent claims of the same initted wallet", async () => {
+      const faucet = BitcoinFaucet.getInstance();
+      const { wallet: aliceWallet } = await SparkWalletTesting.initialize(
+        {
+          options: {
+            network: "LOCAL",
+          },
+        },
+        false,
+      );
+
+      const depositAddress = await aliceWallet.getStaticDepositAddress();
+
+      const signedTx = await faucet.sendToAddress(
+        depositAddress,
+        DEPOSIT_AMOUNT,
+      );
+
+      await faucet.mineBlocks(6);
+
+      const [quoteResult, quote2Result] = await Promise.allSettled([
+        aliceWallet.getClaimStaticDepositQuote(signedTx.id),
+        aliceWallet.getClaimStaticDepositQuote(signedTx.id),
+      ]);
+
+      // Extract the actual quote values
+      const quote =
+        quoteResult.status === "fulfilled" ? quoteResult.value : null;
+      const quote2 =
+        quote2Result.status === "fulfilled" ? quote2Result.value : null;
+
+      expect(JSON.stringify(quote)).toEqual(JSON.stringify(quote2));
+
+      const concurrentCalls = 5; // Number of simultaneous calls
+
+      const promises = Array.from({ length: concurrentCalls }, () =>
+        aliceWallet.claimStaticDeposit({
+          transactionId: signedTx.id,
+          creditAmountSats: quote!.creditAmountSats,
+          sspSignature: quote!.signature,
+        }),
+      );
+
+      const claims = await Promise.allSettled(promises);
+
+      const successes = claims.filter(
+        (result) => result.status === "fulfilled",
+      );
+      const failures = claims.filter((result) => result.status === "rejected");
+
+      expect(successes).toHaveLength(1);
+      expect(failures).toHaveLength(4);
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      const { balance: aliceBalance } = await aliceWallet.getBalance();
+
+      expect(aliceBalance).toBe(BigInt(quote!.creditAmountSats));
     }, 60000);
   });
 
