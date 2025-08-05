@@ -6,6 +6,7 @@ import (
 	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
 
 	"github.com/lightsparkdev/spark/so/ent"
+	"github.com/lightsparkdev/spark/so/errors"
 )
 
 const (
@@ -61,9 +62,10 @@ const (
 	ErrTransactionHashMismatch            = "transaction hash in payload (%x) does not match actual transaction hash (%x)"
 	ErrOperatorPublicKeyMismatch          = "operator identity public key in payload (%v) does not match this SO's identity public key (%v)"
 	ErrInvalidValidityDuration            = "invalid validity duration"
-	ErrTransactionPreemptedByExisting     = "transaction pre-empted by existing transaction with better hash"
+	ErrTransactionPreemptedByExisting     = "transaction pre-empted by existing transaction due to existing transaction having %s (%s)"
 	ErrFailedToCancelPreemptedTransaction = "failed to cancel pre-empted transaction"
 	ErrFailedToConvertTokenProto          = "failed to convert token proto to spark proto (%s->%s)"
+	ErrTokenAlreadyCreatedForIssuer       = "token already created for this issuer"
 )
 
 func FormatErrorWithTransactionEnt(msg string, tokenTransaction *ent.TokenTransaction, err error) error {
@@ -87,4 +89,14 @@ func FormatErrorWithTransactionProto(msg string, tokenTransaction *tokenpb.Token
 	return fmt.Errorf("%s (transaction: %s)",
 		msg,
 		tokenTransaction.String())
+}
+
+func NewTransactionPreemptedError(tokenTransaction *tokenpb.TokenTransaction, reason, details string) error {
+	formattedError := FormatErrorWithTransactionProto(fmt.Sprintf(ErrTransactionPreemptedByExisting, reason, details), tokenTransaction, nil)
+	return errors.AbortedError(formattedError)
+}
+
+func NewTokenAlreadyCreatedError(tokenTransaction *tokenpb.TokenTransaction) error {
+	formattedError := FormatErrorWithTransactionProto(ErrTokenAlreadyCreatedForIssuer, tokenTransaction, nil)
+	return errors.AlreadyExistsError(formattedError)
 }

@@ -13,6 +13,8 @@ import (
 	"github.com/lightsparkdev/spark"
 
 	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/google/uuid"
@@ -24,6 +26,7 @@ import (
 	"github.com/lightsparkdev/spark/so/authz"
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
+	"github.com/lightsparkdev/spark/so/errors"
 	"github.com/lightsparkdev/spark/so/helper"
 	"github.com/lightsparkdev/spark/so/protoconverter"
 	"github.com/lightsparkdev/spark/so/tokens"
@@ -121,7 +124,12 @@ func (h *StartTokenTransactionHandler) StartTokenTransaction(ctx context.Context
 		)
 	})
 	if err != nil {
-		return nil, tokens.FormatErrorWithTransactionProto(tokens.ErrFailedToExecuteWithNonCoordinator, req.PartialTokenTransaction, err)
+		formattedError := tokens.FormatErrorWithTransactionProto(tokens.ErrFailedToExecuteWithNonCoordinator, req.PartialTokenTransaction, err)
+		grpcStatus, ok := status.FromError(err)
+		if ok && (grpcStatus.Code() == codes.Aborted || grpcStatus.Code() == codes.AlreadyExists) {
+			formattedError = errors.WrapErrorWithGRPCCode(formattedError, grpcStatus.Code())
+		}
+		return nil, formattedError
 	}
 
 	// Only save in the coordinator SO after receiving confirmation from all other SOs. This ensures that if
@@ -358,7 +366,7 @@ func logWillPreemptExistingTransaction(ctx context.Context, existingTransaction 
 func rejectNewTransaction(ctx context.Context, newTransaction *tokenpb.TokenTransaction, existingTransaction *ent.TokenTransaction, reason, details string) error {
 	tokens.LogWithTransactionEnt(ctx, fmt.Sprintf("Rejecting new transaction due to existing transaction having %s (%s)", reason, details),
 		existingTransaction, slog.LevelInfo)
-	return tokens.FormatErrorWithTransactionProto(tokens.ErrTransactionPreemptedByExisting, newTransaction, nil)
+	return tokens.NewTransactionPreemptedError(newTransaction, reason, details)
 }
 
 // constructFinalTokenTransaction constructs the final token transaction from the partial token transaction

@@ -577,7 +577,7 @@ func validateIssuerTokenNotAlreadyCreated(ctx context.Context, tokenTransaction 
 		return tokens.FormatErrorWithTransactionProto("failed to search for existing token create entity", tokenTransaction, err)
 	}
 	if existingTokenCreateMetadata != nil {
-		return tokens.FormatErrorWithTransactionProto("token already created for this issuer", tokenTransaction, fmt.Errorf("a token for this issuer has already been created"))
+		return tokens.NewTokenAlreadyCreatedError(tokenTransaction)
 	}
 	return nil
 }

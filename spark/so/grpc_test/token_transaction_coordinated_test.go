@@ -26,6 +26,8 @@ import (
 	testutil "github.com/lightsparkdev/spark/test_util"
 	"github.com/lightsparkdev/spark/wallet"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -1844,6 +1846,9 @@ func TestCoordinatedCreateNativeSparkTokenScenarios(t *testing.T) {
 				})
 				if tc.secondTokenParams.expectedError {
 					require.Error(t, err, "expected error but got none for second token creation")
+					st, ok := status.FromError(err)
+					require.True(t, ok, "expected error to be a gRPC status error")
+					require.Equal(t, codes.AlreadyExists, st.Code(), "expected gRPC status code to be AlreadyExists when token already created for issuer")
 				} else {
 					require.NoError(t, err, "unexpected error during second token creation")
 
@@ -2446,6 +2451,10 @@ func TestCoordinatedTokenTransferPreemption(t *testing.T) {
 			} else {
 				require.Error(t, err, "expected second transaction to be rejected due to pre-emption")
 				require.Nil(t, resp2, "expected nil response when transaction is pre-empted")
+
+				st, ok := status.FromError(err)
+				require.True(t, ok, "expected error to be a gRPC status error")
+				require.Equal(t, codes.Aborted, st.Code(), "expected gRPC status code to be Aborted when transaction is pre-empted")
 			}
 
 			_, err = signAndCommitTransaction(t, winningResult, []*secp256k1.PrivateKey{userOutput1PrivKey, userOutput2PrivKey})

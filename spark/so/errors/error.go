@@ -93,3 +93,15 @@ func UnavailableErrorf(format string, args ...any) error {
 func AlreadyExistsErrorf(format string, args ...any) error {
 	return newGRPCError(codes.AlreadyExists, fmt.Errorf(format, args...))
 }
+
+func AlreadyExistsError(err error) error {
+	return newGRPCError(codes.AlreadyExists, err)
+}
+
+func AbortedError(err error) error {
+	return newGRPCError(codes.Aborted, err)
+}
+
+func WrapErrorWithGRPCCode(err error, originalGRPCCode codes.Code) error {
+	return newGRPCError(originalGRPCCode, err)
+}
