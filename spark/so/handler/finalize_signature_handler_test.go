@@ -11,7 +11,6 @@ import (
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,7 +27,11 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignatures_EmptyRequest(t *testing
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	dsn, stop := db.SpinUpPostgres(t)
+	defer stop()
+
+	ctx, dbCtx, err := db.NewPgTestContext(t, ctx, dsn)
+	require.NoError(t, err)
 	defer dbCtx.Close()
 
 	config := &so.Config{}
@@ -49,7 +52,11 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignaturesV2_EmptyRequest(t *testi
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	dsn, stop := db.SpinUpPostgres(t)
+	defer stop()
+
+	ctx, dbCtx, err := db.NewPgTestContext(t, ctx, dsn)
+	require.NoError(t, err)
 	defer dbCtx.Close()
 
 	config := &so.Config{}
@@ -166,14 +173,18 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+			dsn, stop := db.SpinUpPostgres(t)
+			defer stop()
+
+			ctx, dbCtx, err := db.NewPgTestContext(t, ctx, dsn)
+			require.NoError(t, err)
 			defer dbCtx.Close()
 
 			config := &so.Config{}
 			handler := NewFinalizeSignatureHandler(config)
 
 			input := tt.setupFunc(t, ctx, handler)
-			err := tt.verifyFunc(t, ctx, handler, input)
+			err = tt.verifyFunc(t, ctx, handler, input)
 
 			require.ErrorContains(t, err, tt.expectedError)
 		})
@@ -227,7 +238,11 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignatures_InvalidIntent(t *testin
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	dsn, stop := db.SpinUpPostgres(t)
+	defer stop()
+
+	ctx, dbCtx, err := db.NewPgTestContext(t, ctx, dsn)
+	require.NoError(t, err)
 	defer dbCtx.Close()
 
 	config := &so.Config{
@@ -263,7 +278,11 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignaturesV2_RequireDirectTx(t *te
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	dsn, stop := db.SpinUpPostgres(t)
+	defer stop()
+
+	ctx, dbCtx, err := db.NewPgTestContext(t, ctx, dsn)
+	require.NoError(t, err)
 	defer dbCtx.Close()
 
 	config := &so.Config{}
@@ -285,7 +304,11 @@ func TestConfirmTreeWithNonRootConfirmation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	dsn, stop := db.SpinUpPostgres(t)
+	defer stop()
+
+	ctx, dbCtx, err := db.NewPgTestContext(t, ctx, dsn)
+	require.NoError(t, err)
 	defer dbCtx.Close()
 
 	config := &so.Config{

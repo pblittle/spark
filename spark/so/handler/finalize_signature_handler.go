@@ -221,35 +221,35 @@ func (o *FinalizeSignatureHandler) verifyAndUpdateTransfer(ctx context.Context, 
 		return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
 	}
 
-	var transfer *ent.Transfer
+	// Extract leaf IDs from node signatures
+	leafIDs := make([]uuid.UUID, 0, len(req.NodeSignatures))
 	for _, nodeSignatures := range req.NodeSignatures {
 		leafID, err := uuid.Parse(nodeSignatures.NodeId)
 		if err != nil {
 			return nil, fmt.Errorf("invalid node id in request %s: %w", logging.FormatProto("finalize_node_signatures_request", req), err)
 		}
-		leafTransfer, err := db.Transfer.Query().
-			Where(
-				enttransfer.StatusEQ(st.TransferStatusReceiverRefundSigned),
-				enttransfer.HasTransferLeavesWith(
-					transferleaf.HasLeafWith(
-						treenode.IDEQ(leafID),
-					),
+		leafIDs = append(leafIDs, leafID)
+	}
+
+	// Find all ongoing transfers that involves any of these leaves. All these leaves should be
+	// part of a **single** transfer so we expect one result.
+	transfer, err := db.Transfer.Query().
+		WithTransferLeaves().
+		Where(
+			enttransfer.StatusEQ(st.TransferStatusReceiverRefundSigned),
+			enttransfer.HasTransferLeavesWith(
+				transferleaf.HasLeafWith(
+					treenode.IDIn(leafIDs...),
 				),
-			).
-			Only(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to find pending transfer for leaf %s: %w", leafID.String(), err)
-		}
-		if transfer == nil {
-			transfer = leafTransfer
-		} else if transfer.ID != leafTransfer.ID {
-			return nil, fmt.Errorf("expect all leaves to belong to the same transfer")
-		}
-	}
-	numTransferLeaves, err := transfer.QueryTransferLeaves().Count(ctx)
+			),
+		).
+		ForUpdate().
+		Only(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get the number of transfer leaves for transfer %s: %w", transfer.ID.String(), err)
+		return nil, fmt.Errorf("failed to find pending transfer for leaves %s: %w", leafIDs, err)
 	}
+
+	numTransferLeaves := len(transfer.Edges.TransferLeaves)
 	if len(req.NodeSignatures) != numTransferLeaves {
 		return nil, fmt.Errorf("missing signatures for transfer %s", transfer.ID.String())
 	}
