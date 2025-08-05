@@ -28,7 +28,7 @@ func AuthenticateWithConnection(ctx context.Context, config *Config, conn *grpc.
 	client := pbauthn.NewSparkAuthnServiceClient(conn)
 
 	challengeResp, err := client.GetChallenge(ctx, &pbauthn.GetChallengeRequest{
-		PublicKey: config.IdentityPublicKey(),
+		PublicKey: config.IdentityPublicKey().Serialize(),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to get challenge: %w", err)
@@ -40,12 +40,12 @@ func AuthenticateWithConnection(ctx context.Context, config *Config, conn *grpc.
 	}
 
 	hash := sha256.Sum256(challengeBytes)
-	signature := ecdsa.Sign(&config.IdentityPrivateKey, hash[:])
+	signature := ecdsa.Sign(config.IdentityPrivateKey.ToBTCEC(), hash[:])
 
 	verifyResp, err := client.VerifyChallenge(ctx, &pbauthn.VerifyChallengeRequest{
 		ProtectedChallenge: challengeResp.ProtectedChallenge,
 		Signature:          signature.Serialize(),
-		PublicKey:          config.IdentityPublicKey(),
+		PublicKey:          config.IdentityPublicKey().Serialize(),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to verify challenge: %w", err)

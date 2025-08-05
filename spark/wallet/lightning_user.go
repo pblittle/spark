@@ -65,7 +65,7 @@ func CreateLightningInvoiceWithPreimageAndHash(
 				PreimageShare:         shareProto,
 				Threshold:             uint32(config.Threshold),
 				InvoiceString:         *invoice,
-				UserIdentityPublicKey: config.IdentityPublicKey(),
+				UserIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 			})
 			if err != nil {
 				results <- err

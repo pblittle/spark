@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
@@ -38,7 +40,7 @@ func GetConnectorRefundSignatures(
 	leaves []LeafKeyTweak,
 	exitTxid []byte,
 	connectorOutputs []*wire.OutPoint,
-	receiverPubKey *secp256k1.PublicKey,
+	receiverPubKey keys.Public,
 	expiryTime time.Time,
 ) (*pb.Transfer, map[string][]byte, error) {
 	transfer, signaturesMap, err := signCoopExitRefunds(
@@ -66,7 +68,7 @@ func GetConnectorRefundSignaturesV2(
 	leaves []LeafKeyTweak,
 	exitTxid []byte,
 	connectorOutputs []*wire.OutPoint,
-	receiverPubKey *secp256k1.PublicKey,
+	receiverPubKey keys.Public,
 	expiryTime time.Time,
 ) (*pb.Transfer, map[string][]byte, error) {
 	transfer, signaturesMap, err := signCoopExitRefunds(
@@ -115,7 +117,7 @@ func signCoopExitRefunds(
 	leaves []LeafKeyTweak,
 	exitTxid []byte,
 	connectorOutputs []*wire.OutPoint,
-	receiverPubKey *secp256k1.PublicKey,
+	receiverPubKey keys.Public,
 	expiryTime time.Time,
 ) (*pb.Transfer, map[string][]byte, error) {
 	if len(leaves) != len(connectorOutputs) {
@@ -192,8 +194,8 @@ func signCoopExitRefunds(
 		Transfer: &pb.StartTransferRequest{
 			TransferId:                transferID.String(),
 			LeavesToSend:              signingJobs,
-			OwnerIdentityPublicKey:    config.IdentityPublicKey(),
-			ReceiverIdentityPublicKey: receiverPubKey.SerializeCompressed(),
+			OwnerIdentityPublicKey:    config.IdentityPublicKey().Serialize(),
+			ReceiverIdentityPublicKey: receiverPubKey.Serialize(),
 			ExpiryTime:                timestamppb.New(expiryTime),
 		},
 		ExitId:   exitID.String(),

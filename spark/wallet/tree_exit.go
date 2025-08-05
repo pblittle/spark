@@ -71,7 +71,7 @@ func ExitSingleNodeTrees(
 		)
 	}
 	response, err := sparkClient.ExitSingleNodeTrees(ctx, &pb.ExitSingleNodeTreesRequest{
-		OwnerIdentityPublicKey: config.IdentityPublicKey(),
+		OwnerIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		ExitingTrees:           exitingTrees,
 		RawTx:                  txBytes,
 		PreviousOutputs:        prevOuts,
@@ -139,7 +139,7 @@ func ExitTrees(
 		)
 	}
 	response, err := sspClient.ExitTrees(ctx, &pbssp.ExitTreesRequest{
-		OwnerIdentityPublicKey: config.IdentityPublicKey(),
+		OwnerIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		ExitingTrees:           exitingTrees,
 		RawTx:                  txBytes,
 		PreviousOutputs:        prevOuts,

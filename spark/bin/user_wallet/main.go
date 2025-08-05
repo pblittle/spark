@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	testutil "github.com/lightsparkdev/spark/test_util"
@@ -336,7 +338,11 @@ func main() {
 			if len(args) < 2 {
 				return fmt.Errorf("please provide a receiver identity pubkey in hex string format and amount")
 			}
-			receiverIdentityPubkey, err := hex.DecodeString(args[0])
+			receiverIdentityPubkeyBytes, err := hex.DecodeString(args[0])
+			if err != nil {
+				return fmt.Errorf("invalid receiver identity pubkey: %w", err)
+			}
+			receiverIdentityPubKey, err := keys.ParsePublicKey(receiverIdentityPubkeyBytes)
 			if err != nil {
 				return fmt.Errorf("invalid receiver identity pubkey: %w", err)
 			}
@@ -344,7 +350,7 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("invalid amount: %w", err)
 			}
-			transfer, err := cli.wallet.SendTransfer(context.Background(), receiverIdentityPubkey, int64(amount))
+			transfer, err := cli.wallet.SendTransfer(context.Background(), receiverIdentityPubKey, int64(amount))
 			if err != nil {
 				return fmt.Errorf("failed to send transfer: %w", err)
 			}
@@ -492,7 +498,7 @@ func main() {
 				return fmt.Errorf("invalid amount: %w", err)
 			}
 
-			fmt.Printf("Minting %d tokens with token public key %s\n", amount, hex.EncodeToString(cli.wallet.Config.IdentityPublicKey()))
+			fmt.Printf("Minting %d tokens with token public key %s\n", amount, hex.EncodeToString(cli.wallet.Config.IdentityPublicKey().Serialize()))
 			err = cli.wallet.MintTokens(context.Background(), amount)
 			if err != nil {
 				return fmt.Errorf("failed to mint tokens: %w", err)

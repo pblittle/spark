@@ -51,7 +51,7 @@ func createTestCoopExitAndConnectorOutputs(
 	userPubKey keys.Public, userAmountSats int64,
 ) (*wire.MsgTx, []*wire.OutPoint) {
 	// Get arbitrary SSP address, using identity for convenience
-	identityPubKey, err := keys.ParsePublicKey(config.IdentityPublicKey())
+	identityPubKey, err := keys.ParsePublicKey(config.IdentityPublicKey().Serialize())
 	require.NoError(t, err)
 	sspIntermediateAddress, err := common.P2TRAddressFromPublicKey(identityPubKey, config.Network)
 	require.NoError(t, err)
@@ -132,7 +132,7 @@ func TestCoopExitBasic(t *testing.T) {
 		[]wallet.LeafKeyTweak{transferNode},
 		exitTxID,
 		connectorOutputs,
-		sspConfig.IdentityPrivateKey.PubKey(),
+		sspConfig.IdentityPublicKey(),
 		time.Now().Add(24*time.Hour),
 	)
 	require.NoError(t, err)
@@ -237,7 +237,7 @@ func TestCoopExitV2Basic(t *testing.T) {
 		[]wallet.LeafKeyTweak{transferNode},
 		exitTxID,
 		connectorOutputs,
-		sspConfig.IdentityPrivateKey.PubKey(),
+		sspConfig.IdentityPublicKey(),
 		time.Now().Add(24*time.Hour),
 	)
 	require.NoError(t, err)
@@ -329,7 +329,7 @@ func TestCoopExitCannotClaimBeforeEnoughConfirmations(t *testing.T) {
 		[]wallet.LeafKeyTweak{transferNode},
 		exitTxID,
 		connectorOutputs,
-		sspConfig.IdentityPrivateKey.PubKey(),
+		sspConfig.IdentityPublicKey(),
 		time.Now().Add(24*time.Hour),
 	)
 	require.NoError(t, err)
@@ -400,7 +400,7 @@ func TestCoopExitCannotClaimBeforeConfirm(t *testing.T) {
 		[]wallet.LeafKeyTweak{transferNode},
 		exitTxID,
 		connectorOutputs,
-		sspConfig.IdentityPrivateKey.PubKey(),
+		sspConfig.IdentityPublicKey(),
 		time.Now().Add(24*time.Hour),
 	)
 	require.NoError(t, err)
@@ -455,7 +455,7 @@ func TestCoopExitCancelNoBroadcast(t *testing.T) {
 		[]wallet.LeafKeyTweak{transferNode},
 		exitTxID,
 		connectorOutputs,
-		sspConfig.IdentityPrivateKey.PubKey(),
+		sspConfig.IdentityPublicKey(),
 		time.Now().Add(expiryDelta),
 	)
 	require.NoError(t, err)
@@ -491,7 +491,7 @@ func TestCoopExitCannotCancelAfterBroadcast(t *testing.T) {
 		[]wallet.LeafKeyTweak{transferNode},
 		exitTxID,
 		connectorOutputs,
-		sspConfig.IdentityPrivateKey.PubKey(),
+		sspConfig.IdentityPublicKey(),
 		time.Now().Add(expiryDelta),
 	)
 	require.NoError(t, err)

@@ -1,8 +1,8 @@
 package wallet
 
 import (
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightsparkdev/spark/common"
+	"github.com/lightsparkdev/spark/common/keys"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so"
 )
@@ -18,11 +18,11 @@ type Config struct {
 	// FrostSignerAddress is the address of the Frost signer.
 	FrostSignerAddress string
 	// IdentityPrivateKey is the identity private key of the wallet.
-	IdentityPrivateKey secp256k1.PrivateKey
+	IdentityPrivateKey keys.Private
 	// Threshold is the min signing operators.
 	Threshold int
 	// SparkServiceProviderIdentityPublicKey is the identity public key of the Spark service provider.
-	SparkServiceProviderIdentityPublicKey []byte
+	SparkServiceProviderIdentityPublicKey keys.Public
 	// UseTokenTransactionSchnorrSignatures determines whether to use Schnorr signatures (true) or ECDSA signatures (false)
 	UseTokenTransactionSchnorrSignatures bool
 	// CoordinatorDatabaseURI is the database URI for the coordinator.
@@ -35,8 +35,8 @@ func (c *Config) CoodinatorAddress() string {
 }
 
 // IdentityPublicKey returns the identity public key.
-func (c *Config) IdentityPublicKey() []byte {
-	return c.IdentityPrivateKey.PubKey().SerializeCompressed()
+func (c *Config) IdentityPublicKey() keys.Public {
+	return c.IdentityPrivateKey.Public()
 }
 
 func (c *Config) ProtoNetwork() pb.Network {

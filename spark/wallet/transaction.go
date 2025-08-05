@@ -9,7 +9,6 @@ import (
 
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightsparkdev/spark/common"
 )
 
@@ -115,7 +114,7 @@ func createRefundTxs(
 	sequence uint32,
 	nodeOutPoint *wire.OutPoint,
 	amountSats int64,
-	receivingPubkey *secp256k1.PublicKey,
+	receivingPubkey keys.Public,
 	shouldCalculateFee bool,
 ) (*wire.MsgTx, *wire.MsgTx, error) {
 	// Create CPFP-friendly refund tx (with ephemeral anchor, no fee)
@@ -127,7 +126,7 @@ func createRefundTxs(
 		Sequence:         sequence,
 	})
 
-	refundPkScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*receivingPubkey))
+	refundPkScript, err := common.P2TRScriptFromPubKey(receivingPubkey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create refund pkscript: %w", err)
 	}
@@ -157,7 +156,7 @@ func createConnectorRefundTransaction(
 	nodeOutPoint *wire.OutPoint,
 	connectorOutput *wire.OutPoint,
 	amountSats int64,
-	receiverPubKey *secp256k1.PublicKey,
+	receiverPubKey keys.Public,
 ) (*wire.MsgTx, error) {
 	refundTx := wire.NewMsgTx(3)
 	refundTx.AddTxIn(&wire.TxIn{
@@ -167,7 +166,7 @@ func createConnectorRefundTransaction(
 		Sequence:         sequence,
 	})
 	refundTx.AddTxIn(wire.NewTxIn(connectorOutput, nil, nil))
-	receiverScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*receiverPubKey))
+	receiverScript, err := common.P2TRScriptFromPubKey(receiverPubKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create receiver script: %w", err)
 	}

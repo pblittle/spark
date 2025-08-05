@@ -16,6 +16,6 @@ func SubscribeToEvents(ctx context.Context, config *Config) (pb.SparkService_Sub
 	sparkClient := pb.NewSparkServiceClient(sparkConn)
 
 	return sparkClient.SubscribeToEvents(ctx, &pb.SubscribeToEventsRequest{
-		IdentityPublicKey: config.IdentityPublicKey(),
+		IdentityPublicKey: config.IdentityPublicKey().Serialize(),
 	})
 }

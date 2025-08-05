@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"bytes"
+	"github.com/lightsparkdev/spark/common/keys"
 	rand2 "math/rand/v2"
 	"testing"
 
@@ -329,7 +330,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 			signingJobs, refundTxs, userCommitments, err := prepareFrostSigningJobsForUserSignedRefund(
 				tt.leaves,
 				tt.signingCommitments,
-				tt.receiverIdentityPubkey,
+				keys.PublicKeyFromKey(*tt.receiverIdentityPubkey),
 			)
 
 			if tt.expectError {
@@ -362,7 +363,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 					assert.NotEmpty(t, refundTx)
 					tx := wire.NewMsgTx(wire.TxVersion)
 					err := tx.Deserialize(bytes.NewReader(refundTx))
-					assert.NoError(t, err)
+					require.NoError(t, err)
 				}
 
 				for _, commitment := range userCommitments {

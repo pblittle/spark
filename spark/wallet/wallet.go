@@ -12,6 +12,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/lightsparkdev/spark/so/protoconverter"
 
 	"github.com/btcsuite/btcd/txscript"
@@ -56,7 +58,7 @@ func (w *SingleKeyWallet) RemoveOwnedNodes(nodeIDs map[string]bool) {
 }
 
 func (w *SingleKeyWallet) CreateLightningInvoice(ctx context.Context, amount int64, memo string) (*string, int64, error) {
-	identityPublicKey := hex.EncodeToString(w.Config.IdentityPublicKey())
+	identityPublicKey := hex.EncodeToString(w.Config.IdentityPublicKey().Serialize())
 	requester, err := sspapi.NewRequesterWithBaseURL(identityPublicKey, "")
 	if err != nil {
 		return nil, 0, err
@@ -207,7 +209,7 @@ func (w *SingleKeyWallet) PayInvoice(ctx context.Context, invoice string) (strin
 		return "", fmt.Errorf("failed to send transfer: %w", err)
 	}
 
-	identityPublicKey := hex.EncodeToString(w.Config.IdentityPublicKey())
+	identityPublicKey := hex.EncodeToString(w.Config.IdentityPublicKey().Serialize())
 	requester, err := sspapi.NewRequesterWithBaseURL(identityPublicKey, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to create requester: %w", err)
@@ -252,7 +254,7 @@ func (w *SingleKeyWallet) SyncWallet(ctx context.Context) error {
 		return err
 	}
 	response, err := (*client).QueryNodes(ctx, &pb.QueryNodesRequest{
-		Source:         &pb.QueryNodesRequest_OwnerIdentityPubkey{OwnerIdentityPubkey: w.Config.IdentityPublicKey()},
+		Source:         &pb.QueryNodesRequest_OwnerIdentityPubkey{OwnerIdentityPubkey: w.Config.IdentityPublicKey().Serialize()},
 		IncludeParents: true,
 		Network:        network,
 	})
@@ -350,7 +352,7 @@ func (w *SingleKeyWallet) RequestLeavesSwap(ctx context.Context, targetAmount in
 	adaptorPrivateKey := secp256k1.PrivKeyFromBytes(adaptorPrivKeyBytes)
 	adaptorPubKey := adaptorPrivateKey.PubKey()
 
-	identityPublicKey := hex.EncodeToString(w.Config.IdentityPublicKey())
+	identityPublicKey := hex.EncodeToString(w.Config.IdentityPublicKey().Serialize())
 	requester, err := sspapi.NewRequesterWithBaseURL(identityPublicKey, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create requester: %w", err)
@@ -454,7 +456,7 @@ func (w *SingleKeyWallet) RequestLeavesSwap(ctx context.Context, targetAmount in
 	return claimedNodes, nil
 }
 
-func (w *SingleKeyWallet) SendTransfer(ctx context.Context, receiverIdentityPubkey []byte, targetAmount int64) (*pb.Transfer, error) {
+func (w *SingleKeyWallet) SendTransfer(ctx context.Context, receiverIdentityPubKey keys.Public, targetAmount int64) (*pb.Transfer, error) {
 	nodes, err := w.leafSelection(targetAmount)
 	if err != nil {
 		_, err = w.RequestLeavesSwap(ctx, targetAmount)
@@ -482,7 +484,7 @@ func (w *SingleKeyWallet) SendTransfer(ctx context.Context, receiverIdentityPubk
 		nodesToRemove[node.Id] = true
 	}
 
-	transfer, err := SendTransfer(ctx, w.Config, leafKeyTweaks, receiverIdentityPubkey, time.Unix(0, 0))
+	transfer, err := SendTransfer(ctx, w.Config, leafKeyTweaks, receiverIdentityPubKey, time.Unix(0, 0))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send transfer: %w", err)
 	}
@@ -516,7 +518,7 @@ func (w *SingleKeyWallet) CoopExit(ctx context.Context, targetAmountSats int64, 
 	}
 
 	// Get tx from SSP
-	identityPublicKey := hex.EncodeToString(w.Config.IdentityPublicKey())
+	identityPublicKey := w.Config.IdentityPublicKey().ToHex()
 	requester, err := sspapi.NewRequesterWithBaseURL(identityPublicKey, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create requester: %w", err)
@@ -533,10 +535,7 @@ func (w *SingleKeyWallet) CoopExit(ctx context.Context, targetAmountSats int64, 
 	}
 
 	// Get refund signatures and send tweak
-	sspPubIdentityKey, err := secp256k1.ParsePubKey(w.Config.SparkServiceProviderIdentityPublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse ssp pubkey: %w", err)
-	}
+	sspPubIdentityKey := w.Config.SparkServiceProviderIdentityPublicKey
 
 	transfer, _, err := GetConnectorRefundSignatures(
 		ctx, w.Config, leafKeyTweaks, coopExitTxid, connectorOutputs, sspPubIdentityKey, time.Now().Add(24*time.Hour))
@@ -646,7 +645,7 @@ func (w *SingleKeyWallet) MintTokens(ctx context.Context, amount uint64) error {
 	}
 	ctx = ContextWithToken(ctx, token)
 
-	tokenIdentityPubKeyBytes := w.Config.IdentityPublicKey()
+	tokenIdentityPubKeyBytes := w.Config.IdentityPublicKey().Serialize()
 	mintTransaction := &pb.TokenTransaction{
 		TokenInputs: &pb.TokenTransaction_MintInput{
 			MintInput: &pb.TokenMintInput{
@@ -663,13 +662,13 @@ func (w *SingleKeyWallet) MintTokens(ctx context.Context, amount uint64) error {
 		},
 	}
 	finalTokenTransaction, err := BroadcastTokenTransaction(ctx, w.Config, mintTransaction,
-		[]*secp256k1.PrivateKey{&w.Config.IdentityPrivateKey},
+		[]keys.Private{w.Config.IdentityPrivateKey},
 		nil,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to broadcast mint transaction: %w", err)
 	}
-	newOwnedOutputs, err := getOwnedOutputsFromTokenTransaction(finalTokenTransaction, w.Config.IdentityPublicKey())
+	newOwnedOutputs, err := getOwnedOutputsFromTokenTransaction(finalTokenTransaction, w.Config.IdentityPublicKey().Serialize())
 	if err != nil {
 		return fmt.Errorf("failed to add owned outputs: %w", err)
 	}
@@ -693,17 +692,17 @@ func (w *SingleKeyWallet) TransferTokens(ctx context.Context, amount uint64, rec
 
 	// If no token public key specified, use wallet's identity public key
 	if tokenPublicKey == nil {
-		tokenPublicKey = w.Config.IdentityPublicKey()
+		tokenPublicKey = w.Config.IdentityPublicKey().Serialize()
 	}
 
-	selectedOutputsWithPrevTxData, selectedOutputsAmount, err := selectTokenOutputs(ctx, w.Config, amount, tokenPublicKey, w.Config.IdentityPublicKey())
+	selectedOutputsWithPrevTxData, selectedOutputsAmount, err := selectTokenOutputs(ctx, w.Config, amount, tokenPublicKey, w.Config.IdentityPublicKey().Serialize())
 	if err != nil {
 		return fmt.Errorf("failed to select token outputs: %w", err)
 	}
 
 	outputsToSpend := make([]*pb.TokenOutputToSpend, len(selectedOutputsWithPrevTxData))
 	revocationPublicKeys := make([]SerializedPublicKey, len(selectedOutputsWithPrevTxData))
-	outputsToSpendPrivateKeys := make([]*secp256k1.PrivateKey, len(selectedOutputsWithPrevTxData))
+	outputsToSpendPrivateKeys := make([]keys.Private, len(selectedOutputsWithPrevTxData))
 	for i, output := range selectedOutputsWithPrevTxData {
 		outputsToSpend[i] = &pb.TokenOutputToSpend{
 			PrevTokenTransactionHash: output.GetPreviousTransactionHash(),
@@ -711,7 +710,7 @@ func (w *SingleKeyWallet) TransferTokens(ctx context.Context, amount uint64, rec
 		}
 		revocationPublicKeys[i] = output.Output.RevocationCommitment
 		// Assume all outputs to spend are owned by the wallet.
-		outputsToSpendPrivateKeys[i] = &w.Config.IdentityPrivateKey
+		outputsToSpendPrivateKeys[i] = w.Config.IdentityPrivateKey
 	}
 
 	transferTransaction := &pb.TokenTransaction{
@@ -733,7 +732,7 @@ func (w *SingleKeyWallet) TransferTokens(ctx context.Context, amount uint64, rec
 	if selectedOutputsAmount > amount {
 		remainder := selectedOutputsAmount - amount
 		changeOutput := &pb.TokenOutput{
-			OwnerPublicKey: w.Config.IdentityPublicKey(),
+			OwnerPublicKey: w.Config.IdentityPublicKey().Serialize(),
 			TokenPublicKey: tokenPublicKey,
 			TokenAmount:    int64ToUint128Bytes(0, remainder),
 		}
@@ -761,7 +760,7 @@ func (w *SingleKeyWallet) TransferTokens(ctx context.Context, amount uint64, rec
 	w.OwnedTokenOutputs = w.OwnedTokenOutputs[:j]
 
 	// Add the created outputs to the owned outputs list.
-	newOwnedOutputs, err := getOwnedOutputsFromTokenTransaction(finalTokenTransaction, w.Config.IdentityPublicKey())
+	newOwnedOutputs, err := getOwnedOutputsFromTokenTransaction(finalTokenTransaction, w.Config.IdentityPublicKey().Serialize())
 	if err != nil {
 		return fmt.Errorf("failed to add owned outputs: %w", err)
 	}
@@ -781,7 +780,7 @@ func (w *SingleKeyWallet) GetAllTokenBalances(ctx context.Context) (map[string]T
 	response, err := QueryTokenOutputs(
 		ctx,
 		w.Config,
-		[]SerializedPublicKey{w.Config.IdentityPublicKey()},
+		[]SerializedPublicKey{w.Config.IdentityPublicKey().Serialize()},
 		nil, // nil to get all tokens
 	)
 	if err != nil {
@@ -818,7 +817,7 @@ func (w *SingleKeyWallet) GetTokenBalance(ctx context.Context, tokenPublicKey []
 	response, err := QueryTokenOutputs(
 		ctx,
 		w.Config,
-		[]SerializedPublicKey{w.Config.IdentityPublicKey()},
+		[]SerializedPublicKey{w.Config.IdentityPublicKey().Serialize()},
 		[]SerializedPublicKey{tokenPublicKey},
 	)
 	if err != nil {
@@ -926,7 +925,7 @@ func getLeafWithPrevTxKey(output *pb.OutputWithPreviousTransactionData) string {
 // FreezeTokens freezes all tokens owned by a specific owner public key.
 func (w *SingleKeyWallet) FreezeTokens(ctx context.Context, ownerPublicKey []byte) ([]string, uint64, error) {
 	// For simplicity, we're using the wallet's identity public key as the token public key
-	tokenPublicKey := w.Config.IdentityPublicKey()
+	tokenPublicKey := w.Config.IdentityPublicKey().Serialize()
 	response, err := FreezeTokens(ctx, w.Config, ownerPublicKey, tokenPublicKey, false)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to freeze tokens: %w", err)
@@ -944,7 +943,7 @@ func (w *SingleKeyWallet) FreezeTokens(ctx context.Context, ownerPublicKey []byt
 // UnfreezeTokens unfreezes all tokens owned by a specific owner public key.
 func (w *SingleKeyWallet) UnfreezeTokens(ctx context.Context, ownerPublicKey []byte) ([]string, uint64, error) {
 	// For simplicity, we're using the wallet's identity public key as the token public key
-	tokenPublicKey := w.Config.IdentityPublicKey()
+	tokenPublicKey := w.Config.IdentityPublicKey().Serialize()
 	response, err := FreezeTokens(ctx, w.Config, ownerPublicKey, tokenPublicKey, true)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to unfreeze tokens: %w", err)
@@ -960,22 +959,25 @@ func (w *SingleKeyWallet) UnfreezeTokens(ctx context.Context, ownerPublicKey []b
 }
 
 func (w *SingleKeyWallet) SendToPhone(ctx context.Context, amount int64, phoneNumber string) (*pb.Transfer, error) {
-	identityPublicKey := hex.EncodeToString(w.Config.IdentityPublicKey())
-	requester, err := sspapi.NewRequesterWithBaseURL(identityPublicKey, "")
+	identityPublicKeyHex := w.Config.IdentityPublicKey().ToHex()
+	requester, err := sspapi.NewRequesterWithBaseURL(identityPublicKeyHex, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create requester: %w", err)
 	}
 	api := sspapi.NewSparkServiceAPI(requester)
-	publicKey, err := api.FetchPublicKeyByPhoneNumber(phoneNumber)
+	publicKeyHex, err := api.FetchPublicKeyByPhoneNumber(phoneNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch public key: %w", err)
 	}
-	publicKeyBytes, err := hex.DecodeString(publicKey)
+	publicKeyBytes, err := hex.DecodeString(publicKeyHex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode public key: %w", err)
 	}
-
-	transfer, err := w.SendTransfer(ctx, publicKeyBytes, amount)
+	publicKey, err := keys.ParsePublicKey(publicKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+	transfer, err := w.SendTransfer(ctx, publicKey, amount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send transfer: %w", err)
 	}

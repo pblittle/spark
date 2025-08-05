@@ -77,13 +77,13 @@ func StartTokenTransactionCoordinated(
 			return nil, nil, fmt.Errorf("failed to infer token transaction type: %w", err)
 		}
 		if txType == utils.TokenTransactionTypeCreate || txType == utils.TokenTransactionTypeMint {
-			ownerPrivateKeys = []*secp256k1.PrivateKey{&config.IdentityPrivateKey}
+			ownerPrivateKeys = []*secp256k1.PrivateKey{config.IdentityPrivateKey.ToBTCEC()}
 		} else {
 			return nil, nil, fmt.Errorf("owner signing keys must be specified for transfer transaction")
 		}
 	}
 	for i, privKey := range ownerPrivateKeys {
-		sig, err := SignHashSlice(config, privKey, partialTokenTransactionHash)
+		sig, err := SignHashSlice(config, keys.PrivateFromKey(*privKey), partialTokenTransactionHash)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create signature: %w", err)
 		}
@@ -115,7 +115,7 @@ func StartTokenTransactionCoordinated(
 	}
 
 	startResponse, err := sparkClient.StartTransaction(tmpCtx, &tokenpb.StartTransactionRequest{
-		IdentityPublicKey:                      config.IdentityPublicKey(),
+		IdentityPublicKey:                      config.IdentityPublicKey().Serialize(),
 		PartialTokenTransaction:                tokenTransaction,
 		PartialTokenTransactionOwnerSignatures: ownerSignaturesWithIndex,
 		ValidityDurationSeconds:                validityDurationSeconds,
@@ -219,7 +219,7 @@ func BroadcastCoordinatedTokenTransferWithExpiryDuration(
 		FinalTokenTransaction:          startResp.FinalTokenTransaction,
 		FinalTokenTransactionHash:      finalTxHash,
 		InputTtxoSignaturesPerOperator: operatorSignatures,
-		OwnerIdentityPublicKey:         config.IdentityPublicKey(),
+		OwnerIdentityPublicKey:         config.IdentityPublicKey().Serialize(),
 	}
 
 	_, err = CommitTransactionCoordinated(ctx, config, signReq)
@@ -278,7 +278,7 @@ func SignTokenTransactionFromCoordination(
 		FinalTokenTransaction:          params.TokenTransaction,
 		FinalTokenTransactionHash:      params.FinalTxHash,
 		InputTtxoSignaturesPerOperator: chosenOperatorSignatures,
-		OwnerIdentityPublicKey:         config.IdentityPublicKey(),
+		OwnerIdentityPublicKey:         config.IdentityPublicKey().Serialize(),
 	})
 }
 
@@ -329,8 +329,7 @@ func FreezeTokensV1(
 			return nil, fmt.Errorf("failed to hash freeze tokens payload: %v", err)
 		}
 
-		signingPrivKeySecp := secp256k1.PrivKeyFromBytes(config.IdentityPrivateKey.Serialize())
-		sig, err := SignHashSlice(config, signingPrivKeySecp, payloadHash)
+		sig, err := SignHashSlice(config, config.IdentityPrivateKey, payloadHash)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signature: %v", err)
 		}
@@ -368,7 +367,7 @@ func CreateOperatorSpecificSignatures(
 			if err != nil {
 				return nil, fmt.Errorf("error while hashing operator-specific payload: %w", err)
 			}
-			sig, err := SignHashSlice(config, privKey, payloadHash)
+			sig, err := SignHashSlice(config, keys.PrivateFromKey(*privKey), payloadHash)
 			if err != nil {
 				return nil, fmt.Errorf("error while creating operator-specific signature: %w", err)
 			}
@@ -429,7 +428,7 @@ func ExchangeRevocationSecretsManually(
 		FinalTokenTransactionHash:     exchangeParams.FinalTxHash,
 		OperatorTransactionSignatures: allOperatorSignaturesPackage,
 		OperatorShares:                exchangeParams.RevocationShares,
-		OperatorIdentityPublicKey:     config.IdentityPublicKey(),
+		OperatorIdentityPublicKey:     config.IdentityPublicKey().Serialize(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to exchange revocation secrets with operator %s: %w", exchangeParams.TargetOperator.Identifier, err)

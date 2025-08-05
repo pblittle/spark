@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	pbfrost "github.com/lightsparkdev/spark/proto/frost"
@@ -14,12 +15,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// SwapNodesForLightning swaps a node for a preimage of a Lightning invoice.
+// SwapNodesForPreimage swaps a node for a preimage of a Lightning invoice.
 func SwapNodesForPreimage(
 	ctx context.Context,
 	config *Config,
 	leaves []LeafKeyTweak,
-	receiverIdentityPubkeyBytes []byte,
+	receiverIdentityPubKey keys.Public,
 	paymentHash []byte,
 	invoiceString *string,
 	feeSats uint64,
@@ -58,11 +59,7 @@ func SwapNodesForPreimage(
 	}
 	defer signerConn.Close()
 
-	receiverIdentityPubkey, err := secp256k1.ParsePubKey(receiverIdentityPubkeyBytes)
-	if err != nil {
-		return nil, err
-	}
-	signingJobs, refundTxs, userCommitments, err := prepareFrostSigningJobsForUserSignedRefund(leaves, signingCommitments.SigningCommitments, receiverIdentityPubkey)
+	signingJobs, refundTxs, userCommitments, err := prepareFrostSigningJobsForUserSignedRefund(leaves, signingCommitments.SigningCommitments, receiverIdentityPubKey)
 	if err != nil {
 		return nil, err
 	}
@@ -118,12 +115,12 @@ func SwapNodesForPreimage(
 		},
 		Transfer: &pb.StartUserSignedTransferRequest{
 			TransferId:                transferID.String(),
-			OwnerIdentityPublicKey:    config.IdentityPublicKey(),
-			ReceiverIdentityPublicKey: receiverIdentityPubkeyBytes,
+			OwnerIdentityPublicKey:    config.IdentityPublicKey().Serialize(),
+			ReceiverIdentityPublicKey: receiverIdentityPubKey.Serialize(),
 			LeavesToSend:              leafSigningJobs,
 			ExpiryTime:                timestamppb.New(time.Now().Add(2 * time.Minute)),
 		},
-		ReceiverIdentityPublicKey: receiverIdentityPubkeyBytes,
+		ReceiverIdentityPublicKey: receiverIdentityPubKey.Serialize(),
 		FeeSats:                   feeSats,
 	})
 	if err != nil {
@@ -152,7 +149,7 @@ func ReturnLightningPayment(
 	client := pb.NewSparkServiceClient(conn)
 	_, err = client.ReturnLightningPayment(tmpCtx, &pb.ReturnLightningPaymentRequest{
 		PaymentHash:           paymentHash,
-		UserIdentityPublicKey: config.IdentityPublicKey(),
+		UserIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 	})
 	if err != nil {
 		return err

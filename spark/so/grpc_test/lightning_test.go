@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/lightsparkdev/spark/common"
 	pbmock "github.com/lightsparkdev/spark/proto/mock"
 	"github.com/lightsparkdev/spark/proto/spark"
@@ -81,7 +82,7 @@ func cleanUp(t *testing.T, config *wallet.Config, paymentHash [32]byte) {
 	}
 }
 
-func assertVerifiedPendingTransfer(t *testing.T, err error, leafPrivKeyMap map[string][]byte, nodeToSend *spark.TreeNode, newLeafPrivKey *secp256k1.PrivateKey) {
+func assertVerifiedPendingTransfer(t *testing.T, err error, leafPrivKeyMap map[string][]byte, nodeToSend *spark.TreeNode, newLeafPrivKey keys.Private) {
 	require.NoError(t, err, "unable to verify pending transfer")
 	require.Len(t, leafPrivKeyMap, 1)
 	require.Equal(t, leafPrivKeyMap[nodeToSend.Id], newLeafPrivKey.Serialize(), "wrong leaf signing private key")
@@ -139,21 +140,20 @@ func TestReceiveLightningPayment(t *testing.T) {
 	assert.NotNil(t, invoice)
 
 	// SSP creates a node of 12345 sats
-	sspLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 12345)
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 12345)
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	leaves := []wallet.LeafKeyTweak{}
-	leaves = append(leaves, wallet.LeafKeyTweak{
+	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
 		SigningPrivKey:    sspLeafPrivKey.Serialize(),
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
-	})
+	}}
 
 	response, err := wallet.SwapNodesForPreimage(
 		context.Background(),
@@ -200,7 +200,7 @@ func TestReceiveLightningPayment(t *testing.T) {
 	leafPrivKeyMap, err := wallet.VerifyPendingTransfer(context.Background(), userConfig, receiverTransfer)
 	assertVerifiedPendingTransfer(t, err, leafPrivKeyMap, nodeToSend, newLeafPrivKey)
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
@@ -237,21 +237,20 @@ func TestReceiveLightningPaymentV2(t *testing.T) {
 	assert.NotNil(t, invoice)
 
 	// SSP creates a node of 12345 sats
-	sspLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 12345)
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 12345)
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	leaves := []wallet.LeafKeyTweak{}
-	leaves = append(leaves, wallet.LeafKeyTweak{
+	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
 		SigningPrivKey:    sspLeafPrivKey.Serialize(),
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
-	})
+	}}
 
 	response, err := wallet.SwapNodesForPreimage(
 		context.Background(),
@@ -309,7 +308,7 @@ func TestReceiveLightningPaymentV2(t *testing.T) {
 	leafPrivKeyMap, err := wallet.VerifyPendingTransfer(context.Background(), userConfig, receiverTransfer)
 	assertVerifiedPendingTransfer(t, err, leafPrivKeyMap, nodeToSend, newLeafPrivKey)
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
@@ -347,13 +346,13 @@ func TestReceiveZeroAmountLightningInvoicePayment(t *testing.T) {
 
 	paymentAmountSats := uint64(15000)
 	// SSP creates a node of sats equals to the payment amount
-	sspLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, int64(paymentAmountSats))
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), int64(paymentAmountSats))
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	leaves := []wallet.LeafKeyTweak{}
@@ -396,7 +395,7 @@ func TestReceiveZeroAmountLightningInvoicePayment(t *testing.T) {
 	leafPrivKeyMap, err := wallet.VerifyPendingTransfer(context.Background(), userConfig, receiverTransfer)
 	assertVerifiedPendingTransfer(t, err, leafPrivKeyMap, nodeToSend, newLeafPrivKey)
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
@@ -433,13 +432,13 @@ func TestReceiveLightningPaymentCannotCancelAfterPreimageReveal(t *testing.T) {
 	assert.NotNil(t, invoice)
 
 	// SSP creates a node of 12345 sats
-	sspLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 12345)
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 12345)
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	leaves := []wallet.LeafKeyTweak{}
@@ -484,13 +483,13 @@ func TestSendLightningPayment(t *testing.T) {
 	defer cleanUp(t, userConfig, paymentHash)
 
 	// User creates a node of 12345 sats
-	userLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	userLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(2)
-	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey, 12347)
+	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey.ToBTCEC(), 12347)
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	leaves := []wallet.LeafKeyTweak{}
@@ -540,7 +539,7 @@ func TestSendLightningPayment(t *testing.T) {
 	leafPrivKeyMap, err := wallet.VerifyPendingTransfer(context.Background(), sspConfig, receiverTransfer)
 	assertVerifiedPendingTransfer(t, err, leafPrivKeyMap, nodeToSend, newLeafPrivKey)
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
@@ -573,21 +572,20 @@ func TestSendLightningPaymentV2(t *testing.T) {
 	defer cleanUp(t, userConfig, paymentHash)
 
 	// User creates a node of 12345 sats
-	userLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	userLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(2)
-	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey, 12347)
+	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey.ToBTCEC(), 12347)
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	leaves := []wallet.LeafKeyTweak{}
-	leaves = append(leaves, wallet.LeafKeyTweak{
+	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
 		SigningPrivKey:    userLeafPrivKey.Serialize(),
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
-	})
+	}}
 
 	response, err := wallet.SwapNodesForPreimage(
 		context.Background(),
@@ -640,7 +638,7 @@ func TestSendLightningPaymentV2(t *testing.T) {
 	leafPrivKeyMap, err := wallet.VerifyPendingTransfer(context.Background(), sspConfig, receiverTransfer)
 	assertVerifiedPendingTransfer(t, err, leafPrivKeyMap, nodeToSend, newLeafPrivKey)
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
@@ -673,21 +671,20 @@ func TestSendLightningPaymentWithRejection(t *testing.T) {
 	defer cleanUp(t, userConfig, paymentHash)
 
 	// User creates a node of 12345 sats
-	userLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	userLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(2)
-	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey, 12347)
+	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey.ToBTCEC(), 12347)
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	leaves := []wallet.LeafKeyTweak{}
-	leaves = append(leaves, wallet.LeafKeyTweak{
+	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
 		SigningPrivKey:    userLeafPrivKey.Serialize(),
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
-	})
+	}}
 
 	response, err := wallet.SwapNodesForPreimage(
 		context.Background(),
@@ -767,21 +764,20 @@ func TestReceiveLightningPaymentWithWrongPreimage(t *testing.T) {
 	assert.NotNil(t, invoice)
 
 	// SSP creates a node of 12345 sats
-	sspLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 12345)
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 12345)
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	leaves := []wallet.LeafKeyTweak{}
-	leaves = append(leaves, wallet.LeafKeyTweak{
+	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
 		SigningPrivKey:    sspLeafPrivKey.Serialize(),
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
-	})
+	}}
 
 	_, err = wallet.SwapNodesForPreimage(
 		context.Background(),
@@ -822,21 +818,20 @@ func TestSendLightningPaymentTwice(t *testing.T) {
 	defer cleanUp(t, userConfig, paymentHash)
 
 	// User creates a node of 12345 sats
-	userLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	userLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(2)
-	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey, 12347)
+	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey.ToBTCEC(), 12347)
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	leaves := []wallet.LeafKeyTweak{}
-	leaves = append(leaves, wallet.LeafKeyTweak{
+	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
 		SigningPrivKey:    userLeafPrivKey.Serialize(),
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
-	})
+	}}
 
 	response, err := wallet.SwapNodesForPreimage(
 		context.Background(),
@@ -891,7 +886,7 @@ func TestSendLightningPaymentTwice(t *testing.T) {
 	leafPrivKeyMap, err := wallet.VerifyPendingTransfer(context.Background(), sspConfig, receiverTransfer)
 	assertVerifiedPendingTransfer(t, err, leafPrivKeyMap, nodeToSend, newLeafPrivKey)
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,

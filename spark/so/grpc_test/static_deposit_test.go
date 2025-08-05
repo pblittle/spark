@@ -189,7 +189,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 		uint32(vout),
 		common.Regtest,
 		quoteAmount,
-		&sspConfig.IdentityPrivateKey,
+		sspConfig.IdentityPrivateKey.ToBTCEC(),
 	)
 	require.NoError(t, err)
 
@@ -202,7 +202,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 		pb.UtxoSwapRequestType_Fixed,
 		quoteAmount,
 		sspSignature,
-		&aliceConfig.IdentityPrivateKey,
+		aliceConfig.IdentityPrivateKey.ToBTCEC(),
 	)
 	require.NoError(t, err)
 	// *********************************************************************************
@@ -229,7 +229,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*sspConfig.IdentityPrivateKey.PubKey()))
+	spendPkScript, err := common.P2TRScriptFromPubKey(sspConfig.IdentityPrivateKey.Public())
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -254,7 +254,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
 		sspSignature,
-		aliceConfig.IdentityPrivateKey.PubKey(),
+		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
 		sspConn,
 		signedDepositTx.TxOut[vout],
 	)
@@ -362,8 +362,8 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 		SspSignature:  sspSignature,
 		Transfer: &pb.StartTransferRequest{
 			TransferId:                transfer.Id,
-			OwnerIdentityPublicKey:    sspConfig.IdentityPublicKey(),
-			ReceiverIdentityPublicKey: aliceConfig.IdentityPublicKey(),
+			OwnerIdentityPublicKey:    sspConfig.IdentityPublicKey().Serialize(),
+			ReceiverIdentityPublicKey: aliceConfig.IdentityPublicKey().Serialize(),
 			ExpiryTime:                nil,
 			TransferPackage:           nil,
 		},
@@ -385,7 +385,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 		common.Regtest,
 	)
 	require.NoError(t, err)
-	rollbackUtxoSwapRequestSignature := ecdsa.Sign(&sspConfig.IdentityPrivateKey, rollbackUtxoSwapRequestMessageHash)
+	rollbackUtxoSwapRequestSignature := ecdsa.Sign(sspConfig.IdentityPrivateKey.ToBTCEC(), rollbackUtxoSwapRequestMessageHash)
 
 	_, err = sparkInternalClient.RollbackUtxoSwap(sspCtx, &pbinternal.RollbackUtxoSwapRequest{
 		OnChainUtxo: &pb.UTXO{
@@ -394,9 +394,9 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 			Network: pb.Network_REGTEST,
 		},
 		Signature:            rollbackUtxoSwapRequestSignature.Serialize(),
-		CoordinatorPublicKey: aliceConfig.IdentityPublicKey(),
+		CoordinatorPublicKey: aliceConfig.IdentityPublicKey().Serialize(),
 	})
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestStaticDepositUserRefundLegacy(t *testing.T) {
@@ -490,7 +490,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*aliceConfig.IdentityPrivateKey.PubKey()))
+	spendPkScript, err := common.P2TRScriptFromPubKey(aliceConfig.IdentityPrivateKey.Public())
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -510,7 +510,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		pb.UtxoSwapRequestType_Refund,
 		quoteAmount,
 		spendTxSighash[:],
-		&aliceConfig.IdentityPrivateKey,
+		aliceConfig.IdentityPrivateKey.ToBTCEC(),
 	)
 	require.NoError(t, err)
 
@@ -524,7 +524,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		spendTx,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
-		aliceConfig.IdentityPrivateKey.PubKey(),
+		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		aliceConn,
 	)
@@ -549,7 +549,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		spendTx,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
-		aliceConfig.IdentityPrivateKey.PubKey(),
+		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		aliceConn,
 	)
@@ -566,7 +566,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		common.Regtest,
 	)
 	require.NoError(t, err)
-	rollbackUtxoSwapRequestSignature := ecdsa.Sign(&aliceConfig.IdentityPrivateKey, rollbackUtxoSwapRequestMessageHash)
+	rollbackUtxoSwapRequestSignature := ecdsa.Sign(aliceConfig.IdentityPrivateKey.ToBTCEC(), rollbackUtxoSwapRequestMessageHash)
 
 	_, err = sparkInternalClient.RollbackUtxoSwap(aliceCtx, &pbinternal.RollbackUtxoSwapRequest{
 		OnChainUtxo: &pb.UTXO{
@@ -575,7 +575,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 			Network: pb.Network_REGTEST,
 		},
 		Signature:            rollbackUtxoSwapRequestSignature.Serialize(),
-		CoordinatorPublicKey: aliceConfig.IdentityPublicKey(),
+		CoordinatorPublicKey: aliceConfig.IdentityPublicKey().Serialize(),
 	})
 	require.Error(t, err)
 }
@@ -739,7 +739,7 @@ func TestStaticDepositSSPV1(t *testing.T) {
 		uint32(vout),
 		common.Regtest,
 		quoteAmount,
-		&sspConfig.IdentityPrivateKey,
+		sspConfig.IdentityPrivateKey.ToBTCEC(),
 	)
 	require.NoError(t, err)
 
@@ -752,7 +752,7 @@ func TestStaticDepositSSPV1(t *testing.T) {
 		pb.UtxoSwapRequestType_Fixed,
 		quoteAmount,
 		sspSignature,
-		&aliceConfig.IdentityPrivateKey,
+		aliceConfig.IdentityPrivateKey.ToBTCEC(),
 	)
 	require.NoError(t, err)
 	// *********************************************************************************
@@ -779,7 +779,7 @@ func TestStaticDepositSSPV1(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*sspConfig.IdentityPrivateKey.PubKey()))
+	spendPkScript, err := common.P2TRScriptFromPubKey(sspConfig.IdentityPrivateKey.Public())
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -805,7 +805,7 @@ func TestStaticDepositSSPV1(t *testing.T) {
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
 		sspSignature,
-		aliceConfig.IdentityPrivateKey.PubKey(),
+		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
 		sspConn,
 		signedDepositTx.TxOut[vout],
 	)
@@ -834,7 +834,7 @@ func TestStaticDepositSSPV1(t *testing.T) {
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
 		sspSignature,
-		aliceConfig.IdentityPrivateKey.PubKey(),
+		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
 		sspConn,
 		signedDepositTx.TxOut[vout],
 	)
@@ -919,16 +919,15 @@ func TestStaticDepositSSPV1(t *testing.T) {
 		SspSignature:  sspSignature,
 		Transfer: &pb.StartTransferRequest{
 			TransferId:                transfer.Id,
-			OwnerIdentityPublicKey:    sspConfig.IdentityPublicKey(),
-			ReceiverIdentityPublicKey: aliceConfig.IdentityPublicKey(),
+			OwnerIdentityPublicKey:    sspConfig.IdentityPublicKey().Serialize(),
+			ReceiverIdentityPublicKey: aliceConfig.IdentityPublicKey().Serialize(),
 			ExpiryTime:                nil,
 			TransferPackage:           nil,
 		},
 		SpendTxSigningJob: nil,
 	})
 
-	assert.Error(t, err)
-	assert.ErrorContains(t, err, "utxo swap is already registered")
+	require.ErrorContains(t, err, "utxo swap is already registered")
 
 	// *********************************************************************************
 	// A call to refund should fail
@@ -940,13 +939,13 @@ func TestStaticDepositSSPV1(t *testing.T) {
 		spendTx,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
-		aliceConfig.IdentityPrivateKey.PubKey(),
+		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		aliceConn,
 	)
-	assert.Error(t, err)
+
+	require.ErrorContains(t, err, "utxo swap is already registered")
 	assert.Nil(t, signedRefundTx)
-	assert.ErrorContains(t, err, "utxo swap is already registered")
 }
 
 func TestStaticDepositUserRefund(t *testing.T) {
@@ -1040,7 +1039,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(keys.PublicKeyFromKey(*aliceConfig.IdentityPrivateKey.PubKey()))
+	spendPkScript, err := common.P2TRScriptFromPubKey(aliceConfig.IdentityPrivateKey.Public())
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -1060,7 +1059,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		pb.UtxoSwapRequestType_Refund,
 		quoteAmount,
 		spendTxSighash[:],
-		&aliceConfig.IdentityPrivateKey,
+		aliceConfig.IdentityPrivateKey.ToBTCEC(),
 	)
 	require.NoError(t, err)
 
@@ -1074,7 +1073,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		spendTx,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
-		aliceConfig.IdentityPrivateKey.PubKey(),
+		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		aliceConn,
 	)
@@ -1120,7 +1119,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		pb.UtxoSwapRequestType_Refund,
 		quoteAmount,
 		spendTxSighash2[:],
-		&aliceConfig.IdentityPrivateKey,
+		aliceConfig.IdentityPrivateKey.ToBTCEC(),
 	)
 	require.NoError(t, err)
 
@@ -1131,7 +1130,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		spendTx2,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature2,
-		aliceConfig.IdentityPrivateKey.PubKey(),
+		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		aliceConn,
 	)
@@ -1151,7 +1150,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		common.Regtest,
 	)
 	require.NoError(t, err)
-	rollbackUtxoSwapRequestSignature := ecdsa.Sign(&aliceConfig.IdentityPrivateKey, rollbackUtxoSwapRequestMessageHash)
+	rollbackUtxoSwapRequestSignature := ecdsa.Sign(aliceConfig.IdentityPrivateKey.ToBTCEC(), rollbackUtxoSwapRequestMessageHash)
 
 	_, err = sparkInternalClient.RollbackUtxoSwap(aliceCtx, &pbinternal.RollbackUtxoSwapRequest{
 		OnChainUtxo: &pb.UTXO{
@@ -1160,7 +1159,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 			Network: pb.Network_REGTEST,
 		},
 		Signature:            rollbackUtxoSwapRequestSignature.Serialize(),
-		CoordinatorPublicKey: aliceConfig.IdentityPublicKey(),
+		CoordinatorPublicKey: aliceConfig.IdentityPublicKey().Serialize(),
 	})
 	require.Error(t, err)
 
@@ -1190,7 +1189,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		spendTx2,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature2,
-		aliceConfig.IdentityPrivateKey.PubKey(),
+		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		bobConn,
 	)

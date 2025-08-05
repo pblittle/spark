@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
@@ -96,7 +98,7 @@ func RefreshTimelockRefundTx(
 	sparkClient := pb.NewSparkServiceClient(sparkConn)
 	response, err := sparkClient.RefreshTimelock(authCtx, &pb.RefreshTimelockRequest{
 		LeafId:                 leaf.Id,
-		OwnerIdentityPublicKey: config.IdentityPublicKey(),
+		OwnerIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		SigningJobs:            signingJobs,
 	})
 	if err != nil {
@@ -300,7 +302,7 @@ func RefreshTimelockNodes(
 	sparkClient := pb.NewSparkServiceClient(sparkConn)
 	response, err := sparkClient.RefreshTimelock(authCtx, &pb.RefreshTimelockRequest{
 		LeafId:                 leaf.Id,
-		OwnerIdentityPublicKey: config.IdentityPublicKey(),
+		OwnerIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		SigningJobs:            signingJobs,
 	})
 	if err != nil {
@@ -481,7 +483,7 @@ func ExtendTimelock(
 	// (signing pubkey is used here as the destination for convenience,
 	// though normally it should just be the same output as the refund tx)
 	newRefundOutPoint := wire.OutPoint{Hash: newNodeTx.TxHash(), Index: 0}
-	_, cpfpRefundTx, err := createRefundTxs(spark.InitialSequence(), &newRefundOutPoint, refundTx.TxOut[0].Value, signingPrivKey.PubKey(), false)
+	_, cpfpRefundTx, err := createRefundTxs(spark.InitialSequence(), &newRefundOutPoint, refundTx.TxOut[0].Value, keys.PrivateFromKey(*signingPrivKey).Public(), false)
 	if err != nil {
 		return fmt.Errorf("failed to create refund tx: %w", err)
 	}
@@ -512,7 +514,7 @@ func ExtendTimelock(
 	sparkClient := pb.NewSparkServiceClient(sparkConn)
 	response, err := sparkClient.ExtendLeaf(authCtx, &pb.ExtendLeafRequest{
 		LeafId:                 node.Id,
-		OwnerIdentityPublicKey: config.IdentityPublicKey(),
+		OwnerIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		NodeTxSigningJob:       newNodeSigningJob,
 		RefundTxSigningJob:     newRefundSigningJob,
 	})

@@ -3,6 +3,7 @@ package wallet
 import (
 	"bytes"
 	"fmt"
+	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -33,9 +34,9 @@ func CreateUserKeyPackage(signingPrivateKey []byte) *pbfrost.KeyPackage {
 func prepareFrostSigningJobsForUserSignedRefund(
 	leaves []LeafKeyTweak,
 	signingCommitments []*pb.RequestedSigningCommitments,
-	receiverIdentityPubkey *secp256k1.PublicKey,
+	receiverIdentityPubKey keys.Public,
 ) ([]*pbfrost.FrostSigningJob, [][]byte, []*objects.SigningCommitment, error) {
-	signingJobs := []*pbfrost.FrostSigningJob{}
+	var signingJobs []*pbfrost.FrostSigningJob
 	refundTxs := make([][]byte, len(leaves))
 	userCommitments := make([]*objects.SigningCommitment, len(leaves))
 	if len(leaves) != len(signingCommitments) {
@@ -56,7 +57,7 @@ func prepareFrostSigningJobsForUserSignedRefund(
 			return nil, nil, nil, fmt.Errorf("failed to get next sequence: %w", err)
 		}
 		amountSats := nodeTx.TxOut[0].Value
-		_, cpfpRefundTx, err := createRefundTxs(nextSequence, &nodeOutPoint, amountSats, receiverIdentityPubkey, false)
+		_, cpfpRefundTx, err := createRefundTxs(nextSequence, &nodeOutPoint, amountSats, receiverIdentityPubKey, false)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -108,7 +109,6 @@ func prepareLeafSigningJobs(
 	userCommitments []*objects.SigningCommitment,
 	signingCommitments []*pb.RequestedSigningCommitments,
 ) ([]*pb.UserSignedTxSigningJob, error) {
-	leafSigningJobs := []*pb.UserSignedTxSigningJob{}
 	if len(leaves) != len(refundTxs) {
 		return nil, fmt.Errorf("mismatched lengths: leaves: %d, refund txs: %d", len(leaves), len(refundTxs))
 	}
@@ -121,6 +121,8 @@ func prepareLeafSigningJobs(
 	if len(leaves) != len(signingCommitments) {
 		return nil, fmt.Errorf("mismatched lengths: leaves: %d, commitments: %d", len(leaves), len(signingCommitments))
 	}
+
+	var leafSigningJobs []*pb.UserSignedTxSigningJob
 	for i, leaf := range leaves {
 		userCommitmentProto, err := userCommitments[i].MarshalProto()
 		if err != nil {

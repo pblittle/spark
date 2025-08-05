@@ -7,6 +7,8 @@ import (
 	"errors"
 	"log"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -124,7 +126,7 @@ func GenerateDepositAddressesForTree(
 	client := pb.NewSparkServiceClient(conn)
 
 	request := &pb.PrepareTreeAddressRequest{
-		UserIdentityPublicKey: config.IdentityPublicKey(),
+		UserIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 	}
 
 	if parentNode != nil {
@@ -274,7 +276,11 @@ func buildCreationNodesFromTree(
 					return nil, nil, err
 				}
 
-				pubkey := secp256k1.PrivKeyFromBytes(currentElement.node.SigningPrivateKey).PubKey()
+				privKey, err := keys.ParsePrivateKey(currentElement.node.SigningPrivateKey)
+				if err != nil {
+					return nil, nil, err
+				}
+				pubKey := privKey.Public()
 				signingNonce, err := objects.RandomSigningNonce()
 				if err != nil {
 					return nil, nil, err
@@ -285,7 +291,7 @@ func buildCreationNodesFromTree(
 				}
 				signingNonces = append(signingNonces, signingNonce)
 				signingJob := &pb.SigningJob{
-					SigningPublicKey:       pubkey.SerializeCompressed(),
+					SigningPublicKey:       pubKey.Serialize(),
 					RawTx:                  txBuf.Bytes(),
 					SigningNonceCommitment: signingNonceCommitment,
 				}
@@ -293,7 +299,7 @@ func buildCreationNodesFromTree(
 
 				_, cpfpRefundTx, err := createRefundTxs(spark.InitialSequence(),
 					&wire.OutPoint{Hash: tx.TxHash(), Index: 0},
-					tx.TxOut[0].Value, pubkey, true)
+					tx.TxOut[0].Value, pubKey, true)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -312,7 +318,7 @@ func buildCreationNodesFromTree(
 				}
 				signingNonces = append(signingNonces, refundSigningNonce)
 				refundSigningJob := &pb.SigningJob{
-					SigningPublicKey:       pubkey.SerializeCompressed(),
+					SigningPublicKey:       pubKey.Serialize(),
 					RawTx:                  refundTxBuf.Bytes(),
 					SigningNonceCommitment: refundSigningNonceCommitment,
 				}
@@ -544,7 +550,7 @@ func CreateTree(
 	createLeaves bool,
 ) (*pb.FinalizeNodeSignaturesResponse, error) {
 	request := pb.CreateTreeRequest{
-		UserIdentityPublicKey: config.IdentityPublicKey(),
+		UserIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 	}
 
 	var tx *wire.MsgTx

@@ -150,7 +150,7 @@ func TestTreeCreationWithMultiLevels(t *testing.T) {
 	network, err := common.ProtoNetworkFromNetwork(config.Network)
 	require.NoError(t, err)
 	response, err := sparkClient.QueryNodes(ctx, &pb.QueryNodesRequest{
-		Source:         &pb.QueryNodesRequest_OwnerIdentityPubkey{OwnerIdentityPubkey: config.IdentityPublicKey()},
+		Source:         &pb.QueryNodesRequest_OwnerIdentityPubkey{OwnerIdentityPubkey: config.IdentityPublicKey().Serialize()},
 		IncludeParents: true,
 		Network:        network,
 	})

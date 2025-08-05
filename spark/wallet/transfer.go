@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
@@ -38,10 +40,10 @@ func SendTransfer(
 	ctx context.Context,
 	config *Config,
 	leaves []LeafKeyTweak,
-	receiverIdentityPubkey []byte,
+	receiverIdentityPubKey keys.Public,
 	expiryTime time.Time,
 ) (*pb.Transfer, error) {
-	transfer, refundSignatureMap, _, err := SendTransferSignRefund(ctx, config, leaves, receiverIdentityPubkey, expiryTime)
+	transfer, refundSignatureMap, _, err := SendTransferSignRefund(ctx, config, leaves, receiverIdentityPubKey, expiryTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign refund: %w", err)
 	}
@@ -100,7 +102,7 @@ func SendTransferWithKeyTweaks(
 
 	resp, err := client.StartTransfer(authCtx, &pb.StartTransferRequest{
 		TransferId:                transferID.String(),
-		OwnerIdentityPublicKey:    config.IdentityPublicKey(),
+		OwnerIdentityPublicKey:    config.IdentityPublicKey().Serialize(),
 		ReceiverIdentityPublicKey: receiverIdentityPubkey,
 		ExpiryTime:                timestamppb.New(expiryTime),
 		TransferPackage:           transferPackage,
@@ -140,11 +142,11 @@ func prepareTransferPackage(
 	}
 	defer signerConn.Close()
 
-	receiverIdentityPubkey, err := secp256k1.ParsePubKey(receiverIdentityPubkeyBytes)
+	receiverIdentityPubKey, err := keys.ParsePublicKey(receiverIdentityPubkeyBytes)
 	if err != nil {
 		return nil, err
 	}
-	signingJobs, refundTxs, userCommitments, err := prepareFrostSigningJobsForUserSignedRefund(leaves, signingCommitments.SigningCommitments, receiverIdentityPubkey)
+	signingJobs, refundTxs, userCommitments, err := prepareFrostSigningJobsForUserSignedRefund(leaves, signingCommitments.SigningCommitments, receiverIdentityPubKey)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +199,7 @@ func prepareTransferPackage(
 	}
 
 	transferPackageSigningPayload := common.GetTransferPackageSigningPayload(transferID, transferPackage)
-	signature := ecdsa.Sign(&config.IdentityPrivateKey, transferPackageSigningPayload)
+	signature := ecdsa.Sign(config.IdentityPrivateKey.ToBTCEC(), transferPackageSigningPayload)
 	transferPackage.UserSignature = signature.Serialize()
 
 	return transferPackage, nil
@@ -227,7 +229,7 @@ func DeliverTransferPackage(
 
 	resp, err := client.FinalizeTransferWithTransferPackage(ctx, &pb.FinalizeTransferWithTransferPackageRequest{
 		TransferId:             transfer.Id,
-		OwnerIdentityPublicKey: config.IdentityPublicKey(),
+		OwnerIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		TransferPackage:        transferPackage,
 	})
 	if err != nil {
@@ -271,7 +273,7 @@ func SendTransferTweakKey(
 			tmpCtx := ContextWithToken(ctx, token)
 			transferResp, err := sparkClient.FinalizeTransfer(tmpCtx, &pb.FinalizeTransferRequest{
 				TransferId:             transfer.Id,
-				OwnerIdentityPublicKey: config.IdentityPublicKey(),
+				OwnerIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 				LeavesToSend:           keyTweakInputMap[identifier],
 			})
 			if err != nil {
@@ -302,10 +304,10 @@ func SendTransferSignRefund(
 	ctx context.Context,
 	config *Config,
 	leaves []LeafKeyTweak,
-	receiverIdentityPubkey []byte,
+	receiverIdentityPubKey keys.Public,
 	expiryTime time.Time,
 ) (*pb.Transfer, map[string][]byte, map[string]*LeafRefundSigningData, error) {
-	senderTransfer, senderRefundSignatureMap, leafDataMap, _, err := sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubkey, expiryTime, false, nil)
+	senderTransfer, senderRefundSignatureMap, leafDataMap, _, err := sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubKey, expiryTime, false, nil)
 	return senderTransfer, senderRefundSignatureMap, leafDataMap, err
 }
 
@@ -313,10 +315,10 @@ func StartSwapSignRefund(
 	ctx context.Context,
 	config *Config,
 	leaves []LeafKeyTweak,
-	receiverIdentityPubkey []byte,
+	receiverIdentityPubKey keys.Public,
 	expiryTime time.Time,
 ) (*pb.Transfer, map[string][]byte, map[string]*LeafRefundSigningData, error) {
-	senderTransfer, senderRefundSignatureMap, leafDataMap, _, err := sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubkey, expiryTime, true, nil)
+	senderTransfer, senderRefundSignatureMap, leafDataMap, _, err := sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubKey, expiryTime, true, nil)
 	return senderTransfer, senderRefundSignatureMap, leafDataMap, err
 }
 
@@ -324,18 +326,18 @@ func CounterSwapSignRefund(
 	ctx context.Context,
 	config *Config,
 	leaves []LeafKeyTweak,
-	receiverIdentityPubkey []byte,
+	receiverIdentityPubKey keys.Public,
 	expiryTime time.Time,
 	adaptorPublicKey *secp256k1.PublicKey,
 ) (*pb.Transfer, map[string][]byte, map[string]*LeafRefundSigningData, []*pb.LeafRefundTxSigningResult, error) {
-	return sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubkey, expiryTime, true, adaptorPublicKey)
+	return sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubKey, expiryTime, true, adaptorPublicKey)
 }
 
 func sendTransferSignRefund(
 	ctx context.Context,
 	config *Config,
 	leaves []LeafKeyTweak,
-	receiverIdentityPubkey []byte,
+	receiverIdentityPubKey keys.Public,
 	expiryTime time.Time,
 	forSwap bool,
 	adaptorPublicKey *secp256k1.PublicKey,
@@ -347,12 +349,15 @@ func sendTransferSignRefund(
 
 	leafDataMap := make(map[string]*LeafRefundSigningData)
 	for _, leafKey := range leaves {
-		privKey := secp256k1.PrivKeyFromBytes(leafKey.SigningPrivKey)
+		privKey, err := keys.ParsePrivateKey(leafKey.SigningPrivKey)
+		if err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("failed to parse private key: %w", err)
+		}
 		nonce, _ := objects.RandomSigningNonce()
 		tx, _ := common.TxFromRawTxBytes(leafKey.Leaf.NodeTx)
 		leafDataMap[leafKey.Leaf.Id] = &LeafRefundSigningData{
-			SigningPrivKey:  privKey,
-			ReceivingPubkey: receiverIdentityPubkey,
+			SigningPrivKey:  privKey.ToBTCEC(),
+			ReceivingPubkey: receiverIdentityPubKey.Serialize(),
 			Nonce:           nonce,
 			Tx:              tx,
 			Vout:            int(leafKey.Leaf.Vout),
@@ -380,8 +385,8 @@ func sendTransferSignRefund(
 	startTransferRequest := &pb.StartTransferRequest{
 		TransferId:                transferID.String(),
 		LeavesToSend:              signingJobs,
-		OwnerIdentityPublicKey:    config.IdentityPublicKey(),
-		ReceiverIdentityPublicKey: receiverIdentityPubkey,
+		OwnerIdentityPublicKey:    config.IdentityPublicKey().Serialize(),
+		ReceiverIdentityPublicKey: receiverIdentityPubKey.Serialize(),
 		ExpiryTime:                timestamppb.New(expiryTime),
 	}
 	// Whether it's a swap or normal transfer, we're doing the same thing and getting
@@ -496,7 +501,7 @@ func prepareSingleSendTransferKeyTweak(config *Config, transferID string, leaf L
 	// Generate signature over Sha256(leaf_id||transfer_id||secret_cipher)
 	payload := append(append([]byte(leaf.Leaf.Id), []byte(transferID)...), secretCipher...)
 	payloadHash := sha256.Sum256(payload)
-	signature := ecdsa.Sign(&config.IdentityPrivateKey, payloadHash[:])
+	signature := ecdsa.Sign(config.IdentityPrivateKey.ToBTCEC(), payloadHash[:])
 
 	leafTweaksMap := make(map[string]*pb.SendLeafKeyTweak)
 	for identifier, operator := range config.SigningOperators {
@@ -546,7 +551,7 @@ func QueryPendingTransfers(
 	sparkClient := pb.NewSparkServiceClient(sparkConn)
 	return sparkClient.QueryPendingTransfers(ctx, &pb.TransferFilter{
 		Participant: &pb.TransferFilter_ReceiverIdentityPublicKey{
-			ReceiverIdentityPublicKey: config.IdentityPublicKey(),
+			ReceiverIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		},
 		Network: network,
 	})
@@ -568,7 +573,7 @@ func QueryPendingTransfersBySender(
 	sparkClient := pb.NewSparkServiceClient(sparkConn)
 	return sparkClient.QueryPendingTransfers(ctx, &pb.TransferFilter{
 		Participant: &pb.TransferFilter_SenderIdentityPublicKey{
-			SenderIdentityPublicKey: config.IdentityPublicKey(),
+			SenderIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		},
 		Network: network,
 	})
@@ -693,7 +698,7 @@ func ClaimTransferTweakKeys(
 			sparkClient := pb.NewSparkServiceClient(sparkConn)
 			_, err = sparkClient.ClaimTransferTweakKeys(tmpCtx, &pb.ClaimTransferTweakKeysRequest{
 				TransferId:             transfer.Id,
-				OwnerIdentityPublicKey: config.IdentityPublicKey(),
+				OwnerIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 				LeavesToReceive:        leavesTweaksMap[identifier],
 			})
 			if err != nil {
@@ -823,7 +828,7 @@ func ClaimTransferSignRefunds(
 	}
 	response, err := sparkClient.ClaimTransferSignRefunds(ctx, &pb.ClaimTransferSignRefundsRequest{
 		TransferId:             transfer.Id,
-		OwnerIdentityPublicKey: config.IdentityPublicKey(),
+		OwnerIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		SigningJobs:            signingJobs,
 	})
 	if err != nil {
@@ -931,7 +936,7 @@ func prepareRefundSoSigningJobs(
 	leaves []LeafKeyTweak,
 	leafDataMap map[string]*LeafRefundSigningData,
 ) ([]*pb.LeafRefundTxSigningJob, error) {
-	signingJobs := []*pb.LeafRefundTxSigningJob{}
+	var signingJobs []*pb.LeafRefundTxSigningJob
 	for _, leaf := range leaves {
 		refundSigningData := leafDataMap[leaf.Leaf.Id]
 		nodeTx, err := common.TxFromRawTxBytes(leaf.Leaf.NodeTx)
@@ -944,7 +949,7 @@ func prepareRefundSoSigningJobs(
 			return nil, fmt.Errorf("failed to parse refund tx: %w", err)
 		}
 		amountSats := nodeTx.TxOut[0].Value
-		receivingPubkey, err := secp256k1.ParsePubKey(refundSigningData.ReceivingPubkey)
+		receivingPubkey, err := keys.ParsePublicKey(refundSigningData.ReceivingPubkey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse receiving pubkey: %w", err)
 		}
@@ -993,7 +998,7 @@ func CancelTransfer(ctx context.Context, config *Config, transfer *pb.Transfer) 
 	sparkClient := pb.NewSparkServiceClient(sparkConn)
 	response, err := sparkClient.CancelTransfer(authCtx, &pb.CancelTransferRequest{
 		TransferId:              transfer.Id,
-		SenderIdentityPublicKey: config.IdentityPublicKey(),
+		SenderIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to call CancelTransfer: %w", err)
@@ -1024,7 +1029,7 @@ func QueryAllTransfersWithTypes(ctx context.Context, config *Config, limit int64
 	sparkClient := pb.NewSparkServiceClient(sparkConn)
 	response, err := sparkClient.QueryAllTransfers(authCtx, &pb.TransferFilter{
 		Participant: &pb.TransferFilter_SenderOrReceiverIdentityPublicKey{
-			SenderOrReceiverIdentityPublicKey: config.IdentityPublicKey(),
+			SenderOrReceiverIdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		},
 		Limit:   limit,
 		Offset:  offset,

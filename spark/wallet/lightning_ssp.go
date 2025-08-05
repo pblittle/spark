@@ -25,7 +25,7 @@ func QueryUserSignedRefunds(ctx context.Context, config *Config, paymentHash []b
 
 	request := &pb.QueryUserSignedRefundsRequest{
 		PaymentHash:       paymentHash,
-		IdentityPublicKey: config.IdentityPublicKey(),
+		IdentityPublicKey: config.IdentityPublicKey().Serialize(),
 	}
 
 	response, err := client.QueryUserSignedRefunds(tmpCtx, request)
@@ -64,7 +64,7 @@ func ProvidePreimage(ctx context.Context, config *Config, preimage []byte) (*pb.
 	request := &pb.ProvidePreimageRequest{
 		Preimage:          preimage,
 		PaymentHash:       paymentHash[:],
-		IdentityPublicKey: config.IdentityPublicKey(),
+		IdentityPublicKey: config.IdentityPublicKey().Serialize(),
 	}
 
 	response, err := client.ProvidePreimage(tmpCtx, request)

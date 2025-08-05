@@ -842,7 +842,7 @@ func TestStartDepositTreeCreationUnconfirmed(t *testing.T) {
 		context.Background(),
 		config,
 		leavesToTransfer[:],
-		receiverPrivKey.Public().Serialize(),
+		receiverPrivKey.Public(),
 		time.Now().Add(10*time.Minute),
 	)
 	assert.ErrorContains(t, err, "failed to start transfer")
