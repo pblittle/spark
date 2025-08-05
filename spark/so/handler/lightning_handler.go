@@ -598,7 +598,7 @@ func (h *LightningHandler) validateGetPreimageRequestWithFrostServiceClientFacto
 		totalAmount -= feeSats
 	}
 	if totalAmount != amount.ValueSats {
-		logger.Error("invalid amount", "expected", amount.ValueSats, "got", totalAmount)
+		return fmt.Errorf("invalid amount, expected: %d, got: %d", amount.ValueSats, totalAmount)
 	}
 	return nil
 }

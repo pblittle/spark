@@ -508,8 +508,7 @@ func TestReturnLightningPayment(t *testing.T) {
 
 // Note: validateNodeOwnership and validateHasSession are private methods,
 // so we test them indirectly through GetSigningCommitments which calls validateHasSession
-
-func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
+func TestValidateGetPreimageRequestEdgeErrorCases(t *testing.T) {
 	rng := rand.NewChaCha8([32]byte{1})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -531,26 +530,24 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 		directTransactions         []*pb.UserSignedTxSigningJob
 		directFromCpfpTransactions []*pb.UserSignedTxSigningJob
 		destinationPubkey          []byte
-		expectError                bool
 		expectedErrMsg             string
 	}{
 		{
 			name:              "nil cpfp transactions",
 			cpfpTransactions:  nil,
 			destinationPubkey: validPubKey,
-			expectError:       false,
+			expectedErrMsg:    "invalid amount, expected: 1000, got: 0",
 		},
 		{
 			name:              "empty cpfp transactions",
 			cpfpTransactions:  []*pb.UserSignedTxSigningJob{},
 			destinationPubkey: validPubKey,
-			expectError:       false,
+			expectedErrMsg:    "invalid amount, expected: 1000, got: 0",
 		},
 		{
 			name:              "nil transaction in cpfp array",
 			cpfpTransactions:  []*pb.UserSignedTxSigningJob{nil},
 			destinationPubkey: validPubKey,
-			expectError:       true,
 			expectedErrMsg:    "cpfp transaction is nil",
 		},
 		{
@@ -562,7 +559,6 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 				},
 			},
 			destinationPubkey: validPubKey,
-			expectError:       true,
 			expectedErrMsg:    "signing commitments is nil",
 		},
 		{
@@ -577,7 +573,6 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 				},
 			},
 			destinationPubkey: validPubKey,
-			expectError:       true,
 			expectedErrMsg:    "signing nonce commitment is nil",
 		},
 		{
@@ -592,7 +587,6 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 				},
 			},
 			destinationPubkey: validPubKey,
-			expectError:       true,
 			expectedErrMsg:    "unable to parse node id",
 		},
 		{
@@ -607,7 +601,6 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 				},
 			},
 			destinationPubkey: validPubKey,
-			expectError:       true,
 			expectedErrMsg:    "unable to get cpfpTransaction tree_node with id", // Will fail at node lookup
 		},
 	}
@@ -627,11 +620,7 @@ func TestValidateGetPreimageRequestEdgeCases(t *testing.T) {
 				false,
 			)
 
-			if tt.expectError {
-				require.ErrorContains(t, err, tt.expectedErrMsg)
-			} else {
-				require.NoError(t, err)
-			}
+			require.ErrorContains(t, err, tt.expectedErrMsg)
 		})
 	}
 }
@@ -913,6 +902,131 @@ func TestPreimageSwapAuthorizationBugRegression(t *testing.T) {
 
 		require.ErrorContains(t, err, "not owned by the authenticated identity public key")
 	})
+}
+
+// Regression test for https://linear.app/lightsparkdev/issue/LIG-8086
+func TestValidateGetPreimageRequestMismatchedAmounts(t *testing.T) {
+	rng := rand.NewChaCha8([32]byte{1})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ctx, dbCtx := db.NewTestSQLiteContext(t, ctx)
+	defer dbCtx.Close()
+
+	config := &so.Config{}
+	lightningHandler := NewLightningHandler(config)
+
+	validPubKey := keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize()
+	paymentHash := []byte("test_payment_hash_32_bytes_long_")
+
+	tx, err := ent.GetDbFromContext(ctx)
+	require.NoError(t, err)
+
+	tree, err := tx.Tree.Create().
+		SetOwnerIdentityPubkey(validPubKey).
+		SetStatus(st.TreeStatusAvailable).
+		SetNetwork(st.NetworkMainnet).
+		SetBaseTxid([]byte("test_base_txid_32_bytes_long_")).
+		SetVout(0).
+		Save(ctx)
+	require.NoError(t, err)
+
+	keyshare, err := tx.SigningKeyshare.Create().
+		SetStatus(st.KeyshareStatusInUse).
+		SetSecretShare([]byte("test_secret_share_32_bytes_long_")).
+		SetPublicShares(map[string][]byte{"operator1": validPubKey}).
+		SetPublicKey(validPubKey).
+		SetMinSigners(2).
+		SetCoordinatorIndex(1).
+		Save(ctx)
+	require.NoError(t, err)
+
+	nodeID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
+
+	// Create a transaction with 500 sats output (different from expected 1000)
+	// Use the same pattern as the existing createMockSigningJob function
+	mockTx := []byte{
+		0x02, 0x00, 0x00, 0x00, // version
+		0x01, // input count
+		// Input (simplified)
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0xFF, 0xFF, 0xFF, 0xFF, // previous output index
+		0x00,                   // script length
+		0xFF, 0xFF, 0xFF, 0xFF, // sequence
+		0x01, // output count
+	}
+	// Add 500 sats value (little endian)
+	valueBytes := make([]byte, 8)
+	value := uint64(500)
+	for i := 0; i < 8; i++ {
+		valueBytes[i] = byte(value >> (i * 8))
+	}
+	mockTx = append(mockTx, valueBytes...)
+	// Add the correct P2TR script for the destination pubkey
+	parsedPubKey, err := keys.ParsePublicKey(validPubKey)
+	require.NoError(t, err)
+	correctScript, err := common.P2TRScriptFromPubKey(parsedPubKey)
+	require.NoError(t, err)
+	mockScript := []byte{byte(len(correctScript))}    // script length
+	mockScript = append(mockScript, correctScript...) // the correct P2TR script
+	mockTx = append(mockTx, mockScript...)
+	// Add locktime
+	mockTx = append(mockTx, 0x00, 0x00, 0x00, 0x00)
+
+	_, err = tx.TreeNode.Create().
+		SetTree(tree).
+		SetID(nodeID).
+		SetValue(500). // This is the value in the tree node, but RawTx will also have 500 sats
+		SetStatus(st.TreeNodeStatusAvailable).
+		SetVerifyingPubkey(validPubKey).
+		SetOwnerIdentityPubkey(validPubKey).
+		SetOwnerSigningPubkey(validPubKey).
+		SetRawTx(mockTx).
+		SetDirectTx(mockTx). // Set direct_tx field which is required for direct transaction validation
+		SetVout(0).
+		SetSigningKeyshare(keyshare).
+		Save(ctx)
+	require.NoError(t, err)
+
+	// Create a transaction for testing with mismatched amounts
+	testTx := &pb.UserSignedTxSigningJob{
+		LeafId: nodeID.String(),
+		SigningCommitments: &pb.SigningCommitments{
+			SigningCommitments: map[string]*pbcommon.SigningCommitment{
+				"test": {
+					Hiding:  []byte("test_hiding"),
+					Binding: []byte("test_binding"),
+				},
+			},
+		},
+		SigningNonceCommitment: &pbcommon.SigningCommitment{
+			Hiding:  []byte("test_nonce_hiding"),
+			Binding: []byte("test_nonce_binding"),
+		},
+		UserSignature: []byte("test_signature"),
+		RawTx:         mockTx, // Contains 500 sats output
+	}
+
+	mockFrostConnection := &mockFrostServiceClientConnection{}
+
+	// This should fail because the total amount (500 sats) doesn't match expected (1000 sats)
+	err = lightningHandler.validateGetPreimageRequestWithFrostServiceClientFactory(
+		ctx,
+		mockFrostConnection,
+		paymentHash,
+		[]*pb.UserSignedTxSigningJob{testTx}, // cpfp transactions with 500 sats (these contribute to totalAmount)
+		[]*pb.UserSignedTxSigningJob{},       // empty direct transactions
+		[]*pb.UserSignedTxSigningJob{},       // empty directFromCpfp transactions
+		&pb.InvoiceAmount{ValueSats: 1000},   // Expected 1000 sats but getting 500
+		validPubKey,
+		0,
+		pb.InitiatePreimageSwapRequest_REASON_SEND,
+		false, // validateNodeOwnership = false for this test
+	)
+
+	require.ErrorContains(t, err, "invalid amount, expected: 1000, got: 500")
 }
 
 // Regression test for https://linear.app/lightsparkdev/issue/LIG-8043
