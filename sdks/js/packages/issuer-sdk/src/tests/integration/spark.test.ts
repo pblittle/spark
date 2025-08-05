@@ -542,7 +542,7 @@ describe.each(TEST_CONFIGS)(
       }
     });
 
-    it("it should mint token with 1 max supply without issue", async () => {
+    it("should mint token with 1 max supply without issue", async () => {
       const tokenAmount: bigint = 1n;
       const { wallet: issuerWallet } =
         await IssuerSparkWalletTesting.initialize({
@@ -562,7 +562,7 @@ describe.each(TEST_CONFIGS)(
       expect(tokenBalance.balance).toEqual(tokenAmount);
     });
 
-    it("it should be able to create a token with name of size equal to MAX_SYMBOL_SIZE", async () => {
+    it("should be able to create a token with name of size equal to MAX_SYMBOL_SIZE", async () => {
       const { wallet: issuerWallet } =
         await IssuerSparkWalletTesting.initialize({
           options: config,
@@ -577,7 +577,7 @@ describe.each(TEST_CONFIGS)(
       });
     });
 
-    it("it should be able to anounce a token with name of size equal to MAX_SYMBOL_SIZE", async () => {
+    it("should be able to anounce a token with name of size equal to MAX_SYMBOL_SIZE", async () => {
       const { wallet: issuerWallet } =
         await IssuerSparkWalletTesting.initialize({
           options: config,
@@ -586,7 +586,7 @@ describe.each(TEST_CONFIGS)(
       await fundAndAnnounce(issuerWallet, 100000n, 0, "MST", "TESTAA", false);
     });
 
-    it("it should be able to create a token with symbol of size equal to MAX_NAME_SIZE", async () => {
+    it("should be able to create a token with symbol of size equal to MAX_NAME_SIZE", async () => {
       const { wallet: issuerWallet } =
         await IssuerSparkWalletTesting.initialize({
           options: config,
@@ -601,7 +601,7 @@ describe.each(TEST_CONFIGS)(
       });
     });
 
-    it("it should be able to create a token with symbol of size equal to MAX_NAME_SIZE", async () => {
+    it("should be able to announce a token with symbol of size equal to MAX_NAME_SIZE", async () => {
       const { wallet: issuerWallet } =
         await IssuerSparkWalletTesting.initialize({
           options: config,
