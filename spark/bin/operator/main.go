@@ -71,6 +71,7 @@ type args struct {
 	SessionDuration            time.Duration
 	AuthzEnforced              bool
 	DisableDKG                 bool
+	DisableChainwatcher        bool
 	SupportedNetworks          string
 	AWS                        bool
 	ServerCertPath             string
@@ -120,6 +121,7 @@ func loadArgs() (*args, error) {
 	flag.DurationVar(&args.SessionDuration, "session-duration", time.Minute*15, "Session duration")
 	flag.BoolVar(&args.AuthzEnforced, "authz-enforced", true, "Enforce authorization checks")
 	flag.BoolVar(&args.DisableDKG, "disable-dkg", false, "Disable DKG")
+	flag.BoolVar(&args.DisableChainwatcher, "disable-chainwatcher", false, "Disable Chainwatcher")
 	flag.StringVar(&args.SupportedNetworks, "supported-networks", "", "Supported networks")
 	flag.BoolVar(&args.AWS, "aws", false, "Use AWS RDS")
 	flag.StringVar(&args.ServerCertPath, "server-cert", "", "Path to server certificate")
@@ -355,7 +357,7 @@ func main() {
 		log.Fatalf("Failed to create frost client: %v", err)
 	}
 
-	if !args.DisableDKG {
+	if !args.DisableChainwatcher {
 		// Chain watchers
 		for network, bitcoindConfig := range config.BitcoindConfigs {
 			network := network
