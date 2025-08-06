@@ -33,6 +33,9 @@ type PreimageRequest func(*sql.Selector)
 // PreimageShare is the predicate function for preimageshare builders.
 type PreimageShare func(*sql.Selector)
 
+// SigningCommitment is the predicate function for signingcommitment builders.
+type SigningCommitment func(*sql.Selector)
+
 // SigningKeyshare is the predicate function for signingkeyshare builders.
 type SigningKeyshare func(*sql.Selector)
 

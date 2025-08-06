@@ -23,6 +23,7 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/preimagerequest"
 	"github.com/lightsparkdev/spark/so/ent/preimageshare"
 	"github.com/lightsparkdev/spark/so/ent/schema/schematype"
+	"github.com/lightsparkdev/spark/so/ent/signingcommitment"
 	"github.com/lightsparkdev/spark/so/ent/signingkeyshare"
 	"github.com/lightsparkdev/spark/so/ent/signingnonce"
 	"github.com/lightsparkdev/spark/so/ent/tokencreate"
@@ -59,6 +60,7 @@ const (
 	TypePaymentIntent                     = "PaymentIntent"
 	TypePreimageRequest                   = "PreimageRequest"
 	TypePreimageShare                     = "PreimageShare"
+	TypeSigningCommitment                 = "SigningCommitment"
 	TypeSigningKeyshare                   = "SigningKeyshare"
 	TypeSigningNonce                      = "SigningNonce"
 	TypeTokenCreate                       = "TokenCreate"
@@ -6583,6 +6585,590 @@ func (m *PreimageShareMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown PreimageShare edge %s", name)
+}
+
+// SigningCommitmentMutation represents an operation that mutates the SigningCommitment nodes in the graph.
+type SigningCommitmentMutation struct {
+	config
+	op                Op
+	typ               string
+	id                *uuid.UUID
+	create_time       *time.Time
+	update_time       *time.Time
+	operator_index    *uint
+	addoperator_index *int
+	status            *schematype.SigningCommitmentStatus
+	nonce_commitment  *[]byte
+	clearedFields     map[string]struct{}
+	done              bool
+	oldValue          func(context.Context) (*SigningCommitment, error)
+	predicates        []predicate.SigningCommitment
+}
+
+var _ ent.Mutation = (*SigningCommitmentMutation)(nil)
+
+// signingcommitmentOption allows management of the mutation configuration using functional options.
+type signingcommitmentOption func(*SigningCommitmentMutation)
+
+// newSigningCommitmentMutation creates new mutation for the SigningCommitment entity.
+func newSigningCommitmentMutation(c config, op Op, opts ...signingcommitmentOption) *SigningCommitmentMutation {
+	m := &SigningCommitmentMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSigningCommitment,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSigningCommitmentID sets the ID field of the mutation.
+func withSigningCommitmentID(id uuid.UUID) signingcommitmentOption {
+	return func(m *SigningCommitmentMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SigningCommitment
+		)
+		m.oldValue = func(ctx context.Context) (*SigningCommitment, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SigningCommitment.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSigningCommitment sets the old SigningCommitment of the mutation.
+func withSigningCommitment(node *SigningCommitment) signingcommitmentOption {
+	return func(m *SigningCommitmentMutation) {
+		m.oldValue = func(context.Context) (*SigningCommitment, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SigningCommitmentMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SigningCommitmentMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of SigningCommitment entities.
+func (m *SigningCommitmentMutation) SetID(id uuid.UUID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SigningCommitmentMutation) ID() (id uuid.UUID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SigningCommitmentMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []uuid.UUID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SigningCommitment.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreateTime sets the "create_time" field.
+func (m *SigningCommitmentMutation) SetCreateTime(t time.Time) {
+	m.create_time = &t
+}
+
+// CreateTime returns the value of the "create_time" field in the mutation.
+func (m *SigningCommitmentMutation) CreateTime() (r time.Time, exists bool) {
+	v := m.create_time
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreateTime returns the old "create_time" field's value of the SigningCommitment entity.
+// If the SigningCommitment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SigningCommitmentMutation) OldCreateTime(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreateTime is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreateTime requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreateTime: %w", err)
+	}
+	return oldValue.CreateTime, nil
+}
+
+// ResetCreateTime resets all changes to the "create_time" field.
+func (m *SigningCommitmentMutation) ResetCreateTime() {
+	m.create_time = nil
+}
+
+// SetUpdateTime sets the "update_time" field.
+func (m *SigningCommitmentMutation) SetUpdateTime(t time.Time) {
+	m.update_time = &t
+}
+
+// UpdateTime returns the value of the "update_time" field in the mutation.
+func (m *SigningCommitmentMutation) UpdateTime() (r time.Time, exists bool) {
+	v := m.update_time
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdateTime returns the old "update_time" field's value of the SigningCommitment entity.
+// If the SigningCommitment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SigningCommitmentMutation) OldUpdateTime(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdateTime is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdateTime requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdateTime: %w", err)
+	}
+	return oldValue.UpdateTime, nil
+}
+
+// ResetUpdateTime resets all changes to the "update_time" field.
+func (m *SigningCommitmentMutation) ResetUpdateTime() {
+	m.update_time = nil
+}
+
+// SetOperatorIndex sets the "operator_index" field.
+func (m *SigningCommitmentMutation) SetOperatorIndex(u uint) {
+	m.operator_index = &u
+	m.addoperator_index = nil
+}
+
+// OperatorIndex returns the value of the "operator_index" field in the mutation.
+func (m *SigningCommitmentMutation) OperatorIndex() (r uint, exists bool) {
+	v := m.operator_index
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOperatorIndex returns the old "operator_index" field's value of the SigningCommitment entity.
+// If the SigningCommitment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SigningCommitmentMutation) OldOperatorIndex(ctx context.Context) (v uint, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOperatorIndex is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOperatorIndex requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOperatorIndex: %w", err)
+	}
+	return oldValue.OperatorIndex, nil
+}
+
+// AddOperatorIndex adds u to the "operator_index" field.
+func (m *SigningCommitmentMutation) AddOperatorIndex(u int) {
+	if m.addoperator_index != nil {
+		*m.addoperator_index += u
+	} else {
+		m.addoperator_index = &u
+	}
+}
+
+// AddedOperatorIndex returns the value that was added to the "operator_index" field in this mutation.
+func (m *SigningCommitmentMutation) AddedOperatorIndex() (r int, exists bool) {
+	v := m.addoperator_index
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOperatorIndex resets all changes to the "operator_index" field.
+func (m *SigningCommitmentMutation) ResetOperatorIndex() {
+	m.operator_index = nil
+	m.addoperator_index = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *SigningCommitmentMutation) SetStatus(scs schematype.SigningCommitmentStatus) {
+	m.status = &scs
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *SigningCommitmentMutation) Status() (r schematype.SigningCommitmentStatus, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the SigningCommitment entity.
+// If the SigningCommitment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SigningCommitmentMutation) OldStatus(ctx context.Context) (v schematype.SigningCommitmentStatus, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *SigningCommitmentMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetNonceCommitment sets the "nonce_commitment" field.
+func (m *SigningCommitmentMutation) SetNonceCommitment(b []byte) {
+	m.nonce_commitment = &b
+}
+
+// NonceCommitment returns the value of the "nonce_commitment" field in the mutation.
+func (m *SigningCommitmentMutation) NonceCommitment() (r []byte, exists bool) {
+	v := m.nonce_commitment
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNonceCommitment returns the old "nonce_commitment" field's value of the SigningCommitment entity.
+// If the SigningCommitment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SigningCommitmentMutation) OldNonceCommitment(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNonceCommitment is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNonceCommitment requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNonceCommitment: %w", err)
+	}
+	return oldValue.NonceCommitment, nil
+}
+
+// ResetNonceCommitment resets all changes to the "nonce_commitment" field.
+func (m *SigningCommitmentMutation) ResetNonceCommitment() {
+	m.nonce_commitment = nil
+}
+
+// Where appends a list predicates to the SigningCommitmentMutation builder.
+func (m *SigningCommitmentMutation) Where(ps ...predicate.SigningCommitment) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SigningCommitmentMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SigningCommitmentMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SigningCommitment, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SigningCommitmentMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SigningCommitmentMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SigningCommitment).
+func (m *SigningCommitmentMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SigningCommitmentMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.create_time != nil {
+		fields = append(fields, signingcommitment.FieldCreateTime)
+	}
+	if m.update_time != nil {
+		fields = append(fields, signingcommitment.FieldUpdateTime)
+	}
+	if m.operator_index != nil {
+		fields = append(fields, signingcommitment.FieldOperatorIndex)
+	}
+	if m.status != nil {
+		fields = append(fields, signingcommitment.FieldStatus)
+	}
+	if m.nonce_commitment != nil {
+		fields = append(fields, signingcommitment.FieldNonceCommitment)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SigningCommitmentMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case signingcommitment.FieldCreateTime:
+		return m.CreateTime()
+	case signingcommitment.FieldUpdateTime:
+		return m.UpdateTime()
+	case signingcommitment.FieldOperatorIndex:
+		return m.OperatorIndex()
+	case signingcommitment.FieldStatus:
+		return m.Status()
+	case signingcommitment.FieldNonceCommitment:
+		return m.NonceCommitment()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SigningCommitmentMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case signingcommitment.FieldCreateTime:
+		return m.OldCreateTime(ctx)
+	case signingcommitment.FieldUpdateTime:
+		return m.OldUpdateTime(ctx)
+	case signingcommitment.FieldOperatorIndex:
+		return m.OldOperatorIndex(ctx)
+	case signingcommitment.FieldStatus:
+		return m.OldStatus(ctx)
+	case signingcommitment.FieldNonceCommitment:
+		return m.OldNonceCommitment(ctx)
+	}
+	return nil, fmt.Errorf("unknown SigningCommitment field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SigningCommitmentMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case signingcommitment.FieldCreateTime:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreateTime(v)
+		return nil
+	case signingcommitment.FieldUpdateTime:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdateTime(v)
+		return nil
+	case signingcommitment.FieldOperatorIndex:
+		v, ok := value.(uint)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOperatorIndex(v)
+		return nil
+	case signingcommitment.FieldStatus:
+		v, ok := value.(schematype.SigningCommitmentStatus)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case signingcommitment.FieldNonceCommitment:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNonceCommitment(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SigningCommitment field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SigningCommitmentMutation) AddedFields() []string {
+	var fields []string
+	if m.addoperator_index != nil {
+		fields = append(fields, signingcommitment.FieldOperatorIndex)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SigningCommitmentMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case signingcommitment.FieldOperatorIndex:
+		return m.AddedOperatorIndex()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SigningCommitmentMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case signingcommitment.FieldOperatorIndex:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOperatorIndex(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SigningCommitment numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SigningCommitmentMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SigningCommitmentMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SigningCommitmentMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown SigningCommitment nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SigningCommitmentMutation) ResetField(name string) error {
+	switch name {
+	case signingcommitment.FieldCreateTime:
+		m.ResetCreateTime()
+		return nil
+	case signingcommitment.FieldUpdateTime:
+		m.ResetUpdateTime()
+		return nil
+	case signingcommitment.FieldOperatorIndex:
+		m.ResetOperatorIndex()
+		return nil
+	case signingcommitment.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case signingcommitment.FieldNonceCommitment:
+		m.ResetNonceCommitment()
+		return nil
+	}
+	return fmt.Errorf("unknown SigningCommitment field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SigningCommitmentMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SigningCommitmentMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SigningCommitmentMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SigningCommitmentMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SigningCommitmentMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SigningCommitmentMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SigningCommitmentMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown SigningCommitment unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SigningCommitmentMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown SigningCommitment edge %s", name)
 }
 
 // SigningKeyshareMutation represents an operation that mutates the SigningKeyshare nodes in the graph.

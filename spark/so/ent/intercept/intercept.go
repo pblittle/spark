@@ -18,6 +18,7 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/predicate"
 	"github.com/lightsparkdev/spark/so/ent/preimagerequest"
 	"github.com/lightsparkdev/spark/so/ent/preimageshare"
+	"github.com/lightsparkdev/spark/so/ent/signingcommitment"
 	"github.com/lightsparkdev/spark/so/ent/signingkeyshare"
 	"github.com/lightsparkdev/spark/so/ent/signingnonce"
 	"github.com/lightsparkdev/spark/so/ent/tokencreate"
@@ -333,6 +334,33 @@ func (f TraversePreimageShare) Traverse(ctx context.Context, q ent.Query) error 
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.PreimageShareQuery", q)
+}
+
+// The SigningCommitmentFunc type is an adapter to allow the use of ordinary function as a Querier.
+type SigningCommitmentFunc func(context.Context, *ent.SigningCommitmentQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f SigningCommitmentFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.SigningCommitmentQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.SigningCommitmentQuery", q)
+}
+
+// The TraverseSigningCommitment type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseSigningCommitment func(context.Context, *ent.SigningCommitmentQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseSigningCommitment) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseSigningCommitment) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.SigningCommitmentQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.SigningCommitmentQuery", q)
 }
 
 // The SigningKeyshareFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -788,6 +816,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.PreimageRequestQuery, predicate.PreimageRequest, preimagerequest.OrderOption]{typ: ent.TypePreimageRequest, tq: q}, nil
 	case *ent.PreimageShareQuery:
 		return &query[*ent.PreimageShareQuery, predicate.PreimageShare, preimageshare.OrderOption]{typ: ent.TypePreimageShare, tq: q}, nil
+	case *ent.SigningCommitmentQuery:
+		return &query[*ent.SigningCommitmentQuery, predicate.SigningCommitment, signingcommitment.OrderOption]{typ: ent.TypeSigningCommitment, tq: q}, nil
 	case *ent.SigningKeyshareQuery:
 		return &query[*ent.SigningKeyshareQuery, predicate.SigningKeyshare, signingkeyshare.OrderOption]{typ: ent.TypeSigningKeyshare, tq: q}, nil
 	case *ent.SigningNonceQuery:

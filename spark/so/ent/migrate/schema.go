@@ -266,6 +266,28 @@ var (
 			},
 		},
 	}
+	// SigningCommitmentsColumns holds the columns for the "signing_commitments" table.
+	SigningCommitmentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "create_time", Type: field.TypeTime},
+		{Name: "update_time", Type: field.TypeTime},
+		{Name: "operator_index", Type: field.TypeUint},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"AVAILABLE", "USED"}},
+		{Name: "nonce_commitment", Type: field.TypeBytes, Unique: true},
+	}
+	// SigningCommitmentsTable holds the schema information for the "signing_commitments" table.
+	SigningCommitmentsTable = &schema.Table{
+		Name:       "signing_commitments",
+		Columns:    SigningCommitmentsColumns,
+		PrimaryKey: []*schema.Column{SigningCommitmentsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "signingcommitment_operator_index_status",
+				Unique:  false,
+				Columns: []*schema.Column{SigningCommitmentsColumns[3], SigningCommitmentsColumns[4]},
+			},
+		},
+	}
 	// SigningKeysharesColumns holds the columns for the "signing_keyshares" table.
 	SigningKeysharesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -1015,6 +1037,7 @@ var (
 		PaymentIntentsTable,
 		PreimageRequestsTable,
 		PreimageSharesTable,
+		SigningCommitmentsTable,
 		SigningKeysharesTable,
 		SigningNoncesTable,
 		TokenCreatesTable,

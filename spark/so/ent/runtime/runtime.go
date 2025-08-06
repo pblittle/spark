@@ -17,6 +17,7 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/preimageshare"
 	"github.com/lightsparkdev/spark/so/ent/schema"
 	"github.com/lightsparkdev/spark/so/ent/schema/schematype"
+	"github.com/lightsparkdev/spark/so/ent/signingcommitment"
 	"github.com/lightsparkdev/spark/so/ent/signingkeyshare"
 	"github.com/lightsparkdev/spark/so/ent/signingnonce"
 	"github.com/lightsparkdev/spark/so/ent/tokencreate"
@@ -286,6 +287,25 @@ func init() {
 	preimageshareDescID := preimageshareMixinFields0[0].Descriptor()
 	// preimageshare.DefaultID holds the default value on creation for the id field.
 	preimageshare.DefaultID = preimageshareDescID.Default.(func() uuid.UUID)
+	signingcommitmentMixin := schema.SigningCommitment{}.Mixin()
+	signingcommitmentMixinFields0 := signingcommitmentMixin[0].Fields()
+	_ = signingcommitmentMixinFields0
+	signingcommitmentFields := schema.SigningCommitment{}.Fields()
+	_ = signingcommitmentFields
+	// signingcommitmentDescCreateTime is the schema descriptor for create_time field.
+	signingcommitmentDescCreateTime := signingcommitmentMixinFields0[1].Descriptor()
+	// signingcommitment.DefaultCreateTime holds the default value on creation for the create_time field.
+	signingcommitment.DefaultCreateTime = signingcommitmentDescCreateTime.Default.(func() time.Time)
+	// signingcommitmentDescUpdateTime is the schema descriptor for update_time field.
+	signingcommitmentDescUpdateTime := signingcommitmentMixinFields0[2].Descriptor()
+	// signingcommitment.DefaultUpdateTime holds the default value on creation for the update_time field.
+	signingcommitment.DefaultUpdateTime = signingcommitmentDescUpdateTime.Default.(func() time.Time)
+	// signingcommitment.UpdateDefaultUpdateTime holds the default value on update for the update_time field.
+	signingcommitment.UpdateDefaultUpdateTime = signingcommitmentDescUpdateTime.UpdateDefault.(func() time.Time)
+	// signingcommitmentDescID is the schema descriptor for id field.
+	signingcommitmentDescID := signingcommitmentMixinFields0[0].Descriptor()
+	// signingcommitment.DefaultID holds the default value on creation for the id field.
+	signingcommitment.DefaultID = signingcommitmentDescID.Default.(func() uuid.UUID)
 	signingkeyshareMixin := schema.SigningKeyshare{}.Mixin()
 	signingkeyshareMixinFields0 := signingkeyshareMixin[0].Fields()
 	_ = signingkeyshareMixinFields0

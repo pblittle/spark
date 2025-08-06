@@ -21,6 +21,7 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/paymentintent"
 	"github.com/lightsparkdev/spark/so/ent/preimagerequest"
 	"github.com/lightsparkdev/spark/so/ent/preimageshare"
+	"github.com/lightsparkdev/spark/so/ent/signingcommitment"
 	"github.com/lightsparkdev/spark/so/ent/signingkeyshare"
 	"github.com/lightsparkdev/spark/so/ent/signingnonce"
 	"github.com/lightsparkdev/spark/so/ent/tokencreate"
@@ -106,6 +107,7 @@ func checkColumn(table, column string) error {
 			paymentintent.Table:                     paymentintent.ValidColumn,
 			preimagerequest.Table:                   preimagerequest.ValidColumn,
 			preimageshare.Table:                     preimageshare.ValidColumn,
+			signingcommitment.Table:                 signingcommitment.ValidColumn,
 			signingkeyshare.Table:                   signingkeyshare.ValidColumn,
 			signingnonce.Table:                      signingnonce.ValidColumn,
 			tokencreate.Table:                       tokencreate.ValidColumn,

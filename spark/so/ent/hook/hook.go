@@ -117,6 +117,18 @@ func (f PreimageShareFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PreimageShareMutation", m)
 }
 
+// The SigningCommitmentFunc type is an adapter to allow the use of ordinary
+// function as SigningCommitment mutator.
+type SigningCommitmentFunc func(context.Context, *ent.SigningCommitmentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SigningCommitmentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SigningCommitmentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SigningCommitmentMutation", m)
+}
+
 // The SigningKeyshareFunc type is an adapter to allow the use of ordinary
 // function as SigningKeyshare mutator.
 type SigningKeyshareFunc func(context.Context, *ent.SigningKeyshareMutation) (ent.Value, error)

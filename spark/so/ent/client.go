@@ -25,6 +25,7 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/paymentintent"
 	"github.com/lightsparkdev/spark/so/ent/preimagerequest"
 	"github.com/lightsparkdev/spark/so/ent/preimageshare"
+	"github.com/lightsparkdev/spark/so/ent/signingcommitment"
 	"github.com/lightsparkdev/spark/so/ent/signingkeyshare"
 	"github.com/lightsparkdev/spark/so/ent/signingnonce"
 	"github.com/lightsparkdev/spark/so/ent/tokencreate"
@@ -66,6 +67,8 @@ type Client struct {
 	PreimageRequest *PreimageRequestClient
 	// PreimageShare is the client for interacting with the PreimageShare builders.
 	PreimageShare *PreimageShareClient
+	// SigningCommitment is the client for interacting with the SigningCommitment builders.
+	SigningCommitment *SigningCommitmentClient
 	// SigningKeyshare is the client for interacting with the SigningKeyshare builders.
 	SigningKeyshare *SigningKeyshareClient
 	// SigningNonce is the client for interacting with the SigningNonce builders.
@@ -118,6 +121,7 @@ func (c *Client) init() {
 	c.PaymentIntent = NewPaymentIntentClient(c.config)
 	c.PreimageRequest = NewPreimageRequestClient(c.config)
 	c.PreimageShare = NewPreimageShareClient(c.config)
+	c.SigningCommitment = NewSigningCommitmentClient(c.config)
 	c.SigningKeyshare = NewSigningKeyshareClient(c.config)
 	c.SigningNonce = NewSigningNonceClient(c.config)
 	c.TokenCreate = NewTokenCreateClient(c.config)
@@ -235,6 +239,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PaymentIntent:                     NewPaymentIntentClient(cfg),
 		PreimageRequest:                   NewPreimageRequestClient(cfg),
 		PreimageShare:                     NewPreimageShareClient(cfg),
+		SigningCommitment:                 NewSigningCommitmentClient(cfg),
 		SigningKeyshare:                   NewSigningKeyshareClient(cfg),
 		SigningNonce:                      NewSigningNonceClient(cfg),
 		TokenCreate:                       NewTokenCreateClient(cfg),
@@ -279,6 +284,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PaymentIntent:                     NewPaymentIntentClient(cfg),
 		PreimageRequest:                   NewPreimageRequestClient(cfg),
 		PreimageShare:                     NewPreimageShareClient(cfg),
+		SigningCommitment:                 NewSigningCommitmentClient(cfg),
 		SigningKeyshare:                   NewSigningKeyshareClient(cfg),
 		SigningNonce:                      NewSigningNonceClient(cfg),
 		TokenCreate:                       NewTokenCreateClient(cfg),
@@ -326,10 +332,11 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.BlockHeight, c.CooperativeExit, c.DepositAddress, c.EntityDkgKey, c.Gossip,
 		c.L1TokenCreate, c.PaymentIntent, c.PreimageRequest, c.PreimageShare,
-		c.SigningKeyshare, c.SigningNonce, c.TokenCreate, c.TokenFreeze, c.TokenMint,
-		c.TokenOutput, c.TokenPartialRevocationSecretShare, c.TokenTransaction,
-		c.TokenTransactionPeerSignature, c.Transfer, c.TransferLeaf, c.Tree,
-		c.TreeNode, c.UserSignedTransaction, c.Utxo, c.UtxoSwap,
+		c.SigningCommitment, c.SigningKeyshare, c.SigningNonce, c.TokenCreate,
+		c.TokenFreeze, c.TokenMint, c.TokenOutput, c.TokenPartialRevocationSecretShare,
+		c.TokenTransaction, c.TokenTransactionPeerSignature, c.Transfer,
+		c.TransferLeaf, c.Tree, c.TreeNode, c.UserSignedTransaction, c.Utxo,
+		c.UtxoSwap,
 	} {
 		n.Use(hooks...)
 	}
@@ -341,10 +348,11 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.BlockHeight, c.CooperativeExit, c.DepositAddress, c.EntityDkgKey, c.Gossip,
 		c.L1TokenCreate, c.PaymentIntent, c.PreimageRequest, c.PreimageShare,
-		c.SigningKeyshare, c.SigningNonce, c.TokenCreate, c.TokenFreeze, c.TokenMint,
-		c.TokenOutput, c.TokenPartialRevocationSecretShare, c.TokenTransaction,
-		c.TokenTransactionPeerSignature, c.Transfer, c.TransferLeaf, c.Tree,
-		c.TreeNode, c.UserSignedTransaction, c.Utxo, c.UtxoSwap,
+		c.SigningCommitment, c.SigningKeyshare, c.SigningNonce, c.TokenCreate,
+		c.TokenFreeze, c.TokenMint, c.TokenOutput, c.TokenPartialRevocationSecretShare,
+		c.TokenTransaction, c.TokenTransactionPeerSignature, c.Transfer,
+		c.TransferLeaf, c.Tree, c.TreeNode, c.UserSignedTransaction, c.Utxo,
+		c.UtxoSwap,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -371,6 +379,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PreimageRequest.mutate(ctx, m)
 	case *PreimageShareMutation:
 		return c.PreimageShare.mutate(ctx, m)
+	case *SigningCommitmentMutation:
+		return c.SigningCommitment.mutate(ctx, m)
 	case *SigningKeyshareMutation:
 		return c.SigningKeyshare.mutate(ctx, m)
 	case *SigningNonceMutation:
@@ -1779,6 +1789,139 @@ func (c *PreimageShareClient) mutate(ctx context.Context, m *PreimageShareMutati
 		return (&PreimageShareDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown PreimageShare mutation op: %q", m.Op())
+	}
+}
+
+// SigningCommitmentClient is a client for the SigningCommitment schema.
+type SigningCommitmentClient struct {
+	config
+}
+
+// NewSigningCommitmentClient returns a client for the SigningCommitment from the given config.
+func NewSigningCommitmentClient(c config) *SigningCommitmentClient {
+	return &SigningCommitmentClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `signingcommitment.Hooks(f(g(h())))`.
+func (c *SigningCommitmentClient) Use(hooks ...Hook) {
+	c.hooks.SigningCommitment = append(c.hooks.SigningCommitment, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `signingcommitment.Intercept(f(g(h())))`.
+func (c *SigningCommitmentClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SigningCommitment = append(c.inters.SigningCommitment, interceptors...)
+}
+
+// Create returns a builder for creating a SigningCommitment entity.
+func (c *SigningCommitmentClient) Create() *SigningCommitmentCreate {
+	mutation := newSigningCommitmentMutation(c.config, OpCreate)
+	return &SigningCommitmentCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SigningCommitment entities.
+func (c *SigningCommitmentClient) CreateBulk(builders ...*SigningCommitmentCreate) *SigningCommitmentCreateBulk {
+	return &SigningCommitmentCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SigningCommitmentClient) MapCreateBulk(slice any, setFunc func(*SigningCommitmentCreate, int)) *SigningCommitmentCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SigningCommitmentCreateBulk{err: fmt.Errorf("calling to SigningCommitmentClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SigningCommitmentCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SigningCommitmentCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SigningCommitment.
+func (c *SigningCommitmentClient) Update() *SigningCommitmentUpdate {
+	mutation := newSigningCommitmentMutation(c.config, OpUpdate)
+	return &SigningCommitmentUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SigningCommitmentClient) UpdateOne(sc *SigningCommitment) *SigningCommitmentUpdateOne {
+	mutation := newSigningCommitmentMutation(c.config, OpUpdateOne, withSigningCommitment(sc))
+	return &SigningCommitmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SigningCommitmentClient) UpdateOneID(id uuid.UUID) *SigningCommitmentUpdateOne {
+	mutation := newSigningCommitmentMutation(c.config, OpUpdateOne, withSigningCommitmentID(id))
+	return &SigningCommitmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SigningCommitment.
+func (c *SigningCommitmentClient) Delete() *SigningCommitmentDelete {
+	mutation := newSigningCommitmentMutation(c.config, OpDelete)
+	return &SigningCommitmentDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SigningCommitmentClient) DeleteOne(sc *SigningCommitment) *SigningCommitmentDeleteOne {
+	return c.DeleteOneID(sc.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SigningCommitmentClient) DeleteOneID(id uuid.UUID) *SigningCommitmentDeleteOne {
+	builder := c.Delete().Where(signingcommitment.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SigningCommitmentDeleteOne{builder}
+}
+
+// Query returns a query builder for SigningCommitment.
+func (c *SigningCommitmentClient) Query() *SigningCommitmentQuery {
+	return &SigningCommitmentQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSigningCommitment},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SigningCommitment entity by its id.
+func (c *SigningCommitmentClient) Get(ctx context.Context, id uuid.UUID) (*SigningCommitment, error) {
+	return c.Query().Where(signingcommitment.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SigningCommitmentClient) GetX(ctx context.Context, id uuid.UUID) *SigningCommitment {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SigningCommitmentClient) Hooks() []Hook {
+	return c.hooks.SigningCommitment
+}
+
+// Interceptors returns the client interceptors.
+func (c *SigningCommitmentClient) Interceptors() []Interceptor {
+	return c.inters.SigningCommitment
+}
+
+func (c *SigningCommitmentClient) mutate(ctx context.Context, m *SigningCommitmentMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SigningCommitmentCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SigningCommitmentUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SigningCommitmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SigningCommitmentDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SigningCommitment mutation op: %q", m.Op())
 	}
 }
 
@@ -4458,17 +4601,17 @@ func (c *UtxoSwapClient) mutate(ctx context.Context, m *UtxoSwapMutation) (Value
 type (
 	hooks struct {
 		BlockHeight, CooperativeExit, DepositAddress, EntityDkgKey, Gossip,
-		L1TokenCreate, PaymentIntent, PreimageRequest, PreimageShare, SigningKeyshare,
-		SigningNonce, TokenCreate, TokenFreeze, TokenMint, TokenOutput,
-		TokenPartialRevocationSecretShare, TokenTransaction,
+		L1TokenCreate, PaymentIntent, PreimageRequest, PreimageShare,
+		SigningCommitment, SigningKeyshare, SigningNonce, TokenCreate, TokenFreeze,
+		TokenMint, TokenOutput, TokenPartialRevocationSecretShare, TokenTransaction,
 		TokenTransactionPeerSignature, Transfer, TransferLeaf, Tree, TreeNode,
 		UserSignedTransaction, Utxo, UtxoSwap []ent.Hook
 	}
 	inters struct {
 		BlockHeight, CooperativeExit, DepositAddress, EntityDkgKey, Gossip,
-		L1TokenCreate, PaymentIntent, PreimageRequest, PreimageShare, SigningKeyshare,
-		SigningNonce, TokenCreate, TokenFreeze, TokenMint, TokenOutput,
-		TokenPartialRevocationSecretShare, TokenTransaction,
+		L1TokenCreate, PaymentIntent, PreimageRequest, PreimageShare,
+		SigningCommitment, SigningKeyshare, SigningNonce, TokenCreate, TokenFreeze,
+		TokenMint, TokenOutput, TokenPartialRevocationSecretShare, TokenTransaction,
 		TokenTransactionPeerSignature, Transfer, TransferLeaf, Tree, TreeNode,
 		UserSignedTransaction, Utxo, UtxoSwap []ent.Interceptor
 	}
