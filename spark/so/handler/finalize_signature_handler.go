@@ -273,7 +273,7 @@ func (o *FinalizeSignatureHandler) updateNode(ctx context.Context, nodeSignature
 	}
 
 	// Read the tree node
-	node, err := db.TreeNode.Get(ctx, nodeID)
+	node, err := db.TreeNode.Query().Where(treenode.ID(nodeID)).WithChildren().Only(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get node in %s: %w", logging.FormatProto("node_signatures", nodeSignatures), err)
 	}
@@ -409,7 +409,7 @@ func (o *FinalizeSignatureHandler) updateNode(ctx context.Context, nodeSignature
 		SetDirectRefundTx(directRefundTxBytes).
 		SetDirectFromCpfpRefundTx(directFromCpfpRefundTxBytes)
 	if tree.Status == st.TreeStatusAvailable {
-		if len(node.RawRefundTx) > 0 {
+		if len(node.RawRefundTx) > 0 && len(node.Edges.Children) == 0 {
 			nodeMutator.SetStatus(st.TreeNodeStatusAvailable)
 		} else {
 			nodeMutator.SetStatus(st.TreeNodeStatusSplitted)
