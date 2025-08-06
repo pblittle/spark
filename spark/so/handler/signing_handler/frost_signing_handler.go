@@ -25,7 +25,50 @@ func NewFrostSigningHandler(config *so.Config) *FrostSigningHandler {
 	return &FrostSigningHandler{config: config}
 }
 
+func (h *FrostSigningHandler) GenerateRandomNonces(ctx context.Context, count uint32) (*pb.FrostRound1Response, error) {
+	commitments := make([]*pbcommon.SigningCommitment, 0)
+	entSigningNonces := make([]*ent.SigningNonceCreate, 0)
+	db, err := ent.GetDbFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < int(count); i++ {
+		nonce, err := objects.RandomSigningNonce()
+		if err != nil {
+			return nil, err
+		}
+
+		commitment := nonce.SigningCommitment()
+
+		entSigningNonces = append(
+			entSigningNonces,
+			db.SigningNonce.Create().
+				SetNonce(nonce.MarshalBinary()).
+				SetNonceCommitment(commitment.MarshalBinary()),
+		)
+
+		commitmentProto, err := nonce.SigningCommitment().MarshalProto()
+		if err != nil {
+			return nil, err
+		}
+		commitments = append(commitments, commitmentProto)
+	}
+
+	if err := db.SigningNonce.CreateBulk(entSigningNonces...).Exec(ctx); err != nil {
+		return nil, err
+	}
+
+	return &pb.FrostRound1Response{
+		SigningCommitments: commitments,
+	}, nil
+}
+
 func (h *FrostSigningHandler) FrostRound1(ctx context.Context, req *pb.FrostRound1Request) (*pb.FrostRound1Response, error) {
+	if req.RandomNonceCount > 0 {
+		return h.GenerateRandomNonces(ctx, req.RandomNonceCount)
+	}
+
 	uuids := make([]uuid.UUID, len(req.KeyshareIds))
 	for i, id := range req.KeyshareIds {
 		uuid, err := uuid.Parse(id)

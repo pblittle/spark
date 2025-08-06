@@ -240,12 +240,14 @@ func (x *MarkKeyshareForDepositAddressResponse) GetAddressSignature() []byte {
 }
 
 type FrostRound1Request struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	KeyshareIds   []string               `protobuf:"bytes,1,rep,name=keyshare_ids,json=keyshareIds,proto3" json:"keyshare_ids,omitempty"`
-	PublicKeys    map[string][]byte      `protobuf:"bytes,2,rep,name=public_keys,json=publicKeys,proto3" json:"public_keys,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Count         uint32                 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	KeyshareIds []string               `protobuf:"bytes,1,rep,name=keyshare_ids,json=keyshareIds,proto3" json:"keyshare_ids,omitempty"`
+	PublicKeys  map[string][]byte      `protobuf:"bytes,2,rep,name=public_keys,json=publicKeys,proto3" json:"public_keys,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Count       uint32                 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	// If this is set to non-zero, the keyshare_ids will be ignored and the random keys will be used.
+	RandomNonceCount uint32 `protobuf:"varint,4,opt,name=random_nonce_count,json=randomNonceCount,proto3" json:"random_nonce_count,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *FrostRound1Request) Reset() {
@@ -295,6 +297,13 @@ func (x *FrostRound1Request) GetPublicKeys() map[string][]byte {
 func (x *FrostRound1Request) GetCount() uint32 {
 	if x != nil {
 		return x.Count
+	}
+	return 0
+}
+
+func (x *FrostRound1Request) GetRandomNonceCount() uint32 {
+	if x != nil {
+		return x.RandomNonceCount
 	}
 	return 0
 }
@@ -3019,12 +3028,13 @@ const file_spark_internal_proto_rawDesc = "" +
 	"\n" +
 	"_is_static\"T\n" +
 	"%MarkKeyshareForDepositAddressResponse\x12+\n" +
-	"\x11address_signature\x18\x01 \x01(\fR\x10addressSignature\"\xe1\x01\n" +
+	"\x11address_signature\x18\x01 \x01(\fR\x10addressSignature\"\x8f\x02\n" +
 	"\x12FrostRound1Request\x12!\n" +
 	"\fkeyshare_ids\x18\x01 \x03(\tR\vkeyshareIds\x12S\n" +
 	"\vpublic_keys\x18\x02 \x03(\v22.spark_internal.FrostRound1Request.PublicKeysEntryR\n" +
 	"publicKeys\x12\x14\n" +
-	"\x05count\x18\x03 \x01(\rR\x05count\x1a=\n" +
+	"\x05count\x18\x03 \x01(\rR\x05count\x12,\n" +
+	"\x12random_nonce_count\x18\x04 \x01(\rR\x10randomNonceCount\x1a=\n" +
 	"\x0fPublicKeysEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\"a\n" +

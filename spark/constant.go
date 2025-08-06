@@ -17,6 +17,12 @@ const (
 
 	// TokenMaxValidityDuration is the max duration a token transaction can be valid for
 	TokenMaxValidityDuration = 300
+
+	// SigningCommitmentReserve is the reserve for the signing commitments.
+	SigningCommitmentReserve = 100000
+
+	// SigningCommitmentBatchSize is the batch size for the signing commitments.
+	SigningCommitmentBatchSize = 1000
 )
 
 func InitialSequence() uint32 {

@@ -391,6 +391,8 @@ func (m *FrostRound1Request) validate(all bool) error {
 
 	// no validation rules for Count
 
+	// no validation rules for RandomNonceCount
+
 	if len(errors) > 0 {
 		return FrostRound1RequestMultiError(errors)
 	}

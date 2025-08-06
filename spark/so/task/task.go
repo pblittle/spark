@@ -8,11 +8,14 @@ import (
 	"maps"
 	"time"
 
+	"github.com/lightsparkdev/spark"
 	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/lightsparkdev/spark/so/db"
+	"github.com/lightsparkdev/spark/so/handler/signing_handler"
 	"github.com/lightsparkdev/spark/so/handler/tokens"
 	"github.com/lightsparkdev/spark/so/helper"
+	"github.com/lightsparkdev/spark/so/objects"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"entgo.io/ent/dialect/sql"
@@ -20,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/common/logging"
+	pbcommon "github.com/lightsparkdev/spark/proto/common"
 	pbspark "github.com/lightsparkdev/spark/proto/spark"
 	pbinternal "github.com/lightsparkdev/spark/proto/spark_internal"
 	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
@@ -28,6 +32,7 @@ import (
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/ent/gossip"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
+	"github.com/lightsparkdev/spark/so/ent/signingcommitment"
 	"github.com/lightsparkdev/spark/so/ent/tokenfreeze"
 	"github.com/lightsparkdev/spark/so/ent/tokenoutput"
 	"github.com/lightsparkdev/spark/so/ent/tokentransaction"
@@ -89,6 +94,97 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 				RunInTestEnv: true,
 				Task: func(ctx context.Context, config *so.Config) error {
 					return ent.RunDKGIfNeeded(ctx, config)
+				},
+			},
+		},
+		{
+			ExecutionInterval: 10 * time.Second,
+			BaseTaskSpec: BaseTaskSpec{
+				Name:         "generate_signing_commitments",
+				RunInTestEnv: false,
+				Task: func(ctx context.Context, config *so.Config) error {
+					db, err := ent.GetDbFromContext(ctx)
+					if err != nil {
+						return fmt.Errorf("failed to get or create current tx for request: %w", err)
+					}
+
+					operatorSelection := helper.OperatorSelection{
+						Option: helper.OperatorSelectionOptionAll,
+					}
+
+					signingCommitments, err := helper.ExecuteTaskWithAllOperators(ctx, config, &operatorSelection, func(ctx context.Context, operator *so.SigningOperator) ([]*pbcommon.SigningCommitment, error) {
+						count, err := db.SigningCommitment.Query().Where(
+							signingcommitment.OperatorIndexEQ(uint(operator.ID)),
+							signingcommitment.StatusEQ(st.SigningCommitmentStatusAvailable),
+						).Count(ctx)
+						if err != nil {
+							return nil, err
+						}
+
+						if count < spark.SigningCommitmentReserve {
+							if operator.ID == config.Index {
+								signingHandler := signing_handler.NewFrostSigningHandler(config)
+								resp, err := signingHandler.GenerateRandomNonces(ctx, spark.SigningCommitmentBatchSize)
+								if err != nil {
+									return nil, err
+								}
+
+								return resp.SigningCommitments, nil
+							}
+
+							conn, err := operator.NewGRPCConnection()
+							if err != nil {
+								return nil, err
+							}
+
+							client := pbinternal.NewSparkInternalServiceClient(conn)
+							resp, err := client.FrostRound1(ctx, &pbinternal.FrostRound1Request{
+								RandomNonceCount: spark.SigningCommitmentBatchSize,
+							})
+							if err != nil {
+								return nil, err
+							}
+
+							return resp.SigningCommitments, nil
+						}
+
+						return nil, nil
+					})
+
+					if err != nil {
+						return err
+					}
+
+					entCommitments := make([]*ent.SigningCommitmentCreate, 0)
+					for identifier, signingCommitments := range signingCommitments {
+						operatorIndex := config.SigningOperatorMap[identifier].ID
+						for _, pbCommitment := range signingCommitments {
+							commitments := objects.SigningCommitment{}
+							err := commitments.UnmarshalProto(pbCommitment)
+							if err != nil {
+								return err
+							}
+
+							commitmentBinary := commitments.MarshalBinary()
+							if err != nil {
+								return err
+							}
+
+							entCommitments = append(
+								entCommitments,
+								db.SigningCommitment.Create().
+									SetOperatorIndex(uint(operatorIndex)).
+									SetStatus(st.SigningCommitmentStatusAvailable).
+									SetNonceCommitment(commitmentBinary),
+							)
+						}
+					}
+
+					if err := db.SigningCommitment.CreateBulk(entCommitments...).Exec(ctx); err != nil {
+						return err
+					}
+
+					return nil
 				},
 			},
 		},
