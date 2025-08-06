@@ -425,6 +425,7 @@ func main() {
 	}
 
 	var rateLimiter *middleware.RateLimiter
+	slog.Info("Rate limiter config", "enabled", config.RateLimiter.Enabled, "window", config.RateLimiter.Window, "max_requests", config.RateLimiter.MaxRequests, "methods", config.RateLimiter.Methods)
 	if config.RateLimiter.Enabled {
 		var err error
 		rateLimiter, err = createRateLimiter(config)
