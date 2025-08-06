@@ -800,6 +800,9 @@ func (o *DepositHandler) StartDepositTreeCreation(ctx context.Context, config *s
 		}
 		tree, err = treeMutator.Save(ctx)
 		if err != nil {
+			if ent.IsConstraintError(err) {
+				return nil, errors.AlreadyExistsErrorf("tree already exists: %v", err)
+			}
 			return nil, err
 		}
 	}
@@ -831,7 +834,7 @@ func (o *DepositHandler) StartDepositTreeCreation(ctx context.Context, config *s
 	var root *ent.TreeNode
 	if existingRoot != nil {
 		if existingRoot.Status != st.TreeNodeStatusCreating {
-			return nil, errors.AlreadyExistsErrorf("Expected tree node %s to be in creating status; got %s.", existingRoot.ID, existingRoot.Status)
+			return nil, errors.FailedPreconditionErrorf("Expected tree node %s to be in creating status; got %s.", existingRoot.ID, existingRoot.Status)
 		}
 		logger.Info("Tree node already exists, updating with new transaction data", "treeNodeId", existingRoot.ID, "depositAddress", depositAddress.ID, "txid", txid)
 		// Tree node already exists, update it with new transaction data

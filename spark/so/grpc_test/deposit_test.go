@@ -590,19 +590,46 @@ func TestStartDepositTreeCreationConcurrentWithSameTx(t *testing.T) {
 
 	var resp *pb.FinalizeNodeSignaturesResponse
 	respCount, errCount := 0, 0
+	treeNodeCounts := make(map[string]int)
 
 	for range 2 {
 		select {
 		case r := <-resultChannel:
 			resp = r
 			respCount++
-		case <-errChannel:
+			for _, node := range r.Nodes {
+				treeNodeCounts[node.Id]++
+			}
+		case e := <-errChannel:
+			err = e
 			errCount++
 		}
 	}
 
-	assert.Equal(t, 1, respCount)
-	assert.Equal(t, 1, errCount)
+	// This test is nondeterministic. Either of two outcomes are possible:
+	// 1. One call makes the tree and the other finds it to already exist
+	// 2. One call attempts to make a duplicate tree and fails
+	assert.GreaterOrEqual(t, respCount, 1)
+	assert.LessOrEqual(t, errCount, 1)
+
+	if err != nil {
+		log.Print("one failed call encountered")
+		grpcStatus, ok := status.FromError(err)
+		assert.True(t, ok)
+		// Second call can either land in between tree creation
+		// and finalize node signatures, which yields Already Exists
+		// error, or after both calls, which yields failed precondition
+		assert.True(t, grpcStatus.Code() == codes.FailedPrecondition || grpcStatus.Code() == codes.AlreadyExists)
+	} else {
+		log.Print("both calls succeeded")
+		duplicateNodes := []string{}
+		for nodeId, count := range treeNodeCounts {
+			if count != 2 {
+				duplicateNodes = append(duplicateNodes, nodeId)
+			}
+		}
+		assert.Emptyf(t, duplicateNodes, "expected same nodes to be returned across concurrent calls; found duplicate nodes %v", duplicateNodes)
+	}
 
 	log.Printf("tree created: %v", resp)
 
@@ -1091,7 +1118,7 @@ func TestStartDepositTreeCreationDoubleClaim(t *testing.T) {
 	}
 	stat, ok := status.FromError(err)
 	require.True(t, ok)
-	require.Equal(t, stat.Code(), codes.AlreadyExists)
+	require.Equal(t, stat.Code(), codes.FailedPrecondition)
 }
 
 func TestQueryUnusedDepositAddresses(t *testing.T) {
