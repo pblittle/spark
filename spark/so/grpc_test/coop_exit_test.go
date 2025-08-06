@@ -641,7 +641,7 @@ func TestCoopExitFailureToSync(t *testing.T) {
 		[]wallet.LeafKeyTweak{transferNode},
 		exitTxID,
 		connectorOutputs,
-		sspConfig.IdentityPrivateKey.PubKey(),
+		sspConfig.IdentityPublicKey(),
 		time.Now().Add(24*time.Hour),
 	)
 	require.Error(t, err)
