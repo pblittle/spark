@@ -2,15 +2,57 @@ package common
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/btcsuite/btcd/btcutil/bech32"
+	"github.com/google/uuid"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type DecodedSparkAddress struct {
 	SparkAddress *pb.SparkAddress
 	Network      Network
+}
+
+// CreateTokenSparkInvoiceFields creates SparkInvoiceFields for token payments
+func CreateTokenSparkInvoiceFields(id []byte, tokenIdentifier []byte, amount []byte, memo *string, senderPublicKey []byte, expiryTime *time.Time) *pb.SparkInvoiceFields {
+	sparkInvoiceFields := &pb.SparkInvoiceFields{
+		Version: 1,
+		Id:      id,
+		PaymentType: &pb.SparkInvoiceFields_TokensPayment{
+			TokensPayment: &pb.TokensPayment{
+				TokenIdentifier: tokenIdentifier,
+				Amount:          amount,
+			},
+		},
+		Memo:            memo,
+		SenderPublicKey: senderPublicKey,
+	}
+	if expiryTime != nil {
+		sparkInvoiceFields.ExpiryTime = timestamppb.New(*expiryTime)
+	}
+	return sparkInvoiceFields
+}
+
+// CreateSatsSparkInvoiceFields creates SparkInvoiceFields for sats payments
+func CreateSatsSparkInvoiceFields(id []byte, amount *uint64, memo *string, senderPublicKey []byte, expiryTime *time.Time) *pb.SparkInvoiceFields {
+	sparkInvoiceFields := &pb.SparkInvoiceFields{
+		Version: 1,
+		Id:      id,
+		PaymentType: &pb.SparkInvoiceFields_SatsPayment{
+			SatsPayment: &pb.SatsPayment{
+				Amount: amount,
+			},
+		},
+		Memo:            memo,
+		SenderPublicKey: senderPublicKey,
+	}
+	if expiryTime != nil {
+		sparkInvoiceFields.ExpiryTime = timestamppb.New(*expiryTime)
+	}
+	return sparkInvoiceFields
 }
 
 func DecodeSparkAddress(address string) (*DecodedSparkAddress, error) {
@@ -41,10 +83,45 @@ func DecodeSparkAddress(address string) (*DecodedSparkAddress, error) {
 	}, nil
 }
 
-func EncodeSparkAddress(identityPublicKey []byte, network Network, paymentIntentFields *pb.PaymentIntentFields) (string, error) {
+func EncodeSparkAddress(identityPublicKey []byte, network Network, sparkInvoiceFields *pb.SparkInvoiceFields) (string, error) {
+	if identityPublicKey == nil {
+		return "", fmt.Errorf("identity public key is required")
+	}
+	if sparkInvoiceFields != nil {
+		if sparkInvoiceFields.Version != 1 {
+			return "", fmt.Errorf("version must be 1")
+		}
+		if sparkInvoiceFields.Id == nil {
+			return "", fmt.Errorf("id is required")
+		}
+		if _, err := uuid.FromBytes(sparkInvoiceFields.Id); err != nil {
+			return "", fmt.Errorf("id is not a valid uuid: %w", err)
+		}
+		paymentType := sparkInvoiceFields.PaymentType
+		switch paymentType.(type) {
+		case *pb.SparkInvoiceFields_TokensPayment:
+			tokensPayment := paymentType.(*pb.SparkInvoiceFields_TokensPayment).TokensPayment
+			if tokensPayment == nil {
+				return "", fmt.Errorf("tokens payment is required")
+			}
+			break
+		case *pb.SparkInvoiceFields_SatsPayment:
+			satsPayment := paymentType.(*pb.SparkInvoiceFields_SatsPayment).SatsPayment
+			const MAX_SATS_AMOUNT = 2_100_000_000_000_000 // 21_000_000 BTC * 100_000_000 sats/BTC
+			if satsPayment == nil {
+				return "", fmt.Errorf("sats payment is required")
+			}
+			if satsPayment.Amount != nil && *satsPayment.Amount > MAX_SATS_AMOUNT {
+				return "", fmt.Errorf("sats amount must be between 0 and %d", MAX_SATS_AMOUNT)
+			}
+		default:
+			return "", fmt.Errorf("invalid payment type: %T", paymentType)
+		}
+	}
+
 	sparkAddress := &pb.SparkAddress{
-		IdentityPublicKey:   identityPublicKey,
-		PaymentIntentFields: paymentIntentFields,
+		IdentityPublicKey:  identityPublicKey,
+		SparkInvoiceFields: sparkInvoiceFields,
 	}
 	sparkAddressBytes, err := proto.Marshal(sparkAddress)
 	if err != nil {

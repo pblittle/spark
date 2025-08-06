@@ -272,6 +272,39 @@ export function transferTypeToJSON(object: TransferType): string {
   }
 }
 
+export enum Order {
+  DESCENDING = 0,
+  ASCENDING = 1,
+  UNRECOGNIZED = -1,
+}
+
+export function orderFromJSON(object: any): Order {
+  switch (object) {
+    case 0:
+    case "DESCENDING":
+      return Order.DESCENDING;
+    case 1:
+    case "ASCENDING":
+      return Order.ASCENDING;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return Order.UNRECOGNIZED;
+  }
+}
+
+export function orderToJSON(object: Order): string {
+  switch (object) {
+    case Order.DESCENDING:
+      return "DESCENDING";
+    case Order.ASCENDING:
+      return "ASCENDING";
+    case Order.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 /** Static deposit address flow messages */
 export enum UtxoSwapRequestType {
   Fixed = 0,
@@ -1090,6 +1123,7 @@ export interface TransferFilter {
   /** defaults to mainnet when no network is provided. */
   network: Network;
   statuses: TransferStatus[];
+  order: Order;
 }
 
 export interface QueryTransfersResponse {
@@ -1508,17 +1542,32 @@ export interface QueryBalanceResponse_NodeBalancesEntry {
 
 export interface SparkAddress {
   identityPublicKey: Uint8Array;
-  paymentIntentFields: PaymentIntentFields | undefined;
+  sparkInvoiceFields: SparkInvoiceFields | undefined;
+  signature?: Uint8Array | undefined;
 }
 
-export interface PaymentIntentFields {
+export interface SparkInvoiceFields {
+  version: number;
   id: Uint8Array;
-  assetIdentifier?:
+  paymentType?: { $case: "tokensPayment"; tokensPayment: TokensPayment } | {
+    $case: "satsPayment";
+    satsPayment: SatsPayment;
+  } | undefined;
+  memo?: string | undefined;
+  senderPublicKey?: Uint8Array | undefined;
+  expiryTime?: Date | undefined;
+}
+
+export interface SatsPayment {
+  amount?: number | undefined;
+}
+
+export interface TokensPayment {
+  tokenIdentifier?:
     | Uint8Array
     | undefined;
   /** variable length uint128 */
-  assetAmount: Uint8Array;
-  memo?: string | undefined;
+  amount?: Uint8Array | undefined;
 }
 
 export interface InitiateStaticDepositUtxoRefundRequest {
@@ -1639,6 +1688,18 @@ export interface QueryNodesByValueResponse {
 export interface QueryNodesByValueResponse_NodesEntry {
   key: string;
   value: TreeNode | undefined;
+}
+
+export interface GetUtxosForAddressRequest {
+  address: string;
+  offset: number;
+  limit: number;
+  network: Network;
+}
+
+export interface GetUtxosForAddressResponse {
+  utxos: UTXO[];
+  offset: number;
 }
 
 function createBaseSubscribeToEventsRequest(): SubscribeToEventsRequest {
@@ -9810,7 +9871,16 @@ export const TransferLeaf: MessageFns<TransferLeaf> = {
 };
 
 function createBaseTransferFilter(): TransferFilter {
-  return { participant: undefined, transferIds: [], limit: 0, offset: 0, types: [], network: 0, statuses: [] };
+  return {
+    participant: undefined,
+    transferIds: [],
+    limit: 0,
+    offset: 0,
+    types: [],
+    network: 0,
+    statuses: [],
+    order: 0,
+  };
 }
 
 export const TransferFilter: MessageFns<TransferFilter> = {
@@ -9848,6 +9918,9 @@ export const TransferFilter: MessageFns<TransferFilter> = {
       writer.int32(v);
     }
     writer.join();
+    if (message.order !== 0) {
+      writer.uint32(40).int32(message.order);
+    }
     return writer;
   },
 
@@ -9953,6 +10026,14 @@ export const TransferFilter: MessageFns<TransferFilter> = {
 
           break;
         }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.order = reader.int32() as any;
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -9987,6 +10068,7 @@ export const TransferFilter: MessageFns<TransferFilter> = {
       statuses: globalThis.Array.isArray(object?.statuses)
         ? object.statuses.map((e: any) => transferStatusFromJSON(e))
         : [],
+      order: isSet(object.order) ? orderFromJSON(object.order) : 0,
     };
   },
 
@@ -10016,6 +10098,9 @@ export const TransferFilter: MessageFns<TransferFilter> = {
     }
     if (message.statuses?.length) {
       obj.statuses = message.statuses.map((e) => transferStatusToJSON(e));
+    }
+    if (message.order !== 0) {
+      obj.order = orderToJSON(message.order);
     }
     return obj;
   },
@@ -10069,6 +10154,7 @@ export const TransferFilter: MessageFns<TransferFilter> = {
     message.types = object.types?.map((e) => e) || [];
     message.network = object.network ?? 0;
     message.statuses = object.statuses?.map((e) => e) || [];
+    message.order = object.order ?? 0;
     return message;
   },
 };
@@ -15694,7 +15780,7 @@ export const QueryBalanceResponse_NodeBalancesEntry: MessageFns<QueryBalanceResp
 };
 
 function createBaseSparkAddress(): SparkAddress {
-  return { identityPublicKey: new Uint8Array(0), paymentIntentFields: undefined };
+  return { identityPublicKey: new Uint8Array(0), sparkInvoiceFields: undefined, signature: undefined };
 }
 
 export const SparkAddress: MessageFns<SparkAddress> = {
@@ -15702,8 +15788,11 @@ export const SparkAddress: MessageFns<SparkAddress> = {
     if (message.identityPublicKey.length !== 0) {
       writer.uint32(10).bytes(message.identityPublicKey);
     }
-    if (message.paymentIntentFields !== undefined) {
-      PaymentIntentFields.encode(message.paymentIntentFields, writer.uint32(18).fork()).join();
+    if (message.sparkInvoiceFields !== undefined) {
+      SparkInvoiceFields.encode(message.sparkInvoiceFields, writer.uint32(18).fork()).join();
+    }
+    if (message.signature !== undefined) {
+      writer.uint32(26).bytes(message.signature);
     }
     return writer;
   },
@@ -15728,7 +15817,15 @@ export const SparkAddress: MessageFns<SparkAddress> = {
             break;
           }
 
-          message.paymentIntentFields = PaymentIntentFields.decode(reader, reader.uint32());
+          message.sparkInvoiceFields = SparkInvoiceFields.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.signature = reader.bytes();
           continue;
         }
       }
@@ -15745,9 +15842,10 @@ export const SparkAddress: MessageFns<SparkAddress> = {
       identityPublicKey: isSet(object.identityPublicKey)
         ? bytesFromBase64(object.identityPublicKey)
         : new Uint8Array(0),
-      paymentIntentFields: isSet(object.paymentIntentFields)
-        ? PaymentIntentFields.fromJSON(object.paymentIntentFields)
+      sparkInvoiceFields: isSet(object.sparkInvoiceFields)
+        ? SparkInvoiceFields.fromJSON(object.sparkInvoiceFields)
         : undefined,
+      signature: isSet(object.signature) ? bytesFromBase64(object.signature) : undefined,
     };
   },
 
@@ -15756,8 +15854,11 @@ export const SparkAddress: MessageFns<SparkAddress> = {
     if (message.identityPublicKey.length !== 0) {
       obj.identityPublicKey = base64FromBytes(message.identityPublicKey);
     }
-    if (message.paymentIntentFields !== undefined) {
-      obj.paymentIntentFields = PaymentIntentFields.toJSON(message.paymentIntentFields);
+    if (message.sparkInvoiceFields !== undefined) {
+      obj.sparkInvoiceFields = SparkInvoiceFields.toJSON(message.sparkInvoiceFields);
+    }
+    if (message.signature !== undefined) {
+      obj.signature = base64FromBytes(message.signature);
     }
     return obj;
   },
@@ -15768,47 +15869,66 @@ export const SparkAddress: MessageFns<SparkAddress> = {
   fromPartial(object: DeepPartial<SparkAddress>): SparkAddress {
     const message = createBaseSparkAddress();
     message.identityPublicKey = object.identityPublicKey ?? new Uint8Array(0);
-    message.paymentIntentFields = (object.paymentIntentFields !== undefined && object.paymentIntentFields !== null)
-      ? PaymentIntentFields.fromPartial(object.paymentIntentFields)
+    message.sparkInvoiceFields = (object.sparkInvoiceFields !== undefined && object.sparkInvoiceFields !== null)
+      ? SparkInvoiceFields.fromPartial(object.sparkInvoiceFields)
       : undefined;
+    message.signature = object.signature ?? undefined;
     return message;
   },
 };
 
-function createBasePaymentIntentFields(): PaymentIntentFields {
-  return { id: new Uint8Array(0), assetIdentifier: undefined, assetAmount: new Uint8Array(0), memo: undefined };
+function createBaseSparkInvoiceFields(): SparkInvoiceFields {
+  return {
+    version: 0,
+    id: new Uint8Array(0),
+    paymentType: undefined,
+    memo: undefined,
+    senderPublicKey: undefined,
+    expiryTime: undefined,
+  };
 }
 
-export const PaymentIntentFields: MessageFns<PaymentIntentFields> = {
-  encode(message: PaymentIntentFields, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+export const SparkInvoiceFields: MessageFns<SparkInvoiceFields> = {
+  encode(message: SparkInvoiceFields, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== 0) {
+      writer.uint32(8).uint32(message.version);
+    }
     if (message.id.length !== 0) {
-      writer.uint32(10).bytes(message.id);
+      writer.uint32(18).bytes(message.id);
     }
-    if (message.assetIdentifier !== undefined) {
-      writer.uint32(18).bytes(message.assetIdentifier);
-    }
-    if (message.assetAmount.length !== 0) {
-      writer.uint32(26).bytes(message.assetAmount);
+    switch (message.paymentType?.$case) {
+      case "tokensPayment":
+        TokensPayment.encode(message.paymentType.tokensPayment, writer.uint32(26).fork()).join();
+        break;
+      case "satsPayment":
+        SatsPayment.encode(message.paymentType.satsPayment, writer.uint32(34).fork()).join();
+        break;
     }
     if (message.memo !== undefined) {
-      writer.uint32(34).string(message.memo);
+      writer.uint32(42).string(message.memo);
+    }
+    if (message.senderPublicKey !== undefined) {
+      writer.uint32(50).bytes(message.senderPublicKey);
+    }
+    if (message.expiryTime !== undefined) {
+      Timestamp.encode(toTimestamp(message.expiryTime), writer.uint32(58).fork()).join();
     }
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): PaymentIntentFields {
+  decode(input: BinaryReader | Uint8Array, length?: number): SparkInvoiceFields {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBasePaymentIntentFields();
+    const message = createBaseSparkInvoiceFields();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 1: {
-          if (tag !== 10) {
+          if (tag !== 8) {
             break;
           }
 
-          message.id = reader.bytes();
+          message.version = reader.uint32();
           continue;
         }
         case 2: {
@@ -15816,7 +15936,7 @@ export const PaymentIntentFields: MessageFns<PaymentIntentFields> = {
             break;
           }
 
-          message.assetIdentifier = reader.bytes();
+          message.id = reader.bytes();
           continue;
         }
         case 3: {
@@ -15824,7 +15944,10 @@ export const PaymentIntentFields: MessageFns<PaymentIntentFields> = {
             break;
           }
 
-          message.assetAmount = reader.bytes();
+          message.paymentType = {
+            $case: "tokensPayment",
+            tokensPayment: TokensPayment.decode(reader, reader.uint32()),
+          };
           continue;
         }
         case 4: {
@@ -15832,7 +15955,31 @@ export const PaymentIntentFields: MessageFns<PaymentIntentFields> = {
             break;
           }
 
+          message.paymentType = { $case: "satsPayment", satsPayment: SatsPayment.decode(reader, reader.uint32()) };
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
           message.memo = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.senderPublicKey = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.expiryTime = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
           continue;
         }
       }
@@ -15844,41 +15991,210 @@ export const PaymentIntentFields: MessageFns<PaymentIntentFields> = {
     return message;
   },
 
-  fromJSON(object: any): PaymentIntentFields {
+  fromJSON(object: any): SparkInvoiceFields {
     return {
+      version: isSet(object.version) ? globalThis.Number(object.version) : 0,
       id: isSet(object.id) ? bytesFromBase64(object.id) : new Uint8Array(0),
-      assetIdentifier: isSet(object.assetIdentifier) ? bytesFromBase64(object.assetIdentifier) : undefined,
-      assetAmount: isSet(object.assetAmount) ? bytesFromBase64(object.assetAmount) : new Uint8Array(0),
+      paymentType: isSet(object.tokensPayment)
+        ? { $case: "tokensPayment", tokensPayment: TokensPayment.fromJSON(object.tokensPayment) }
+        : isSet(object.satsPayment)
+        ? { $case: "satsPayment", satsPayment: SatsPayment.fromJSON(object.satsPayment) }
+        : undefined,
       memo: isSet(object.memo) ? globalThis.String(object.memo) : undefined,
+      senderPublicKey: isSet(object.senderPublicKey) ? bytesFromBase64(object.senderPublicKey) : undefined,
+      expiryTime: isSet(object.expiryTime) ? fromJsonTimestamp(object.expiryTime) : undefined,
     };
   },
 
-  toJSON(message: PaymentIntentFields): unknown {
+  toJSON(message: SparkInvoiceFields): unknown {
     const obj: any = {};
+    if (message.version !== 0) {
+      obj.version = Math.round(message.version);
+    }
     if (message.id.length !== 0) {
       obj.id = base64FromBytes(message.id);
     }
-    if (message.assetIdentifier !== undefined) {
-      obj.assetIdentifier = base64FromBytes(message.assetIdentifier);
-    }
-    if (message.assetAmount.length !== 0) {
-      obj.assetAmount = base64FromBytes(message.assetAmount);
+    if (message.paymentType?.$case === "tokensPayment") {
+      obj.tokensPayment = TokensPayment.toJSON(message.paymentType.tokensPayment);
+    } else if (message.paymentType?.$case === "satsPayment") {
+      obj.satsPayment = SatsPayment.toJSON(message.paymentType.satsPayment);
     }
     if (message.memo !== undefined) {
       obj.memo = message.memo;
     }
+    if (message.senderPublicKey !== undefined) {
+      obj.senderPublicKey = base64FromBytes(message.senderPublicKey);
+    }
+    if (message.expiryTime !== undefined) {
+      obj.expiryTime = message.expiryTime.toISOString();
+    }
     return obj;
   },
 
-  create(base?: DeepPartial<PaymentIntentFields>): PaymentIntentFields {
-    return PaymentIntentFields.fromPartial(base ?? {});
+  create(base?: DeepPartial<SparkInvoiceFields>): SparkInvoiceFields {
+    return SparkInvoiceFields.fromPartial(base ?? {});
   },
-  fromPartial(object: DeepPartial<PaymentIntentFields>): PaymentIntentFields {
-    const message = createBasePaymentIntentFields();
+  fromPartial(object: DeepPartial<SparkInvoiceFields>): SparkInvoiceFields {
+    const message = createBaseSparkInvoiceFields();
+    message.version = object.version ?? 0;
     message.id = object.id ?? new Uint8Array(0);
-    message.assetIdentifier = object.assetIdentifier ?? undefined;
-    message.assetAmount = object.assetAmount ?? new Uint8Array(0);
+    switch (object.paymentType?.$case) {
+      case "tokensPayment": {
+        if (object.paymentType?.tokensPayment !== undefined && object.paymentType?.tokensPayment !== null) {
+          message.paymentType = {
+            $case: "tokensPayment",
+            tokensPayment: TokensPayment.fromPartial(object.paymentType.tokensPayment),
+          };
+        }
+        break;
+      }
+      case "satsPayment": {
+        if (object.paymentType?.satsPayment !== undefined && object.paymentType?.satsPayment !== null) {
+          message.paymentType = {
+            $case: "satsPayment",
+            satsPayment: SatsPayment.fromPartial(object.paymentType.satsPayment),
+          };
+        }
+        break;
+      }
+    }
     message.memo = object.memo ?? undefined;
+    message.senderPublicKey = object.senderPublicKey ?? undefined;
+    message.expiryTime = object.expiryTime ?? undefined;
+    return message;
+  },
+};
+
+function createBaseSatsPayment(): SatsPayment {
+  return { amount: undefined };
+}
+
+export const SatsPayment: MessageFns<SatsPayment> = {
+  encode(message: SatsPayment, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.amount !== undefined) {
+      writer.uint32(8).uint64(message.amount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SatsPayment {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSatsPayment();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.amount = longToNumber(reader.uint64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SatsPayment {
+    return { amount: isSet(object.amount) ? globalThis.Number(object.amount) : undefined };
+  },
+
+  toJSON(message: SatsPayment): unknown {
+    const obj: any = {};
+    if (message.amount !== undefined) {
+      obj.amount = Math.round(message.amount);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<SatsPayment>): SatsPayment {
+    return SatsPayment.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<SatsPayment>): SatsPayment {
+    const message = createBaseSatsPayment();
+    message.amount = object.amount ?? undefined;
+    return message;
+  },
+};
+
+function createBaseTokensPayment(): TokensPayment {
+  return { tokenIdentifier: undefined, amount: undefined };
+}
+
+export const TokensPayment: MessageFns<TokensPayment> = {
+  encode(message: TokensPayment, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.tokenIdentifier !== undefined) {
+      writer.uint32(10).bytes(message.tokenIdentifier);
+    }
+    if (message.amount !== undefined) {
+      writer.uint32(18).bytes(message.amount);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TokensPayment {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTokensPayment();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.tokenIdentifier = reader.bytes();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.amount = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): TokensPayment {
+    return {
+      tokenIdentifier: isSet(object.tokenIdentifier) ? bytesFromBase64(object.tokenIdentifier) : undefined,
+      amount: isSet(object.amount) ? bytesFromBase64(object.amount) : undefined,
+    };
+  },
+
+  toJSON(message: TokensPayment): unknown {
+    const obj: any = {};
+    if (message.tokenIdentifier !== undefined) {
+      obj.tokenIdentifier = base64FromBytes(message.tokenIdentifier);
+    }
+    if (message.amount !== undefined) {
+      obj.amount = base64FromBytes(message.amount);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<TokensPayment>): TokensPayment {
+    return TokensPayment.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<TokensPayment>): TokensPayment {
+    const message = createBaseTokensPayment();
+    message.tokenIdentifier = object.tokenIdentifier ?? undefined;
+    message.amount = object.amount ?? undefined;
     return message;
   },
 };
@@ -17418,6 +17734,190 @@ export const QueryNodesByValueResponse_NodesEntry: MessageFns<QueryNodesByValueR
   },
 };
 
+function createBaseGetUtxosForAddressRequest(): GetUtxosForAddressRequest {
+  return { address: "", offset: 0, limit: 0, network: 0 };
+}
+
+export const GetUtxosForAddressRequest: MessageFns<GetUtxosForAddressRequest> = {
+  encode(message: GetUtxosForAddressRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.address !== "") {
+      writer.uint32(10).string(message.address);
+    }
+    if (message.offset !== 0) {
+      writer.uint32(16).uint64(message.offset);
+    }
+    if (message.limit !== 0) {
+      writer.uint32(24).uint64(message.limit);
+    }
+    if (message.network !== 0) {
+      writer.uint32(32).int32(message.network);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetUtxosForAddressRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetUtxosForAddressRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.address = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.offset = longToNumber(reader.uint64());
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.limit = longToNumber(reader.uint64());
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.network = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetUtxosForAddressRequest {
+    return {
+      address: isSet(object.address) ? globalThis.String(object.address) : "",
+      offset: isSet(object.offset) ? globalThis.Number(object.offset) : 0,
+      limit: isSet(object.limit) ? globalThis.Number(object.limit) : 0,
+      network: isSet(object.network) ? networkFromJSON(object.network) : 0,
+    };
+  },
+
+  toJSON(message: GetUtxosForAddressRequest): unknown {
+    const obj: any = {};
+    if (message.address !== "") {
+      obj.address = message.address;
+    }
+    if (message.offset !== 0) {
+      obj.offset = Math.round(message.offset);
+    }
+    if (message.limit !== 0) {
+      obj.limit = Math.round(message.limit);
+    }
+    if (message.network !== 0) {
+      obj.network = networkToJSON(message.network);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<GetUtxosForAddressRequest>): GetUtxosForAddressRequest {
+    return GetUtxosForAddressRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<GetUtxosForAddressRequest>): GetUtxosForAddressRequest {
+    const message = createBaseGetUtxosForAddressRequest();
+    message.address = object.address ?? "";
+    message.offset = object.offset ?? 0;
+    message.limit = object.limit ?? 0;
+    message.network = object.network ?? 0;
+    return message;
+  },
+};
+
+function createBaseGetUtxosForAddressResponse(): GetUtxosForAddressResponse {
+  return { utxos: [], offset: 0 };
+}
+
+export const GetUtxosForAddressResponse: MessageFns<GetUtxosForAddressResponse> = {
+  encode(message: GetUtxosForAddressResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.utxos) {
+      UTXO.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.offset !== 0) {
+      writer.uint32(16).uint64(message.offset);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetUtxosForAddressResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetUtxosForAddressResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.utxos.push(UTXO.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.offset = longToNumber(reader.uint64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetUtxosForAddressResponse {
+    return {
+      utxos: globalThis.Array.isArray(object?.utxos) ? object.utxos.map((e: any) => UTXO.fromJSON(e)) : [],
+      offset: isSet(object.offset) ? globalThis.Number(object.offset) : 0,
+    };
+  },
+
+  toJSON(message: GetUtxosForAddressResponse): unknown {
+    const obj: any = {};
+    if (message.utxos?.length) {
+      obj.utxos = message.utxos.map((e) => UTXO.toJSON(e));
+    }
+    if (message.offset !== 0) {
+      obj.offset = Math.round(message.offset);
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<GetUtxosForAddressResponse>): GetUtxosForAddressResponse {
+    return GetUtxosForAddressResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<GetUtxosForAddressResponse>): GetUtxosForAddressResponse {
+    const message = createBaseGetUtxosForAddressResponse();
+    message.utxos = object.utxos?.map((e) => UTXO.fromPartial(e)) || [];
+    message.offset = object.offset ?? 0;
+    return message;
+  },
+};
+
 export type SparkServiceDefinition = typeof SparkServiceDefinition;
 export const SparkServiceDefinition = {
   name: "SparkService",
@@ -17889,6 +18389,14 @@ export const SparkServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    get_utxos_for_address: {
+      name: "get_utxos_for_address",
+      requestType: GetUtxosForAddressRequest,
+      requestStream: false,
+      responseType: GetUtxosForAddressResponse,
+      responseStream: false,
+      options: {},
+    },
   },
 } as const;
 
@@ -18147,6 +18655,10 @@ export interface SparkServiceImplementation<CallContextExt = {}> {
     request: RefreshTimelockRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<RefreshTimelockResponse>>;
+  get_utxos_for_address(
+    request: GetUtxosForAddressRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<GetUtxosForAddressResponse>>;
 }
 
 export interface SparkServiceClient<CallOptionsExt = {}> {
@@ -18404,6 +18916,10 @@ export interface SparkServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<RefreshTimelockRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<RefreshTimelockResponse>;
+  get_utxos_for_address(
+    request: DeepPartial<GetUtxosForAddressRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<GetUtxosForAddressResponse>;
 }
 
 function bytesFromBase64(b64: string): Uint8Array {

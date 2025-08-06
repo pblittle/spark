@@ -72,6 +72,55 @@ export interface TriggerTaskRequest {
   taskName: string;
 }
 
+export interface InterruptCoopExitRequest {
+  action: InterruptCoopExitRequest_InterruptCoopExitAction;
+  /** optional, defaults to MockAction.TargetOperatorID */
+  targetOperator: string;
+}
+
+export enum InterruptCoopExitRequest_InterruptCoopExitAction {
+  NONE = 0,
+  INTERRUPT = 1,
+  RESUME = 2,
+  UNRECOGNIZED = -1,
+}
+
+export function interruptCoopExitRequest_InterruptCoopExitActionFromJSON(
+  object: any,
+): InterruptCoopExitRequest_InterruptCoopExitAction {
+  switch (object) {
+    case 0:
+    case "NONE":
+      return InterruptCoopExitRequest_InterruptCoopExitAction.NONE;
+    case 1:
+    case "INTERRUPT":
+      return InterruptCoopExitRequest_InterruptCoopExitAction.INTERRUPT;
+    case 2:
+    case "RESUME":
+      return InterruptCoopExitRequest_InterruptCoopExitAction.RESUME;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return InterruptCoopExitRequest_InterruptCoopExitAction.UNRECOGNIZED;
+  }
+}
+
+export function interruptCoopExitRequest_InterruptCoopExitActionToJSON(
+  object: InterruptCoopExitRequest_InterruptCoopExitAction,
+): string {
+  switch (object) {
+    case InterruptCoopExitRequest_InterruptCoopExitAction.NONE:
+      return "NONE";
+    case InterruptCoopExitRequest_InterruptCoopExitAction.INTERRUPT:
+      return "INTERRUPT";
+    case InterruptCoopExitRequest_InterruptCoopExitAction.RESUME:
+      return "RESUME";
+    case InterruptCoopExitRequest_InterruptCoopExitAction.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 function createBaseCleanUpPreimageShareRequest(): CleanUpPreimageShareRequest {
   return { paymentHash: new Uint8Array(0) };
 }
@@ -324,6 +373,82 @@ export const TriggerTaskRequest: MessageFns<TriggerTaskRequest> = {
   },
 };
 
+function createBaseInterruptCoopExitRequest(): InterruptCoopExitRequest {
+  return { action: 0, targetOperator: "" };
+}
+
+export const InterruptCoopExitRequest: MessageFns<InterruptCoopExitRequest> = {
+  encode(message: InterruptCoopExitRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.action !== 0) {
+      writer.uint32(8).int32(message.action);
+    }
+    if (message.targetOperator !== "") {
+      writer.uint32(18).string(message.targetOperator);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): InterruptCoopExitRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseInterruptCoopExitRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.action = reader.int32() as any;
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.targetOperator = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): InterruptCoopExitRequest {
+    return {
+      action: isSet(object.action) ? interruptCoopExitRequest_InterruptCoopExitActionFromJSON(object.action) : 0,
+      targetOperator: isSet(object.targetOperator) ? globalThis.String(object.targetOperator) : "",
+    };
+  },
+
+  toJSON(message: InterruptCoopExitRequest): unknown {
+    const obj: any = {};
+    if (message.action !== 0) {
+      obj.action = interruptCoopExitRequest_InterruptCoopExitActionToJSON(message.action);
+    }
+    if (message.targetOperator !== "") {
+      obj.targetOperator = message.targetOperator;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<InterruptCoopExitRequest>): InterruptCoopExitRequest {
+    return InterruptCoopExitRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<InterruptCoopExitRequest>): InterruptCoopExitRequest {
+    const message = createBaseInterruptCoopExitRequest();
+    message.action = object.action ?? 0;
+    message.targetOperator = object.targetOperator ?? "";
+    return message;
+  },
+};
+
 export type MockServiceDefinition = typeof MockServiceDefinition;
 export const MockServiceDefinition = {
   name: "MockService",
@@ -340,6 +465,14 @@ export const MockServiceDefinition = {
     interrupt_transfer: {
       name: "interrupt_transfer",
       requestType: InterruptTransferRequest,
+      requestStream: false,
+      responseType: Empty,
+      responseStream: false,
+      options: {},
+    },
+    interrupt_coop_exit: {
+      name: "interrupt_coop_exit",
+      requestType: InterruptCoopExitRequest,
       requestStream: false,
       responseType: Empty,
       responseStream: false,
@@ -374,6 +507,10 @@ export interface MockServiceImplementation<CallContextExt = {}> {
     request: InterruptTransferRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<Empty>>;
+  interrupt_coop_exit(
+    request: InterruptCoopExitRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<Empty>>;
   update_nodes_status(
     request: UpdateNodesStatusRequest,
     context: CallContext & CallContextExt,
@@ -389,6 +526,10 @@ export interface MockServiceClient<CallOptionsExt = {}> {
   ): Promise<Empty>;
   interrupt_transfer(
     request: DeepPartial<InterruptTransferRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<Empty>;
+  interrupt_coop_exit(
+    request: DeepPartial<InterruptCoopExitRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<Empty>;
   update_nodes_status(

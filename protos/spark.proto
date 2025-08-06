@@ -1186,14 +1186,29 @@ message QueryBalanceResponse {
 
 message SparkAddress {
     bytes identity_public_key = 1;
-    PaymentIntentFields payment_intent_fields = 2;
+    SparkInvoiceFields spark_invoice_fields = 2;
+    optional bytes signature = 3 [(validate.rules).bytes.len = 64];
 }
 
-message PaymentIntentFields {
-    bytes id = 1 [(validate.rules).bytes.len = 16]; 
-    optional bytes asset_identifier = 2;
-    bytes asset_amount = 3 [(validate.rules).bytes.max_len = 16]; // variable length uint128
-    optional string memo = 4 [(validate.rules).string.max_bytes = 120];
+message SparkInvoiceFields {
+    uint32 version = 1;
+    bytes id = 2 [(validate.rules).bytes.len = 16]; 
+    oneof payment_type {
+        TokensPayment tokens_payment = 3;
+        SatsPayment sats_payment = 4;
+    }
+    optional string memo = 5 [(validate.rules).string.max_bytes = 120];
+    optional bytes sender_public_key = 6 [(validate.rules).bytes.len = 33];  
+    optional google.protobuf.Timestamp expiry_time = 7;
+}
+
+message SatsPayment {
+    optional uint64 amount = 1;
+}
+
+message TokensPayment {
+    optional bytes token_identifier = 1 [(validate.rules).bytes.len = 32];
+    optional bytes amount = 2 [(validate.rules).bytes.max_len = 16]; // variable length uint128
 }
 
 /**

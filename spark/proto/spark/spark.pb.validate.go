@@ -18433,11 +18433,11 @@ func (m *SparkAddress) validate(all bool) error {
 	// no validation rules for IdentityPublicKey
 
 	if all {
-		switch v := interface{}(m.GetPaymentIntentFields()).(type) {
+		switch v := interface{}(m.GetSparkInvoiceFields()).(type) {
 		case interface{ ValidateAll() error }:
 			if err := v.ValidateAll(); err != nil {
 				errors = append(errors, SparkAddressValidationError{
-					field:  "PaymentIntentFields",
+					field:  "SparkInvoiceFields",
 					reason: "embedded message failed validation",
 					cause:  err,
 				})
@@ -18445,20 +18445,35 @@ func (m *SparkAddress) validate(all bool) error {
 		case interface{ Validate() error }:
 			if err := v.Validate(); err != nil {
 				errors = append(errors, SparkAddressValidationError{
-					field:  "PaymentIntentFields",
+					field:  "SparkInvoiceFields",
 					reason: "embedded message failed validation",
 					cause:  err,
 				})
 			}
 		}
-	} else if v, ok := interface{}(m.GetPaymentIntentFields()).(interface{ Validate() error }); ok {
+	} else if v, ok := interface{}(m.GetSparkInvoiceFields()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
 			return SparkAddressValidationError{
-				field:  "PaymentIntentFields",
+				field:  "SparkInvoiceFields",
 				reason: "embedded message failed validation",
 				cause:  err,
 			}
 		}
+	}
+
+	if m.Signature != nil {
+
+		if len(m.GetSignature()) != 64 {
+			err := SparkAddressValidationError{
+				field:  "Signature",
+				reason: "value length must be 64 bytes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
 	}
 
 	if len(errors) > 0 {
@@ -18538,30 +18553,32 @@ var _ interface {
 	ErrorName() string
 } = SparkAddressValidationError{}
 
-// Validate checks the field values on PaymentIntentFields with the rules
+// Validate checks the field values on SparkInvoiceFields with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
-func (m *PaymentIntentFields) Validate() error {
+func (m *SparkInvoiceFields) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on PaymentIntentFields with the rules
+// ValidateAll checks the field values on SparkInvoiceFields with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the result is a list of violation errors wrapped in
-// PaymentIntentFieldsMultiError, or nil if none found.
-func (m *PaymentIntentFields) ValidateAll() error {
+// SparkInvoiceFieldsMultiError, or nil if none found.
+func (m *SparkInvoiceFields) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *PaymentIntentFields) validate(all bool) error {
+func (m *SparkInvoiceFields) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
+	// no validation rules for Version
+
 	if len(m.GetId()) != 16 {
-		err := PaymentIntentFieldsValidationError{
+		err := SparkInvoiceFieldsValidationError{
 			field:  "Id",
 			reason: "value length must be 16 bytes",
 		}
@@ -18571,25 +18588,97 @@ func (m *PaymentIntentFields) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if len(m.GetAssetAmount()) > 16 {
-		err := PaymentIntentFieldsValidationError{
-			field:  "AssetAmount",
-			reason: "value length must be at most 16 bytes",
+	switch v := m.PaymentType.(type) {
+	case *SparkInvoiceFields_TokensPayment:
+		if v == nil {
+			err := SparkInvoiceFieldsValidationError{
+				field:  "PaymentType",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
 		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
 
-	if m.AssetIdentifier != nil {
-		// no validation rules for AssetIdentifier
+		if all {
+			switch v := interface{}(m.GetTokensPayment()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, SparkInvoiceFieldsValidationError{
+						field:  "TokensPayment",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, SparkInvoiceFieldsValidationError{
+						field:  "TokensPayment",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetTokensPayment()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return SparkInvoiceFieldsValidationError{
+					field:  "TokensPayment",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	case *SparkInvoiceFields_SatsPayment:
+		if v == nil {
+			err := SparkInvoiceFieldsValidationError{
+				field:  "PaymentType",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+		if all {
+			switch v := interface{}(m.GetSatsPayment()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, SparkInvoiceFieldsValidationError{
+						field:  "SatsPayment",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, SparkInvoiceFieldsValidationError{
+						field:  "SatsPayment",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetSatsPayment()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return SparkInvoiceFieldsValidationError{
+					field:  "SatsPayment",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	default:
+		_ = v // ensures v is used
 	}
 
 	if m.Memo != nil {
 
 		if len(m.GetMemo()) > 120 {
-			err := PaymentIntentFieldsValidationError{
+			err := SparkInvoiceFieldsValidationError{
 				field:  "Memo",
 				reason: "value length must be at most 120 bytes",
 			}
@@ -18601,20 +18690,68 @@ func (m *PaymentIntentFields) validate(all bool) error {
 
 	}
 
+	if m.SenderPublicKey != nil {
+
+		if len(m.GetSenderPublicKey()) != 33 {
+			err := SparkInvoiceFieldsValidationError{
+				field:  "SenderPublicKey",
+				reason: "value length must be 33 bytes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.ExpiryTime != nil {
+
+		if all {
+			switch v := interface{}(m.GetExpiryTime()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, SparkInvoiceFieldsValidationError{
+						field:  "ExpiryTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, SparkInvoiceFieldsValidationError{
+						field:  "ExpiryTime",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetExpiryTime()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return SparkInvoiceFieldsValidationError{
+					field:  "ExpiryTime",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
 	if len(errors) > 0 {
-		return PaymentIntentFieldsMultiError(errors)
+		return SparkInvoiceFieldsMultiError(errors)
 	}
 
 	return nil
 }
 
-// PaymentIntentFieldsMultiError is an error wrapping multiple validation
-// errors returned by PaymentIntentFields.ValidateAll() if the designated
-// constraints aren't met.
-type PaymentIntentFieldsMultiError []error
+// SparkInvoiceFieldsMultiError is an error wrapping multiple validation errors
+// returned by SparkInvoiceFields.ValidateAll() if the designated constraints
+// aren't met.
+type SparkInvoiceFieldsMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m PaymentIntentFieldsMultiError) Error() string {
+func (m SparkInvoiceFieldsMultiError) Error() string {
 	msgs := make([]string, 0, len(m))
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -18623,11 +18760,11 @@ func (m PaymentIntentFieldsMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m PaymentIntentFieldsMultiError) AllErrors() []error { return m }
+func (m SparkInvoiceFieldsMultiError) AllErrors() []error { return m }
 
-// PaymentIntentFieldsValidationError is the validation error returned by
-// PaymentIntentFields.Validate if the designated constraints aren't met.
-type PaymentIntentFieldsValidationError struct {
+// SparkInvoiceFieldsValidationError is the validation error returned by
+// SparkInvoiceFields.Validate if the designated constraints aren't met.
+type SparkInvoiceFieldsValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -18635,24 +18772,24 @@ type PaymentIntentFieldsValidationError struct {
 }
 
 // Field function returns field value.
-func (e PaymentIntentFieldsValidationError) Field() string { return e.field }
+func (e SparkInvoiceFieldsValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e PaymentIntentFieldsValidationError) Reason() string { return e.reason }
+func (e SparkInvoiceFieldsValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e PaymentIntentFieldsValidationError) Cause() error { return e.cause }
+func (e SparkInvoiceFieldsValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e PaymentIntentFieldsValidationError) Key() bool { return e.key }
+func (e SparkInvoiceFieldsValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e PaymentIntentFieldsValidationError) ErrorName() string {
-	return "PaymentIntentFieldsValidationError"
+func (e SparkInvoiceFieldsValidationError) ErrorName() string {
+	return "SparkInvoiceFieldsValidationError"
 }
 
 // Error satisfies the builtin error interface
-func (e PaymentIntentFieldsValidationError) Error() string {
+func (e SparkInvoiceFieldsValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -18664,14 +18801,14 @@ func (e PaymentIntentFieldsValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sPaymentIntentFields.%s: %s%s",
+		"invalid %sSparkInvoiceFields.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = PaymentIntentFieldsValidationError{}
+var _ error = SparkInvoiceFieldsValidationError{}
 
 var _ interface {
 	Field() string
@@ -18679,7 +18816,240 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = PaymentIntentFieldsValidationError{}
+} = SparkInvoiceFieldsValidationError{}
+
+// Validate checks the field values on SatsPayment with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *SatsPayment) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on SatsPayment with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in SatsPaymentMultiError, or
+// nil if none found.
+func (m *SatsPayment) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *SatsPayment) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.Amount != nil {
+		// no validation rules for Amount
+	}
+
+	if len(errors) > 0 {
+		return SatsPaymentMultiError(errors)
+	}
+
+	return nil
+}
+
+// SatsPaymentMultiError is an error wrapping multiple validation errors
+// returned by SatsPayment.ValidateAll() if the designated constraints aren't met.
+type SatsPaymentMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m SatsPaymentMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m SatsPaymentMultiError) AllErrors() []error { return m }
+
+// SatsPaymentValidationError is the validation error returned by
+// SatsPayment.Validate if the designated constraints aren't met.
+type SatsPaymentValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e SatsPaymentValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e SatsPaymentValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e SatsPaymentValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e SatsPaymentValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e SatsPaymentValidationError) ErrorName() string { return "SatsPaymentValidationError" }
+
+// Error satisfies the builtin error interface
+func (e SatsPaymentValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sSatsPayment.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = SatsPaymentValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = SatsPaymentValidationError{}
+
+// Validate checks the field values on TokensPayment with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *TokensPayment) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TokensPayment with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in TokensPaymentMultiError, or
+// nil if none found.
+func (m *TokensPayment) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TokensPayment) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.TokenIdentifier != nil {
+
+		if len(m.GetTokenIdentifier()) != 32 {
+			err := TokensPaymentValidationError{
+				field:  "TokenIdentifier",
+				reason: "value length must be 32 bytes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if m.Amount != nil {
+
+		if len(m.GetAmount()) > 16 {
+			err := TokensPaymentValidationError{
+				field:  "Amount",
+				reason: "value length must be at most 16 bytes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return TokensPaymentMultiError(errors)
+	}
+
+	return nil
+}
+
+// TokensPaymentMultiError is an error wrapping multiple validation errors
+// returned by TokensPayment.ValidateAll() if the designated constraints
+// aren't met.
+type TokensPaymentMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TokensPaymentMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TokensPaymentMultiError) AllErrors() []error { return m }
+
+// TokensPaymentValidationError is the validation error returned by
+// TokensPayment.Validate if the designated constraints aren't met.
+type TokensPaymentValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TokensPaymentValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TokensPaymentValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TokensPaymentValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TokensPaymentValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TokensPaymentValidationError) ErrorName() string { return "TokensPaymentValidationError" }
+
+// Error satisfies the builtin error interface
+func (e TokensPaymentValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTokensPayment.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TokensPaymentValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TokensPaymentValidationError{}
 
 // Validate checks the field values on InitiateStaticDepositUtxoRefundRequest
 // with the rules defined in the proto definition for this message. If any

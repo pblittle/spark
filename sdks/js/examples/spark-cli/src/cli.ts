@@ -17,6 +17,7 @@ import {
   NetworkType,
   protoToNetwork,
   WalletConfig,
+  SparkAddressFormat,
 } from "@buildonspark/spark-sdk";
 import {
   TokenTransactionStatus,
@@ -306,7 +307,7 @@ const commands = [
   "refundstaticdeposit",
   "refundstaticdepositlegacy",
   "claimstaticdepositwithmaxfee",
-  "createpaymentintent",
+  "createsparkinvoice",
   "createinvoice",
   "payinvoice",
   "sendtransfer",
@@ -354,6 +355,14 @@ const commands = [
 // Initialize Spark Wallet
 const walletMnemonic =
   "cctypical stereo dose party penalty decline neglect feel harvest abstract stage winter";
+
+interface CreateSparkInvoiceArgs {
+  asset?: string;
+  amount?: string;
+  memo?: string;
+  senderPublicKey?: string;
+  expiryTime?: string;
+}
 
 interface QueryTokenTransactionsArgs {
   ownerPublicKeys?: string[];
@@ -487,6 +496,59 @@ function parseQueryTokenTransactionsArgsWithYargs(
     throw error;
   }
 }
+function parseCreateSparkInvoiceArgsWithYargs(
+  args: string[],
+): CreateSparkInvoiceArgs | null {
+  try {
+    const underscore = (v?: string) => (v === "_" ? undefined : v);
+
+    const parsed = yargs(args)
+      .command(
+        "$0 <asset> <amount> [memo] [senderPublicKey] [expiryTime]",
+        false,
+        (y) =>
+          y
+            .positional("asset", {
+              describe: "btc or tokenIdentifier",
+              type: "string",
+            })
+            .positional("amount", {
+              describe: "Amount to send",
+              type: "string",
+            })
+            .positional("memo", {
+              describe: "Optional memo, use _ for empty",
+              type: "string",
+            })
+            .positional("senderPublicKey", {
+              describe: "Optional sender public key, use _ for empty",
+              type: "string",
+            })
+            .positional("expiryTime", {
+              describe: "Optional RFC-3339 or epoch ms, use _ for empty",
+              type: "string",
+            }),
+      )
+      .help()
+      .version(false)
+      .exitProcess(false)
+      .parseSync();
+
+    return {
+      asset: underscore(parsed.asset as string),
+      amount: underscore(parsed.amount as string),
+      memo: underscore(parsed.memo as string),
+      senderPublicKey: underscore(parsed.senderPublicKey as string),
+      expiryTime: underscore(parsed.expiryTime as string),
+    };
+  } catch (err) {
+    console.error(
+      "Error: createsparkinvoice <asset> <amount> [memo] [senderPublicKey] [expiryTime]",
+      err,
+    );
+    throw err;
+  }
+}
 
 async function runCLI() {
   // Get network from environment variable
@@ -556,7 +618,7 @@ async function runCLI() {
   gettransfers [limit] [offset]                                       - Get a list of transfers
   createinvoice <amount> <memo> <includeSparkAddress> [receiverIdentityPubkey] [descriptionHash] - Create a new lightning invoice
   payinvoice <invoice> <maxFeeSats> <preferSpark> [amountSatsToSend]  - Pay a lightning invoice
-  createpaymentintent <asset("btc" | tokenIdentifier)> <amount> <memo>   - Create a spark payment request
+  createsparkinvoice <asset("btc" | tokenIdentifier)> <amount> <memo> <senderPublicKey> <expiryTime> - Create a spark payment request, pass _ for any undefined optional fields eg createsparkinvoice btc 1000 memo _ _
   sendtransfer <amount> <receiverSparkAddress>                        - Send a spark transfer
   withdraw <amount> <onchainAddress> <exitSpeed(FAST|MEDIUM|SLOW)> [deductFeeFromWithdrawalAmount(true|false)] - Withdraw funds to an L1 address
   withdrawalfee <amount> <withdrawalAddress>                          - Get a fee estimate for a withdrawal (cooperative exit)
@@ -1153,17 +1215,34 @@ async function runCLI() {
           });
           console.log(payment);
           break;
-        case "createpaymentintent":
+        case "createsparkinvoice":
           if (!wallet) {
             console.log("Please initialize a wallet first");
             break;
           }
-          const paymentRequest = await wallet.createSparkPaymentIntent(
-            args[0] === "btc" ? undefined : args[0],
-            BigInt(args[1]),
-            args[2],
-          );
-          console.log(paymentRequest);
+          const { asset, amount, memo, senderPublicKey, expiryTime } =
+            parseCreateSparkInvoiceArgsWithYargs(args) || {};
+          if (args.includes("--help")) {
+            break;
+          }
+          let sparkInvoice: SparkAddressFormat;
+          if (asset === "btc") {
+            sparkInvoice = await wallet.createSatsInvoice({
+              amount: amount ? parseInt(amount) : undefined,
+              memo,
+              senderPublicKey: senderPublicKey,
+              expiryTime: expiryTime ? new Date(expiryTime) : undefined,
+            });
+          } else {
+            sparkInvoice = await wallet.createTokensInvoice({
+              tokenIdentifier: asset as Bech32mTokenIdentifier,
+              amount: amount ? BigInt(amount) : undefined,
+              memo,
+              senderPublicKey,
+              expiryTime: expiryTime ? new Date(expiryTime) : undefined,
+            });
+          }
+          console.log(sparkInvoice);
           break;
         case "sendtransfer":
           if (!wallet) {

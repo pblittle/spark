@@ -46,6 +46,8 @@ import {
   TransferStatus,
   TransferType,
   TreeNode,
+  TokensPayment,
+  SatsPayment,
   UtxoSwapRequestType,
 } from "../proto/spark.js";
 import { WalletConfigService } from "../services/config.js";
@@ -124,8 +126,8 @@ import {
 import {
   decodeSparkAddress,
   encodeSparkAddress,
-  isValidPublicKey,
   SparkAddressFormat,
+  validateSparkInvoiceFields,
 } from "../utils/address.js";
 import { chunkArray } from "../utils/chunkArray.js";
 import { getFetch } from "../utils/fetch.js";
@@ -795,54 +797,128 @@ export class SparkWallet extends EventEmitter {
     return this.sparkAddress;
   }
 
-  public async createSparkPaymentIntent(
-    assetIdentifier?: string,
-    assetAmount: bigint = BigInt(0),
-    memo?: string,
-  ): Promise<SparkAddressFormat> {
-    const MAX_UINT128 = BigInt("340282366920938463463374607431768211455");
-    if (assetAmount < 0 || assetAmount > MAX_UINT128) {
+  /**
+   * Creates a Spark invoice for a sats payment on Spark.
+   *
+   * @param {Object} params - Parameters for the sats payment
+   * @param {number} params.amount - The amount of sats to receive
+   * @param {string} [params.memo] - The memo for the payment
+   * @param {string} [params.senderPublicKey] - The public key of the expected sender
+   * @param {Date} [params.expiryTime] - The expiry time of the payment
+   * @returns {Promise<SparkAddressFormat>} The Spark address for the sats payment
+   */
+  public async createSatsInvoice({
+    amount,
+    memo,
+    senderPublicKey,
+    expiryTime,
+  }: {
+    amount?: number;
+    memo?: string;
+    senderPublicKey?: string;
+    expiryTime?: Date;
+  }): Promise<SparkAddressFormat> {
+    const MAX_SATS_AMOUNT = 2_100_000_000_000_000; // 21_000_000 BTC * 100_000_000 sats/BTC
+    if (amount && (amount < 0 || amount > MAX_SATS_AMOUNT)) {
       throw new ValidationError(
-        "Asset amount must be between 0 and MAX_UINT128",
+        `Amount must be between 0 and ${MAX_SATS_AMOUNT} sats`,
         {
-          field: "assetAmount",
-          value: assetAmount,
+          field: "amount",
+          value: amount,
+          expected: `less than or equal to ${MAX_SATS_AMOUNT}`,
         },
       );
     }
-    if (memo) {
-      const encoder = new TextEncoder();
-      const memoBytes = encoder.encode(memo);
-      if (memoBytes.length > 120) {
-        throw new ValidationError(
-          "Memo exceeds the maximum allowed byte length of 120.",
-          {
-            field: "memo",
-            value: memo,
-            expected: "less than 120 bytes",
-          },
-        );
-      }
-    }
-    if (assetIdentifier) {
-      isValidPublicKey(assetIdentifier);
-    }
-    const paymentRequest = encodeSparkAddress({
+    const protoPayment = {
+      $case: "satsPayment",
+      satsPayment: {
+        amount: amount,
+      },
+    } as const;
+    const invoiceFields = {
+      version: 1,
+      id: uuidv7obj().bytes,
+      paymentType: protoPayment,
+      memo: memo,
+      senderPublicKey: senderPublicKey
+        ? hexToBytes(senderPublicKey)
+        : undefined,
+      expiryTime: expiryTime,
+    };
+    validateSparkInvoiceFields(invoiceFields);
+    return encodeSparkAddress({
       identityPublicKey: bytesToHex(
         await this.config.signer.getIdentityPublicKey(),
       ),
       network: this.config.getNetworkType(),
-      paymentIntentFields: {
-        id: uuidv7obj().bytes,
-        assetIdentifier: assetIdentifier
-          ? hexToBytes(assetIdentifier)
-          : undefined,
-        assetAmount: numberToVarBytesBE(assetAmount),
-        memo: memo,
-      },
+      sparkInvoiceFields: invoiceFields,
     });
+  }
 
-    return paymentRequest;
+  /**
+   * Creates a Spark invoice for a tokens payment on Spark.
+   *
+   * @param {Object} params - Parameters for the tokens payment
+   * @param {bigint} [params.amount] - The amount of tokens to receive
+   * @param {Bech32mTokenIdentifier} [params.tokenIdentifier] - The token identifier
+   * @param {string} [params.memo] - The memo for the payment
+   * @param {string} [params.senderPublicKey] - The public key of the expected sender
+   * @param {Date} [params.expiryTime] - The expiry time of the payment
+   * @returns {Promise<SparkAddressFormat>} The Spark address for the tokens payment
+   */
+  public async createTokensInvoice({
+    amount,
+    tokenIdentifier,
+    memo,
+    senderPublicKey,
+    expiryTime,
+  }: {
+    tokenIdentifier?: Bech32mTokenIdentifier;
+    amount?: bigint;
+    memo?: string;
+    senderPublicKey?: string;
+    expiryTime?: Date;
+  }): Promise<SparkAddressFormat> {
+    const MAX_UINT128 = BigInt(2 ** 128 - 1);
+    if (amount && (amount < 0 || amount > MAX_UINT128)) {
+      throw new ValidationError(`Amount must be between 0 and ${MAX_UINT128}`, {
+        field: "amount",
+        value: amount,
+        expected: `greater than or equal to 0 and less than or equal to ${MAX_UINT128}`,
+      });
+    }
+    let decodedTokenIdentifier: Uint8Array | undefined = undefined;
+    if (tokenIdentifier) {
+      decodedTokenIdentifier = decodeBech32mTokenIdentifier(
+        tokenIdentifier,
+        this.config.getNetworkType(),
+      ).tokenIdentifier;
+    }
+    const protoPayment = {
+      $case: "tokensPayment",
+      tokensPayment: {
+        tokenIdentifier: decodedTokenIdentifier,
+        amount: amount ? numberToVarBytesBE(amount) : undefined,
+      },
+    } as const;
+    const invoiceFields = {
+      version: 1,
+      id: uuidv7obj().bytes,
+      paymentType: protoPayment,
+      memo: memo,
+      senderPublicKey: senderPublicKey
+        ? hexToBytes(senderPublicKey)
+        : undefined,
+      expiryTime: expiryTime,
+    };
+    validateSparkInvoiceFields(invoiceFields);
+    return encodeSparkAddress({
+      identityPublicKey: bytesToHex(
+        await this.config.signer.getIdentityPublicKey(),
+      ),
+      network: this.config.getNetworkType(),
+      sparkInvoiceFields: invoiceFields,
+    });
   }
 
   /**
@@ -4491,7 +4567,8 @@ export class SparkWallet extends EventEmitter {
       "getLeaves",
       "getIdentityPublicKey",
       "getSparkAddress",
-      "createSparkPaymentIntent",
+      "createSatsInvoice",
+      "createTokensInvoice",
       "getSwapFeeEstimate",
       "getTransfers",
       "getBalance",
