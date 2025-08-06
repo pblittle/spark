@@ -268,7 +268,7 @@ func TestGenerateDepositAddress(t *testing.T) {
 		// Testing that the handler tries to create a new address
 		_, err = handler.GenerateDepositAddress(ctx, testConfig, req)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "sql: SELECT .. FOR UPDATE/SHARE not supported in SQLite")
+		require.Contains(t, err.Error(), "near \"SET\": syntax error")
 	})
 }
 

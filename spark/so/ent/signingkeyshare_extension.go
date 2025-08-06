@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/decred/dcrd/dcrec/secp256k1"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark"
@@ -116,29 +117,50 @@ func GetUnusedSigningKeysharesTx(
 		return nil, fmt.Errorf("keyshare count must be greater than 0")
 	}
 
-	sks, err := tx.SigningKeyshare.Query().
-		Where(
-			signingkeyshare.StatusEQ(st.KeyshareStatusAvailable),
-			signingkeyshare.CoordinatorIndexEQ(cfg.Index),
-			signingkeyshare.IDGT(uuid.MustParse("01954639-8d50-7e47-b3f0-ddb307fab7c2")),
-		).
-		Limit(keyshareCount).
-		ForUpdate().
-		All(ctx)
+	err := tx.driver.Exec(ctx, `
+		SET LOCAL seq_page_cost = 10.0;
+		SET LOCAL random_page_cost = 1.0;
+	`, []any{}, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get signing keyshares: %w", err)
+		return nil, err
 	}
 
-	if len(sks) < keyshareCount {
-		return nil, fmt.Errorf("not enough signing keyshares available (needed %d, got %d)", keyshareCount, len(sks))
+	var updatedKeyshares []*SigningKeyshare
+	rows := &sql.Rows{}
+	err = tx.driver.Query(ctx, `
+		WITH selected_ids AS (
+			SELECT id FROM signing_keyshares
+			WHERE status = 'AVAILABLE' AND coordinator_index = $1
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE signing_keyshares
+		SET status = 'IN_USE', update_time = NOW()
+		FROM selected_ids
+		WHERE signing_keyshares.id = selected_ids.id
+		RETURNING signing_keyshares.*
+	`, []any{cfg.Index, keyshareCount}, rows)
+	if err != nil {
+		return nil, err
 	}
-
-	for _, ks := range sks {
-		if _, err := ks.Update().SetStatus(st.KeyshareStatusInUse).Save(ctx); err != nil {
-			return nil, fmt.Errorf("failed to update signing keyshare status: %w", err)
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			// If ScanSlice already returned an error, we don't want to overwrite it,
+			// so just log the close error.
+			logging.GetLoggerFromContext(ctx).Error("failed to close rows", "error", cerr)
+			span.RecordError(cerr)
 		}
+	}()
+
+	if err := sql.ScanSlice(rows, &updatedKeyshares); err != nil {
+		return nil, err
 	}
-	return sks, nil
+
+	if len(updatedKeyshares) < keyshareCount {
+		return nil, fmt.Errorf("not enough signing keyshares available (needed %d, got %d)", keyshareCount, len(updatedKeyshares))
+	}
+
+	return updatedKeyshares, nil
 }
 
 // MarkSigningKeysharesAsUsed marks the given keyshares as used. If any of the keyshares are not

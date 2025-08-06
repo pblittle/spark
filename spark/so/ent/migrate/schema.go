@@ -289,6 +289,14 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{SigningKeysharesColumns[8]},
 			},
+			{
+				Name:    "idx_signing_keyshares_coordinator_available",
+				Unique:  false,
+				Columns: []*schema.Column{SigningKeysharesColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'AVAILABLE'",
+				},
+			},
 		},
 	}
 	// SigningNoncesColumns holds the columns for the "signing_nonces" table.

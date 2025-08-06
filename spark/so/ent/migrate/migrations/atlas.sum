@@ -1,4 +1,4 @@
-h1:O/Sxd2+B9Hc9kc0uIWyy+z/EP+m4WosASrKMcYrxAMg=
+h1:25D83BbqqgtUHkqR13IMU/aDdlWVgr2FT9E5FDF3Fcg=
 20250228224813_baseline.sql h1:9WqkxKWZU7tp4fFZCPiExVqT+q76qkZ74xM64j7aTzc=
 20250306203211_fix_atlas.sql h1:SdaYEBYWDFvvhIBx5VYOWBtfZMHiaoKxO4EEkxGxOhc=
 20250306211926_transfer_leaf_index.sql h1:JpwabFVlmvWwmtbbMU7IR+dix+8+z4xdfHzuflYA6Xg=
@@ -52,3 +52,5 @@ h1:O/Sxd2+B9Hc9kc0uIWyy+z/EP+m4WosASrKMcYrxAMg=
 20250717203510_add_token_create_edge_to_token_outputs.sql h1:E0fqSy8ZEz6RZx972G9mR53IqraBi+YgPt8BaV2xg+M=
 20250722181957_freeze_token_create.sql h1:jEx6mfCO7r3Z+p39lm62sf3k5DnJ8M0Qnx2nYKEJmuQ=
 20250724224859_token_create_remove_issuer_public_key_unique_constraint.sql h1:hi3D7yBRlU0B9lZtCE6SFuF+RO5hyxnoNSEuqCG4aLw=
+20250805235200_signing_keyshare_set_old_ids_in_use.sql h1:j2PzRmjxC1ck7Pt/sjdPQApJMsLTVbq8HQBTZ/d8SSQ=
+20250806203329_idx_signing_keyshares_coordinator_available.sql h1:TtuknFXyjcbmg0qHi2OveWMw43/OgQd93UC4wwWy8Vo=

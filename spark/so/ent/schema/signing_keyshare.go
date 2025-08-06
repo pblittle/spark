@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
@@ -23,6 +24,11 @@ func (SigningKeyshare) Mixin() []ent.Mixin {
 func (SigningKeyshare) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("coordinator_index"),
+		index.Fields("coordinator_index").
+			Annotations(
+				entsql.IndexWhere("status = 'AVAILABLE'"),
+			).
+			StorageKey("idx_signing_keyshares_coordinator_available"),
 	}
 }
 
