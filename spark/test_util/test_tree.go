@@ -7,7 +7,6 @@ import (
 
 	"github.com/lightsparkdev/spark/common/keys"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
@@ -42,7 +41,7 @@ func WaitForPendingDepositNode(ctx context.Context, sparkClient pb.SparkServiceC
 }
 
 // CreateNewTree creates a new Tree
-func CreateNewTree(config *wallet.Config, faucet *Faucet, privKey *secp256k1.PrivateKey, amountSats int64) (*pb.TreeNode, error) {
+func CreateNewTree(config *wallet.Config, faucet *Faucet, privKey keys.Private, amountSats int64) (*pb.TreeNode, error) {
 	coin, err := faucet.Fund()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fund faucet: %w", err)
@@ -60,11 +59,9 @@ func CreateNewTree(config *wallet.Config, faucet *Faucet, privKey *secp256k1.Pri
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
-
+	userPubKey := privKey.Public()
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKey.Serialize(), &leafID, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate deposit address: %w", err)
 	}
@@ -75,7 +72,7 @@ func CreateNewTree(config *wallet.Config, faucet *Faucet, privKey *secp256k1.Pri
 	}
 	vout := 0
 
-	resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
+	resp, err := wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tree: %w", err)
 	}
@@ -113,7 +110,7 @@ func CreateNewTree(config *wallet.Config, faucet *Faucet, privKey *secp256k1.Pri
 }
 
 // CreateNewTreeWithLevels creates a new Tree
-func CreateNewTreeWithLevels(config *wallet.Config, faucet *Faucet, privKey *secp256k1.PrivateKey, amountSats int64, levels uint32) (*wallet.DepositAddressTree, []*pb.TreeNode, error) {
+func CreateNewTreeWithLevels(config *wallet.Config, faucet *Faucet, privKey keys.Private, amountSats int64, levels uint32) (*wallet.DepositAddressTree, []*pb.TreeNode, error) {
 	coin, err := faucet.Fund()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fund faucet: %w", err)
@@ -131,11 +128,9 @@ func CreateNewTreeWithLevels(config *wallet.Config, faucet *Faucet, privKey *sec
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	userPubKey := privKey.PubKey()
-	userPubKeyBytes := userPubKey.SerializeCompressed()
-
+	userPubKey := privKey.Public()
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKey.Serialize(), &leafID, false)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate deposit address: %w", err)
 	}

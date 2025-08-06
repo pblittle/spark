@@ -2,10 +2,10 @@ package grpctest
 
 import (
 	"context"
+	"github.com/lightsparkdev/spark/common/keys"
 	"testing"
 	"time"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	testutil "github.com/lightsparkdev/spark/test_util"
 	"github.com/lightsparkdev/spark/wallet"
@@ -52,14 +52,14 @@ func TestEventHandlerTransferNotification(t *testing.T) {
 
 	var expectedNodeIDs []string
 	for range numTransfers {
-		leafPrivKey, err := secp256k1.GeneratePrivateKey()
+		leafPrivKey, err := keys.GeneratePrivateKey()
 		require.NoError(t, err, "failed to create node signing private key")
 
 		rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey, 100_000)
 		require.NoError(t, err, "failed to create new tree")
 		expectedNodeIDs = append(expectedNodeIDs, rootNode.Id)
 
-		newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+		newLeafPrivKey, err := keys.GeneratePrivateKey()
 		require.NoError(t, err, "failed to create new node signing private key")
 
 		transferNode := wallet.LeafKeyTweak{
@@ -128,7 +128,7 @@ func TestEventHandlerDepositNotification(t *testing.T) {
 		}
 	}()
 
-	leafPrivKey, err := secp256k1.GeneratePrivateKey()
+	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
 
 	rootNode, err := testutil.CreateNewTree(config, faucet, leafPrivKey, 100_000)
@@ -210,12 +210,12 @@ func TestMultipleSubscriptions(t *testing.T) {
 		t.Fatal("stream2 timed out waiting for connected event")
 	}
 
-	leafPrivKey, err := secp256k1.GeneratePrivateKey()
+	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err)
 
-	newLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	transferNode := wallet.LeafKeyTweak{
 		Leaf:              rootNode,

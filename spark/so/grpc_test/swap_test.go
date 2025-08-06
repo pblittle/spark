@@ -2,6 +2,7 @@ package grpctest
 
 import (
 	"context"
+	"github.com/lightsparkdev/spark/common/keys"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ func TestSwap(t *testing.T) {
 	senderConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err, "failed to create sender wallet config")
 
-	senderLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	senderLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
 	senderRootNode, err := testutil.CreateNewTree(senderConfig, faucet, senderLeafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
@@ -31,13 +32,13 @@ func TestSwap(t *testing.T) {
 	receiverConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err, "failed to create sender wallet config")
 
-	receiverLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	receiverLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
 	receiverRootNode, err := testutil.CreateNewTree(receiverConfig, faucet, receiverLeafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	// Sender initiates transfer
-	senderNewLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	senderNewLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 
 	senderTransferNode := wallet.LeafKeyTweak{
@@ -78,7 +79,7 @@ func TestSwap(t *testing.T) {
 	require.NoError(t, err)
 
 	// Bob signs refunds with adaptor
-	receiverNewLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	receiverNewLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	receiverTransferNode := wallet.LeafKeyTweak{
@@ -152,7 +153,7 @@ func TestSwap(t *testing.T) {
 	require.Len(t, leafPrivKeyMap, 1)
 	require.Equal(t, senderNewLeafPrivKey.Serialize(), leafPrivKeyMap[senderRootNode.Id])
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverPendingTransfer.Leaves[0].Leaf,
@@ -193,7 +194,7 @@ func TestSwap(t *testing.T) {
 	require.Len(t, leafPrivKeyMap, 1, "expected 1 leaf to transfer")
 	require.Equal(t, receiverNewLeafPrivKey.Serialize(), leafPrivKeyMap[receiverRootNode.Id])
 
-	finalLeafPrivKey, err = secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err = keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode = wallet.LeafKeyTweak{
 		Leaf:              senderPendingTransfer.Leaves[0].Leaf,
@@ -215,7 +216,7 @@ func TestSwapV2(t *testing.T) {
 	senderConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err, "failed to create sender wallet config")
 
-	senderLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	senderLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
 	senderRootNode, err := testutil.CreateNewTree(senderConfig, faucet, senderLeafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
@@ -224,13 +225,13 @@ func TestSwapV2(t *testing.T) {
 	receiverConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err, "failed to create sender wallet config")
 
-	receiverLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	receiverLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
 	receiverRootNode, err := testutil.CreateNewTree(receiverConfig, faucet, receiverLeafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	// Sender initiates transfer
-	senderNewLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	senderNewLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 
 	senderTransferNode := wallet.LeafKeyTweak{
@@ -271,7 +272,7 @@ func TestSwapV2(t *testing.T) {
 	require.NoError(t, err)
 
 	// Bob signs refunds with adaptor
-	receiverNewLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	receiverNewLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	receiverTransferNode := wallet.LeafKeyTweak{
@@ -356,7 +357,7 @@ func TestSwapV2(t *testing.T) {
 	require.Len(t, leafPrivKeyMap, 1)
 	require.Equal(t, senderNewLeafPrivKey.Serialize(), leafPrivKeyMap[senderRootNode.Id])
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverPendingTransfer.Leaves[0].Leaf,
@@ -401,7 +402,7 @@ func TestSwapV2(t *testing.T) {
 	require.Len(t, leafPrivKeyMap, 1)
 	require.Equal(t, receiverNewLeafPrivKey.Serialize(), leafPrivKeyMap[receiverRootNode.Id])
 
-	finalLeafPrivKey, err = secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err = keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode = wallet.LeafKeyTweak{
 		Leaf:              senderPendingTransfer.Leaves[0].Leaf,
@@ -423,7 +424,7 @@ func TestSwapDeliverTransferPackageTwice(t *testing.T) {
 	senderConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err, "failed to create sender wallet config")
 
-	senderLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	senderLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
 	senderRootNode, err := testutil.CreateNewTree(senderConfig, faucet, senderLeafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
@@ -432,13 +433,13 @@ func TestSwapDeliverTransferPackageTwice(t *testing.T) {
 	receiverConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err, "failed to create sender wallet config")
 
-	receiverLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	receiverLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
 	receiverRootNode, err := testutil.CreateNewTree(receiverConfig, faucet, receiverLeafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	// Sender initiates transfer
-	senderNewLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	senderNewLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 
 	senderTransferNode := wallet.LeafKeyTweak{
@@ -479,7 +480,7 @@ func TestSwapDeliverTransferPackageTwice(t *testing.T) {
 	require.NoError(t, err)
 
 	// Bob signs refunds with adaptor
-	receiverNewLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	receiverNewLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	receiverTransferNode := wallet.LeafKeyTweak{
@@ -574,7 +575,7 @@ func TestSwapDeliverTransferPackageTwice(t *testing.T) {
 	require.Len(t, leafPrivKeyMap, 1)
 	require.Equal(t, senderNewLeafPrivKey.Serialize(), leafPrivKeyMap[senderRootNode.Id])
 
-	finalLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverPendingTransfer.Leaves[0].Leaf,
@@ -629,7 +630,7 @@ func TestSwapDeliverTransferPackageTwice(t *testing.T) {
 	require.Len(t, leafPrivKeyMap, 1)
 	require.Equal(t, receiverNewLeafPrivKey.Serialize(), leafPrivKeyMap[receiverRootNode.Id])
 
-	finalLeafPrivKey, err = secp256k1.GeneratePrivateKey()
+	finalLeafPrivKey, err = keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode = wallet.LeafKeyTweak{
 		Leaf:              senderPendingTransfer.Leaves[0].Leaf,

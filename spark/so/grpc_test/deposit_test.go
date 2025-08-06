@@ -286,7 +286,7 @@ func TestStartDepositTreeCreationBasic(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
+	resp, err := wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	if err != nil {
 		t.Fatalf("failed to create tree: %v", err)
 	}
@@ -401,7 +401,7 @@ func TestStartDepositTreeCreationUnknownAddress(t *testing.T) {
 	// flip a bit in the pk script to simulate an unknown address
 	depositTx.TxOut[0].PkScript[30] = depositTx.TxOut[0].PkScript[30] ^ 1
 
-	_, err = wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
+	_, err = wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	require.Error(t, err)
 	grpcStatus, ok := status.FromError(err)
 	assert.True(t, ok)
@@ -485,7 +485,7 @@ func TestStartDepositTreeCreationWithoutCustomLeafID(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
+	resp, err := wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	if err != nil {
 		t.Fatalf("failed to create tree: %v", err)
 	}
@@ -578,7 +578,7 @@ func TestStartDepositTreeCreationConcurrentWithSameTx(t *testing.T) {
 
 	for range 2 {
 		go func() {
-			resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
+			resp, err := wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 
 			if err != nil {
 				errChannel <- err
@@ -681,7 +681,7 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 		t.Fatalf("failed to deserilize deposit tx: %v", err)
 	}
 
-	resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
+	resp, err := wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	if err != nil {
 		t.Fatalf("failed to create tree: %v", err)
 	}
@@ -812,7 +812,7 @@ func TestStartDepositTreeCreationUnconfirmed(t *testing.T) {
 		t.Fatalf("failed to deserilize deposit tx: %v", err)
 	}
 
-	resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
+	resp, err := wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	if err != nil {
 		t.Fatalf("failed to create tree: %v", err)
 	}
@@ -878,10 +878,9 @@ func TestStartDepositTreeCreationIdempotency(t *testing.T) {
 		t.Fatal(err)
 	}
 	userPubKey := privKey.Public()
-	userPubKeyBytes := userPubKey.Serialize()
 
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKey.Serialize(), &leafID, false)
 	if err != nil {
 		t.Fatalf("failed to generate deposit address: %v", err)
 	}
@@ -935,8 +934,7 @@ func TestStartDepositTreeCreationIdempotency(t *testing.T) {
 
 	randomKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	randomPubKey := randomKey.Public()
-	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomPubKey, common.Regtest)
+	randomAddress, err := common.P2TRRawAddressFromPublicKey(randomKey.Public(), common.Regtest)
 	if err != nil {
 		t.Fatalf("failed to get p2tr raw address: %v", err)
 	}
@@ -948,12 +946,12 @@ func TestStartDepositTreeCreationIdempotency(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Call CreateTreeRoot twice in a row
-	_, err = wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, true)
+	_, err = wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, true)
 	if err != nil {
 		t.Fatalf("failed to create tree: %v", err)
 	}
 
-	resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
+	resp, err := wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	if err != nil {
 		t.Fatalf("failed to create tree: %v", err)
 	}
@@ -998,10 +996,9 @@ func TestStartDepositTreeCreationDoubleClaim(t *testing.T) {
 		t.Fatal(err)
 	}
 	userPubKey := privKey.Public()
-	userPubKeyBytes := userPubKey.Serialize()
 
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKeyBytes, &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKey.Serialize(), &leafID, false)
 	if err != nil {
 		t.Fatalf("failed to generate deposit address: %v", err)
 	}
@@ -1067,7 +1064,7 @@ func TestStartDepositTreeCreationDoubleClaim(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	resp, err := wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
+	resp, err := wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	if err != nil {
 		t.Fatalf("failed to create tree: %v", err)
 	}
@@ -1088,7 +1085,7 @@ func TestStartDepositTreeCreationDoubleClaim(t *testing.T) {
 		t.Fatalf("expected 0 unused deposit addresses, got %d", len(unusedDepositAddresses.DepositAddresses))
 	}
 
-	_, err = wallet.CreateTreeRoot(ctx, config, privKey.Serialize(), depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
+	_, err = wallet.CreateTreeRoot(ctx, config, privKey, depositResp.DepositAddress.VerifyingKey, depositTx, vout, false)
 	if err == nil {
 		t.Fatalf("expected error upon double claim")
 	}

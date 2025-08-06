@@ -27,7 +27,7 @@ func TestExitSingleNodeTrees(t *testing.T) {
 	for range 5 {
 		priKey, err := keys.GeneratePrivateKey()
 		require.NoError(t, err, "failed to create node signing private key")
-		root, err := testutil.CreateNewTree(config, faucet, priKey.ToBTCEC(), int64(treeAmountSats))
+		root, err := testutil.CreateNewTree(config, faucet, priKey, int64(treeAmountSats))
 		require.NoError(t, err, "failed to create new tree")
 		roots = append(roots, root)
 		privKeys = append(privKeys, priKey.ToBTCEC())

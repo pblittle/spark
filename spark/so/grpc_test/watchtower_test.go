@@ -34,7 +34,7 @@ func TestTimelockExpirationHappyPath(t *testing.T) {
 
 	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	rootNode, err := testutil.CreateNewTree(walletConfig, faucet, leafPrivKey.ToBTCEC(), 100_000)
+	rootNode, err := testutil.CreateNewTree(walletConfig, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err)
 
 	// Reduce timelock
@@ -168,7 +168,7 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 	// Create sender wallet and tree
 	senderLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	senderRootNode, err := testutil.CreateNewTree(walletConfig, faucet, senderLeafPrivKey.ToBTCEC(), 100_000)
+	senderRootNode, err := testutil.CreateNewTree(walletConfig, faucet, senderLeafPrivKey, 100_000)
 	require.NoError(t, err)
 
 	// Create receiver wallet
@@ -371,7 +371,7 @@ func TestTimelockExpirationMultiLevelTree(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a multi-level tree with 1 level (root + 2 children + 2 leaves = 5 nodes total)
-	tree, nodes, err := testutil.CreateNewTreeWithLevels(walletConfig, faucet, leafPrivKey.ToBTCEC(), 100_000, 1)
+	tree, nodes, err := testutil.CreateNewTreeWithLevels(walletConfig, faucet, leafPrivKey, 100_000, 1)
 	require.NoError(t, err)
 	require.Len(t, nodes, 5)
 
@@ -594,7 +594,7 @@ func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
 	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 12345)
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 12345)
 	require.NoError(t, err)
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()

@@ -95,7 +95,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 
 	aliceLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey.ToBTCEC(), 100_000)
+	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey, 100_000)
 	require.NoError(t, err)
 
 	aliceConn, err := common.NewGRPCConnectionWithTestTLS(aliceConfig.CoodinatorAddress(), nil)
@@ -112,7 +112,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 
 	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	sspRootNode, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 90_000)
+	sspRootNode, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 90_000)
 	require.NoError(t, err)
 
 	sspConn, err := common.NewGRPCConnectionWithTestTLS(sspConfig.CoodinatorAddress(), nil)
@@ -414,7 +414,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 
 	aliceLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey.ToBTCEC(), 100_000)
+	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey, 100_000)
 	require.NoError(t, err)
 
 	aliceConn, err := common.NewGRPCConnectionWithTestTLS(aliceConfig.CoodinatorAddress(), nil)
@@ -656,7 +656,7 @@ func TestStaticDepositSSPV1(t *testing.T) {
 
 	aliceLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey.ToBTCEC(), 100_000)
+	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey, 100_000)
 	require.NoError(t, err)
 
 	aliceConn, err := common.NewGRPCConnectionWithTestTLS(aliceConfig.CoodinatorAddress(), nil)
@@ -673,7 +673,7 @@ func TestStaticDepositSSPV1(t *testing.T) {
 
 	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	sspRootNode, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 90_000)
+	sspRootNode, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 90_000)
 	require.NoError(t, err)
 
 	sspConn, err := common.NewGRPCConnectionWithTestTLS(sspConfig.CoodinatorAddress(), nil)
@@ -963,7 +963,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 
 	aliceLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey.ToBTCEC(), 100_000)
+	_, err = testutil.CreateNewTree(aliceConfig, faucet, aliceLeafPrivKey, 100_000)
 	require.NoError(t, err)
 
 	aliceConn, err := common.NewGRPCConnectionWithTestTLS(aliceConfig.CoodinatorAddress(), nil)
@@ -1171,7 +1171,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 
 	bobLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	_, err = testutil.CreateNewTree(bobConfig, faucet, bobLeafPrivKey.ToBTCEC(), 100_000)
+	_, err = testutil.CreateNewTree(bobConfig, faucet, bobLeafPrivKey, 100_000)
 	require.NoError(t, err)
 
 	bobConn, err := common.NewGRPCConnectionWithTestTLS(bobConfig.CoodinatorAddress(), nil)

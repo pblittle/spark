@@ -3,6 +3,7 @@ package grpctest
 import (
 	"context"
 	"fmt"
+	"github.com/lightsparkdev/spark/common/keys"
 	"testing"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -16,7 +17,7 @@ import (
 func TestRefreshTimelock(t *testing.T) {
 	senderConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
-	senderLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	senderLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	tree, nodes, err := testutil.CreateNewTreeWithLevels(senderConfig, faucet, senderLeafPrivKey, 100_000, 1)
 	require.NoError(t, err)
@@ -56,7 +57,7 @@ func TestRefreshTimelock(t *testing.T) {
 func TestExtendLeaf(t *testing.T) {
 	senderConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
-	senderLeafPrivKey, err := secp256k1.GeneratePrivateKey()
+	senderLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	tree, nodes, err := testutil.CreateNewTreeWithLevels(senderConfig, faucet, senderLeafPrivKey, 100_000, 1)
 	require.NoError(t, err)

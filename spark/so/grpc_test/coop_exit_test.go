@@ -31,7 +31,7 @@ func setupUsers(t *testing.T, amountSats int64) (*wallet.Config, *wallet.Config,
 	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	rootNode, err := testutil.CreateNewTree(config, faucet, leafPrivKey.ToBTCEC(), amountSats)
+	rootNode, err := testutil.CreateNewTree(config, faucet, leafPrivKey, amountSats)
 	require.NoError(t, err)
 
 	transferNode := wallet.LeafKeyTweak{

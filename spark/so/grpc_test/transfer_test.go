@@ -29,7 +29,7 @@ func TestTransfer(t *testing.T) {
 
 	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
-	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey.ToBTCEC(), 100_000)
+	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -102,7 +102,7 @@ func TestQueryPendingTransferByNetwork(t *testing.T) {
 
 	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
-	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey.ToBTCEC(), 100_000)
+	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -161,7 +161,7 @@ func TestTransferInterrupt(t *testing.T) {
 
 	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
-	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey.ToBTCEC(), 100_000)
+	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -256,7 +256,7 @@ func TestTransferRecoverFinalizeSignatures(t *testing.T) {
 
 	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
-	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey.ToBTCEC(), 100_000)
+	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -356,7 +356,7 @@ func TestTransferWithSeparateSteps(t *testing.T) {
 
 	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
-	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey.ToBTCEC(), 100_000)
+	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -452,7 +452,7 @@ func TestCancelTransfer(t *testing.T) {
 
 	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
-	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey.ToBTCEC(), 100_000)
+	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -536,7 +536,7 @@ func TestCancelTransferAfterTweak(t *testing.T) {
 
 	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
-	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey.ToBTCEC(), 100_000)
+	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -576,7 +576,7 @@ func TestQueryTransfers(t *testing.T) {
 
 	senderLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
-	senderRootNode, err := testutil.CreateNewTree(senderConfig, faucet, senderLeafPrivKey.ToBTCEC(), 100_000)
+	senderRootNode, err := testutil.CreateNewTree(senderConfig, faucet, senderLeafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	// Initiate receiver
@@ -585,7 +585,7 @@ func TestQueryTransfers(t *testing.T) {
 
 	receiverLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
-	receiverRootNode, err := testutil.CreateNewTree(receiverConfig, faucet, receiverLeafPrivKey.ToBTCEC(), 100_000)
+	receiverRootNode, err := testutil.CreateNewTree(receiverConfig, faucet, receiverLeafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	// Sender initiates transfer
@@ -800,7 +800,7 @@ func TestDoubleClaimTransfer(t *testing.T) {
 
 	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err, "failed to create node signing private key")
-	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey.ToBTCEC(), 100_000)
+	rootNode, err := testutil.CreateNewTree(senderConfig, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err, "failed to create new tree")
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()

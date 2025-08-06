@@ -212,24 +212,19 @@ func QueryStaticDepositAddresses(
 func CreateTreeRoot(
 	ctx context.Context,
 	config *Config,
-	signingPrivKeyBytes,
+	signingPrivKey keys.Private,
 	verifyingKey []byte,
 	depositTx *wire.MsgTx,
 	vout int,
 	skipFinalizeSignatures bool,
 ) (*pb.FinalizeNodeSignaturesResponse, error) {
-	signingPrivKey, err := keys.ParsePrivateKey(signingPrivKeyBytes)
-	if err != nil {
-		return nil, err
-	}
-	signingPubkey := signingPrivKey.Public()
-	signingPubkeyBytes := signingPubkey.Serialize()
+	signingPubKey := signingPrivKey.Public()
+	signingPubkeyBytes := signingPubKey.Serialize()
 	// Creat root tx
 	depositOutPoint := &wire.OutPoint{Hash: depositTx.TxHash(), Index: uint32(vout)}
 	rootTx := createRootTx(depositOutPoint, depositTx.TxOut[0])
 	var rootBuf bytes.Buffer
-	err = rootTx.Serialize(&rootBuf)
-	if err != nil {
+	if err := rootTx.Serialize(&rootBuf); err != nil {
 		return nil, err
 	}
 	rootNonce, err := objects.RandomSigningNonce()
@@ -259,7 +254,7 @@ func CreateTreeRoot(
 		spark.InitialSequence(),
 		&wire.OutPoint{Hash: rootTx.TxHash(), Index: 0},
 		rootTx.TxOut[0].Value,
-		signingPubkey,
+		signingPubKey,
 		true,
 	)
 	if err != nil {
@@ -324,29 +319,29 @@ func CreateTreeRoot(
 		return nil, fmt.Errorf("verifying key does not match")
 	}
 
-	userKeyPackage := CreateUserKeyPackage(signingPrivKeyBytes)
+	userKeyPackage := CreateUserKeyPackage(signingPrivKey.Serialize())
 
-	userSigningJobs := make([]*pbfrost.FrostSigningJob, 0)
 	nodeJobID := uuid.NewString()
 	refundJobID := uuid.NewString()
-	userSigningJobs = append(userSigningJobs, &pbfrost.FrostSigningJob{
-		JobId:           nodeJobID,
-		Message:         rootTxSighash,
-		KeyPackage:      userKeyPackage,
-		VerifyingKey:    verifyingKey,
-		Nonce:           rootNonceProto,
-		Commitments:     treeResponse.RootNodeSignatureShares.NodeTxSigningResult.SigningNonceCommitments,
-		UserCommitments: rootNonceCommitmentProto,
-	})
-	userSigningJobs = append(userSigningJobs, &pbfrost.FrostSigningJob{
-		JobId:           refundJobID,
-		Message:         refundTxSighash,
-		KeyPackage:      userKeyPackage,
-		VerifyingKey:    treeResponse.RootNodeSignatureShares.VerifyingKey,
-		Nonce:           refundNonceProto,
-		Commitments:     treeResponse.RootNodeSignatureShares.RefundTxSigningResult.SigningNonceCommitments,
-		UserCommitments: refundNonceCommitmentProto,
-	})
+	userSigningJobs := []*pbfrost.FrostSigningJob{
+		{
+			JobId:           nodeJobID,
+			Message:         rootTxSighash,
+			KeyPackage:      userKeyPackage,
+			VerifyingKey:    verifyingKey,
+			Nonce:           rootNonceProto,
+			Commitments:     treeResponse.RootNodeSignatureShares.NodeTxSigningResult.SigningNonceCommitments,
+			UserCommitments: rootNonceCommitmentProto,
+		},
+		{
+			JobId:           refundJobID,
+			Message:         refundTxSighash,
+			KeyPackage:      userKeyPackage,
+			VerifyingKey:    treeResponse.RootNodeSignatureShares.VerifyingKey,
+			Nonce:           refundNonceProto,
+			Commitments:     treeResponse.RootNodeSignatureShares.RefundTxSigningResult.SigningNonceCommitments,
+			UserCommitments: refundNonceCommitmentProto,
+		}}
 
 	frostConn, err := common.NewGRPCConnectionWithoutTLS(config.FrostSignerAddress, nil)
 	if err != nil {
@@ -404,7 +399,7 @@ func CreateTreeRoot(
 	})
 }
 
-// ClaimStaticDeposit claims a static deposit.
+// ClaimStaticDepositLegacy claims a static deposit.
 func ClaimStaticDepositLegacy(
 	ctx context.Context,
 	config *Config,

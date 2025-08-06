@@ -143,7 +143,7 @@ func TestReceiveLightningPayment(t *testing.T) {
 	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 12345)
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 12345)
 	require.NoError(t, err)
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -240,7 +240,7 @@ func TestReceiveLightningPaymentV2(t *testing.T) {
 	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 12345)
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 12345)
 	require.NoError(t, err)
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -349,7 +349,7 @@ func TestReceiveZeroAmountLightningInvoicePayment(t *testing.T) {
 	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), int64(paymentAmountSats))
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, int64(paymentAmountSats))
 	require.NoError(t, err)
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -435,7 +435,7 @@ func TestReceiveLightningPaymentCannotCancelAfterPreimageReveal(t *testing.T) {
 	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 12345)
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 12345)
 	require.NoError(t, err)
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -486,7 +486,7 @@ func TestSendLightningPayment(t *testing.T) {
 	userLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(2)
-	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey.ToBTCEC(), 12347)
+	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey, 12347)
 	require.NoError(t, err)
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -575,7 +575,7 @@ func TestSendLightningPaymentV2(t *testing.T) {
 	userLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(2)
-	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey.ToBTCEC(), 12347)
+	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey, 12347)
 	require.NoError(t, err)
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -674,7 +674,7 @@ func TestSendLightningPaymentWithRejection(t *testing.T) {
 	userLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(2)
-	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey.ToBTCEC(), 12347)
+	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey, 12347)
 	require.NoError(t, err)
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -767,7 +767,7 @@ func TestReceiveLightningPaymentWithWrongPreimage(t *testing.T) {
 	sspLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(0)
-	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey.ToBTCEC(), 12345)
+	nodeToSend, err := testutil.CreateNewTree(sspConfig, faucet, sspLeafPrivKey, 12345)
 	require.NoError(t, err)
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
@@ -821,7 +821,7 @@ func TestSendLightningPaymentTwice(t *testing.T) {
 	userLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	feeSats := uint64(2)
-	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey.ToBTCEC(), 12347)
+	nodeToSend, err := testutil.CreateNewTree(userConfig, faucet, userLeafPrivKey, 12347)
 	require.NoError(t, err)
 
 	newLeafPrivKey, err := keys.GeneratePrivateKey()

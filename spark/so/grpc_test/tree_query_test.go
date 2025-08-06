@@ -2,11 +2,11 @@ package grpctest
 
 import (
 	"context"
+	"github.com/lightsparkdev/spark/common/keys"
 	"maps"
 	"slices"
 	"testing"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	testutil "github.com/lightsparkdev/spark/test_util"
@@ -36,7 +36,7 @@ func TestTreeQuery(t *testing.T) {
 	client := pb.NewSparkServiceClient(conn)
 
 	// Create test nodes with parent chain
-	rootPrivKey, err := secp256k1.GeneratePrivateKey()
+	rootPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
 	tree, err := testutil.CreateNewTree(config, faucet, rootPrivKey, 65536)
@@ -174,7 +174,7 @@ func TestTreeQuery(t *testing.T) {
 	})
 
 	t.Run("query nodes by value", func(t *testing.T) {
-		rootPrivKey2, err := secp256k1.GeneratePrivateKey()
+		rootPrivKey2, err := keys.GeneratePrivateKey()
 		require.NoError(t, err)
 		tree2, err := testutil.CreateNewTree(config, faucet, rootPrivKey2, 32768)
 		require.NoError(t, err)

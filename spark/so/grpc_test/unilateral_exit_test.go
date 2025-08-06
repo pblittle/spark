@@ -82,7 +82,7 @@ func TestUnilateralExitSingleLeaf(t *testing.T) {
 	config, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
-	leafPrivKey, err := secp256k1.GeneratePrivateKey()
+	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	rootNode, err := testutil.CreateNewTree(config, faucet, leafPrivKey, 100_000)
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestUnilateralExitSingleLeaf(t *testing.T) {
 
 	// Re-sign the leaf with decrement timelock so we don't need to mine so many blocks
 	for getCurrentTimelock(rootNode) > spark.TimeLockInterval*2 {
-		rootNode, err = wallet.RefreshTimelockRefundTx(context.Background(), config, rootNode, leafPrivKey)
+		rootNode, err = wallet.RefreshTimelockRefundTx(context.Background(), config, rootNode, leafPrivKey.ToBTCEC())
 		require.NoError(t, err)
 	}
 
@@ -115,7 +115,7 @@ func TestUnilateralExitTreeLeaf(t *testing.T) {
 	config, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
-	leafPrivKey, err := secp256k1.GeneratePrivateKey()
+	leafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	tree, nodes, err := testutil.CreateNewTreeWithLevels(config, faucet, leafPrivKey, 100_000, 1)
 	require.NoError(t, err)
