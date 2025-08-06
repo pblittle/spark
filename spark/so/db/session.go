@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var (
@@ -125,6 +126,49 @@ func getMetricAttributes(ctx context.Context) []attribute.KeyValue {
 	return attrs
 }
 
+// getGaugeAttributes returns the attributes for gauge operations
+func getGaugeAttributes(ctx context.Context, operationAttr attribute.KeyValue) []attribute.KeyValue {
+	return append([]attribute.KeyValue{operationAttr}, getMetricAttributes(ctx)...)
+}
+
+// getOperationAttributes returns the attributes for a specific operation
+func getOperationAttributes(ctx context.Context, operationAttr attribute.KeyValue, statusAttr attribute.KeyValue) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{operationAttr, statusAttr}
+	attrs = append(attrs, getMetricAttributes(ctx)...)
+	return attrs
+}
+
+// addTraceEvent adds a trace event if a span is available
+func addTraceEvent(ctx context.Context, operation string, duration float64, err error) {
+	span := trace.SpanFromContext(ctx)
+	if span != nil {
+		eventName := "db.transaction." + operation
+		span.AddEvent(eventName, trace.WithAttributes(
+			getTraceAttributes(operation, duration, err)...,
+		))
+	}
+}
+
+// getTraceAttributes returns the attributes for trace events
+// operation: the operation type (begin, commit, rollback)
+// duration: duration in seconds (0 for operations without duration)
+// err: error if the operation failed - optional (status is inferred from this)
+func getTraceAttributes(operation string, duration float64, err error) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{
+		attribute.String("db.transaction.operation", operation),
+	}
+	if duration > 0 {
+		attrs = append(attrs, attribute.Float64("db.transaction.duration_seconds", duration))
+	}
+
+	if err != nil {
+		attrs = append(attrs, attrStatusError, attribute.String("error", err.Error()))
+	}
+	attrs = append(attrs, attrStatusSuccess)
+
+	return attrs
+}
+
 // WithRpcFullMethod adds the RPC method to the context
 func WithRpcFullMethod(ctx context.Context, fullMethod string) context.Context {
 	parts := strings.Split(fullMethod, "/")
@@ -223,22 +267,19 @@ func (s *Session) GetOrBeginTx(ctx context.Context) (*ent.Tx, error) {
 		logger := logging.GetLoggerFromContext(ctx)
 		logger.Info("Creating new transaction")
 
-		// Extract RPC method and task name for metrics
 		s.rpcService, s.rpcMethod = extractRpcServiceAndMethod(ctx)
 		s.taskName = extractTaskName(ctx)
 
-		// Increment active transactions
-		txActiveGauge.Add(ctx, 1, metric.WithAttributes(
-			append([]attribute.KeyValue{attrOperationBegin}, getMetricAttributes(ctx)...)...,
-		))
+		txActiveGauge.Add(ctx, 1, metric.WithAttributes(getGaugeAttributes(ctx, attrOperationBegin)...))
 
 		tx, err := s.provider.GetOrBeginTx(ctx)
 		if err != nil {
 			logger.Error("Failed to create new transaction", "error", err)
 			// Decrement on error
-			txActiveGauge.Add(ctx, -1, metric.WithAttributes(
-				append([]attribute.KeyValue{attrOperationBegin}, getMetricAttributes(ctx)...)...,
-			))
+			txActiveGauge.Add(ctx, -1, metric.WithAttributes(getGaugeAttributes(ctx, attrOperationBegin)...))
+
+			addTraceEvent(ctx, "begin", 0, err)
+
 			return nil, err
 		}
 		logger.Info("New transaction created")
@@ -248,6 +289,8 @@ func (s *Session) GetOrBeginTx(ctx context.Context) (*ent.Tx, error) {
 			logger.Info("Transaction is held for more than 30 seconds")
 		})
 
+		addTraceEvent(ctx, "begin", 0, nil)
+
 		tx.OnCommit(func(fn ent.Committer) ent.Committer {
 			return ent.CommitFunc(func(ctx context.Context, tx *ent.Tx) error {
 				s.mu.Lock()
@@ -256,28 +299,28 @@ func (s *Session) GetOrBeginTx(ctx context.Context) (*ent.Tx, error) {
 
 				duration := time.Since(s.startTime).Seconds()
 
-				// Record metrics with RPC method and task name
-				attrs := append([]attribute.KeyValue{attrOperationCommit, attrStatusSuccess}, getMetricAttributes(ctx)...)
-				txDurationHistogram.Record(ctx, duration, metric.WithAttributes(attrs...))
-				txCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
-				txActiveGauge.Add(ctx, -1, metric.WithAttributes(
-					append([]attribute.KeyValue{attrOperationCommit}, getMetricAttributes(ctx)...)...,
-				))
-
 				err := fn.Commit(ctx, tx)
+				var attrs []attribute.KeyValue
 				if err != nil {
 					logger.Error("Failed to commit transaction", "error", err)
-					// Update metrics for error case
-					errorAttrs := append([]attribute.KeyValue{attrOperationCommit, attrStatusError}, getMetricAttributes(ctx)...)
-					txDurationHistogram.Record(ctx, duration, metric.WithAttributes(errorAttrs...))
-					txCounter.Add(ctx, 1, metric.WithAttributes(errorAttrs...))
+					attrs = getOperationAttributes(ctx, attrOperationCommit, attrStatusError)
+
+					addTraceEvent(ctx, "commit", duration, err)
 				} else {
 					// Only set the current tx to nil if the transaction was committed successfully.
 					// Otherwise, the transaction will be rolled back at last.
+					attrs = getOperationAttributes(ctx, attrOperationCommit, attrStatusSuccess)
+					txDurationHistogram.Record(ctx, duration, metric.WithAttributes(attrs...))
+					txActiveGauge.Add(ctx, -1, metric.WithAttributes(getGaugeAttributes(ctx, attrOperationCommit)...))
 					s.timer.Stop()
 					s.timer = nil
 					s.currentTx = nil
+
+					addTraceEvent(ctx, "commit", duration, nil)
 				}
+
+				txCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
+
 				return err
 			})
 		})
@@ -289,22 +332,20 @@ func (s *Session) GetOrBeginTx(ctx context.Context) (*ent.Tx, error) {
 
 				duration := time.Since(s.startTime).Seconds()
 
-				// Record metrics with RPC method and task name
-				attrs := append([]attribute.KeyValue{attrOperationRollback, attrStatusSuccess}, getMetricAttributes(ctx)...)
-				txDurationHistogram.Record(ctx, duration, metric.WithAttributes(attrs...))
-				txCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
-				txActiveGauge.Add(ctx, -1, metric.WithAttributes(
-					append([]attribute.KeyValue{attrOperationRollback}, getMetricAttributes(ctx)...)...,
-				))
-
 				err := fn.Rollback(ctx, tx)
+				var attrs []attribute.KeyValue
 				if err != nil {
 					logger.Error("Failed to rollback transaction", "error", err)
-					// Update metrics for error case
-					errorAttrs := append([]attribute.KeyValue{attrOperationRollback, attrStatusError}, getMetricAttributes(ctx)...)
-					txDurationHistogram.Record(ctx, duration, metric.WithAttributes(errorAttrs...))
-					txCounter.Add(ctx, 1, metric.WithAttributes(errorAttrs...))
+					attrs = getOperationAttributes(ctx, attrOperationRollback, attrStatusError)
+					addTraceEvent(ctx, "rollback", duration, err)
+				} else {
+					attrs = getOperationAttributes(ctx, attrOperationRollback, attrStatusSuccess)
+					addTraceEvent(ctx, "rollback", duration, nil)
 				}
+
+				txDurationHistogram.Record(ctx, duration, metric.WithAttributes(attrs...))
+				txCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
+				txActiveGauge.Add(ctx, -1, metric.WithAttributes(getGaugeAttributes(ctx, attrOperationRollback)...))
 				s.timer.Stop()
 				s.timer = nil
 				s.currentTx = nil
