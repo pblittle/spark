@@ -700,26 +700,17 @@ func signRefunds(ctx context.Context, config *so.Config, requests *pb.StartTrans
 		}
 	}
 
-	// Sign all jobs
-	var err error
-	cpfpSigningResults, err = helper.SignFrost(ctx, config, cpfpSigningJobs)
+	allSigningJobs := append(cpfpSigningJobs, directSigningJobs...)
+	allSigningJobs = append(allSigningJobs, directFromCpfpSigningJobs...)
+
+	allSigningResults, err := helper.SignFrost(ctx, config, allSigningJobs)
 	if err != nil {
-		return nil, fmt.Errorf("unable to sign frost for cpfp signing jobs: %w", err)
+		return nil, fmt.Errorf("unable to sign frost for all signing jobs: %w", err)
 	}
 
-	if len(directSigningJobs) > 0 {
-		directSigningResults, err = helper.SignFrost(ctx, config, directSigningJobs)
-		if err != nil {
-			return nil, fmt.Errorf("unable to sign frost for direct signing jobs: %w", err)
-		}
-	}
-
-	if len(directFromCpfpSigningJobs) > 0 {
-		directFromCpfpSigningResults, err = helper.SignFrost(ctx, config, directFromCpfpSigningJobs)
-		if err != nil {
-			return nil, fmt.Errorf("unable to sign frost for direct from cpfp signing jobs: %w", err)
-		}
-	}
+	cpfpSigningResults = allSigningResults[:len(cpfpSigningJobs)]
+	directSigningResults = allSigningResults[len(cpfpSigningJobs) : len(cpfpSigningJobs)+len(directSigningJobs)]
+	directFromCpfpSigningResults = allSigningResults[len(cpfpSigningJobs)+len(directSigningJobs):]
 
 	// Create map to store results by leaf ID
 	resultsByLeafID := make(map[string]*pb.LeafRefundTxSigningResult)
