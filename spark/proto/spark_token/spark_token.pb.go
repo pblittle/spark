@@ -290,8 +290,8 @@ func (x *TokenMintInput) GetTokenIdentifier() []byte {
 type TokenCreateInput struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
 	IssuerPublicKey         []byte                 `protobuf:"bytes,1,opt,name=issuer_public_key,json=issuerPublicKey,proto3" json:"issuer_public_key,omitempty"`
-	TokenName               string                 `protobuf:"bytes,2,opt,name=token_name,json=tokenName,proto3" json:"token_name,omitempty"`
-	TokenTicker             string                 `protobuf:"bytes,3,opt,name=token_ticker,json=tokenTicker,proto3" json:"token_ticker,omitempty"`
+	TokenName               string                 `protobuf:"bytes,2,opt,name=token_name,json=tokenName,proto3" json:"token_name,omitempty"`       // No minimum length because a single utf-8 character can be 3 bytes.
+	TokenTicker             string                 `protobuf:"bytes,3,opt,name=token_ticker,json=tokenTicker,proto3" json:"token_ticker,omitempty"` // No minimum length because a single utf-8 character can be 3 bytes.
 	Decimals                uint32                 `protobuf:"varint,4,opt,name=decimals,proto3" json:"decimals,omitempty"`
 	MaxSupply               []byte                 `protobuf:"bytes,5,opt,name=max_supply,json=maxSupply,proto3" json:"max_supply,omitempty"` // Decoded uint128
 	IsFreezable             bool                   `protobuf:"varint,6,opt,name=is_freezable,json=isFreezable,proto3" json:"is_freezable,omitempty"`
@@ -1881,12 +1881,12 @@ const file_spark_token_proto_rawDesc = "" +
 	"\x0eTokenMintInput\x123\n" +
 	"\x11issuer_public_key\x18\x01 \x01(\fB\a\xfaB\x04z\x02h!R\x0fissuerPublicKey\x127\n" +
 	"\x10token_identifier\x18\x02 \x01(\fB\a\xfaB\x04z\x02h H\x00R\x0ftokenIdentifier\x88\x01\x01B\x13\n" +
-	"\x11_token_identifier\"\xfa\x02\n" +
+	"\x11_token_identifier\"\xf6\x02\n" +
 	"\x10TokenCreateInput\x123\n" +
-	"\x11issuer_public_key\x18\x01 \x01(\fB\a\xfaB\x04z\x02h!R\x0fissuerPublicKey\x12(\n" +
+	"\x11issuer_public_key\x18\x01 \x01(\fB\a\xfaB\x04z\x02h!R\x0fissuerPublicKey\x12&\n" +
 	"\n" +
-	"token_name\x18\x02 \x01(\tB\t\xfaB\x06r\x04\x10\x03\x18\x14R\ttokenName\x12,\n" +
-	"\ftoken_ticker\x18\x03 \x01(\tB\t\xfaB\x06r\x04\x10\x03\x18\x06R\vtokenTicker\x12$\n" +
+	"token_name\x18\x02 \x01(\tB\a\xfaB\x04r\x02\x18\x14R\ttokenName\x12*\n" +
+	"\ftoken_ticker\x18\x03 \x01(\tB\a\xfaB\x04r\x02\x18\x06R\vtokenTicker\x12$\n" +
 	"\bdecimals\x18\x04 \x01(\rB\b\xfaB\x05*\x03\x18\xff\x01R\bdecimals\x12&\n" +
 	"\n" +
 	"max_supply\x18\x05 \x01(\fB\a\xfaB\x04z\x02h\x10R\tmaxSupply\x12!\n" +
