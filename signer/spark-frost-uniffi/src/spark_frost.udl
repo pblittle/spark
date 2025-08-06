@@ -30,6 +30,9 @@ namespace spark_frost {
 
     [Throws=Error]
     bytes decrypt_ecies(bytes encrypted_msg, bytes private_key);
+
+    [Throws=Error]
+    bytes get_taproot_pubkey(bytes verifying_pubkey);
 };
 
 [Error]

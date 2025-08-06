@@ -9,7 +9,8 @@ use bitcoin::{
     absolute::LockTime,
     consensus::deserialize,
     hashes::Hash,
-    key::Secp256k1,
+    key::Parity,
+    key::{Secp256k1, TapTweak},
     sighash::{Prevouts, SighashCache},
     transaction::Version,
     Address, Amount, OutPoint, ScriptBuf, Sequence, TapSighashType, Transaction, TxIn, TxOut, Txid,
@@ -742,4 +743,46 @@ pub fn encrypt_ecies(msg: Vec<u8>, public_key_bytes: Vec<u8>) -> Result<Vec<u8>,
 #[wasm_bindgen]
 pub fn decrypt_ecies(encrypted_msg: Vec<u8>, private_key_bytes: Vec<u8>) -> Result<Vec<u8>, Error> {
     decrypt(&private_key_bytes, &encrypted_msg).map_err(|e| Error::Spark(e.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn get_taproot_pubkey(verifying_pubkey: Vec<u8>) -> Result<Vec<u8>, Error> {
+    let full_key = bitcoin::PublicKey::from_slice(&verifying_pubkey)
+        .map_err(|e| Error::Spark(e.to_string()))?;
+    let x_only_key = full_key.inner.x_only_public_key().0;
+
+    let secp = Secp256k1::new();
+    let (tweaked_pubkey, parity) = x_only_key.tap_tweak(&secp, None);
+
+    let mut buf = [0u8; 33];
+    buf[0] = match parity {
+        Parity::Even => 0x02,
+        Parity::Odd => 0x03,
+    };
+    buf[1..].clone_from_slice(&tweaked_pubkey.serialize());
+
+    Ok(buf.to_vec())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_taproot_pubkey() {
+        let pubkey_bytes =
+            hex::decode("031cd7599775b6959193029794b04dcd99d257cbec008d63e49fdf0f89a5f7c231")
+                .expect("Invalid hex");
+
+        let taproot_pubkey =
+            get_taproot_pubkey(pubkey_bytes).expect("should compute taproot pubkey");
+
+        // It should be 33 bytes: 1-byte prefix + 32-byte x-only key
+        assert_eq!(taproot_pubkey.len(), 33);
+
+        let expected_taproot_bytes =
+            hex::decode("02133ca1b125d35d19a8c794b0b04b8968e24091fd6685247c1b0e903c6f5bdd23")
+                .expect("Invalid hex");
+        assert_eq!(taproot_pubkey, expected_taproot_bytes);
+    }
 }

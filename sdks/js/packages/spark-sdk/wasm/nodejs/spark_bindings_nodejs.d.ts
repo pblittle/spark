@@ -6,9 +6,11 @@ export function wasm_aggregate_frost(msg: Uint8Array, statechain_commitments: an
 export function construct_node_tx(tx: Uint8Array, vout: number, address: string, locktime: number): TransactionResult;
 export function construct_refund_tx(tx: Uint8Array, vout: number, pubkey: Uint8Array, network: string, locktime: number): TransactionResult;
 export function construct_split_tx(tx: Uint8Array, vout: number, addresses: string[], locktime: number): TransactionResult;
+export function construct_direct_refund_tx(tx: Uint8Array, vout: number, pubkey: Uint8Array, network: string, locktime: number): TransactionResult;
 export function create_dummy_tx(address: string, amount_sats: bigint): DummyTx;
 export function encrypt_ecies(msg: Uint8Array, public_key_bytes: Uint8Array): Uint8Array;
 export function decrypt_ecies(encrypted_msg: Uint8Array, private_key_bytes: Uint8Array): Uint8Array;
+export function get_taproot_pubkey(verifying_pubkey: Uint8Array): Uint8Array;
 export class DummyTx {
   private constructor();
   free(): void;

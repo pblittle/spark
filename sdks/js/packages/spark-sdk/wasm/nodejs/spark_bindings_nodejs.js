@@ -341,6 +341,28 @@ module.exports.construct_split_tx = function(tx, vout, addresses, locktime) {
 };
 
 /**
+ * @param {Uint8Array} tx
+ * @param {number} vout
+ * @param {Uint8Array} pubkey
+ * @param {string} network
+ * @param {number} locktime
+ * @returns {TransactionResult}
+ */
+module.exports.construct_direct_refund_tx = function(tx, vout, pubkey, network, locktime) {
+    const ptr0 = passArray8ToWasm0(tx, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(pubkey, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.construct_direct_refund_tx(ptr0, len0, vout, ptr1, len1, ptr2, len2, locktime);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return TransactionResult.__wrap(ret[0]);
+};
+
+/**
  * @param {string} address
  * @param {bigint} amount_sats
  * @returns {DummyTx}
@@ -391,6 +413,22 @@ module.exports.decrypt_ecies = function(encrypted_msg, private_key_bytes) {
     var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v3;
+};
+
+/**
+ * @param {Uint8Array} verifying_pubkey
+ * @returns {Uint8Array}
+ */
+module.exports.get_taproot_pubkey = function(verifying_pubkey) {
+    const ptr0 = passArray8ToWasm0(verifying_pubkey, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.get_taproot_pubkey(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 };
 
 const DummyTxFinalization = (typeof FinalizationRegistry === 'undefined')
