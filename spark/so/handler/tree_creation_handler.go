@@ -72,6 +72,7 @@ func (h *TreeCreationHandler) findParentOutputFromNodeOutput(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
+
 	tx, err := common.TxFromRawTxBytes(node.RawTx)
 	if err != nil {
 		return nil, err
@@ -335,6 +336,11 @@ func (h *TreeCreationHandler) PrepareTreeAddress(ctx context.Context, req *pb.Pr
 		if err != nil {
 			return nil, err
 		}
+
+		if !bytes.Equal(req.UserIdentityPublicKey, treeNode.OwnerIdentityPubkey) {
+			return nil, errors.New("user identity public key does not match tree node owner")
+		}
+
 		nodeTree, err := treeNode.QueryTree().Only(ctx)
 		if err != nil {
 			return nil, err
