@@ -1,9 +1,11 @@
 package tokens
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -12,7 +14,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	ecdsa "github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
+
 	sparktokeninternal "github.com/lightsparkdev/spark/proto/spark_token_internal"
+	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
@@ -300,5 +306,62 @@ func TestValidateSecretShareMatchesPublicKey(t *testing.T) {
 
 		err = validateSecretShareMatchesPublicKey(secretBytes, pubKeyBytes)
 		require.NoError(t, err)
+	})
+}
+func TestValidateSignaturesPackageAndPersistPeerSignatures_RequireThresholdOperators(t *testing.T) {
+	handler, ctx, tx, cleanup := setupInternalSignTokenTestHandler(t)
+	defer cleanup()
+
+	// Limit to 3 operators and set threshold to 2.
+	limitedOperators := make(map[string]*so.SigningOperator)
+	ids := make([]string, 0, 3)
+	for i := 0; i < 3; i++ {
+		id := fmt.Sprintf("%064x", i+1)
+		op, ok := handler.config.SigningOperatorMap[id]
+		require.True(t, ok, "operator %s must exist", id)
+		limitedOperators[id] = op
+		ids = append(ids, id)
+	}
+	handler.config.SigningOperatorMap = limitedOperators
+	handler.config.Threshold = 2
+
+	// Prepare a fake transaction in the DB.
+	testHash := bytes.Repeat([]byte{0x42}, 32)
+	tokenTransaction := tx.TokenTransaction.Create().
+		SetPartialTokenTransactionHash(testHash).
+		SetFinalizedTokenTransactionHash(testHash).
+		SetStatus(st.TokenTransactionStatusStarted).
+		SaveX(ctx)
+
+	// Helper to build signatures map with operators 0 and 1.
+	buildSignatures := func() map[string][]byte {
+		sigs := make(map[string][]byte)
+
+		// Operator 0 (self)
+		sig0 := ecdsa.Sign(handler.config.IdentityPrivateKey.ToBTCEC(), testHash)
+		sigs[ids[0]] = sig0.Serialize()
+
+		// Operator 1
+		const operator1PrivHex = "bc0f5b9055c4a88b881d4bb48d95b409cd910fb27c088380f8ecda2150ee8faf"
+		privBytes, _ := hex.DecodeString(operator1PrivHex)
+		privKey1 := secp256k1.PrivKeyFromBytes(privBytes)
+		sig1 := ecdsa.Sign(privKey1, testHash)
+		sigs[ids[1]] = sig1.Serialize()
+
+		return sigs
+	}
+
+	signatures := buildSignatures()
+
+	t.Run("flag false with missing operator fails", func(t *testing.T) {
+		handler.config.Token.RequireThresholdOperators = false
+		err := handler.validateSignaturesPackageAndPersistPeerSignatures(ctx, signatures, tokenTransaction)
+		require.Error(t, err, "expected failure when RequireThresholdOperators is false and not all operators signed")
+	})
+
+	t.Run("flag true with threshold signatures succeeds", func(t *testing.T) {
+		handler.config.Token.RequireThresholdOperators = true
+		err := handler.validateSignaturesPackageAndPersistPeerSignatures(ctx, signatures, tokenTransaction)
+		require.NoError(t, err, "expected success when RequireThresholdOperators is true and threshold signatures provided")
 	})
 }

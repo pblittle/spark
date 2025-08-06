@@ -127,6 +127,9 @@ type TokenConfig struct {
 	EnableBackfillTokenFreezesTokenIdentifierTask bool `yaml:"enable_backfill_token_freezes_token_identifier_task"`
 	// EnableDeleteLegacyTokenOutputDataTask enables the delete legacy token output data task.
 	EnableDeleteLegacyTokenOutputDataTask bool `yaml:"enable_delete_legacy_token_output_data_task"`
+	// RequireThresholdOperators, when set to true, makes operator signature and finalization use
+	// the configured threshold value instead of requiring responses from all operators to succeed.
+	RequireThresholdOperators bool `yaml:"require_threshold_operators"`
 }
 
 // OperatorConfig contains the configuration for a signing operator.

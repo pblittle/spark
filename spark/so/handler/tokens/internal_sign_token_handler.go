@@ -43,6 +43,17 @@ func NewInternalSignTokenHandler(config *so.Config) *InternalSignTokenHandler {
 	}
 }
 
+// getRequiredParticipatingOperatorsCount returns the number of operators required to
+// sign/reveal to consider a transaction valid. By default, signatures from all operators are
+// required. If the Token.RequireThresholdOperators flag is enabled, we fall back
+// to the configured threshold value instead.
+func (h *InternalSignTokenHandler) getRequiredParticipatingOperatorsCount() int {
+	if h.config.Token.RequireThresholdOperators {
+		return int(h.config.Threshold)
+	}
+	return len(h.config.SigningOperatorMap)
+}
+
 // SignAndPersistTokenTransaction performs the core logic for signing a token transaction from coordination.
 // It validates the transaction, input signatures, signs the hash, updates the DB, and returns the signature bytes.
 func (h *InternalSignTokenHandler) SignAndPersistTokenTransaction(
@@ -576,7 +587,8 @@ func (h *InternalSignTokenHandler) recoverFullRevocationSecretsAndFinalize(ctx c
 		)
 	}
 	// min count of partial revocation secret shares + this server's share >= threshold, for all outputs
-	if minCountOutputPartialRevocationSecretSharesForAllOutputs+1 >= int(h.config.Threshold) {
+	requiredOperators := h.getRequiredParticipatingOperatorsCount()
+	if minCountOutputPartialRevocationSecretSharesForAllOutputs+1 >= requiredOperators {
 		outputRecoveredSecrets, outputToSpendRevocationCommitments, err := h.recoverFullRevocationSecrets(tokenTransaction)
 		if err != nil {
 			return false, tokens.FormatErrorWithTransactionEnt("failed to recover full revocation secrets", tokenTransaction, err)
@@ -688,8 +700,9 @@ func buildInputOperatorShareMap(operatorShares []*pbtkinternal.OperatorRevocatio
 }
 
 func (h *InternalSignTokenHandler) validateSignaturesPackageAndPersistPeerSignatures(ctx context.Context, signatures operatorSignaturesMap, tokenTransaction *ent.TokenTransaction) error {
-	if len(signatures) < int(h.config.Threshold) {
-		return tokens.FormatErrorWithTransactionEnt("less than threshold operators have signed this transaction", tokenTransaction, fmt.Errorf("expected %d signatures, got %d", h.config.Threshold, len(signatures)))
+	expectedSignatures := h.getRequiredParticipatingOperatorsCount()
+	if len(signatures) < expectedSignatures {
+		return tokens.FormatErrorWithTransactionEnt("less than required operators have signed this transaction", tokenTransaction, fmt.Errorf("expected %d signatures, got %d", expectedSignatures, len(signatures)))
 	}
 
 	if err := verifyOperatorSignatures(signatures, h.config.SigningOperatorMap, tokenTransaction.FinalizedTokenTransactionHash); err != nil {
