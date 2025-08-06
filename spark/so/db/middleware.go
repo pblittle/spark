@@ -22,6 +22,10 @@ func SessionMiddleware(factory SessionFactory) grpc.UnaryServerInterceptor {
 
 		logger := logging.GetLoggerFromContext(ctx)
 
+		if info != nil {
+			ctx = WithRpcFullMethod(ctx, info.FullMethod)
+		}
+
 		// Start a transaction or session
 		session := factory.NewSession()
 

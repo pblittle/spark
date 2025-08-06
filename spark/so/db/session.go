@@ -3,18 +3,145 @@ package db
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/lightsparkdev/spark/common/logging"
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 var (
 	ErrTxBeginTimeout   = errors.UnavailableErrorf("The service is currently unavailable. Please try again later.")
 	DefaultNewTxTimeout = 15 * time.Second
 )
+
+var (
+	// Metrics
+	txDurationHistogram metric.Float64Histogram
+	txCounter           metric.Int64Counter
+	txActiveGauge       metric.Int64UpDownCounter
+
+	// Common attribute values
+	attrOperationCommit   = attribute.String("operation", "commit")
+	attrOperationRollback = attribute.String("operation", "rollback")
+	attrOperationBegin    = attribute.String("operation", "begin")
+	attrStatusSuccess     = attribute.String("status", "success")
+	attrStatusError       = attribute.String("status", "error")
+
+	// Initialize metrics
+	_ = initMetrics()
+)
+
+func initMetrics() error {
+	meter := otel.GetMeterProvider().Meter("spark.db")
+
+	var err error
+	txDurationHistogram, err = meter.Float64Histogram(
+		"transaction_duration_ms",
+		metric.WithDescription("Database transaction duration in milliseconds"),
+		metric.WithUnit("ms"),
+		metric.WithExplicitBucketBoundaries(
+			0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1,
+			5, 10, 25, 50, 100, 250, 500,
+			1000, 2500, 5000, 10000, 25000, 50000, 100000,
+		),
+	)
+	if err != nil {
+		return err
+	}
+
+	txCounter, err = meter.Int64Counter(
+		"transactions_total",
+		metric.WithDescription("Total number of database transactions"),
+	)
+	if err != nil {
+		return err
+	}
+
+	txActiveGauge, err = meter.Int64UpDownCounter(
+		"transactions_active",
+		metric.WithDescription("Number of currently active database transactions"),
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Context keys for storing RPC method and task name
+type contextKey string
+
+const (
+	rpcServiceMethodKey contextKey = "rpc_service_method"
+	taskNameKey         contextKey = "task_name"
+)
+
+type rpcServiceMethod struct {
+	service string
+	method  string
+}
+
+// extractRpcServiceAndMethod extracts the RPC method name from the context
+func extractRpcServiceAndMethod(ctx context.Context) (string, string) {
+	if rpc, ok := ctx.Value(rpcServiceMethodKey).(rpcServiceMethod); ok && rpc != (rpcServiceMethod{}) {
+		return rpc.service, rpc.method
+	}
+
+	return "", ""
+}
+
+// extractTaskName extracts the task name from the context
+func extractTaskName(ctx context.Context) string {
+	if taskName, ok := ctx.Value(taskNameKey).(string); ok && taskName != "" {
+		return taskName
+	}
+
+	return ""
+}
+
+// getMetricAttributes returns the attributes for metrics including RPC method and task name
+func getMetricAttributes(ctx context.Context) []attribute.KeyValue {
+	var attrs []attribute.KeyValue
+
+	service, method := extractRpcServiceAndMethod(ctx)
+	if service != "" {
+		attrs = append(attrs, attribute.String("rpc_service", service))
+	}
+	if method != "" {
+		attrs = append(attrs, attribute.String("rpc_method", method))
+	}
+
+	taskName := extractTaskName(ctx)
+	if taskName != "" {
+		attrs = append(attrs, attribute.String("task_name", taskName))
+	}
+
+	return attrs
+}
+
+// WithRpcFullMethod adds the RPC method to the context
+func WithRpcFullMethod(ctx context.Context, fullMethod string) context.Context {
+	parts := strings.Split(fullMethod, "/")
+	if len(parts) >= 3 {
+		rpc := rpcServiceMethod{
+			service: parts[1],
+			method:  parts[2],
+		}
+		return context.WithValue(ctx, rpcServiceMethodKey, rpc)
+	}
+	return ctx
+}
+
+// WithTaskName adds the task name to the context
+func WithTaskName(ctx context.Context, taskName string) context.Context {
+	return context.WithValue(ctx, taskNameKey, taskName)
+}
 
 // SessionFactory is an interface for creating a new Session.
 type SessionFactory interface {
@@ -63,6 +190,14 @@ type Session struct {
 	// a set amount of time, we log a warning. This is useful for tracking down long running
 	// transactions.
 	timer *time.Timer
+	// startTime is the time when the current transaction was started.
+	startTime time.Time
+	// rpcService is the RPC service name for this session
+	rpcService string
+	// rpcMethod is the RPC method name for this session
+	rpcMethod string
+	// taskName is the task name for this session
+	taskName string
 }
 
 // NewSession creates a new Session with a new transactions provided
@@ -87,13 +222,28 @@ func (s *Session) GetOrBeginTx(ctx context.Context) (*ent.Tx, error) {
 	if s.currentTx == nil {
 		logger := logging.GetLoggerFromContext(ctx)
 		logger.Info("Creating new transaction")
+
+		// Extract RPC method and task name for metrics
+		s.rpcService, s.rpcMethod = extractRpcServiceAndMethod(ctx)
+		s.taskName = extractTaskName(ctx)
+
+		// Increment active transactions
+		txActiveGauge.Add(ctx, 1, metric.WithAttributes(
+			append([]attribute.KeyValue{attrOperationBegin}, getMetricAttributes(ctx)...)...,
+		))
+
 		tx, err := s.provider.GetOrBeginTx(ctx)
 		if err != nil {
 			logger.Error("Failed to create new transaction", "error", err)
+			// Decrement on error
+			txActiveGauge.Add(ctx, -1, metric.WithAttributes(
+				append([]attribute.KeyValue{attrOperationBegin}, getMetricAttributes(ctx)...)...,
+			))
 			return nil, err
 		}
 		logger.Info("New transaction created")
 		s.currentTx = tx
+		s.startTime = time.Now()
 		s.timer = time.AfterFunc(30*time.Second, func() {
 			logger.Info("Transaction is held for more than 30 seconds")
 		})
@@ -103,9 +253,24 @@ func (s *Session) GetOrBeginTx(ctx context.Context) (*ent.Tx, error) {
 				s.mu.Lock()
 				defer s.mu.Unlock()
 				logger.Info("Transaction committed")
+
+				duration := time.Since(s.startTime).Seconds()
+
+				// Record metrics with RPC method and task name
+				attrs := append([]attribute.KeyValue{attrOperationCommit, attrStatusSuccess}, getMetricAttributes(ctx)...)
+				txDurationHistogram.Record(ctx, duration, metric.WithAttributes(attrs...))
+				txCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
+				txActiveGauge.Add(ctx, -1, metric.WithAttributes(
+					append([]attribute.KeyValue{attrOperationCommit}, getMetricAttributes(ctx)...)...,
+				))
+
 				err := fn.Commit(ctx, tx)
 				if err != nil {
 					logger.Error("Failed to commit transaction", "error", err)
+					// Update metrics for error case
+					errorAttrs := append([]attribute.KeyValue{attrOperationCommit, attrStatusError}, getMetricAttributes(ctx)...)
+					txDurationHistogram.Record(ctx, duration, metric.WithAttributes(errorAttrs...))
+					txCounter.Add(ctx, 1, metric.WithAttributes(errorAttrs...))
 				} else {
 					// Only set the current tx to nil if the transaction was committed successfully.
 					// Otherwise, the transaction will be rolled back at last.
@@ -121,9 +286,24 @@ func (s *Session) GetOrBeginTx(ctx context.Context) (*ent.Tx, error) {
 				s.mu.Lock()
 				defer s.mu.Unlock()
 				logger.Info("Transaction rolled back")
+
+				duration := time.Since(s.startTime).Seconds()
+
+				// Record metrics with RPC method and task name
+				attrs := append([]attribute.KeyValue{attrOperationRollback, attrStatusSuccess}, getMetricAttributes(ctx)...)
+				txDurationHistogram.Record(ctx, duration, metric.WithAttributes(attrs...))
+				txCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
+				txActiveGauge.Add(ctx, -1, metric.WithAttributes(
+					append([]attribute.KeyValue{attrOperationRollback}, getMetricAttributes(ctx)...)...,
+				))
+
 				err := fn.Rollback(ctx, tx)
 				if err != nil {
 					logger.Error("Failed to rollback transaction", "error", err)
+					// Update metrics for error case
+					errorAttrs := append([]attribute.KeyValue{attrOperationRollback, attrStatusError}, getMetricAttributes(ctx)...)
+					txDurationHistogram.Record(ctx, duration, metric.WithAttributes(errorAttrs...))
+					txCounter.Add(ctx, 1, metric.WithAttributes(errorAttrs...))
 				}
 				s.timer.Stop()
 				s.timer = nil

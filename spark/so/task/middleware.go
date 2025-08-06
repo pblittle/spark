@@ -76,6 +76,8 @@ func DatabaseMiddleware(factory db.SessionFactory) TaskMiddleware {
 	return func(ctx context.Context, config *so.Config, task *BaseTaskSpec) error {
 		logger := logging.GetLoggerFromContext(ctx)
 
+		ctx = db.WithTaskName(ctx, task.Name)
+
 		session := factory.NewSession()
 		ctx = ent.Inject(ctx, session)
 
