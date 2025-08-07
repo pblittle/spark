@@ -32,16 +32,10 @@ func createTestTxBytes(t *testing.T, value int64) []byte {
 }
 
 func TestFinalizeTransfer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Use PostgreSQL instead of SQLite to support FOR UPDATE
-	dsn, stop := db.SpinUpPostgres(t)
-	defer stop()
-
-	ctx, dbCtx, err := db.NewPgTestContext(t, ctx, dsn)
-	require.NoError(t, err)
-	defer dbCtx.Close()
+	ctx, dbCtx := db.SetupPostgresTestContext(t)
 
 	config := &so.Config{
 		BitcoindConfigs: map[string]so.BitcoindConfig{

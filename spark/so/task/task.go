@@ -403,9 +403,11 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 						}
 
 						signTokenHandler := tokens.NewSignTokenHandler(config)
-						err = signTokenHandler.ExchangeRevocationSecretsAndFinalizeIfPossible(ctx, tokenPb, signaturesPackage, tokenTransaction.FinalizedTokenTransactionHash)
+						commitTransactionResponse, err := signTokenHandler.ExchangeRevocationSecretsAndFinalizeIfPossible(ctx, tokenPb, signaturesPackage, tokenTransaction.FinalizedTokenTransactionHash)
 						if err != nil {
 							return fmt.Errorf("cron job failed to exchange revocation secrets and finalize if possible for token txHash: %x: %w", tokenTransaction.FinalizedTokenTransactionHash, err)
+						} else {
+							logger.Info(fmt.Sprintf("Successfully exchanged revocation secrets and finalized if possible for token txHash: %x. Commit response: %v", tokenTransaction.FinalizedTokenTransactionHash, commitTransactionResponse))
 						}
 					}
 					return nil

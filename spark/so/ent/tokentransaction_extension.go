@@ -668,9 +668,13 @@ func FetchAndLockTokenTransactionDataByHash(ctx context.Context, tokenTransactio
 		Where(tokentransaction.FinalizedTokenTransactionHash(tokenTransactionHash)).
 		WithCreatedOutput().
 		WithSpentOutput(func(q *TokenOutputQuery) {
-			// Needed to enable marshalling of the token transaction proto.
-			q.WithOutputCreatedTokenTransaction()
+			// Needed to enable computation of the progress of a transaction commit.
+			q.WithRevocationKeyshare().
+				WithTokenPartialRevocationSecretShares().
+				// Needed to enable marshalling of the token transaction proto.
+				WithOutputCreatedTokenTransaction()
 		}).
+		WithPeerSignatures().
 		WithMint().
 		WithCreate().
 		ForUpdate().

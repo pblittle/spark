@@ -155,7 +155,21 @@ message CommitTransactionRequest {
     bytes owner_identity_public_key = 4 [(validate.rules).bytes.len = 33];
 }
 
-message CommitTransactionResponse {}
+enum CommitStatus {
+    COMMIT_UNSPECIFIED = 0;
+    COMMIT_PROCESSING = 1;
+    COMMIT_FINALIZED = 2;
+}
+
+message CommitProgress {
+    repeated bytes committed_operator_public_keys = 1 [(validate.rules).repeated .items.bytes.len = 33];
+    repeated bytes uncommitted_operator_public_keys = 2 [(validate.rules).repeated .items.bytes.len = 33];
+}
+
+message CommitTransactionResponse {
+    CommitStatus commit_status = 1;
+    CommitProgress commit_progress = 2;
+}
 
 message QueryTokenMetadataRequest {
     repeated bytes token_identifiers = 1 [(validate.rules).repeated .items.bytes.len = 32];

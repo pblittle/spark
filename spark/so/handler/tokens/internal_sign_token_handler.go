@@ -67,20 +67,21 @@ func (h *InternalSignTokenHandler) SignAndPersistTokenTransaction(
 
 	logger := logging.GetLoggerFromContext(ctx)
 
+	if tokenTransaction.Status == st.TokenTransactionStatusSigned {
+		// Return stored signature for sign requests if already signed.
+		signature, err := h.regenerateOperatorSignatureForDuplicateRequest(ctx, h.config, tokenTransaction, finalTokenTransactionHash)
+		if err != nil {
+			return nil, err
+		}
+		return signature, nil
+	}
+
 	if err := validateTokenTransactionForSigning(h.config, tokenTransaction); err != nil {
 		return nil, tokens.FormatErrorWithTransactionEnt(err.Error(), tokenTransaction, err)
 	}
 
 	if err := validateOperatorSpecificSignatures(h.config.IdentityPublicKey(), operatorSpecificSignatures, tokenTransaction); err != nil {
 		return nil, err
-	}
-
-	if tokenTransaction.Status == st.TokenTransactionStatusSigned {
-		signature, err := h.regenerateOperatorSignatureForDuplicateRequest(ctx, h.config, tokenTransaction, finalTokenTransactionHash)
-		if err != nil {
-			return nil, err
-		}
-		return signature, nil
 	}
 
 	invalidOutputs := validateOutputs(tokenTransaction.Edges.CreatedOutput, st.TokenOutputStatusCreatedStarted)

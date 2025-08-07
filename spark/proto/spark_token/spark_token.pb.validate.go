@@ -1939,6 +1939,138 @@ var _ interface {
 	ErrorName() string
 } = CommitTransactionRequestValidationError{}
 
+// Validate checks the field values on CommitProgress with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *CommitProgress) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on CommitProgress with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in CommitProgressMultiError,
+// or nil if none found.
+func (m *CommitProgress) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *CommitProgress) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	for idx, item := range m.GetCommittedOperatorPublicKeys() {
+		_, _ = idx, item
+
+		if len(item) != 33 {
+			err := CommitProgressValidationError{
+				field:  fmt.Sprintf("CommittedOperatorPublicKeys[%v]", idx),
+				reason: "value length must be 33 bytes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	for idx, item := range m.GetUncommittedOperatorPublicKeys() {
+		_, _ = idx, item
+
+		if len(item) != 33 {
+			err := CommitProgressValidationError{
+				field:  fmt.Sprintf("UncommittedOperatorPublicKeys[%v]", idx),
+				reason: "value length must be 33 bytes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return CommitProgressMultiError(errors)
+	}
+
+	return nil
+}
+
+// CommitProgressMultiError is an error wrapping multiple validation errors
+// returned by CommitProgress.ValidateAll() if the designated constraints
+// aren't met.
+type CommitProgressMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m CommitProgressMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m CommitProgressMultiError) AllErrors() []error { return m }
+
+// CommitProgressValidationError is the validation error returned by
+// CommitProgress.Validate if the designated constraints aren't met.
+type CommitProgressValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e CommitProgressValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e CommitProgressValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e CommitProgressValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e CommitProgressValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e CommitProgressValidationError) ErrorName() string { return "CommitProgressValidationError" }
+
+// Error satisfies the builtin error interface
+func (e CommitProgressValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sCommitProgress.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = CommitProgressValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = CommitProgressValidationError{}
+
 // Validate checks the field values on CommitTransactionResponse with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
@@ -1960,6 +2092,37 @@ func (m *CommitTransactionResponse) validate(all bool) error {
 	}
 
 	var errors []error
+
+	// no validation rules for CommitStatus
+
+	if all {
+		switch v := interface{}(m.GetCommitProgress()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, CommitTransactionResponseValidationError{
+					field:  "CommitProgress",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, CommitTransactionResponseValidationError{
+					field:  "CommitProgress",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetCommitProgress()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return CommitTransactionResponseValidationError{
+				field:  "CommitProgress",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
 
 	if len(errors) > 0 {
 		return CommitTransactionResponseMultiError(errors)

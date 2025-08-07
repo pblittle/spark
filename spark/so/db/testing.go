@@ -120,3 +120,18 @@ func NewPgTestContext(t *testing.T, ctx context.Context, dsn string) (context.Co
 	session := NewSession(client, nil)
 	return ent.Inject(ctx, session), &TestContext{t: t, Client: client, Session: session}, nil
 }
+
+// SetupPostgresTestContext is a convenience helper that combines SpinUpPostgres and NewPgTestContext
+// with proper cleanup setup. It returns a context with database session injected and a TestContext
+// with automatic cleanup handlers registered.
+func SetupPostgresTestContext(t *testing.T) (context.Context, *TestContext) {
+	dsn, stop := SpinUpPostgres(t)
+	t.Cleanup(stop)
+
+	ctx := context.Background()
+	ctx, sessionCtx, err := NewPgTestContext(t, ctx, dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { sessionCtx.Close() })
+
+	return ctx, sessionCtx
+}

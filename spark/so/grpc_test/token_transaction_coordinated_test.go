@@ -1324,8 +1324,8 @@ func testCoordinatedTransactionSigningScenarios(
 	commitOwnerPrivateKeys []keys.Private,
 	doubleStartSameTx bool,
 	doubleStartDifferentTx bool,
-	doubleSign bool,
-	expiredSign bool,
+	doubleCommit bool,
+	expiredCommit bool,
 	expectedStartError bool,
 	expectedCommitError bool,
 ) *tokenpb.TokenTransaction {
@@ -1412,7 +1412,7 @@ func testCoordinatedTransactionSigningScenarios(
 		finalTxHash = finalTxHash2
 	}
 
-	if expiredSign {
+	if expiredCommit {
 		wait := time.Duration(TestValidityDurationSecsPlus1) * time.Second
 		t.Logf("Waiting %v for transaction expiry", wait)
 		time.Sleep(wait)
@@ -1451,20 +1451,23 @@ func testCoordinatedTransactionSigningScenarios(
 		OwnerIdentityPublicKey:         config.IdentityPublicKey().Serialize(),
 	}
 
-	_, commitErr := wallet.CommitTransactionCoordinated(context.Background(), config, commitReq)
-
-	// Handle double sign scenario
-	if doubleSign && commitErr == nil {
-		// Try committing again to simulate double sign
-		_, commitErr2 := wallet.CommitTransactionCoordinated(context.Background(), config, commitReq)
-		require.NoError(t, commitErr2, "unexpected error on second commit (double sign)")
-	}
+	commitResp, commitErr := wallet.CommitTransactionCoordinated(context.Background(), config, commitReq)
 
 	if expectedCommitError {
 		require.Error(t, commitErr, "expected error during commit but none")
 		return nil
 	}
 	require.NoError(t, commitErr, "unexpected error during commit")
+
+	require.Equal(t, commitResp.CommitStatus, tokenpb.CommitStatus_COMMIT_FINALIZED, "commit should return finalized status")
+	require.Nil(t, commitResp.CommitProgress, "commit progress should be nil")
+
+	if doubleCommit {
+		// Try committing again to simulate double sign
+		commitResp2, commitErr2 := wallet.CommitTransactionCoordinated(context.Background(), config, commitReq)
+		require.NoError(t, commitErr2, "unexpected error on second commit (double sign)")
+		require.Equal(t, commitResp2.CommitStatus, tokenpb.CommitStatus_COMMIT_FINALIZED, "second commit should return finalized status")
+	}
 
 	return startResp.FinalTokenTransaction
 }
@@ -1896,8 +1899,8 @@ func testCoordinatedTransferTransactionSigningScenarios(t *testing.T, config *wa
 	useTokenIdentifier bool,
 	doubleStartSameTx bool,
 	doubleStartDifferentTx bool,
-	doubleSign bool,
-	expiredSign bool,
+	doubleCommit bool,
+	expiredCommit bool,
 	expectedStartError bool,
 	expectedCommitError bool,
 ) {
@@ -1924,8 +1927,8 @@ func testCoordinatedTransferTransactionSigningScenarios(t *testing.T, config *wa
 		commitOwnerPrivateKeys,
 		doubleStartSameTx,
 		doubleStartDifferentTx,
-		doubleSign,
-		expiredSign,
+		doubleCommit,
+		expiredCommit,
 		expectedStartError,
 		expectedCommitError,
 	)
@@ -1939,8 +1942,8 @@ func testCoordinatedMintTransactionSigningScenarios(t *testing.T, config *wallet
 	useTokenIdentifier bool,
 	doubleStartSameTx bool,
 	doubleStartDifferentTx bool,
-	doubleSign bool,
-	expiredSign bool,
+	doubleCommit bool,
+	expiredCommit bool,
 	expectedStartError bool,
 	expectedCommitError bool,
 ) (*tokenpb.TokenTransaction, keys.Private, keys.Private) {
@@ -1974,8 +1977,8 @@ func testCoordinatedMintTransactionSigningScenarios(t *testing.T, config *wallet
 		commitIssuerPrivateKeys,
 		doubleStartSameTx,
 		doubleStartDifferentTx,
-		doubleSign,
-		expiredSign,
+		doubleCommit,
+		expiredCommit,
 		expectedStartError,
 		expectedCommitError,
 	)
@@ -2000,8 +2003,8 @@ func TestCoordinatedMintTransactionSigning(t *testing.T) {
 		expectedCommitError      bool
 		doubleStartSameTx        bool
 		doubleStartDifferentTx   bool
-		doubleSign               bool
-		expiredSign              bool
+		doubleCommit             bool
+		expiredCommit            bool
 	}{
 		{
 			name: "mint should succeed with l1 token without token identifier",
@@ -2061,16 +2064,13 @@ func TestCoordinatedMintTransactionSigning(t *testing.T) {
 			name:                   "double start mint should succeed with different transaction",
 			doubleStartDifferentTx: true,
 		},
-		/*
-			TODO: Re-enable this test once we have re-added sign idempotiency
-			{
-				name:       "double sign transfer should succeed with same transaction",
-				doubleSign: true,
-			},
-		*/
+		{
+			name:         "double commit mint should succeed with same transaction",
+			doubleCommit: true,
+		},
 		{
 			name:                "mint should fail with expired transaction",
-			expiredSign:         true,
+			expiredCommit:       true,
 			expectedCommitError: true,
 		},
 	}
@@ -2105,8 +2105,8 @@ func TestCoordinatedMintTransactionSigning(t *testing.T) {
 				tc.useTokenIdentifier,
 				tc.doubleStartSameTx,
 				tc.doubleStartDifferentTx,
-				tc.doubleSign,
-				tc.expiredSign,
+				tc.doubleCommit,
+				tc.expiredCommit,
 				tc.expectedStartError,
 				tc.expectedCommitError)
 		})
@@ -2126,8 +2126,8 @@ func TestCoordinatedTransferTransactionSigning(t *testing.T) {
 		expectedCommitError            bool
 		doubleStartSameTx              bool
 		doubleStartDifferentTx         bool
-		doubleSign                     bool
-		expiredSign                    bool
+		doubleCommit                   bool
+		expiredCommit                  bool
 	}{
 		{
 			name: "transfer should succeed with l1 token",
@@ -2187,16 +2187,13 @@ func TestCoordinatedTransferTransactionSigning(t *testing.T) {
 			name:                   "double start transfer should succeed with different transaction",
 			doubleStartDifferentTx: true,
 		},
-		/*
-			TODO: Re-enable this test once we have re-added sign idempotiency
-			{
-				name:       "double sign transfer should succeed with same transaction",
-				doubleSign: true,
-			},
-		*/
+		{
+			name:         "double commit transfer should succeed with same transaction",
+			doubleCommit: true,
+		},
 		{
 			name:                "sign transfer should fail with expired transaction",
-			expiredSign:         true,
+			expiredCommit:       true,
 			expectedCommitError: true,
 		},
 	}
@@ -2245,8 +2242,8 @@ func TestCoordinatedTransferTransactionSigning(t *testing.T) {
 				tc.useTokenIdentifier,
 				tc.doubleStartSameTx,
 				tc.doubleStartDifferentTx,
-				tc.doubleSign,
-				tc.expiredSign,
+				tc.doubleCommit,
+				tc.expiredCommit,
 				tc.expectedStartError,
 				tc.expectedCommitError,
 			)
