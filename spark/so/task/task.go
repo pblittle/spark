@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"maps"
 	"time"
 
 	"github.com/lightsparkdev/spark/common/keys"
@@ -400,7 +401,10 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 							ExpiryTime:   timestamppb.New(tokenTransaction.ExpiryTime),
 							Network:      protoNetwork,
 						}
-
+						logger.Info("[cron] Finalizing token transaction",
+							"num_signatures", len(signaturesPackage),
+							"operator_ids", maps.Keys(signaturesPackage),
+							"tx_hash", hex.EncodeToString(tokenTransaction.FinalizedTokenTransactionHash))
 						signTokenHandler := tokens.NewSignTokenHandler(config)
 						commitTransactionResponse, err := signTokenHandler.ExchangeRevocationSecretsAndFinalizeIfPossible(ctx, tokenPb, signaturesPackage, tokenTransaction.FinalizedTokenTransactionHash)
 						if err != nil {

@@ -2,6 +2,7 @@ package tokens
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -511,6 +512,7 @@ func (h *InternalSignTokenHandler) persistPartialRevocationSecretShares(
 }
 
 func (h *InternalSignTokenHandler) recoverFullRevocationSecretsAndFinalize(ctx context.Context, tokenTransactionHash []byte) (finalized bool, err error) {
+	logger := logging.GetLoggerFromContext(ctx)
 	db, err := ent.GetDbFromContext(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to get or create current tx for request: %w", err)
@@ -562,6 +564,11 @@ func (h *InternalSignTokenHandler) recoverFullRevocationSecretsAndFinalize(ctx c
 
 		for _, output := range batchOutputs {
 			outputsWithShares[output.ID] = output
+			shares := 0
+			if output.Edges.TokenPartialRevocationSecretShares != nil {
+				shares = len(output.Edges.TokenPartialRevocationSecretShares)
+			}
+			logger.Info(fmt.Sprintf("output: %s, has %d revocation keyshares", output.ID, shares))
 		}
 	}
 
@@ -589,6 +596,14 @@ func (h *InternalSignTokenHandler) recoverFullRevocationSecretsAndFinalize(ctx c
 	}
 	// min count of partial revocation secret shares + this server's share >= threshold, for all outputs
 	requiredOperators := h.getRequiredParticipatingOperatorsCount()
+
+	logger.Info("Checking if enough shares for finalization",
+		"tx_hash", hex.EncodeToString(tokenTransactionHash),
+		"min_shares", minCountOutputPartialRevocationSecretSharesForAllOutputs,
+		"with_coordinator", minCountOutputPartialRevocationSecretSharesForAllOutputs+1,
+		"required", requiredOperators,
+		"operator_count", len(h.config.SigningOperatorMap))
+
 	if minCountOutputPartialRevocationSecretSharesForAllOutputs+1 >= requiredOperators {
 		outputRecoveredSecrets, outputToSpendRevocationCommitments, err := h.recoverFullRevocationSecrets(tokenTransaction)
 		if err != nil {

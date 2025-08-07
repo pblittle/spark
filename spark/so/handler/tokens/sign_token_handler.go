@@ -231,6 +231,7 @@ func (h *SignTokenHandler) CommitTransaction(ctx context.Context, req *tokenpb.C
 }
 
 func (h *SignTokenHandler) ExchangeRevocationSecretsAndFinalizeIfPossible(ctx context.Context, tokenTransactionProto *tokenpb.TokenTransaction, internalSignatures map[string]*tokeninternalpb.SignTokenTransactionFromCoordinationResponse, tokenTransactionHash []byte) (*tokenpb.CommitTransactionResponse, error) {
+	logger := logging.GetLoggerFromContext(ctx)
 	response, err := h.exchangeRevocationSecretShares(ctx, internalSignatures, tokenTransactionProto, tokenTransactionHash)
 	if err != nil {
 		return nil, fmt.Errorf("coordinator failed to exchange revocation secret shares with all other operators for token txHash: %x: %w", tokenTransactionHash, err)
@@ -248,7 +249,7 @@ func (h *SignTokenHandler) ExchangeRevocationSecretsAndFinalizeIfPossible(ctx co
 	if err != nil {
 		return nil, fmt.Errorf("failed to build input operator share map for token txHash: %x: %w", tokenTransactionHash, err)
 	}
-
+	logger.Info("length of inputOperatorShareMap", "length", len(inputOperatorShareMap))
 	// Persist the secret shares from all operators.
 	internalHandler := NewInternalSignTokenHandler(h.config)
 	finalized, err := internalHandler.persistPartialRevocationSecretShares(ctx, inputOperatorShareMap, tokenTransactionHash)
