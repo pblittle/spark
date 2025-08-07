@@ -42,8 +42,6 @@ const (
 	SparkService_CounterLeafSwap_FullMethodName                     = "/spark.SparkService/counter_leaf_swap"
 	SparkService_RefreshTimelock_FullMethodName                     = "/spark.SparkService/refresh_timelock"
 	SparkService_ExtendLeaf_FullMethodName                          = "/spark.SparkService/extend_leaf"
-	SparkService_PrepareTreeAddress_FullMethodName                  = "/spark.SparkService/prepare_tree_address"
-	SparkService_CreateTree_FullMethodName                          = "/spark.SparkService/create_tree"
 	SparkService_GetSigningOperatorList_FullMethodName              = "/spark.SparkService/get_signing_operator_list"
 	SparkService_QueryNodes_FullMethodName                          = "/spark.SparkService/query_nodes"
 	SparkService_QueryNodesDistribution_FullMethodName              = "/spark.SparkService/query_nodes_distribution"
@@ -63,7 +61,6 @@ const (
 	SparkService_InitiateStaticDepositUtxoRefund_FullMethodName     = "/spark.SparkService/initiate_static_deposit_utxo_refund"
 	SparkService_InitiateUtxoSwap_FullMethodName                    = "/spark.SparkService/initiate_utxo_swap"
 	SparkService_ExitSingleNodeTrees_FullMethodName                 = "/spark.SparkService/exit_single_node_trees"
-	SparkService_CreateTreeV2_FullMethodName                        = "/spark.SparkService/create_tree_v2"
 	SparkService_CooperativeExitV2_FullMethodName                   = "/spark.SparkService/cooperative_exit_v2"
 	SparkService_ExtendLeafV2_FullMethodName                        = "/spark.SparkService/extend_leaf_v2"
 	SparkService_ClaimTransferSignRefundsV2_FullMethodName          = "/spark.SparkService/claim_transfer_sign_refunds_v2"
@@ -112,8 +109,6 @@ type SparkServiceClient interface {
 	CounterLeafSwap(ctx context.Context, in *CounterLeafSwapRequest, opts ...grpc.CallOption) (*CounterLeafSwapResponse, error)
 	RefreshTimelock(ctx context.Context, in *RefreshTimelockRequest, opts ...grpc.CallOption) (*RefreshTimelockResponse, error)
 	ExtendLeaf(ctx context.Context, in *ExtendLeafRequest, opts ...grpc.CallOption) (*ExtendLeafResponse, error)
-	PrepareTreeAddress(ctx context.Context, in *PrepareTreeAddressRequest, opts ...grpc.CallOption) (*PrepareTreeAddressResponse, error)
-	CreateTree(ctx context.Context, in *CreateTreeRequest, opts ...grpc.CallOption) (*CreateTreeResponse, error)
 	GetSigningOperatorList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetSigningOperatorListResponse, error)
 	QueryNodes(ctx context.Context, in *QueryNodesRequest, opts ...grpc.CallOption) (*QueryNodesResponse, error)
 	QueryNodesDistribution(ctx context.Context, in *QueryNodesDistributionRequest, opts ...grpc.CallOption) (*QueryNodesDistributionResponse, error)
@@ -145,7 +140,6 @@ type SparkServiceClient interface {
 	ExitSingleNodeTrees(ctx context.Context, in *ExitSingleNodeTreesRequest, opts ...grpc.CallOption) (*ExitSingleNodeTreesResponse, error)
 	// The following endpoints enforce inclusion of Direct Transactions used
 	// for unilateral exits
-	CreateTreeV2(ctx context.Context, in *CreateTreeRequest, opts ...grpc.CallOption) (*CreateTreeResponse, error)
 	CooperativeExitV2(ctx context.Context, in *CooperativeExitRequest, opts ...grpc.CallOption) (*CooperativeExitResponse, error)
 	ExtendLeafV2(ctx context.Context, in *ExtendLeafRequest, opts ...grpc.CallOption) (*ExtendLeafResponse, error)
 	ClaimTransferSignRefundsV2(ctx context.Context, in *ClaimTransferSignRefundsRequest, opts ...grpc.CallOption) (*ClaimTransferSignRefundsResponse, error)
@@ -389,26 +383,6 @@ func (c *sparkServiceClient) ExtendLeaf(ctx context.Context, in *ExtendLeafReque
 	return out, nil
 }
 
-func (c *sparkServiceClient) PrepareTreeAddress(ctx context.Context, in *PrepareTreeAddressRequest, opts ...grpc.CallOption) (*PrepareTreeAddressResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PrepareTreeAddressResponse)
-	err := c.cc.Invoke(ctx, SparkService_PrepareTreeAddress_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *sparkServiceClient) CreateTree(ctx context.Context, in *CreateTreeRequest, opts ...grpc.CallOption) (*CreateTreeResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateTreeResponse)
-	err := c.cc.Invoke(ctx, SparkService_CreateTree_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *sparkServiceClient) GetSigningOperatorList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetSigningOperatorListResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSigningOperatorListResponse)
@@ -609,16 +583,6 @@ func (c *sparkServiceClient) ExitSingleNodeTrees(ctx context.Context, in *ExitSi
 	return out, nil
 }
 
-func (c *sparkServiceClient) CreateTreeV2(ctx context.Context, in *CreateTreeRequest, opts ...grpc.CallOption) (*CreateTreeResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateTreeResponse)
-	err := c.cc.Invoke(ctx, SparkService_CreateTreeV2_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *sparkServiceClient) CooperativeExitV2(ctx context.Context, in *CooperativeExitRequest, opts ...grpc.CallOption) (*CooperativeExitResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CooperativeExitResponse)
@@ -755,8 +719,6 @@ type SparkServiceServer interface {
 	CounterLeafSwap(context.Context, *CounterLeafSwapRequest) (*CounterLeafSwapResponse, error)
 	RefreshTimelock(context.Context, *RefreshTimelockRequest) (*RefreshTimelockResponse, error)
 	ExtendLeaf(context.Context, *ExtendLeafRequest) (*ExtendLeafResponse, error)
-	PrepareTreeAddress(context.Context, *PrepareTreeAddressRequest) (*PrepareTreeAddressResponse, error)
-	CreateTree(context.Context, *CreateTreeRequest) (*CreateTreeResponse, error)
 	GetSigningOperatorList(context.Context, *emptypb.Empty) (*GetSigningOperatorListResponse, error)
 	QueryNodes(context.Context, *QueryNodesRequest) (*QueryNodesResponse, error)
 	QueryNodesDistribution(context.Context, *QueryNodesDistributionRequest) (*QueryNodesDistributionResponse, error)
@@ -788,7 +750,6 @@ type SparkServiceServer interface {
 	ExitSingleNodeTrees(context.Context, *ExitSingleNodeTreesRequest) (*ExitSingleNodeTreesResponse, error)
 	// The following endpoints enforce inclusion of Direct Transactions used
 	// for unilateral exits
-	CreateTreeV2(context.Context, *CreateTreeRequest) (*CreateTreeResponse, error)
 	CooperativeExitV2(context.Context, *CooperativeExitRequest) (*CooperativeExitResponse, error)
 	ExtendLeafV2(context.Context, *ExtendLeafRequest) (*ExtendLeafResponse, error)
 	ClaimTransferSignRefundsV2(context.Context, *ClaimTransferSignRefundsRequest) (*ClaimTransferSignRefundsResponse, error)
@@ -875,12 +836,6 @@ func (UnimplementedSparkServiceServer) RefreshTimelock(context.Context, *Refresh
 func (UnimplementedSparkServiceServer) ExtendLeaf(context.Context, *ExtendLeafRequest) (*ExtendLeafResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExtendLeaf not implemented")
 }
-func (UnimplementedSparkServiceServer) PrepareTreeAddress(context.Context, *PrepareTreeAddressRequest) (*PrepareTreeAddressResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PrepareTreeAddress not implemented")
-}
-func (UnimplementedSparkServiceServer) CreateTree(context.Context, *CreateTreeRequest) (*CreateTreeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateTree not implemented")
-}
 func (UnimplementedSparkServiceServer) GetSigningOperatorList(context.Context, *emptypb.Empty) (*GetSigningOperatorListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSigningOperatorList not implemented")
 }
@@ -937,9 +892,6 @@ func (UnimplementedSparkServiceServer) InitiateUtxoSwap(context.Context, *Initia
 }
 func (UnimplementedSparkServiceServer) ExitSingleNodeTrees(context.Context, *ExitSingleNodeTreesRequest) (*ExitSingleNodeTreesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExitSingleNodeTrees not implemented")
-}
-func (UnimplementedSparkServiceServer) CreateTreeV2(context.Context, *CreateTreeRequest) (*CreateTreeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateTreeV2 not implemented")
 }
 func (UnimplementedSparkServiceServer) CooperativeExitV2(context.Context, *CooperativeExitRequest) (*CooperativeExitResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CooperativeExitV2 not implemented")
@@ -1388,42 +1340,6 @@ func _SparkService_ExtendLeaf_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _SparkService_PrepareTreeAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PrepareTreeAddressRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SparkServiceServer).PrepareTreeAddress(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: SparkService_PrepareTreeAddress_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SparkServiceServer).PrepareTreeAddress(ctx, req.(*PrepareTreeAddressRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _SparkService_CreateTree_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateTreeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SparkServiceServer).CreateTree(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: SparkService_CreateTree_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SparkServiceServer).CreateTree(ctx, req.(*CreateTreeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _SparkService_GetSigningOperatorList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
@@ -1759,24 +1675,6 @@ func _SparkService_ExitSingleNodeTrees_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
-func _SparkService_CreateTreeV2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateTreeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SparkServiceServer).CreateTreeV2(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: SparkService_CreateTreeV2_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SparkServiceServer).CreateTreeV2(ctx, req.(*CreateTreeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _SparkService_CooperativeExitV2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CooperativeExitRequest)
 	if err := dec(in); err != nil {
@@ -2053,14 +1951,6 @@ var SparkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _SparkService_ExtendLeaf_Handler,
 		},
 		{
-			MethodName: "prepare_tree_address",
-			Handler:    _SparkService_PrepareTreeAddress_Handler,
-		},
-		{
-			MethodName: "create_tree",
-			Handler:    _SparkService_CreateTree_Handler,
-		},
-		{
 			MethodName: "get_signing_operator_list",
 			Handler:    _SparkService_GetSigningOperatorList_Handler,
 		},
@@ -2131,10 +2021,6 @@ var SparkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "exit_single_node_trees",
 			Handler:    _SparkService_ExitSingleNodeTrees_Handler,
-		},
-		{
-			MethodName: "create_tree_v2",
-			Handler:    _SparkService_CreateTreeV2_Handler,
 		},
 		{
 			MethodName: "cooperative_exit_v2",

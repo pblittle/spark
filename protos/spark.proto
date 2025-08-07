@@ -47,8 +47,6 @@ service SparkService {
     rpc refresh_timelock(RefreshTimelockRequest) returns (RefreshTimelockResponse) {}
     rpc extend_leaf(ExtendLeafRequest) returns (ExtendLeafResponse) {}
 
-    rpc prepare_tree_address(PrepareTreeAddressRequest) returns (PrepareTreeAddressResponse) {}
-    rpc create_tree(CreateTreeRequest) returns (CreateTreeResponse) {}
     rpc get_signing_operator_list(google.protobuf.Empty) returns (GetSigningOperatorListResponse) {}
 
     rpc query_nodes(QueryNodesRequest) returns (QueryNodesResponse) {}
@@ -93,7 +91,6 @@ service SparkService {
 
     // The following endpoints enforce inclusion of Direct Transactions used
     // for unilateral exits
-    rpc create_tree_v2(CreateTreeRequest) returns (CreateTreeResponse) {}
     rpc cooperative_exit_v2(CooperativeExitRequest) returns (CooperativeExitResponse) {}
     rpc extend_leaf_v2(ExtendLeafRequest) returns (ExtendLeafResponse) {}
     rpc claim_transfer_sign_refunds_v2(ClaimTransferSignRefundsRequest) returns (ClaimTransferSignRefundsResponse) {}

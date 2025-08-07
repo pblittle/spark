@@ -244,27 +244,6 @@ func (s *SparkServer) ExtendLeafV2(ctx context.Context, req *pb.ExtendLeafReques
 	return errors.WrapWithGRPCError(handler.ExtendLeafV2(ctx, req))
 }
 
-// PrepareTreeAddress prepares the tree address for the given public key.
-func (s *SparkServer) PrepareTreeAddress(ctx context.Context, req *pb.PrepareTreeAddressRequest) (*pb.PrepareTreeAddressResponse, error) {
-	ctx, _ = logging.WithIdentityPubkey(ctx, req.UserIdentityPublicKey)
-	treeHandler := handler.NewTreeCreationHandler(s.config)
-	return errors.WrapWithGRPCError(treeHandler.PrepareTreeAddress(ctx, req))
-}
-
-// CreateTree creates a tree from user input and signs the transactions in the tree.
-func (s *SparkServer) CreateTree(ctx context.Context, req *pb.CreateTreeRequest) (*pb.CreateTreeResponse, error) {
-	ctx, _ = logging.WithIdentityPubkey(ctx, req.UserIdentityPublicKey)
-	treeHandler := handler.NewTreeCreationHandler(s.config)
-	return errors.WrapWithGRPCError(treeHandler.CreateTree(ctx, req))
-}
-
-// CreateTreeV2 creates a tree from user input and signs the transactions in the tree.
-func (s *SparkServer) CreateTreeV2(ctx context.Context, req *pb.CreateTreeRequest) (*pb.CreateTreeResponse, error) {
-	ctx, _ = logging.WithIdentityPubkey(ctx, req.UserIdentityPublicKey)
-	treeHandler := handler.NewTreeCreationHandler(s.config)
-	return errors.WrapWithGRPCError(treeHandler.CreateTreeV2(ctx, req))
-}
-
 // GetSigningOperatorList gets the list of signing operators.
 func (s *SparkServer) GetSigningOperatorList(_ context.Context, _ *emptypb.Empty) (*pb.GetSigningOperatorListResponse, error) {
 	return &pb.GetSigningOperatorListResponse{SigningOperators: s.config.GetSigningOperatorList()}, nil

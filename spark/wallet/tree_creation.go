@@ -18,6 +18,7 @@ import (
 	"github.com/lightsparkdev/spark/common"
 	pbfrost "github.com/lightsparkdev/spark/proto/frost"
 	pb "github.com/lightsparkdev/spark/proto/spark"
+	pbssp "github.com/lightsparkdev/spark/proto/spark_ssp_internal"
 	"github.com/lightsparkdev/spark/so/objects"
 )
 
@@ -123,7 +124,7 @@ func GenerateDepositAddressesForTree(
 	}
 	defer conn.Close()
 
-	client := pb.NewSparkServiceClient(conn)
+	client := pbssp.NewSparkSspInternalServiceClient(conn)
 
 	request := &pb.PrepareTreeAddressRequest{
 		UserIdentityPublicKey: config.IdentityPublicKey().Serialize(),
@@ -598,9 +599,10 @@ func CreateTree(
 	}
 	defer conn.Close()
 
+	sspClient := pbssp.NewSparkSspInternalServiceClient(conn)
 	client := pb.NewSparkServiceClient(conn)
 
-	response, err := client.CreateTree(ctx, &request)
+	response, err := sspClient.CreateTree(ctx, &request)
 	if err != nil {
 		return nil, err
 	}
