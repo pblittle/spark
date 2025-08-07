@@ -473,6 +473,10 @@ func NewDBConnector(ctx context.Context, soConfig *Config) (*DBConnector, error)
 			}
 		}
 
+		if podName, ok := os.LookupEnv("POD_NAME"); ok {
+			conf.ConnConfig.RuntimeParams["application_name"] = podName
+		}
+
 		pool, err := pgxpool.NewWithConfig(ctx, conf)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create connection pool: %w", err)
