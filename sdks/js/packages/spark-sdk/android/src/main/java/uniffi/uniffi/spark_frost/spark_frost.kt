@@ -776,6 +776,15 @@ internal interface UniffiLib : Library {
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
+    fun uniffi_spark_frost_fn_func_construct_direct_refund_tx(
+        `tx`: RustBuffer.ByValue,
+        `vout`: Int,
+        `pubkey`: RustBuffer.ByValue,
+        `network`: RustBuffer.ByValue,
+        `locktime`: Short,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
     fun uniffi_spark_frost_fn_func_construct_node_tx(
         `tx`: RustBuffer.ByValue,
         `vout`: Int,
@@ -821,6 +830,11 @@ internal interface UniffiLib : Library {
 
     fun uniffi_spark_frost_fn_func_frost_nonce(
         `keyPackage`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    fun uniffi_spark_frost_fn_func_get_taproot_pubkey(
+        `verifyingPubkey`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -1062,6 +1076,8 @@ internal interface UniffiLib : Library {
 
     fun uniffi_spark_frost_checksum_func_aggregate_frost(): Short
 
+    fun uniffi_spark_frost_checksum_func_construct_direct_refund_tx(): Short
+
     fun uniffi_spark_frost_checksum_func_construct_node_tx(): Short
 
     fun uniffi_spark_frost_checksum_func_construct_refund_tx(): Short
@@ -1075,6 +1091,8 @@ internal interface UniffiLib : Library {
     fun uniffi_spark_frost_checksum_func_encrypt_ecies(): Short
 
     fun uniffi_spark_frost_checksum_func_frost_nonce(): Short
+
+    fun uniffi_spark_frost_checksum_func_get_taproot_pubkey(): Short
 
     fun uniffi_spark_frost_checksum_func_sign_frost(): Short
 
@@ -1098,6 +1116,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_spark_frost_checksum_func_aggregate_frost() != 50841.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_spark_frost_checksum_func_construct_direct_refund_tx() != 21321.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_spark_frost_checksum_func_construct_node_tx() != 50549.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1117,6 +1138,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_spark_frost_checksum_func_frost_nonce() != 5111.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_spark_frost_checksum_func_get_taproot_pubkey() != 13153.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_spark_frost_checksum_func_sign_frost() != 4845.toShort()) {
@@ -1740,6 +1764,27 @@ fun `aggregateFrost`(
     )
 
 @Throws(Exception::class)
+fun `constructDirectRefundTx`(
+    `tx`: kotlin.ByteArray,
+    `vout`: kotlin.UInt,
+    `pubkey`: kotlin.ByteArray,
+    `network`: kotlin.String,
+    `locktime`: kotlin.UShort,
+): TransactionResult =
+    FfiConverterTypeTransactionResult.lift(
+        uniffiRustCallWithError(Exception) { _status ->
+            UniffiLib.INSTANCE.uniffi_spark_frost_fn_func_construct_direct_refund_tx(
+                FfiConverterByteArray.lower(`tx`),
+                FfiConverterUInt.lower(`vout`),
+                FfiConverterByteArray.lower(`pubkey`),
+                FfiConverterString.lower(`network`),
+                FfiConverterUShort.lower(`locktime`),
+                _status,
+            )
+        },
+    )
+
+@Throws(Exception::class)
 fun `constructNodeTx`(
     `tx`: kotlin.ByteArray,
     `vout`: kotlin.UInt,
@@ -1849,6 +1894,17 @@ fun `frostNonce`(`keyPackage`: KeyPackage): NonceResult =
         uniffiRustCallWithError(Exception) { _status ->
             UniffiLib.INSTANCE.uniffi_spark_frost_fn_func_frost_nonce(
                 FfiConverterTypeKeyPackage.lower(`keyPackage`),
+                _status,
+            )
+        },
+    )
+
+@Throws(Exception::class)
+fun `getTaprootPubkey`(`verifyingPubkey`: kotlin.ByteArray): kotlin.ByteArray =
+    FfiConverterByteArray.lift(
+        uniffiRustCallWithError(Exception) { _status ->
+            UniffiLib.INSTANCE.uniffi_spark_frost_fn_func_get_taproot_pubkey(
+                FfiConverterByteArray.lower(`verifyingPubkey`),
                 _status,
             )
         },
