@@ -16,6 +16,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // RetryPolicyConfig represents configuration for gRPC retry policy
@@ -91,7 +93,9 @@ func NewGRPCConnectionWithCert(address string, certPath string, retryPolicy *Ret
 	}
 
 	clientOpts := []grpc.DialOption{
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler(
+			otelgrpc.WithMetricAttributes(attribute.String("server.address", address)),
+		)),
 		grpc.WithUnaryInterceptor(LoggingUnaryClientInterceptor),
 	}
 
@@ -138,7 +142,9 @@ func NewGRPCConnectionWithCert(address string, certPath string, retryPolicy *Ret
 
 func NewGRPCConnectionWithoutTLS(address string, retryPolicy *RetryPolicyConfig) (*grpc.ClientConn, error) {
 	clientOpts := []grpc.DialOption{
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler(
+			otelgrpc.WithMetricAttributes(attribute.String("server.address", address)),
+		)),
 		grpc.WithUnaryInterceptor(LoggingUnaryClientInterceptor),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
@@ -158,7 +164,9 @@ func NewGRPCConnectionWithoutTLS(address string, retryPolicy *RetryPolicyConfig)
 
 func NewGRPCConnectionWithTestTLS(address string, retryPolicy *RetryPolicyConfig) (*grpc.ClientConn, error) {
 	clientOpts := []grpc.DialOption{
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler(
+			otelgrpc.WithMetricAttributes(attribute.String("server.address", address)),
+		)),
 		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
 			InsecureSkipVerify: true,
 		})),
