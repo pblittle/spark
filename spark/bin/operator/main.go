@@ -314,8 +314,9 @@ func main() {
 		}()
 	}
 
+	var knobsService *knobs.Knobs
 	if config.Knobs.IsEnabled() {
-		knobsService := knobs.New(slog.Default().With("component", "knobs"))
+		knobsService = knobs.New(slog.Default().With("component", "knobs"))
 		if err := knobsService.FetchAndUpdate(errCtx); err != nil {
 			// Knobs has failed to fetch the config, so the controllers will rely on the default values.
 			slog.Error("Failed to fetch and update knobs", "error", err)
@@ -323,7 +324,7 @@ func main() {
 	}
 
 	dbDriver := config.DatabaseDriver()
-	connector, err := so.NewDBConnector(errCtx, config)
+	connector, err := so.NewDBConnector(errCtx, config, knobsService)
 	if err != nil {
 		log.Fatalf("Failed to create db connector: %v", err)
 	}

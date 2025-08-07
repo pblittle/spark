@@ -274,3 +274,7 @@ func (k *Knobs) handleConfigMap(configMap *corev1.ConfigMap) {
 	}
 	k.logger.Info("Updated knobs", "knobs", k.values)
 }
+
+func (k *Knobs) GetDatabaseStatementTimeoutMs(ctx context.Context) uint64 {
+	return uint64(k.GetValue("spark.database.statement_timeout", 60) * 1000)
+}
