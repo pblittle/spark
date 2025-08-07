@@ -326,7 +326,6 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 						Where(
 							tokentransaction.And(
 								tokentransaction.StatusEQ(st.TokenTransactionStatusRevealed),
-								tokentransaction.UpdateTimeLT(time.Now().Add(-5*time.Minute)),
 							),
 						).
 						WithPeerSignatures().
