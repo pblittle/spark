@@ -16,7 +16,7 @@ func TestKnobs(t *testing.T) {
 
 	// Test GetValue with no value set
 	value := k.GetValue("test_knob", 0.0)
-	assert.Equal(t, 0.0, value)
+	assert.Zero(t, value)
 
 	// Test RolloutRandom with default value
 	assert.True(t, k.RolloutRandom("test_knob", 100.0)) // 100% chance
@@ -38,10 +38,10 @@ func TestKnobs(t *testing.T) {
 
 	// Test GetValueTarget
 	value = k.GetValueTarget("test_knob", &target1, 0.0)
-	assert.Equal(t, 50.0, value)
+	assert.InDelta(t, 50.0, value, 0.001)
 
 	value = k.GetValueTarget("test_knob", &target2, 0.0)
-	assert.Equal(t, 0.0, value)
+	assert.InDelta(t, 0.0, value, 0.001)
 
 	// Test RolloutRandomTarget
 	assert.False(t, k.RolloutRandomTarget("test_knob", &target2, 100.0)) // 0% chance
@@ -74,10 +74,10 @@ func TestKnobs(t *testing.T) {
 	result3 := k.RolloutUUIDTarget("test_knob", id2, &target1, 50.0)
 	result4 := k.RolloutUUIDTarget("test_knob", id3, &target1, 50.0)
 	// Note: We can't assert they're different since it depends on the hash, but we test they're consistent
-	result3_repeat := k.RolloutUUIDTarget("test_knob", id2, &target1, 50.0)
-	result4_repeat := k.RolloutUUIDTarget("test_knob", id3, &target1, 50.0)
-	assert.Equal(t, result3, result3_repeat, "RolloutUUIDTarget should be deterministic for id2")
-	assert.Equal(t, result4, result4_repeat, "RolloutUUIDTarget should be deterministic for id3")
+	result3Repeat := k.RolloutUUIDTarget("test_knob", id2, &target1, 50.0)
+	result4Repeat := k.RolloutUUIDTarget("test_knob", id3, &target1, 50.0)
+	assert.Equal(t, result3, result3Repeat, "RolloutUUIDTarget should be deterministic for id2")
+	assert.Equal(t, result4, result4Repeat, "RolloutUUIDTarget should be deterministic for id3")
 }
 
 func TestKnobs_HandleConfigMap(t *testing.T) {
@@ -199,7 +199,7 @@ func TestKnobs_HandleConfigMap_NilData(t *testing.T) {
 	k.inner.RUnlock()
 
 	assert.True(t, exists, "Existing knob should still exist")
-	assert.Equal(t, 42.0, value, "Existing knob value should be unchanged")
+	assert.InDelta(t, 42.0, value, 0.001, "Existing knob value should be unchanged")
 }
 
 func TestKnobs_RolloutUUIDConsistent(t *testing.T) {
@@ -227,8 +227,7 @@ func TestKnobs_RolloutUUIDConsistent(t *testing.T) {
 			// Test multiple times to ensure consistency - this is the key requirement
 			for i := 0; i < 10; i++ {
 				repeatResult := k.RolloutUUID("test", parsedUUID, 50.0)
-				assert.Equal(t, tc.expected, repeatResult,
-					"RolloutUUID should be deterministic (iteration %d)", i)
+				assert.Equal(t, tc.expected, repeatResult, "RolloutUUID should be deterministic (iteration %d)", i)
 			}
 		})
 	}

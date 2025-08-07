@@ -237,7 +237,7 @@ type SignTokenTransactionFromCoordinationParams struct {
 	OwnerPrivateKeys []*secp256k1.PrivateKey
 }
 
-// SignTokenTransactionFromCoordinationCoordinated instructs a single operator to sign a token transaction.
+// SignTokenTransactionFromCoordination instructs a single operator to sign a token transaction.
 // This is normally called by the coordinator to each other SO.
 func SignTokenTransactionFromCoordination(
 	ctx context.Context,
@@ -282,7 +282,7 @@ func SignTokenTransactionFromCoordination(
 	})
 }
 
-// FreezeTokens sends a request to freeze (or unfreeze) all tokens owned by a specific owner public key.
+// FreezeTokensV1 sends a request to freeze (or unfreeze) all tokens owned by a specific owner public key.
 func FreezeTokensV1(
 	ctx context.Context,
 	config *Config,
@@ -310,7 +310,7 @@ func FreezeTokensV1(
 
 		token, err := AuthenticateWithConnection(ctx, config, operatorConn)
 		if err != nil {
-			return nil, fmt.Errorf("failed to authenticate with server: %v", err)
+			return nil, fmt.Errorf("failed to authenticate with server: %w", err)
 		}
 		tmpCtx := ContextWithToken(ctx, token)
 		sparkTokenClient := tokenpb.NewSparkTokenServiceClient(operatorConn)
@@ -326,12 +326,12 @@ func FreezeTokensV1(
 		}
 		payloadHash, err := utils.HashFreezeTokensPayloadV1(payloadTokenProto)
 		if err != nil {
-			return nil, fmt.Errorf("failed to hash freeze tokens payload: %v", err)
+			return nil, fmt.Errorf("failed to hash freeze tokens payload: %w", err)
 		}
 
 		sig, err := SignHashSlice(config, config.IdentityPrivateKey, payloadHash)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create signature: %v", err)
+			return nil, fmt.Errorf("failed to create signature: %w", err)
 		}
 		issuerSignature := sig
 
@@ -342,7 +342,7 @@ func FreezeTokensV1(
 
 		lastResponse, err = sparkTokenClient.FreezeTokens(tmpCtx, request)
 		if err != nil {
-			return nil, fmt.Errorf("failed to freeze/unfreeze tokens: %v", err)
+			return nil, fmt.Errorf("failed to freeze/unfreeze tokens: %w", err)
 		}
 	}
 	return lastResponse, nil
@@ -437,7 +437,7 @@ func ExchangeRevocationSecretsManually(
 	return nil
 }
 
-// PrepareRevocationSharesForTesting prepares revocation shares from the database for testing purposes.
+// PrepareRevocationSharesFromCoordinator prepares revocation shares from the database for testing purposes.
 // This function queries the database to get the actual revocation keyshares for the outputs being spent.
 func PrepareRevocationSharesFromCoordinator(
 	ctx context.Context,

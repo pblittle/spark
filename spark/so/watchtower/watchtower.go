@@ -207,7 +207,7 @@ func CheckExpiredTimeLocks(ctx context.Context, bitcoinClient *rpcclient.Client,
 							))
 						}
 						slog.InfoContext(ctx, "Failed to broadcast both direct refund tx and direct from cpfp refund tx", "error", err)
-						return fmt.Errorf("watchtower failed to broadcast refund txs: %v", err)
+						return fmt.Errorf("watchtower failed to broadcast refund txs: %w", err)
 					}
 					// Record successful refund tx broadcast
 					if refundTxBroadcastCounter != nil {

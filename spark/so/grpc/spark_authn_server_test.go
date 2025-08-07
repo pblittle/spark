@@ -250,7 +250,7 @@ func TestVerifyChallenge_TamperedToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			protectedSubject := proto.Clone(protected).(*pbauthninternal.ProtectedSession)
+			protectedSubject := proto.CloneOf(protected)
 			tt.tamper(protectedSubject)
 			tamperedBytes, err := proto.Marshal(protectedSubject)
 			require.NoError(t, err)

@@ -85,7 +85,7 @@ type args struct {
 }
 
 func (a *args) SupportedNetworksList() []common.Network {
-	networks := make([]common.Network, 0)
+	var networks []common.Network
 	if strings.Contains(a.SupportedNetworks, "mainnet") || a.SupportedNetworks == "" {
 		networks = append(networks, common.Mainnet)
 	}
@@ -505,9 +505,6 @@ func main() {
 	} else {
 		grpcServer = grpc.NewServer(serverOpts...)
 		tlsConfig = nil
-	}
-
-	if !args.DisableDKG {
 	}
 
 	var mockAction *common.MockAction

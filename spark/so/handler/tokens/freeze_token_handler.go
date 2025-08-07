@@ -102,7 +102,7 @@ func (h *FreezeTokenHandler) FreezeTokens(
 	outputIDs, totalAmount, err := ent.GetOwnedTokenOutputStats(ctx,
 		[][]byte{req.FreezeTokensPayload.OwnerPublicKey},
 		tokenCreateEnt.TokenIdentifier,
-		common.Network(tokenNetwork),
+		tokenNetwork,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", tokens.ErrFailedToGetOwnedOutputStats, err)

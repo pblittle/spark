@@ -78,7 +78,7 @@ func createDepositAddressBinaryTree(
 func createAddressRequestNodeFromTreeNodes(
 	treeNodes []*DepositAddressTree,
 ) []*pb.AddressRequestNode {
-	results := []*pb.AddressRequestNode{}
+	var results []*pb.AddressRequestNode
 	for _, node := range treeNodes {
 		pubkey := secp256k1.PrivKeyFromBytes(node.SigningPrivateKey).PubKey()
 		result := &pb.AddressRequestNode{
@@ -134,7 +134,7 @@ func GenerateDepositAddressesForTree(
 		request.Source = &pb.PrepareTreeAddressRequest_ParentNodeOutput{
 			ParentNodeOutput: &pb.NodeOutput{
 				NodeId: parentNode.Id,
-				Vout:   uint32(vout),
+				Vout:   vout,
 			},
 		}
 	} else if parentTx != nil {
@@ -145,7 +145,7 @@ func GenerateDepositAddressesForTree(
 		}
 		request.Source = &pb.PrepareTreeAddressRequest_OnChainUtxo{
 			OnChainUtxo: &pb.UTXO{
-				Vout:    uint32(vout),
+				Vout:    vout,
 				RawTx:   bytebuf.Bytes(),
 				Network: config.ProtoNetwork(),
 			},
@@ -191,16 +191,15 @@ func buildCreationNodesFromTree(
 
 	rootCreationNode := &pb.CreationNode{}
 
-	elements := []element{}
-	elements = append(elements, element{
+	elements := []element{{
 		parentTx:     parentTx,
 		vout:         vout,
 		node:         root,
 		creationNode: rootCreationNode,
 		leafNode:     false,
-	})
+	}}
 
-	signingNonces := make([]*objects.SigningNonce, 0)
+	var signingNonces []*objects.SigningNonce
 
 	for len(elements) > 0 {
 		currentElement := elements[0]
@@ -210,19 +209,19 @@ func buildCreationNodesFromTree(
 			shouldAddToQueue := currentElement.node.Children[0].Children != nil || createLeaves
 
 			// Form tx
-			childTxOuts := make([]*wire.TxOut, 0)
+			var childTxOuts []*wire.TxOut
 			for _, child := range currentElement.node.Children {
 				childAddress, _ := btcutil.DecodeAddress(*child.Address, common.NetworkParams(network))
 				childPkScript, _ := txscript.PayToAddrScript(childAddress)
-				childTxOut := wire.NewTxOut(int64(currentElement.parentTx.TxOut[currentElement.vout].Value)/2, childPkScript)
+				childTxOut := wire.NewTxOut(currentElement.parentTx.TxOut[currentElement.vout].Value/2, childPkScript)
 				childTxOuts = append(childTxOuts, childTxOut)
 			}
 			parentOutPoint := &wire.OutPoint{Hash: currentElement.parentTx.TxHash(), Index: currentElement.vout}
 			tx := createSplitTx(parentOutPoint, childTxOuts)
 
 			// Form children/elements
-			childrenArray := make([]*pb.CreationNode, 0)
-			newElements := make([]element, 0)
+			var childrenArray []*pb.CreationNode
+			var newElements []element
 			for i, child := range currentElement.node.Children {
 				childCreationNode := &pb.CreationNode{}
 				childrenArray = append(childrenArray, childCreationNode)
@@ -377,14 +376,13 @@ func signTreeCreation(
 		creationNode         *pb.CreationNode
 		creationResponseNode *pb.CreationResponseNode
 	}
-	elements := []element{}
-	elements = append(elements, element{
+	elements := []element{{
 		parentTx:             tx,
 		vout:                 vout,
 		internalNode:         internalTreeRoot,
 		creationNode:         requestTreeRoot,
 		creationResponseNode: creationResultTreeRoot,
-	})
+	}}
 
 	conn, err := common.NewGRPCConnectionWithoutTLS(config.FrostSignerAddress, nil)
 	if err != nil {
@@ -394,7 +392,7 @@ func signTreeCreation(
 
 	frostClient := pbfrost.NewFrostServiceClient(conn)
 
-	nodeSignatures := []*pb.NodeSignatures{}
+	var nodeSignatures []*pb.NodeSignatures
 	for len(elements) > 0 {
 		currentElement := elements[0]
 		elements = elements[1:]
@@ -564,7 +562,7 @@ func CreateTree(
 		}
 		request.Source = &pb.CreateTreeRequest_OnChainUtxo{
 			OnChainUtxo: &pb.UTXO{
-				Vout:    uint32(vout),
+				Vout:    vout,
 				RawTx:   bytebuf.Bytes(),
 				Network: config.ProtoNetwork(),
 			},
@@ -578,7 +576,7 @@ func CreateTree(
 		request.Source = &pb.CreateTreeRequest_ParentNodeOutput{
 			ParentNodeOutput: &pb.NodeOutput{
 				NodeId: parentNode.Id,
-				Vout:   uint32(vout),
+				Vout:   vout,
 			},
 		}
 	} else {

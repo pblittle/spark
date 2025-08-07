@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -57,10 +58,10 @@ func validateArrayLengths(req any, method string) error {
 		// This is a simplified version - in practice you'd want to recursively check all fields
 		if protoMsg, ok := msg.(interface{ GetArrayFields() []any }); ok {
 			for _, arr := range protoMsg.GetArrayFields() {
-				if len(arr.([]any)) > MaxArrayLength {
+				if anyArr, ok := arr.([]any); ok && len(anyArr) > MaxArrayLength {
 					return &ValidationError{
 						Field:      "array_length",
-						Value:      len(arr.([]any)),
+						Value:      len(anyArr),
 						Constraint: fmt.Sprintf("must be <= %d items", MaxArrayLength),
 						Message:    "array too long",
 						Method:     method,
@@ -78,19 +79,25 @@ func ValidationInterceptor() grpc.UnaryServerInterceptor {
 
 		// Check request size
 		if err := validateRequestSize(req, info.FullMethod); err != nil {
-			logger.Warn("Request size validation failed",
-				"error", err,
-				"size", err.(*ValidationError).Value,
-			)
+			var valErr *ValidationError
+			if errors.As(err, &valErr) {
+				logger.Warn("Request size validation failed",
+					"error", err,
+					"size", valErr.Value,
+				)
+			}
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 
 		// Check array lengths
 		if err := validateArrayLengths(req, info.FullMethod); err != nil {
-			logger.Warn("Array length validation failed",
-				"error", err,
-				"length", err.(*ValidationError).Value,
-			)
+			var valErr *ValidationError
+			if errors.As(err, &valErr) {
+				logger.Warn("Array length validation failed",
+					"error", err,
+					"length", valErr.Value,
+				)
+			}
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 

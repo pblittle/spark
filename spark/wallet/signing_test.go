@@ -2,9 +2,10 @@ package wallet
 
 import (
 	"bytes"
-	"github.com/lightsparkdev/spark/common/keys"
 	rand2 "math/rand/v2"
 	"testing"
+
+	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -334,8 +335,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 			)
 
 			if tt.expectError {
-				require.Error(t, err)
-				assert.ErrorContains(t, err, tt.expectedErrorContains)
+				require.ErrorContains(t, err, tt.expectedErrorContains)
 				assert.Nil(t, signingJobs)
 				assert.Nil(t, refundTxs)
 				assert.Nil(t, userCommitments)

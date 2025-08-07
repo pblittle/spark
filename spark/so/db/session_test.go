@@ -117,7 +117,7 @@ func TestSession_GetCurrrentTxReturnsSameTxAfterFailedCommit(t *testing.T) {
 
 	tx.OnCommit(func(fn ent.Committer) ent.Committer {
 		return ent.CommitFunc(func(ctx context.Context, tx *ent.Tx) error {
-			return fmt.Errorf("Commit failed, because you asked it to!")
+			return fmt.Errorf("commit failed because you asked it to")
 		})
 	})
 
@@ -142,7 +142,7 @@ func TestSession_GetCurrrentTxReturnsSameTxAfterFailedRollback(t *testing.T) {
 
 	tx.OnRollback(func(fn ent.Rollbacker) ent.Rollbacker {
 		return ent.RollbackFunc(func(ctx context.Context, tx *ent.Tx) error {
-			return fmt.Errorf("Rollback failed, because you asked it to!")
+			return fmt.Errorf("rollback failed because you asked it to")
 		})
 	})
 

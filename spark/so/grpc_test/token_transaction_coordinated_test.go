@@ -394,13 +394,13 @@ func setAndValidateSuccessfulTokenTransactionToRevealedForCoordinator(t *testing
 	require.NoError(t, err)
 
 	require.Equal(t, st.TokenTransactionStatusRevealed, tokenTransaction.Status, "token transaction status should be revealed")
-	require.True(t, time.Now().In(time.UTC).Sub(tokenTransaction.UpdateTime.In(time.UTC)) > 5*time.Minute, "update time should be more than 5 minutes before now")
+	require.Greater(t, time.Now().In(time.UTC).Sub(tokenTransaction.UpdateTime.In(time.UTC)), 5*time.Minute, "update time should be more than 5 minutes before now")
 	for _, output := range tokenTransaction.Edges.SpentOutput {
-		require.Equal(t, output.Status, st.TokenOutputStatusSpentSigned, "spent output %s should be signed", output.ID)
-		require.Equal(t, len(output.Edges.TokenPartialRevocationSecretShares), 0, "should have 0 secret shares")
+		require.Equal(t, st.TokenOutputStatusSpentSigned, output.Status, "spent output %s should be signed", output.ID)
+		require.Empty(t, output.Edges.TokenPartialRevocationSecretShares, "should have 0 secret shares")
 	}
 	for _, output := range tokenTransaction.Edges.CreatedOutput {
-		require.Equal(t, output.Status, st.TokenOutputStatusCreatedSigned, "created output %s should be signed", output.ID)
+		require.Equal(t, st.TokenOutputStatusCreatedSigned, output.Status, "created output %s should be signed", output.ID)
 	}
 }
 
@@ -663,7 +663,7 @@ func TestCoordinatedTokenMintAndTransferTokensWithTooManyInputsFails(t *testing.
 			{
 				OwnerPublicKey: consolidatedOutputPubKeyBytes,
 				TokenPublicKey: tokenIdentityPubKeyBytes,
-				TokenAmount:    int64ToUint128Bytes(0, uint64(TestIssueMultiplePerOutputAmount)*uint64(ManyOutputsCount)),
+				TokenAmount:    int64ToUint128Bytes(0, uint64(testIssueMultiplePerOutputAmount)*uint64(manyOutputsCount)),
 			},
 		},
 		Network:                         config.ProtoNetwork(),
@@ -722,7 +722,7 @@ func TestCoordinatedTokenMintAndTransferMaxInputsSucceeds(t *testing.T) {
 			{
 				OwnerPublicKey: consolidatedOutputPubKeyBytes,
 				TokenPublicKey: tokenIdentityPubKeyBytes,
-				TokenAmount:    int64ToUint128Bytes(0, uint64(TestIssueMultiplePerOutputAmount)*uint64(MaxInputOrOutputTokenTransactionOutputsForTests)),
+				TokenAmount:    int64ToUint128Bytes(0, uint64(testIssueMultiplePerOutputAmount)*uint64(MaxInputOrOutputTokenTransactionOutputsForTests)),
 			},
 		},
 		Network:                         config.ProtoNetwork(),
@@ -1206,7 +1206,7 @@ func createTestTokenMintTransactionTokenPbWithParams(config *wallet.Config, para
 	if params.UseTokenIdentifier {
 		tokenIdentifier, err := getTokenIdentifierFromMetadata(context.Background(), config, params.TokenIdentityPubKey)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get token identifier from metadata: %v", err)
+			return nil, nil, fmt.Errorf("failed to get token identifier from metadata: %w", err)
 		}
 		mintTokenTransaction.GetMintInput().TokenIdentifier = tokenIdentifier
 		for _, output := range mintTokenTransaction.TokenOutputs {
@@ -1304,7 +1304,7 @@ func createTestTokenMintTransactionWithMultipleTokenOutputsTokenPb(config *walle
 	// Create an array that evenly distributes the amount
 	outputAmounts := make([]uint64, numOutputs)
 	for i := 0; i < numOutputs; i++ {
-		outputAmounts[i] = uint64(TestIssueMultiplePerOutputAmount)
+		outputAmounts[i] = uint64(testIssueMultiplePerOutputAmount)
 	}
 
 	return createTestTokenMintTransactionTokenPbWithParams(config, tokenTransactionParams{
@@ -1457,16 +1457,16 @@ func testCoordinatedTransactionSigningScenarios(
 		require.Error(t, commitErr, "expected error during commit but none")
 		return nil
 	}
-	require.NoError(t, commitErr, "unexpected error during commit")
+	require.NoError(t, commitErr)
 
-	require.Equal(t, commitResp.CommitStatus, tokenpb.CommitStatus_COMMIT_FINALIZED, "commit should return finalized status")
+	require.Equal(t, tokenpb.CommitStatus_COMMIT_FINALIZED, commitResp.CommitStatus)
 	require.Nil(t, commitResp.CommitProgress, "commit progress should be nil")
 
 	if doubleCommit {
 		// Try committing again to simulate double sign
 		commitResp2, commitErr2 := wallet.CommitTransactionCoordinated(context.Background(), config, commitReq)
 		require.NoError(t, commitErr2, "unexpected error on second commit (double sign)")
-		require.Equal(t, commitResp2.CommitStatus, tokenpb.CommitStatus_COMMIT_FINALIZED, "second commit should return finalized status")
+		require.Equal(t, tokenpb.CommitStatus_COMMIT_FINALIZED, commitResp2.CommitStatus)
 	}
 
 	return startResp.FinalTokenTransaction
@@ -1594,7 +1594,7 @@ func queryAndVerifyTokenOutputs(t *testing.T, coordinatorIdentifiers []string, f
 
 		outputs, err := wallet.QueryTokenOutputsV2(context.Background(), config, []wallet.SerializedPublicKey{ownerPubKeyBytes}, nil)
 		require.NoError(t, err, "failed to query token outputs from coordinator: %s", coordinatorIdentifier)
-		require.Equal(t, len(expectedOutputs), len(outputs.OutputsWithPreviousTransactionData), "expected %d outputs from coordinator: %s", len(expectedOutputs), coordinatorIdentifier)
+		require.Len(t, outputs.OutputsWithPreviousTransactionData, len(expectedOutputs), "expected %d outputs from coordinator: %s", len(expectedOutputs), coordinatorIdentifier)
 
 		for j, expectedOutput := range expectedOutputs {
 			require.Equal(t, expectedOutput.Id, outputs.OutputsWithPreviousTransactionData[j].Output.Id, "expected the same output ID for output %d from coordinator: %s", j, coordinatorIdentifier)
@@ -1617,7 +1617,7 @@ func getTokenIdentifierFromMetadata(ctx context.Context, config *wallet.Config, 
 		[]wallet.SerializedPublicKey{issuerPubKeyBytes}, // issuerPublicKeys
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query token metadata: %v", err)
+		return nil, fmt.Errorf("failed to query token metadata: %w", err)
 	}
 
 	if len(response.TokenMetadata) == 0 {
@@ -1851,9 +1851,9 @@ func TestCoordinatedCreateNativeSparkTokenScenarios(t *testing.T) {
 				})
 				if tc.secondTokenParams.expectedError {
 					require.Error(t, err, "expected error but got none for second token creation")
-					st, ok := status.FromError(err)
+					stat, ok := status.FromError(err)
 					require.True(t, ok, "expected error to be a gRPC status error")
-					require.Equal(t, codes.AlreadyExists, st.Code(), "expected gRPC status code to be AlreadyExists when token already created for issuer")
+					require.Equal(t, codes.AlreadyExists, stat.Code(), "expected gRPC status code to be AlreadyExists when token already created for issuer")
 				} else {
 					require.NoError(t, err, "unexpected error during second token creation")
 
@@ -1877,7 +1877,7 @@ func verifyMultipleTokenIdentifiersQuery(t *testing.T, config *wallet.Config, to
 	// Query for multiple tokens using their identifiers in a single RPC call
 	resp, err := wallet.QueryTokenMetadata(context.Background(), config, tokenIdentifiers, nil)
 	require.NoError(t, err, "failed to query multiple tokens by their identifiers")
-	require.Equal(t, expectedCount, len(resp.TokenMetadata), "expected exactly %d token metadata entries when querying multiple tokens", expectedCount)
+	require.Len(t, resp.TokenMetadata, expectedCount, "expected exactly %d token metadata entries when querying multiple tokens", expectedCount)
 
 	// Verify that all requested token identifiers are present in the response
 	responseIdentifiers := make(map[string]bool)
@@ -1886,7 +1886,7 @@ func verifyMultipleTokenIdentifiersQuery(t *testing.T, config *wallet.Config, to
 	}
 
 	for i, tokenID := range tokenIdentifiers {
-		require.True(t, responseIdentifiers[string(tokenID)], "token identifier %d should be present in response", i)
+		require.Contains(t, responseIdentifiers, string(tokenID), "token identifier %d should be present in response", i)
 	}
 }
 
@@ -2451,9 +2451,9 @@ func TestCoordinatedTokenTransferPreemption(t *testing.T) {
 				require.Error(t, err, "expected second transaction to be rejected due to pre-emption")
 				require.Nil(t, resp2, "expected nil response when transaction is pre-empted")
 
-				st, ok := status.FromError(err)
+				stat, ok := status.FromError(err)
 				require.True(t, ok, "expected error to be a gRPC status error")
-				require.Equal(t, codes.Aborted, st.Code(), "expected gRPC status code to be Aborted when transaction is pre-empted")
+				require.Equal(t, codes.Aborted, stat.Code(), "expected gRPC status code to be Aborted when transaction is pre-empted")
 			}
 
 			_, err = signAndCommitTransaction(t, winningResult, []keys.Private{userOutput1PrivKey, userOutput2PrivKey})

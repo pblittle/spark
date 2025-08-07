@@ -67,7 +67,7 @@ func createTestCoopExitAndConnectorOutputs(
 
 	exitTxHash := exitTx.TxHash()
 	intermediateOutPoint := wire.NewOutPoint(&exitTxHash, 1)
-	connectorP2trAddrs := make([]string, 0)
+	var connectorP2trAddrs []string
 	for range leafCount + 1 {
 		connectorPrivKey, err := keys.GeneratePrivateKey()
 		require.NoError(t, err)
@@ -80,7 +80,7 @@ func createTestCoopExitAndConnectorOutputs(
 	connectorTx, err := testutil.CreateTestConnectorTransaction(intermediateOutPoint, intermediateAmountSats, connectorP2trAddrs, feeBumpAddr)
 	require.NoError(t, err)
 
-	connectorOutputs := make([]*wire.OutPoint, 0)
+	var connectorOutputs []*wire.OutPoint
 	for i := range connectorTx.TxOut[:len(connectorTx.TxOut)-1] {
 		txHash := connectorTx.TxHash()
 		connectorOutputs = append(connectorOutputs, wire.NewOutPoint(&txHash, uint32(i)))
@@ -541,7 +541,7 @@ func TestCoopExitCannotCancelAfterBroadcast(t *testing.T) {
 
 	// Fail to cancel
 	_, err = wallet.CancelTransfer(context.Background(), config, senderTransfer)
-	assert.Error(t, err, "expected error cancelling transfer after exit tx confirmed")
+	require.Error(t, err, "expected error cancelling transfer after exit tx confirmed")
 
 	// Succeed in claiming
 	finalLeafPrivKey, err := keys.GeneratePrivateKey()

@@ -246,8 +246,7 @@ func TestHandleBlock_MixedTransactions(t *testing.T) {
 	validIssuerPubKey, err := hex.DecodeString("02a0434d9e47f3c86235477c7b1ae6ae5d3442d49b1943c2b752a68e2a47e247c7")
 	require.NoError(t, err)
 	validScriptData := func() []byte {
-		s := []byte{}
-		s = append(s, []byte(announcementPrefix)...)
+		s := []byte(announcementPrefix)
 		s = append(s, creationAnnouncementKind[:]...)
 		s = append(s, validIssuerPubKey...)
 		s = append(s, 9) // "TestToken"
@@ -256,8 +255,7 @@ func TestHandleBlock_MixedTransactions(t *testing.T) {
 		s = append(s, []byte("TICK")...)
 		s = append(s, 8)
 		s = append(s, make([]byte, 16)...)
-		s = append(s, 1)
-		return s
+		return append(s, 1)
 	}()
 	t.Logf("Valid script data length: %d bytes", len(validScriptData))
 	b := txscript.NewScriptBuilder()
@@ -270,8 +268,7 @@ func TestHandleBlock_MixedTransactions(t *testing.T) {
 
 	// A second valid token announcement with the same issuer pubkey (should be rejected as duplicate)
 	duplicateScriptData := func() []byte {
-		s := []byte{}
-		s = append(s, []byte(announcementPrefix)...)
+		s := []byte(announcementPrefix)
 		s = append(s, creationAnnouncementKind[:]...)
 		s = append(s, validIssuerPubKey...) // Same issuer pubkey
 		s = append(s, 4)
@@ -280,8 +277,7 @@ func TestHandleBlock_MixedTransactions(t *testing.T) {
 		s = append(s, []byte("DUP1")...)
 		s = append(s, 6)
 		s = append(s, make([]byte, 16)...)
-		s = append(s, 0)
-		return s
+		return append(s, 0)
 	}()
 	b2 := txscript.NewScriptBuilder()
 	b2.AddOp(txscript.OP_RETURN)
@@ -292,12 +288,10 @@ func TestHandleBlock_MixedTransactions(t *testing.T) {
 
 	// An invalid token announcement script that should cause a parsing error
 	invalidScriptData := func() []byte {
-		s := []byte{}
-		s = append(s, []byte(announcementPrefix)...)
+		s := []byte(announcementPrefix)
 		s = append(s, creationAnnouncementKind[:]...)
 		s = append(s, make([]byte, 33)...)
-		s = append(s, 1) // Invalid name length
-		return s
+		return append(s, 1) // Invalid name length
 	}()
 	b3 := txscript.NewScriptBuilder()
 	b3.AddOp(txscript.OP_RETURN)

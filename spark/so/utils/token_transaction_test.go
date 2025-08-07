@@ -374,13 +374,13 @@ func TestHashTokenTransactionV0UniqueHash(t *testing.T) {
 	outputID := "test-output-1"
 	bondSats := uint64(1000000)
 	blockLocktime := uint64(1000)
-	finalMintTokenTransaction := proto.Clone(partialMintTokenTransaction).(*pb.TokenTransaction)
+	finalMintTokenTransaction := proto.CloneOf(partialMintTokenTransaction)
 	finalMintTokenTransaction.TokenOutputs[0].Id = &outputID
 	finalMintTokenTransaction.TokenOutputs[0].RevocationCommitment = bytes.Repeat([]byte{0x03}, 32)
 	finalMintTokenTransaction.TokenOutputs[0].WithdrawBondSats = &bondSats
 	finalMintTokenTransaction.TokenOutputs[0].WithdrawRelativeBlockLocktime = &blockLocktime
 
-	finalTransferTokenTransaction := proto.Clone(partialTransferTokenTransaction).(*pb.TokenTransaction)
+	finalTransferTokenTransaction := proto.CloneOf(partialTransferTokenTransaction)
 	finalTransferTokenTransaction.TokenOutputs[0].Id = &outputID
 	finalTransferTokenTransaction.TokenOutputs[0].RevocationCommitment = bytes.Repeat([]byte{0x03}, 32)
 	finalTransferTokenTransaction.TokenOutputs[0].WithdrawBondSats = &bondSats
@@ -509,14 +509,14 @@ func TestHashTokenTransactionV1UniqueHash(t *testing.T) {
 	outputID := "test-output-1"
 	bondSats := uint64(1000000)
 	blockLocktime := uint64(1000)
-	finalMintTokenTransaction := proto.Clone(partialMintTokenTransaction).(*tokenpb.TokenTransaction)
+	finalMintTokenTransaction := proto.CloneOf(partialMintTokenTransaction)
 	finalMintTokenTransaction.TokenOutputs[0].Id = &outputID
 	finalMintTokenTransaction.TokenOutputs[0].RevocationCommitment = bytes.Repeat([]byte{0x03}, 32)
 	finalMintTokenTransaction.TokenOutputs[0].WithdrawBondSats = &bondSats
 	finalMintTokenTransaction.TokenOutputs[0].WithdrawRelativeBlockLocktime = &blockLocktime
 	finalMintTokenTransaction.ExpiryTime = timestamppb.New(time.Unix(1000, 0))
 
-	finalTransferTokenTransaction := proto.Clone(partialTransferTokenTransaction).(*tokenpb.TokenTransaction)
+	finalTransferTokenTransaction := proto.CloneOf(partialTransferTokenTransaction)
 	finalTransferTokenTransaction.TokenOutputs[0].Id = &outputID
 	finalTransferTokenTransaction.TokenOutputs[0].RevocationCommitment = bytes.Repeat([]byte{0x03}, 32)
 	finalTransferTokenTransaction.TokenOutputs[0].WithdrawBondSats = &bondSats
@@ -1078,7 +1078,7 @@ func TestHashTokenTransactionV1RequiredFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s_%s", tt.txType, tt.name), func(t *testing.T) {
-			tx := proto.Clone(tt.baseTx).(*tokenpb.TokenTransaction)
+			tx := proto.CloneOf(tt.baseTx)
 
 			tt.modifyTx(tx)
 
@@ -1141,7 +1141,7 @@ func TestHashTokenTransactionV1PartialHashRequiredFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tx := proto.Clone(baseTransaction).(*tokenpb.TokenTransaction)
+			tx := proto.CloneOf(baseTransaction)
 
 			tt.modifyTx(tx)
 

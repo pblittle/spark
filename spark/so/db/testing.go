@@ -70,18 +70,18 @@ func NewTestSQLiteContext(
 	return ent.Inject(ctx, session), &TestContext{t: t, Client: dbClient, Session: session}
 }
 
-func NewTestSQLiteClient(
-	t *testing.T,
-) *ent.Client {
+func NewTestSQLiteClient(t *testing.T) *ent.Client {
 	return enttest.Open(t, "sqlite3", "file:ent?mode=memory&_fk=1")
 }
 
-// spinUpPostgres starts an ephemeral postgres and returns a DSN and a stop func.
+// SpinUpPostgres starts an ephemeral postgres and returns a DSN and a stop func.
 func SpinUpPostgres(t *testing.T) (dsn string, stop func()) {
 	// pick a free TCP port for each test
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	port := l.Addr().(*net.TCPAddr).Port
+	tcpAddr, ok := l.Addr().(*net.TCPAddr)
+	require.True(t, ok)
+	port := tcpAddr.Port
 	_ = l.Close()
 
 	// give each test its own runtime dir so parallel runs don't clash
@@ -96,13 +96,10 @@ func SpinUpPostgres(t *testing.T) (dsn string, stop func()) {
 
 	pg := epg.NewDatabase(cfg)
 	require.NoError(t, pg.Start())
-	stop = func() { _ = pg.Stop() }
-
-	dsn = cfg.GetConnectionURL() + "?sslmode=disable"
-	return
+	return cfg.GetConnectionURL() + "?sslmode=disable", func() { _ = pg.Stop() }
 }
 
-// newPgTestClient opens an ent Client on the given DSN and ensures the schema exists.
+// NewPgTestClient opens an ent Client on the given DSN and ensures the schema exists.
 func NewPgTestClient(t *testing.T, dsn string) *ent.Client {
 	client, err := ent.Open("postgres", dsn)
 	require.NoError(t, err)

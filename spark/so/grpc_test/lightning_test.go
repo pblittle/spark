@@ -99,7 +99,7 @@ func TestCreateLightningInvoice(t *testing.T) {
 
 	invoice, _, err := wallet.CreateLightningInvoiceWithPreimage(context.Background(), config, fakeInvoiceCreator, amountSats, "test", preimage)
 	require.NoError(t, err)
-	require.Equal(t, *invoice, testInvoice)
+	require.Equal(t, testInvoice, *invoice)
 
 	cleanUp(t, config, paymentHash)
 }
@@ -115,7 +115,7 @@ func TestCreateZeroAmountLightningInvoice(t *testing.T) {
 
 	invoice, _, err := wallet.CreateLightningInvoiceWithPreimage(context.Background(), config, fakeInvoiceCreator, amountSats, "test", preimage)
 	require.NoError(t, err)
-	require.Equal(t, *invoice, testZeroInvoice)
+	require.Equal(t, testZeroInvoice, *invoice)
 
 	cleanUp(t, config, paymentHash)
 }
@@ -172,7 +172,7 @@ func TestReceiveLightningPayment(t *testing.T) {
 
 	transfer, err := wallet.SendTransferTweakKey(context.Background(), sspConfig, response.Transfer, leaves, nil)
 	require.NoError(t, err)
-	assert.Equal(t, transfer.Status, spark.TransferStatus_TRANSFER_STATUS_SENDER_KEY_TWEAKED)
+	assert.Equal(t, spark.TransferStatus_TRANSFER_STATUS_SENDER_KEY_TWEAKED, transfer.Status)
 
 	_, err = wallet.SwapNodesForPreimage(
 		context.Background(),
@@ -355,12 +355,11 @@ func TestReceiveZeroAmountLightningInvoicePayment(t *testing.T) {
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	leaves := []wallet.LeafKeyTweak{}
-	leaves = append(leaves, wallet.LeafKeyTweak{
+	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
 		SigningPrivKey:    sspLeafPrivKey.Serialize(),
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
-	})
+	}}
 
 	response, err := wallet.SwapNodesForPreimage(
 		context.Background(),
@@ -441,12 +440,11 @@ func TestReceiveLightningPaymentCannotCancelAfterPreimageReveal(t *testing.T) {
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	leaves := []wallet.LeafKeyTweak{}
-	leaves = append(leaves, wallet.LeafKeyTweak{
+	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
 		SigningPrivKey:    sspLeafPrivKey.Serialize(),
 		NewSigningPrivKey: newLeafPrivKey.Serialize(),
-	})
+	}}
 
 	response, err := wallet.SwapNodesForPreimage(
 		context.Background(),
@@ -463,8 +461,8 @@ func TestReceiveLightningPaymentCannotCancelAfterPreimageReveal(t *testing.T) {
 	assert.Equal(t, response.Preimage, preimage[:])
 
 	_, err = wallet.CancelTransfer(context.Background(), sspConfig, response.Transfer)
-	assert.ErrorContains(t, err, "FailedPrecondition")
-	assert.ErrorContains(t, err, "Cannot cancel an invoice whose preimage has already been revealed")
+	require.ErrorContains(t, err, "FailedPrecondition")
+	require.ErrorContains(t, err, "Cannot cancel an invoice whose preimage has already been revealed")
 }
 
 func TestSendLightningPayment(t *testing.T) {

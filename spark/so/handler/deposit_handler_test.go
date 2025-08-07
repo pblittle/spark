@@ -156,8 +156,7 @@ func TestVerifiedTargetUtxo(t *testing.T) {
 
 		// Test verification
 		_, err = VerifiedTargetUtxo(ctx, config, tx, st.NetworkRegtest, []byte("test_txid2"), 1)
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "deposit tx doesn't have enough confirmations")
+		require.ErrorContains(t, err, "deposit tx doesn't have enough confirmations")
 	})
 }
 
@@ -240,8 +239,7 @@ func TestGenerateDepositAddress(t *testing.T) {
 		}
 
 		_, err = handler.GenerateDepositAddress(ctx, testConfig, req)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "static deposit address already exists: bcrt1p")
+		require.ErrorContains(t, err, "static deposit address already exists: bcrt1p")
 		previousError := err.Error()
 		_, err = handler.GenerateDepositAddress(ctx, testConfig, req)
 		require.Error(t, err)
@@ -267,8 +265,7 @@ func TestGenerateDepositAddress(t *testing.T) {
 
 		// Testing that the handler tries to create a new address
 		_, err = handler.GenerateDepositAddress(ctx, testConfig, req)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "near \"SET\": syntax error")
+		require.Error(t, err, "near \"SET\": syntax error")
 	})
 }
 
@@ -394,7 +391,7 @@ func TestGetUtxosFromAddress(t *testing.T) {
 
 		response, err := handler.GetUtxosForAddress(ctx, req)
 		require.NoError(t, err)
-		require.Len(t, response.Utxos, 0)
+		require.Empty(t, response.Utxos)
 	})
 
 	t.Run("non-static deposit address with confirmation txid", func(t *testing.T) {
@@ -446,7 +443,7 @@ func TestGetUtxosFromAddress(t *testing.T) {
 
 		response, err := handler.GetUtxosForAddress(ctx, req)
 		require.NoError(t, err)
-		require.Len(t, response.Utxos, 0)
+		require.Empty(t, response.Utxos)
 	})
 
 	t.Run("deposit address not found", func(t *testing.T) {
@@ -458,8 +455,7 @@ func TestGetUtxosFromAddress(t *testing.T) {
 		}
 
 		_, err := handler.GetUtxosForAddress(ctx, req)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get deposit address")
+		require.ErrorContains(t, err, "failed to get deposit address")
 	})
 
 	t.Run("pagination limits", func(t *testing.T) {
@@ -543,8 +539,7 @@ func TestGetUtxosFromAddress(t *testing.T) {
 		}
 
 		_, err = handler.GetUtxosForAddress(ctx, req)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to decode confirmation txid")
+		require.ErrorContains(t, err, "failed to decode confirmation txid")
 	})
 
 	t.Run("static deposit address with insufficient confirmations", func(t *testing.T) {
@@ -580,7 +575,7 @@ func TestGetUtxosFromAddress(t *testing.T) {
 
 		response, err := handler.GetUtxosForAddress(ctx, req)
 		require.NoError(t, err)
-		require.Len(t, response.Utxos, 0) // Should not return UTXO with insufficient confirmations
+		require.Empty(t, response.Utxos) // Should not return UTXO with insufficient confirmations
 	})
 
 	t.Run("network validation error", func(t *testing.T) {
@@ -603,8 +598,7 @@ func TestGetUtxosFromAddress(t *testing.T) {
 		}
 
 		_, err = handler.GetUtxosForAddress(ctx, req)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "deposit address is not aligned with the requested network")
+		require.Error(t, err, "deposit address is not aligned with the requested network")
 	})
 
 	t.Run("multiple deposit addresses with UTXOs - verify correct filtering", func(t *testing.T) {

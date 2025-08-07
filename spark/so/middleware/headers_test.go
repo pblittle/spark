@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -39,7 +40,7 @@ func TestGetClientIpFromHeader(t *testing.T) {
 			})
 			ctx = metadata.NewIncomingContext(ctx, md)
 			ip, err := GetClientIpFromHeader(ctx, tt.count)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedIp, ip)
 		})
 	}
@@ -49,8 +50,8 @@ func TestGetClientIpFromHeaderErrors(t *testing.T) {
 	t.Run("no metadata", func(t *testing.T) {
 		ctx := context.Background()
 		ip, err := GetClientIpFromHeader(ctx, 0)
-		assert.Equal(t, "", ip)
-		assert.ErrorContains(t, err, "no metadata found")
+		require.ErrorContains(t, err, "no metadata found")
+		assert.Empty(t, ip)
 	})
 
 	tests := []struct {
@@ -76,8 +77,8 @@ func TestGetClientIpFromHeaderErrors(t *testing.T) {
 			ctx = metadata.NewIncomingContext(ctx, md)
 
 			ip, err := GetClientIpFromHeader(ctx, tt.count)
-			assert.Equal(t, "", ip)
-			assert.ErrorContains(t, err, "no client IP found in header")
+			require.ErrorContains(t, err, "no client IP found in header")
+			assert.Empty(t, ip)
 		})
 	}
 }

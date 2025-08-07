@@ -155,7 +155,7 @@ func (h *TreeCreationHandler) validateAndCountTreeAddressNodes(ctx context.Conte
 	}
 
 	count := len(nodes) - 1
-	publicKeys := [][]byte{}
+	var publicKeys [][]byte
 	for _, child := range nodes {
 		childCount, err := h.validateAndCountTreeAddressNodes(ctx, child.UserPublicKey, child.Children)
 		if err != nil {
@@ -204,11 +204,10 @@ func (h *TreeCreationHandler) applyKeysharesToTree(ctx context.Context, targetKe
 		children []*pbinternal.PrepareTreeAddressNode
 	}
 
-	queue := []*element{}
-	queue = append(queue, &element{
+	queue := []*element{{
 		keyshare: targetKeyshare,
 		children: []*pbinternal.PrepareTreeAddressNode{node},
-	})
+	}}
 
 	keysharesMap := make(map[string]*ent.SigningKeyshare)
 
@@ -216,12 +215,11 @@ func (h *TreeCreationHandler) applyKeysharesToTree(ctx context.Context, targetKe
 		currentElement := queue[0]
 		queue = queue[1:]
 
-		selectedKeyshares := make([]*ent.SigningKeyshare, 0)
-
 		if len(currentElement.children) == 0 {
 			continue
 		}
 
+		var selectedKeyshares []*ent.SigningKeyshare
 		for _, child := range currentElement.children[:len(currentElement.children)-1] {
 			electedKeyShare := keyshares[keyshareIndex]
 			child.SigningKeyshareId = electedKeyShare.ID.String()
@@ -499,19 +497,17 @@ func (h *TreeCreationHandler) prepareSigningJobs(ctx context.Context, req *pb.Cr
 		}
 	}
 
-	queue := []*element{}
-	queue = append(queue, &element{
+	queue := []*element{{
 		output:        parentOutput,
 		node:          req.Node,
 		userPublicKey: userPublicKey,
 		keyshare:      keyshare,
 		parentNode:    parentNode,
 		vout:          vout,
-	})
+	}}
 
-	signingJobs := make([]*helper.SigningJob, 0)
-
-	nodes := make([]*ent.TreeNode, 0)
+	var signingJobs []*helper.SigningJob
+	var nodes []*ent.TreeNode
 
 	for len(queue) > 0 {
 		currentElement := queue[0]
@@ -535,7 +531,7 @@ func (h *TreeCreationHandler) prepareSigningJobs(ctx context.Context, req *pb.Cr
 			}
 			signingJobs = append(signingJobs, directSigningJob)
 		} else if requireDirectTx {
-			return nil, nil, errors.New("directNodeTxSigningJob is required. Please upgrade to the latest SDK version.")
+			return nil, nil, errors.New("field DirectNodeTxSigningJob is required. Please upgrade to the latest SDK version")
 		}
 
 		var savedTree *ent.Tree
@@ -660,8 +656,8 @@ func (h *TreeCreationHandler) prepareSigningJobs(ctx context.Context, req *pb.Cr
 				return nil, nil, errors.New("directRefundTxSigningJob or DirectFromCpfpRefundTxSigningJob is required. Please upgrade to the latest SDK version")
 			}
 		} else if len(currentElement.node.Children) > 0 {
-			userPublicKeys := [][]byte{}
-			statechainPublicKeys := [][]byte{}
+			var userPublicKeys [][]byte
+			var statechainPublicKeys [][]byte
 			if len(cpfpTx.TxOut) < len(currentElement.node.Children) {
 				return nil, nil, fmt.Errorf("vout out of bounds for node split cpfp tx, had: %d, needed: %d", len(cpfpTx.TxOut), len(currentElement.node.Children))
 			}
@@ -716,11 +712,10 @@ func (h *TreeCreationHandler) createTreeResponseNodesFromSigningResults(req *pb.
 		creationNode *pb.CreationNode
 	}
 
-	queue := []*element{}
-	queue = append(queue, &element{
+	queue := []*element{{
 		node:         root,
 		creationNode: req.Node,
-	})
+	}}
 
 	for len(queue) > 0 {
 		currentElement := queue[0]
@@ -834,7 +829,7 @@ func (h *TreeCreationHandler) CreateTree(ctx context.Context, req *pb.CreateTree
 	return h.createTree(ctx, req, false)
 }
 
-// CreateTree creates a tree from user input and signs the transactions in the tree.
+// CreateTreeV2 creates a tree from user input and signs the transactions in the tree.
 func (h *TreeCreationHandler) CreateTreeV2(ctx context.Context, req *pb.CreateTreeRequest) (*pb.CreateTreeResponse, error) {
 	return h.createTree(ctx, req, true)
 }

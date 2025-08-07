@@ -9,13 +9,16 @@ import (
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	testutil "github.com/lightsparkdev/spark/test_util"
 	"github.com/lightsparkdev/spark/wallet"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func skipConnectedEvent(t *testing.T, stream pb.SparkService_SubscribeToEventsClient) {
 	event, err := stream.Recv()
-	require.NoError(t, err)
-	require.NotNil(t, event.GetConnected())
+	if err != nil {
+		t.Errorf("failed to receive event: %v", err) // We have to do this instead of require since this is a goroutine
+	}
+	assert.NotNil(t, event.GetConnected())
 }
 
 func TestEventHandlerTransferNotification(t *testing.T) {

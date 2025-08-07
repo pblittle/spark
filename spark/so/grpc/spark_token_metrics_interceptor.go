@@ -49,7 +49,7 @@ func SparkTokenMetricsInterceptor() grpc.UnaryServerInterceptor {
 		),
 	)
 
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if !isTokenTransactionMethod(info.FullMethod) {
 			return handler(ctx, req)
 		}
@@ -90,7 +90,7 @@ func isTokenTransactionMethod(method string) bool {
 }
 
 // extractTransactionType extracts the transaction type from the request
-func extractTransactionType(req interface{}) string {
+func extractTransactionType(req any) string {
 	switch r := req.(type) {
 	case *tokenpb.StartTransactionRequest:
 		if r.PartialTokenTransaction != nil {

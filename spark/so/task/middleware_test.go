@@ -39,7 +39,7 @@ func TestTimeoutMiddleware_TestSlowTask(t *testing.T) {
 	taskWithTimeout := task.wrapMiddleware(TimeoutMiddleware())
 
 	err = taskWithTimeout.Task(ctx, config)
-	require.ErrorAs(t, err, &errTaskTimeout)
+	require.ErrorIs(t, err, errTaskTimeout)
 }
 
 func TestTimeoutMiddleware_TestTaskFinishes(t *testing.T) {
@@ -119,7 +119,7 @@ func TestTimeoutMiddleware_TestContextCancelled(t *testing.T) {
 
 	select {
 	case err := <-errChan:
-		require.ErrorAs(t, err, &errShutdown)
+		require.ErrorIs(t, err, errShutdown)
 	case <-time.After(200 * time.Millisecond):
 		t.Fatalf("Didn't receive error after context was cancelled.")
 	}
@@ -180,7 +180,7 @@ func TestDatabaseMiddleware_TestCommitWhenTaskSuccessful(t *testing.T) {
 	case <-txChan:
 		// Transaction was committed successfully. This is what we wanted!
 	case err := <-errChan:
-		require.Fail(t, "Expected transaction to be committed before task returned (got %v)", err)
+		t.Fatalf("Expected transaction to be committed before task returned (got %v)", err)
 	case <-time.After(200 * time.Millisecond):
 		require.Fail(t, "Expected transaction to be committed, but it took too long")
 	}
@@ -226,7 +226,7 @@ func TestDatabaseMiddleware_TestRollbackWhenTaskUnsuccessful(t *testing.T) {
 		})
 	})
 
-	taskErr := errors.New("Oh no, task failed!")
+	taskErr := errors.New("oh no, task failed")
 	task := BaseTaskSpec{
 		Name:    "Test",
 		Timeout: nil,
@@ -250,7 +250,7 @@ func TestDatabaseMiddleware_TestRollbackWhenTaskUnsuccessful(t *testing.T) {
 	case <-rollbackChan:
 		// Rollback was called successfully. This is what we wanted!
 	case err := <-errChan:
-		require.Fail(t, "Expected task to rollback before returning error, but got error: %v", err)
+		t.Fatalf("Expected task to rollback before returning error, but got error: %v", err)
 	case <-time.After(200 * time.Millisecond):
 		require.Fail(t, "Expected transaction to be rolled back, but it took too long")
 	}

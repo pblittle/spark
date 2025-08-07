@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -61,7 +62,7 @@ func TimeoutMiddleware() TaskMiddleware {
 			return err
 		case <-ctx.Done():
 			err := context.Cause(ctx)
-			if err == errTaskTimeout {
+			if errors.Is(err, errTaskTimeout) {
 				logger.Warn("Task timed out!")
 				return err
 			}

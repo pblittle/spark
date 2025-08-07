@@ -184,14 +184,14 @@ func (k *Knobs) FetchAndUpdate(ctx context.Context) error {
 		kubeconfig := clientcmd.NewDefaultClientConfigLoadingRules().GetDefaultFilename()
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
-			return fmt.Errorf("failed to get kubernetes config: %v", err)
+			return fmt.Errorf("failed to get kubernetes config: %w", err)
 		}
 	}
 
 	// Create Kubernetes client
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return fmt.Errorf("failed to create kubernetes client: %v", err)
+		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
 	// Create custom ListerWatcher that only uses Watch (no List permission required)
@@ -216,15 +216,15 @@ func (k *Knobs) FetchAndUpdate(ctx context.Context) error {
 
 	// Add event handlers
 	_, err = informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj any) {
 			k.handleConfigMap(obj.(*corev1.ConfigMap))
 		},
-		UpdateFunc: func(_, newObj interface{}) {
+		UpdateFunc: func(_, newObj any) {
 			k.handleConfigMap(newObj.(*corev1.ConfigMap))
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to add event handler: %v", err)
+		return fmt.Errorf("failed to add event handler: %w", err)
 	}
 
 	// Start the informer

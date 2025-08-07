@@ -185,7 +185,7 @@ func TestGenerateStaticDepositAddress(t *testing.T) {
 
 	// Generating a new static deposit address should return an error
 	_, err = wallet.GenerateStaticDepositAddress(ctx, config, pubkey)
-	assert.ErrorContains(t, err, fmt.Sprintf("static deposit address already exists: %s", resp.DepositAddress.Address))
+	require.ErrorContains(t, err, fmt.Sprintf("static deposit address already exists: %s", resp.DepositAddress.Address))
 
 	// No new address should be created
 	queryStaticDepositAddresses, err = wallet.QueryStaticDepositAddresses(ctx, config)
@@ -622,7 +622,7 @@ func TestStartDepositTreeCreationConcurrentWithSameTx(t *testing.T) {
 		assert.True(t, grpcStatus.Code() == codes.FailedPrecondition || grpcStatus.Code() == codes.AlreadyExists)
 	} else {
 		log.Print("both calls succeeded")
-		duplicateNodes := []string{}
+		var duplicateNodes []string
 		for nodeId, count := range treeNodeCounts {
 			if count != 2 {
 				duplicateNodes = append(duplicateNodes, nodeId)
@@ -1118,7 +1118,7 @@ func TestStartDepositTreeCreationDoubleClaim(t *testing.T) {
 	}
 	stat, ok := status.FromError(err)
 	require.True(t, ok)
-	require.Equal(t, stat.Code(), codes.FailedPrecondition)
+	require.Equal(t, codes.FailedPrecondition, stat.Code())
 }
 
 func TestQueryUnusedDepositAddresses(t *testing.T) {

@@ -346,7 +346,7 @@ func TestTransferZeroLeaves(t *testing.T) {
 	require.Error(t, err, "expected error when transferring zero leaves")
 	stat, ok := status.FromError(err)
 	require.True(t, ok)
-	require.Equal(t, stat.Code(), codes.InvalidArgument)
+	require.Equal(t, codes.InvalidArgument, stat.Code())
 }
 
 func TestTransferWithSeparateSteps(t *testing.T) {

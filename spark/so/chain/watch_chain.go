@@ -131,8 +131,8 @@ func findPreviousChainTip(chainTip Tip, client *rpcclient.Client) (Tip, error) {
 }
 
 func findDifference(currChainTip, newChainTip Tip, client *rpcclient.Client) (Difference, error) {
-	disconnected := []Tip{}
-	connected := []Tip{}
+	var disconnected []Tip
+	var connected []Tip
 
 	for !currChainTip.Hash.IsEqual(&newChainTip.Hash) {
 		// Walk back the chain, finding blocks needed to connect and disconnect. Only walk back
@@ -329,7 +329,7 @@ func connectBlocks(
 		if err != nil {
 			return err
 		}
-		txs := []wire.MsgTx{}
+		var txs []wire.MsgTx
 		for _, tx := range block.Tx {
 			rawTx, err := TxFromRPCTx(tx)
 			if err != nil {
@@ -495,7 +495,7 @@ func handleBlock(
 			if len(node.DirectTx) > 0 {
 				directTx, err := common.TxFromRawTxBytes(node.DirectTx)
 				if err != nil {
-					return fmt.Errorf("failed to parse direct node tx: %v", err)
+					return fmt.Errorf("failed to parse direct node tx: %w", err)
 				}
 				directTxid := directTx.TxHash()
 				if confirmedTxHashSet[directTxid] {
@@ -504,7 +504,7 @@ func handleBlock(
 						SetStatus(st.TreeNodeStatusOnChain).
 						Save(ctx)
 					if err != nil {
-						return fmt.Errorf("failed to update node status: %v", err)
+						return fmt.Errorf("failed to update node status: %w", err)
 					}
 					logger.Info("Updated tree node status to ON_CHAIN",
 						"node_id", node.ID,
@@ -747,7 +747,7 @@ func handleBlock(
 	}
 
 	logger.Info("Finished handling block", "height", blockHeight)
-	blockHeightProcessingTimeHistogram.Record(ctx, int64(time.Since(start).Milliseconds()), metric.WithAttributes(
+	blockHeightProcessingTimeHistogram.Record(ctx, time.Since(start).Milliseconds(), metric.WithAttributes(
 		attribute.String("network", network.String()),
 	))
 	return nil

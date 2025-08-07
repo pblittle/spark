@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lightsparkdev/spark/common/keys"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/lightsparkdev/spark"
 	"github.com/lightsparkdev/spark/common"
@@ -103,8 +104,8 @@ func TestTimelockExpirationHappyPath(t *testing.T) {
 			break
 		}
 	}
-	require.Greater(t, broadcastedNode.NodeConfirmationHeight, uint64(0), "Node confirmation height should be set to a positive block height")
-	require.Equal(t, uint64(0), broadcastedNode.RefundConfirmationHeight, "Refund confirmation height should not be set yet")
+	require.Positive(t, broadcastedNode.NodeConfirmationHeight, "Node confirmation height should be set to a positive block height")
+	require.Zero(t, broadcastedNode.RefundConfirmationHeight, "Refund confirmation height should not be set yet")
 	require.NotEmpty(t, broadcastedNode.RawRefundTx, "RawRefundTx should exist in the database")
 
 	// Generate blocks until timelock expires
@@ -148,8 +149,8 @@ func TestTimelockExpirationHappyPath(t *testing.T) {
 		}
 	}
 
-	require.Greater(t, finalNode.NodeConfirmationHeight, uint64(0), "Node confirmation height should be set to a positive block height")
-	require.Greater(t, finalNode.RefundConfirmationHeight, uint64(0), "Refund confirmation height should be set to a positive block height")
+	assert.Positive(t, finalNode.NodeConfirmationHeight, "Node confirmation height should be set to a positive block height")
+	assert.Positive(t, finalNode.RefundConfirmationHeight, "Refund confirmation height should be set to a positive block height")
 }
 
 func TestTimelockExpirationTransferredNode(t *testing.T) {
@@ -297,8 +298,8 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 			break
 		}
 	}
-	require.Greater(t, broadcastedNode.NodeConfirmationHeight, uint64(0), "Node confirmation height should be set to a positive block height")
-	require.Equal(t, uint64(0), broadcastedNode.RefundConfirmationHeight, "Refund confirmation height should not be set yet")
+	require.Positive(t, broadcastedNode.NodeConfirmationHeight, "Node confirmation height should be set to a positive block height")
+	require.Zero(t, broadcastedNode.RefundConfirmationHeight, "Refund confirmation height should not be set yet")
 	require.NotEmpty(t, broadcastedNode.RawRefundTx, "RawRefundTx should exist in the database")
 
 	// Now reduce the timelock on the refund transaction
@@ -350,8 +351,8 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 		}
 	}
 
-	require.Greater(t, finalNode.NodeConfirmationHeight, uint64(0), "Node confirmation height should be set to a positive block height")
-	require.Greater(t, finalNode.RefundConfirmationHeight, uint64(0), "Refund confirmation height should be set to a positive block height")
+	require.Positive(t, finalNode.NodeConfirmationHeight, "Node confirmation height should be set to a positive block height")
+	require.Positive(t, finalNode.RefundConfirmationHeight, "Refund confirmation height should be set to a positive block height")
 }
 
 func TestTimelockExpirationMultiLevelTree(t *testing.T) {
@@ -471,7 +472,7 @@ func TestTimelockExpirationMultiLevelTree(t *testing.T) {
 			break
 		}
 	}
-	require.Greater(t, confirmedRootNode.NodeConfirmationHeight, uint64(0), "Root node confirmation height should be set")
+	require.Positive(t, confirmedRootNode.NodeConfirmationHeight, "Root node confirmation height should be set")
 
 	// Generate blocks until parent node timelock expires
 	for getCurrentTimelock(leafNode.NodeTx) > spark.TimeLockInterval*2 {
@@ -507,12 +508,12 @@ func TestTimelockExpirationMultiLevelTree(t *testing.T) {
 			break
 		}
 	}
-	require.Greater(t, confirmedParentNode.NodeConfirmationHeight, uint64(0), "Parent node confirmation height should be set")
+	require.Positive(t, confirmedParentNode.NodeConfirmationHeight, "Parent node confirmation height should be set")
 
 	// Get updated leaf node from database
 	confirmedLeafNode, err := dbCtx.Client.TreeNode.Get(ctx, leafDbNode.ID)
 	require.NoError(t, err)
-	require.Equal(t, uint64(0), confirmedLeafNode.NodeConfirmationHeight, "Leaf node should not be confirmed yet")
+	require.Zero(t, confirmedLeafNode.NodeConfirmationHeight, "Leaf node should not be confirmed yet")
 
 	// Mine additional block to trigger watchtower check
 	_, err = client.GenerateToAddress(1, randomAddress, nil)
@@ -557,7 +558,7 @@ func TestTimelockExpirationMultiLevelTree(t *testing.T) {
 		}
 	}
 
-	require.Greater(t, finalLeafNode.NodeConfirmationHeight, uint64(0), "Leaf node confirmation height should be set to a positive block height")
+	require.Positive(t, finalLeafNode.NodeConfirmationHeight, "Leaf node confirmation height should be set to a positive block height")
 }
 
 func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
@@ -728,7 +729,7 @@ func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
 			break
 		}
 	}
-	require.Greater(t, broadcastedNode.NodeConfirmationHeight, uint64(0), "Node confirmation height should be set to a positive block height")
+	require.Positive(t, broadcastedNode.NodeConfirmationHeight, "Node confirmation height should be set to a positive block height")
 	require.Equal(t, uint64(0), broadcastedNode.RefundConfirmationHeight, "Refund confirmation height should not be set yet")
 	require.NotEmpty(t, broadcastedNode.RawRefundTx, "RawRefundTx should exist in the database")
 
@@ -776,6 +777,6 @@ func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
 		}
 	}
 
-	require.Greater(t, finalNode.NodeConfirmationHeight, uint64(0), "Node confirmation height should be set to a positive block height")
-	require.Greater(t, finalNode.RefundConfirmationHeight, uint64(0), "Refund confirmation height should be set to a positive block height")
+	assert.Positive(t, finalNode.NodeConfirmationHeight, "Node confirmation height should be set to a positive block height")
+	assert.Positive(t, finalNode.RefundConfirmationHeight, "Refund confirmation height should be set to a positive block height")
 }

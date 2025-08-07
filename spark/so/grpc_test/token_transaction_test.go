@@ -60,17 +60,17 @@ var MaxInputOrOutputTokenTransactionOutputsForTests = func() int {
 
 var (
 	// The expected maximum number of outputs which can be created in a single transaction.
-	ManyOutputsCount = MaxInputOrOutputTokenTransactionOutputsForTests
+	manyOutputsCount = MaxInputOrOutputTokenTransactionOutputsForTests
 	// Amount for second created output in multiple output issuance transaction
-	TestIssueMultiplePerOutputAmount = MaxInputOrOutputTokenTransactionOutputsForTests
+	testIssueMultiplePerOutputAmount = MaxInputOrOutputTokenTransactionOutputsForTests
 )
 
-type PrederivedIdentityPrivateKeyFromMnemonic struct {
-	IdentityPrivateKeyHex string
+type prederivedIdentityPrivateKeyFromMnemonic struct {
+	identityPrivateKeyHex string
 }
 
-func (k *PrederivedIdentityPrivateKeyFromMnemonic) IdentityPrivateKey() keys.Private {
-	privKeyBytes, err := hex.DecodeString(k.IdentityPrivateKeyHex)
+func (k *prederivedIdentityPrivateKeyFromMnemonic) IdentityPrivateKey() keys.Private {
+	privKeyBytes, err := hex.DecodeString(k.identityPrivateKeyHex)
 	if err != nil {
 		panic("invalid issuer private key hex")
 	}
@@ -81,10 +81,10 @@ func (k *PrederivedIdentityPrivateKeyFromMnemonic) IdentityPrivateKey() keys.Pri
 	return privKey
 }
 
-var staticLocalIssuerKey = PrederivedIdentityPrivateKeyFromMnemonic{
+var staticLocalIssuerKey = prederivedIdentityPrivateKeyFromMnemonic{
 	// Mnemonic:           "table apology decrease custom deny client retire genius uniform find eager fish",
 	// TokenL1Address:     "bcrt1q2mgym77n8ta8gn48xtusyrd6wr5uhecajyshku",
-	IdentityPrivateKeyHex: "515c86ccb09faa2235acd0e287381bf286b37002328a8cc3c3b89738ab59dc93",
+	identityPrivateKeyHex: "515c86ccb09faa2235acd0e287381bf286b37002328a8cc3c3b89738ab59dc93",
 }
 
 func bytesToBigInt(value []byte) *big.Int {
@@ -225,7 +225,7 @@ func createTestTokenMintTransactionWithMultipleTokenOutputs(config *wallet.Confi
 		outputOutputs[i] = &pb.TokenOutput{
 			OwnerPublicKey: pubKeyBytes,
 			TokenPublicKey: issuerPublicKeyBytes,
-			TokenAmount:    int64ToUint128Bytes(0, uint64(TestIssueMultiplePerOutputAmount)),
+			TokenAmount:    int64ToUint128Bytes(0, uint64(testIssueMultiplePerOutputAmount)),
 		}
 	}
 
@@ -631,7 +631,7 @@ func TestBroadcastTokenTransactionMintAndTransferTokensLotsOfOutputs(t *testing.
 
 	// Create issuance transaction with 100 outputs
 	issueTokenTransactionFirst100, userOutputPrivKeysFirst100, err := createTestTokenMintTransactionWithMultipleTokenOutputs(config,
-		issuerPublicKeyBytes, ManyOutputsCount)
+		issuerPublicKeyBytes, manyOutputsCount)
 	require.NoError(t, err, "failed to create test token issuance transaction")
 
 	// Broadcast the issuance transaction
@@ -644,7 +644,7 @@ func TestBroadcastTokenTransactionMintAndTransferTokensLotsOfOutputs(t *testing.
 
 	// Create issuance transaction with 100 outputs
 	issueTokenTransactionSecond100, userOutputPrivKeysSecond100, err := createTestTokenMintTransactionWithMultipleTokenOutputs(config,
-		issuerPublicKeyBytes, ManyOutputsCount)
+		issuerPublicKeyBytes, manyOutputsCount)
 	require.NoError(t, err, "failed to create test token issuance transaction")
 
 	// Broadcast the issuance transaction
@@ -692,7 +692,7 @@ func TestBroadcastTokenTransactionMintAndTransferTokensLotsOfOutputs(t *testing.
 			{
 				OwnerPublicKey: consolidatedOutputPubKeyBytes,
 				TokenPublicKey: issuerPublicKeyBytes,
-				TokenAmount:    int64ToUint128Bytes(0, uint64(TestIssueMultiplePerOutputAmount)*uint64(ManyOutputsCount)),
+				TokenAmount:    int64ToUint128Bytes(0, uint64(testIssueMultiplePerOutputAmount)*uint64(manyOutputsCount)),
 			},
 		},
 		Network:                         config.ProtoNetwork(),
@@ -735,7 +735,7 @@ func TestBroadcastTokenTransactionMintAndTransferTokensLotsOfOutputs(t *testing.
 			{
 				OwnerPublicKey: consolidatedOutputPubKeyBytes,
 				TokenPublicKey: issuerPublicKeyBytes,
-				TokenAmount:    int64ToUint128Bytes(0, uint64(TestIssueMultiplePerOutputAmount)*uint64(ManyOutputsCount)),
+				TokenAmount:    int64ToUint128Bytes(0, uint64(testIssueMultiplePerOutputAmount)*uint64(manyOutputsCount)),
 			},
 		},
 		Network:                         config.ProtoNetwork(),
@@ -1833,11 +1833,8 @@ func TestBroadcastTokenTransactionUnspecifiedNetwork(t *testing.T) {
 
 // cloneTransferTransactionWithDifferentOutputOwner creates a copy of a transfer transaction
 // with a modified owner public key in the first output
-func cloneTransferTransactionWithDifferentOutputOwner(
-	tx *pb.TokenTransaction,
-	newOwnerPubKey []byte,
-) *pb.TokenTransaction {
-	clone := proto.Clone(tx).(*pb.TokenTransaction)
+func cloneTransferTransactionWithDifferentOutputOwner(tx *pb.TokenTransaction, newOwnerPubKey []byte) *pb.TokenTransaction {
+	clone := proto.CloneOf(tx)
 	if len(clone.TokenOutputs) > 0 {
 		clone.TokenOutputs[0].OwnerPublicKey = newOwnerPubKey
 	}

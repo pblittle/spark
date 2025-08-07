@@ -38,7 +38,6 @@ func GetTokenTransactionMapFromList(transactions []*TokenTransaction) (map[strin
 	return tokenTransactionMap, nil
 }
 
-// Ordered fields are ordered according to the order of the input in the token transaction proto.
 func CreateStartedTransactionEntities(
 	ctx context.Context,
 	tokenTransaction *tokenpb.TokenTransaction,
@@ -47,6 +46,7 @@ func CreateStartedTransactionEntities(
 	orderedOutputToSpendEnts []*TokenOutput,
 	coordinatorPublicKey []byte,
 ) (*TokenTransaction, error) {
+	// Ordered fields are ordered according to the order of the input in the token transaction proto.
 	logger := logging.GetLoggerFromContext(ctx)
 	db, err := GetDbFromContext(ctx)
 	if err != nil {
@@ -599,7 +599,7 @@ func FetchPartialTokenTransactionData(ctx context.Context, partialTokenTransacti
 	return tokenTransaction, nil
 }
 
-// FetchTokenTransactionData refetches the transaction with all its relations.
+// FetchAndLockTokenTransactionData refetches the transaction with all its relations.
 func FetchAndLockTokenTransactionData(ctx context.Context, finalTokenTransaction *tokenpb.TokenTransaction) (*TokenTransaction, error) {
 	calculatedFinalTokenTransactionHash, err := utils.HashTokenTransaction(finalTokenTransaction, false)
 	if err != nil {

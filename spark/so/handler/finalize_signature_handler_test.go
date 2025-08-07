@@ -76,13 +76,13 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignaturesV2_EmptyRequest(t *testi
 func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 	tests := []struct {
 		name          string
-		setupFunc     func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) interface{}
-		verifyFunc    func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input interface{}) error
+		setupFunc     func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) any
+		verifyFunc    func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input any) error
 		expectedError string
 	}{
 		{
 			name: "FinalizeNodeSignatures_InvalidNodeID",
-			setupFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) interface{} {
+			setupFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) any {
 				return &pb.FinalizeNodeSignaturesRequest{
 					NodeSignatures: []*pb.NodeSignatures{
 						{NodeId: "invalid-uuid"},
@@ -90,7 +90,7 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 					Intent: pbcommon.SignatureIntent_CREATION,
 				}
 			},
-			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input interface{}) error {
+			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input any) error {
 				require.IsType(t, &pb.FinalizeNodeSignaturesRequest{}, input)
 				req := input.(*pb.FinalizeNodeSignaturesRequest)
 				resp, err := handler.FinalizeNodeSignatures(ctx, req)
@@ -101,7 +101,7 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 		},
 		{
 			name: "FinalizeNodeSignatures_NodeNotFound",
-			setupFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) interface{} {
+			setupFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) any {
 				nodeID := uuid.New()
 				return &pb.FinalizeNodeSignaturesRequest{
 					NodeSignatures: []*pb.NodeSignatures{
@@ -110,7 +110,7 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 					Intent: pbcommon.SignatureIntent_CREATION,
 				}
 			},
-			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input interface{}) error {
+			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input any) error {
 				req := input.(*pb.FinalizeNodeSignaturesRequest)
 				resp, err := handler.FinalizeNodeSignatures(ctx, req)
 				assert.Nil(t, resp)
@@ -120,7 +120,7 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 		},
 		{
 			name: "VerifyAndUpdateTransfer_NoTransferFound",
-			setupFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) interface{} {
+			setupFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) any {
 				nodeID := uuid.New()
 				return &pb.FinalizeNodeSignaturesRequest{
 					NodeSignatures: []*pb.NodeSignatures{
@@ -129,7 +129,7 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 					Intent: pbcommon.SignatureIntent_TRANSFER,
 				}
 			},
-			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input interface{}) error {
+			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input any) error {
 				req := input.(*pb.FinalizeNodeSignaturesRequest)
 				transfer, err := handler.verifyAndUpdateTransfer(ctx, req)
 				assert.Nil(t, transfer)
@@ -139,10 +139,10 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 		},
 		{
 			name: "UpdateNode_InvalidNodeID",
-			setupFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) interface{} {
+			setupFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) any {
 				return &pb.NodeSignatures{NodeId: "invalid-uuid"}
 			},
-			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input interface{}) error {
+			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input any) error {
 				nodeSignatures := input.(*pb.NodeSignatures)
 				sparkNode, internalNode, err := handler.updateNode(ctx, nodeSignatures, pbcommon.SignatureIntent_CREATION, false)
 				assert.Nil(t, sparkNode)
@@ -153,11 +153,11 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 		},
 		{
 			name: "UpdateNode_NodeNotFound",
-			setupFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) interface{} {
+			setupFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler) any {
 				nodeID := uuid.New()
 				return &pb.NodeSignatures{NodeId: nodeID.String()}
 			},
-			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input interface{}) error {
+			verifyFunc: func(t *testing.T, ctx context.Context, handler *FinalizeSignatureHandler, input any) error {
 				nodeSignatures := input.(*pb.NodeSignatures)
 				sparkNode, internalNode, err := handler.updateNode(ctx, nodeSignatures, pbcommon.SignatureIntent_CREATION, false)
 				assert.Nil(t, sparkNode)
@@ -192,10 +192,10 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 }
 
 func createTestTree(t *testing.T, ctx context.Context, network st.Network, status st.TreeStatus) (*ent.Tree, *ent.TreeNode) {
-	db, err := ent.GetDbFromContext(ctx)
+	dbTX, err := ent.GetDbFromContext(ctx)
 	require.NoError(t, err)
 
-	tree, err := db.Tree.Create().
+	tree, err := dbTX.Tree.Create().
 		SetID(uuid.New()).
 		SetNetwork(network).
 		SetStatus(status).
@@ -205,7 +205,7 @@ func createTestTree(t *testing.T, ctx context.Context, network st.Network, statu
 		Save(ctx)
 	require.NoError(t, err)
 
-	keyshare, err := db.SigningKeyshare.Create().
+	keyshare, err := dbTX.SigningKeyshare.Create().
 		SetID(uuid.New()).
 		SetStatus(st.KeyshareStatusAvailable).
 		SetSecretShare([]byte("secret_share")).
@@ -216,7 +216,7 @@ func createTestTree(t *testing.T, ctx context.Context, network st.Network, statu
 		Save(ctx)
 	require.NoError(t, err)
 
-	node, err := db.TreeNode.Create().
+	node, err := dbTX.TreeNode.Create().
 		SetID(uuid.New()).
 		SetTree(tree).
 		SetSigningKeyshare(keyshare).
@@ -326,7 +326,7 @@ func TestConfirmTreeWithNonRootConfirmation(t *testing.T) {
 	// Create a tree in a not-yet-finalized (PENDING) state
 	tree, rootNode := createTestTree(t, ctx, st.NetworkRegtest, st.TreeStatusPending)
 
-	db, err := ent.GetDbFromContext(ctx)
+	dbTX, err := ent.GetDbFromContext(ctx)
 	require.NoError(t, err)
 
 	keyshare, err := rootNode.QuerySigningKeyshare().Only(ctx)
@@ -334,7 +334,7 @@ func TestConfirmTreeWithNonRootConfirmation(t *testing.T) {
 
 	// Create a child node in the tree - this represents a non-root node
 	// that can receive deposits independently of the root node
-	childNode, err := db.TreeNode.Create().
+	childNode, err := dbTX.TreeNode.Create().
 		SetID(uuid.New()).
 		SetTree(tree).
 		SetSigningKeyshare(keyshare).
@@ -351,7 +351,7 @@ func TestConfirmTreeWithNonRootConfirmation(t *testing.T) {
 
 	// Create a deposit address for the child node - this simulates the scenario
 	// where a user deposits to a non-root node's address instead of the tree's root
-	depositAddress, err := db.DepositAddress.Create().
+	depositAddress, err := dbTX.DepositAddress.Create().
 		SetID(uuid.New()).
 		SetAddress("child_deposit_address").
 		SetOwnerIdentityPubkey([]byte("child_owner_identity_pubkey")).
@@ -365,7 +365,7 @@ func TestConfirmTreeWithNonRootConfirmation(t *testing.T) {
 
 	// Create a UTXO that represents the actual Bitcoin transaction
 	// confirming the deposit to the child node's address
-	_, err = db.Utxo.Create().
+	_, err = dbTX.Utxo.Create().
 		SetID(uuid.New()).
 		SetBlockHeight(100).
 		// The actual transaction ID of the deposit is different from tree base txid

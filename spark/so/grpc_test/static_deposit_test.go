@@ -285,10 +285,10 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 
 	utxoSwap, err := dbCtx.Client.UtxoSwap.Query().Where(utxoswap.HasUtxoWith(utxo.IDEQ(targetUtxo.ID))).Only(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, utxoSwap.Status, st.UtxoSwapStatusCompleted)
+	assert.Equal(t, st.UtxoSwapStatusCompleted, utxoSwap.Status)
 	dbTransferSspToAlice, err := utxoSwap.QueryTransfer().Only(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, dbTransferSspToAlice.Status, st.TransferStatusSenderKeyTweaked)
+	assert.Equal(t, st.TransferStatusSenderKeyTweaked, dbTransferSspToAlice.Status)
 
 	_, err = common.SerializeTx(signedSpendTx)
 	require.NoError(t, err)
@@ -313,12 +313,7 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
-	res, err := wallet.ClaimTransfer(
-		aliceCtx,
-		receiverTransfer,
-		aliceConfig,
-		leavesToClaim[:],
-	)
+	res, err := wallet.ClaimTransfer(aliceCtx, receiverTransfer, aliceConfig, leavesToClaim[:])
 	require.NoError(t, err, "failed to ClaimTransfer")
 	require.Equal(t, res[0].Id, transferNode.Leaf.Id)
 

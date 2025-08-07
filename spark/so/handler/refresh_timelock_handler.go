@@ -36,7 +36,7 @@ func (h *RefreshTimelockHandler) RefreshTimelock(ctx context.Context, req *pb.Re
 	return h.refreshTimelock(ctx, req, false)
 }
 
-// RefreshTimelock refreshes the timelocks of a leaf and its ancestors.
+// RefreshTimelockV2 refreshes the timelocks of a leaf and its ancestors.
 func (h *RefreshTimelockHandler) RefreshTimelockV2(ctx context.Context, req *pb.RefreshTimelockRequest) (*pb.RefreshTimelockResponse, error) {
 	return h.refreshTimelock(ctx, req, true)
 }
@@ -100,9 +100,9 @@ func (h *RefreshTimelockHandler) refreshTimelock(ctx context.Context, req *pb.Re
 			}
 		} else if requireDirectTx && len(node.DirectTx) > 0 {
 			if len(req.SigningJobs) != 3 && len(req.SigningJobs) != 5 {
-				return nil, fmt.Errorf("Received %d signing jobs, expected either 3 or 5 to include direct TX signing jobs.", len(req.SigningJobs))
+				return nil, fmt.Errorf("received %d signing jobs, expected either 3 or 5 to include direct TX signing jobs", len(req.SigningJobs))
 			} else {
-				return nil, fmt.Errorf("Leaf %s does not have a direct TX present.", node.ID)
+				return nil, fmt.Errorf("leaf %s does not have a direct TX present", node.ID)
 			}
 		} else if len(req.SigningJobs) == 1 {
 			rawTxBytes = node.RawRefundTx
@@ -296,7 +296,7 @@ func (h *RefreshTimelockHandler) refreshTimelock(ctx context.Context, req *pb.Re
 	}
 
 	// Prepare response
-	pbSigningResults := make([]*pb.RefreshTimelockSigningResult, 0)
+	var pbSigningResults []*pb.RefreshTimelockSigningResult
 	for i, signingResult := range signingResults {
 		signingResultProto, err := signingResult.MarshalProto()
 		if err != nil {

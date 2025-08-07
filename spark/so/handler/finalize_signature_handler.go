@@ -34,7 +34,7 @@ func NewFinalizeSignatureHandler(config *so.Config) *FinalizeSignatureHandler {
 	return &FinalizeSignatureHandler{config: config}
 }
 
-// FinalizeNodeSignatures verifies the node signatures and updates the node.
+// FinalizeNodeSignaturesV2 verifies the node signatures and updates the node.
 func (o *FinalizeSignatureHandler) FinalizeNodeSignaturesV2(ctx context.Context, req *pb.FinalizeNodeSignaturesRequest) (*pb.FinalizeNodeSignaturesResponse, error) {
 	return o.finalizeNodeSignatures(ctx, req, true)
 }
@@ -48,15 +48,6 @@ func (o *FinalizeSignatureHandler) FinalizeNodeSignatures(ctx context.Context, r
 func (o *FinalizeSignatureHandler) finalizeNodeSignatures(ctx context.Context, req *pb.FinalizeNodeSignaturesRequest, requireDirectTx bool) (*pb.FinalizeNodeSignaturesResponse, error) {
 	if len(req.NodeSignatures) == 0 {
 		return &pb.FinalizeNodeSignaturesResponse{Nodes: []*pb.TreeNode{}}, nil
-	}
-
-	var transfer *ent.Transfer
-	if req.Intent == pbcommon.SignatureIntent_TRANSFER {
-		var err error
-		transfer, err = o.verifyAndUpdateTransfer(ctx, req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify and update transfer for request %s: %w", logging.FormatProto("finalize_node_signatures_request", req), err)
-		}
 	}
 
 	db, err := ent.GetDbFromContext(ctx)
@@ -112,8 +103,8 @@ func (o *FinalizeSignatureHandler) finalizeNodeSignatures(ctx context.Context, r
 		}
 	}
 
-	nodes := make([]*pb.TreeNode, 0)
-	internalNodes := make([]*pbinternal.TreeNode, 0)
+	var nodes []*pb.TreeNode
+	var internalNodes []*pbinternal.TreeNode
 	for _, nodeSignatures := range req.NodeSignatures {
 		node, internalNode, err := o.updateNode(ctx, nodeSignatures, req.Intent, requireDirectTx)
 		if err != nil {
@@ -155,17 +146,21 @@ func (o *FinalizeSignatureHandler) finalizeNodeSignatures(ctx context.Context, r
 		}
 
 	case pbcommon.SignatureIntent_TRANSFER:
-		transfer_id := transfer.ID.String()
-		completion_timestamp := timestamppb.New(*transfer.CompletionTime)
+		transfer, err := o.verifyAndUpdateTransfer(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify and update transfer for request %s: %w", logging.FormatProto("finalize_node_signatures_request", req), err)
+		}
+		transferID := transfer.ID.String()
+		completionTimestamp := timestamppb.New(*transfer.CompletionTime)
 
 		logger.Info("Sending finalize transfer gossip message")
 
 		_, err = sendGossipHandler.CreateAndSendGossipMessage(ctx, &pbgossip.GossipMessage{
 			Message: &pbgossip.GossipMessage_FinalizeTransfer{
 				FinalizeTransfer: &pbgossip.GossipMessageFinalizeTransfer{
-					TransferId:          transfer_id,
+					TransferId:          transferID,
 					InternalNodes:       internalNodes,
-					CompletionTimestamp: completion_timestamp,
+					CompletionTimestamp: completionTimestamp,
 				},
 			},
 		}, participants)
@@ -207,10 +202,6 @@ func (o *FinalizeSignatureHandler) finalizeNodeSignatures(ctx context.Context, r
 
 	default:
 		return nil, fmt.Errorf("invalid intent %s", req.Intent)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("unable to create and send gossip message: %w", err)
 	}
 	return &pb.FinalizeNodeSignaturesResponse{Nodes: nodes}, nil
 }
@@ -254,11 +245,11 @@ func (o *FinalizeSignatureHandler) verifyAndUpdateTransfer(ctx context.Context, 
 		return nil, fmt.Errorf("missing signatures for transfer %s", transfer.ID.String())
 	}
 
-	transfer, err = transfer.Update().SetStatus(st.TransferStatusCompleted).SetCompletionTime(time.Now()).Save(ctx)
+	updatedTransfer, err := transfer.Update().SetStatus(st.TransferStatusCompleted).SetCompletionTime(time.Now()).Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update transfer %s: %w", transfer.ID.String(), err)
 	}
-	return transfer, nil
+	return updatedTransfer, nil
 }
 
 func (o *FinalizeSignatureHandler) updateNode(ctx context.Context, nodeSignatures *pb.NodeSignatures, intent pbcommon.SignatureIntent, requireDirectTx bool) (*pb.TreeNode, *pbinternal.TreeNode, error) {
@@ -388,7 +379,7 @@ func (o *FinalizeSignatureHandler) updateNode(ctx context.Context, nodeSignature
 				return nil, nil, fmt.Errorf("unable to verify direct from cpfp refund tx signature: %w", err)
 			}
 		} else if requireDirectTx && len(node.DirectTx) > 0 {
-			return nil, nil, fmt.Errorf("DirectRefundTxSignature and DirectFromCpfpRefundTxSignature are required. Please upgrade to the latest SDK version.")
+			return nil, nil, fmt.Errorf("fields DirectRefundTxSignature and DirectFromCpfpRefundTxSignature are required. Please upgrade to the latest SDK version")
 		}
 	} else {
 		cpfpRefundTxBytes = node.RawRefundTx
