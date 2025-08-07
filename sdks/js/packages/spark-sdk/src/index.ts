@@ -20,7 +20,6 @@ export {
   TaprootSparkSigner,
   UnsafeStatelessSparkSigner,
   type SparkSigner,
-  type TokenSigner,
 } from "./signer/signer.js";
 export * from "./signer/types.js";
 

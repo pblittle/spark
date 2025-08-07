@@ -1,29 +1,47 @@
 #!/usr/bin/env node
-import { IssuerSparkWallet } from "@buildonspark/issuer-sdk";
+import * as bitcoin from "bitcoinjs-lib";
+import {
+  TokenPubkey,
+  TokenPubkeyAnnouncement,
+  LRCWallet,
+  NetworkType,
+} from "@buildonspark/lrc20-sdk";
 import fetch from "node-fetch";
 
 Object.defineProperty(globalThis, "fetch", {
   value: fetch,
 });
 
+export const isHermeticTest = Boolean(
+  typeof process !== "undefined" && process?.env?.HERMETIC_TEST === "true",
+);
+
 async function main() {
-  const mnemonicOrSeed =
-    "table apology decrease custom deny client retire genius uniform find eager fish";
   const tokenName = "TestToken";
   const tokenTicker = "TEST";
   const decimals = 8;
   const maxSupply = 0n;
   const isFreezable = true;
 
-  const { wallet } = await IssuerSparkWallet.initialize({
-    mnemonicOrSeed,
-    options: {
-      network: "LOCAL",
+  let wallet = new LRCWallet(
+    "515c86ccb09faa2235acd0e287381bf286b37002328a8cc3c3b89738ab59dc93",
+    bitcoin.networks.regtest,
+    NetworkType.LOCAL,
+    {
+      lrc20NodeUrl: "http://127.0.0.1:18332",
+      electrsUrl: isHermeticTest
+        ? "http://mempool.minikube.local/api"
+        : "http://127.0.0.1:30000",
+      electrsCredentials: {
+        username: "spark-sdk",
+        password: "mCMk1JqlBNtetUNy",
+      },
     },
-  });
+  );
 
   console.log(`Announcing token: ${tokenName} (${tokenTicker})`);
-  const txid = await wallet.announceTokenL1(
+  const txid = await announceTokenL1(
+    wallet,
     tokenName,
     tokenTicker,
     decimals,
@@ -32,6 +50,52 @@ async function main() {
   );
   console.log(txid);
   process.exit(0);
+}
+
+/**
+ * Announces a new token on the L1 (Bitcoin) network.
+ * @param tokenName - The name of the token
+ * @param tokenTicker - The ticker symbol for the token
+ * @param decimals - The number of decimal places for the token
+ * @param maxSupply - The maximum supply of the token
+ * @param isFreezable - Whether the token can be frozen
+ * @param feeRateSatsPerVb - The fee rate in satoshis per virtual byte (default: 4.0)
+ * @returns The transaction ID of the announcement
+ * @throws {ValidationError} If decimals is not a safe integer
+ * @throws {NetworkError} If the announcement transaction cannot be broadcast
+ */
+async function announceTokenL1(
+  lrc20Wallet: LRCWallet,
+  tokenName: string,
+  tokenTicker: string,
+  decimals: number,
+  maxSupply: bigint,
+  isFreezable: boolean,
+  feeRateSatsPerVb: number = 4.0,
+): Promise<string> {
+  await lrc20Wallet!.syncWallet();
+
+  const tokenPublicKey = new TokenPubkey(lrc20Wallet!.pubkey);
+
+  const announcement = new TokenPubkeyAnnouncement(
+    tokenPublicKey,
+    tokenName,
+    tokenTicker,
+    decimals,
+    maxSupply,
+    isFreezable,
+  );
+
+  const tx = await lrc20Wallet!.prepareAnnouncement(
+    announcement,
+    feeRateSatsPerVb,
+  );
+
+  const txId = await lrc20Wallet!.broadcastRawBtcTransaction(
+    tx.bitcoin_tx.toHex(),
+  );
+
+  return txId;
 }
 
 main().catch((err) => {

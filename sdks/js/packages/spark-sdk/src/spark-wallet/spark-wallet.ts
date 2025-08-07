@@ -83,8 +83,6 @@ import {
 } from "../utils/bitcoin.js";
 import {
   getNetwork,
-  LRC_WALLET_NETWORK,
-  LRC_WALLET_NETWORK_TYPE,
   Network,
   NetworkToProto,
   NetworkType,
@@ -95,7 +93,6 @@ import {
   getCurrentTimelock,
 } from "../utils/transaction.js";
 
-import { LRCWallet } from "@buildonspark/lrc20-sdk";
 import { sha256 } from "@noble/hashes/sha2";
 import { trace, Tracer } from "@opentelemetry/api";
 import {
@@ -159,7 +156,6 @@ export class SparkWallet extends EventEmitter {
   protected config: WalletConfigService;
 
   protected connectionManager: ConnectionManager;
-  protected lrc20Wallet: LRCWallet | undefined;
   protected transferService: TransferService;
   protected tracerId = "spark-sdk";
 
@@ -969,14 +965,6 @@ export class SparkWallet extends EventEmitter {
     }
 
     await this.initWalletFromSeed(seed, accountNumber);
-    const network = this.config.getNetwork();
-
-    this.lrc20Wallet = await LRCWallet.create(
-      LRC_WALLET_NETWORK[network],
-      LRC_WALLET_NETWORK_TYPE[network],
-      this.config.lrc20ApiConfig,
-      this.config.signer,
-    );
 
     return {
       mnemonic,

@@ -27,7 +27,6 @@ export default defineConfig([
       "src/debug.ts",
       "src/proto/spark.ts",
       "src/proto/spark_token.ts",
-      "src/proto/lrc20.ts",
       "src/graphql/objects/index.ts",
       "src/types/index.ts",
       "src/spark_bindings/wasm/index.ts",

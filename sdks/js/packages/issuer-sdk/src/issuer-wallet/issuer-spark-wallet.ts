@@ -1,4 +1,3 @@
-import { TokenPubkey, TokenPubkeyAnnouncement } from "@buildonspark/lrc20-sdk";
 import {
   NetworkError,
   SparkWallet,
@@ -142,7 +141,7 @@ export class IssuerSparkWallet extends SparkWallet {
       });
       if (response.tokenMetadata.length === 0) {
         throw new ValidationError(
-          "Token metadata not found - If a token has not yet been announced, please announce. If a token was recently announced, it is being confirmed. Try again in a few seconds.",
+          "Token metadata not found - If a token has not yet been created, please create it first. Try again in a few seconds.",
           {
             field: "tokenMetadata",
             value: response.tokenMetadata,
@@ -371,72 +370,6 @@ export class IssuerSparkWallet extends SparkWallet {
     throw new NotImplementedError("Token distribution is not yet supported");
   }
 
-  /**
-   * Announces a new token on the L1 (Bitcoin) network.
-   * @param tokenName - The name of the token
-   * @param tokenTicker - The ticker symbol for the token
-   * @param decimals - The number of decimal places for the token
-   * @param maxSupply - The maximum supply of the token
-   * @param isFreezable - Whether the token can be frozen
-   * @param feeRateSatsPerVb - The fee rate in satoshis per virtual byte (default: 4.0)
-   * @returns The transaction ID of the announcement
-   * @throws {ValidationError} If decimals is not a safe integer
-   * @throws {NetworkError} If the announcement transaction cannot be broadcast
-   */
-  public async announceTokenL1(
-    tokenName: string,
-    tokenTicker: string,
-    decimals: number,
-    maxSupply: bigint,
-    isFreezable: boolean,
-    feeRateSatsPerVb: number = 4.0,
-  ): Promise<string> {
-    validateTokenParameters(tokenName, tokenTicker, decimals, maxSupply);
-
-    if (!Number.isSafeInteger(decimals)) {
-      throw new ValidationError("Decimals must be less than 2^53", {
-        field: "decimals",
-        value: decimals,
-        expected: "smaller or equal to " + Number.MAX_SAFE_INTEGER,
-      });
-    }
-
-    await this.lrc20Wallet!.syncWallet();
-
-    const tokenPublicKey = new TokenPubkey(this.lrc20Wallet!.pubkey);
-
-    const announcement = new TokenPubkeyAnnouncement(
-      tokenPublicKey,
-      tokenName,
-      tokenTicker,
-      decimals,
-      maxSupply,
-      isFreezable,
-    );
-
-    try {
-      const tx = await this.lrc20Wallet!.prepareAnnouncement(
-        announcement,
-        feeRateSatsPerVb,
-      );
-
-      const txId = await this.lrc20Wallet!.broadcastRawBtcTransaction(
-        tx.bitcoin_tx.toHex(),
-      );
-
-      return txId;
-    } catch (error) {
-      throw new NetworkError(
-        "Failed to broadcast announcement transaction on L1",
-        {
-          operation: "broadcastRawBtcTransaction",
-          errorCount: 1,
-          errors: error instanceof Error ? error.message : String(error),
-        },
-      );
-    }
-  }
-
   protected getTraceName(methodName: string) {
     return `IssuerSparkWallet.${methodName}`;
   }
@@ -471,7 +404,6 @@ export class IssuerSparkWallet extends SparkWallet {
       "freezeTokens",
       "unfreezeTokens",
       "getIssuerTokenDistribution",
-      "announceTokenL1",
     ] as const;
 
     methods.forEach((m) =>

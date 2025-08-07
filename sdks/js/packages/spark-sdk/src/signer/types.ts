@@ -1,8 +1,6 @@
 import type { HDKey } from "@scure/bip32";
 import type { ISigningCommitment } from "../spark_bindings/types.js";
 
-export { MultisigReceiptInput } from "@buildonspark/lrc20-sdk/lrc/types";
-
 export type SigningCommitmentWithOptionalNonce = {
   commitment: SigningCommitment;
   nonce?: SigningNonce;

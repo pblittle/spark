@@ -1,7 +1,3 @@
-import {
-  HasLrc20WalletApiConfig,
-  LRC20WalletApiConfig,
-} from "@buildonspark/lrc20-sdk";
 import { HasSspClientOptions, SspClientOptions } from "../graphql/client.js";
 import { BitcoinNetwork } from "../graphql/objects/BitcoinNetwork.js";
 import { DefaultSparkSigner, SparkSigner } from "../signer/signer.js";
@@ -14,12 +10,9 @@ import {
 } from "./wallet-config.js";
 import { ConfigurationError } from "../errors/types.js";
 
-export class WalletConfigService
-  implements HasLrc20WalletApiConfig, HasSspClientOptions
-{
+export class WalletConfigService implements HasSspClientOptions {
   private readonly config: Required<ConfigOptions>;
   public readonly signer: SparkSigner;
-  public readonly lrc20ApiConfig: LRC20WalletApiConfig;
   public readonly sspClientOptions: SspClientOptions;
 
   constructor(options?: ConfigOptions, signer?: SparkSigner) {
@@ -31,7 +24,6 @@ export class WalletConfigService
     };
 
     this.signer = signer ?? new DefaultSparkSigner();
-    this.lrc20ApiConfig = this.config.lrc20ApiConfig;
     this.sspClientOptions = this.config.sspClientOptions;
   }
 
@@ -58,10 +50,6 @@ export class WalletConfigService
       );
     }
     return coordinator.address;
-  }
-
-  public getLrc20Address(): string {
-    return this.config.lrc20Address;
   }
 
   public getSigningOperators(): Readonly<Record<string, SigningOperator>> {

@@ -61,10 +61,6 @@
       "import": "./dist/proto/spark_token.js",
       "require": "./dist/proto/spark_token.cjs"
     },
-    "./proto/lrc20": {
-      "import": "./dist/proto/lrc20.js",
-      "require": "./dist/proto/lrc20.cjs"
-    },
     "./native": {
       "import": "./dist/native/index.js",
       "require": "./dist/native/index.cjs"
@@ -133,7 +129,6 @@
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.1.1",
     "@bufbuild/protobuf": "^2.2.5",
-    "@buildonspark/lrc20-sdk": "0.0.61",
     "@lightsparkdev/core": "^1.4.2",
     "@noble/curves": "^1.8.0",
     "@noble/hashes": "^1.7.1",

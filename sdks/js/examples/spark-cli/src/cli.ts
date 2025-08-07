@@ -47,6 +47,11 @@ export interface Utxo {
   publicKey: string; // Private key in hex format for signing
 }
 
+export const ELECTRS_CREDENTIALS = {
+  username: "spark-sdk",
+  password: "mCMk1JqlBNtetUNy",
+};
+
 export interface FeeRate {
   satPerVbyte: number;
 }
@@ -329,7 +334,6 @@ const commands = [
   "freezetokens",
   "unfreezetokens",
   "getissuertokenactivity",
-  "announcetoken",
   "createtoken",
   "nontrustydeposit",
   "querytokentransactions",
@@ -657,7 +661,6 @@ async function runCLI() {
   burntokens <amount>                                                 - Burn tokens
   freezetokens <sparkAddress>                                         - Freeze tokens for a specific address
   unfreezetokens <sparkAddress>                                       - Unfreeze tokens for a specific address
-  announcetoken <tokenName> <tokenTicker> <decimals> <maxSupply> <isFreezable> - Announce token on L1
   createtoken <tokenName> <tokenTicker> <decimals> <maxSupply> <isFreezable> - Create a new token
   decodetokenidentifier <tokenIdentifier>                             - Returns the raw token identifier as a hex string
 
@@ -725,7 +728,7 @@ async function runCLI() {
 
             if (network === "REGTEST") {
               const auth = btoa(
-                `${config.lrc20ApiConfig?.electrsCredentials?.username}:${config.lrc20ApiConfig?.electrsCredentials?.password}`,
+                `${ELECTRS_CREDENTIALS.username}:${ELECTRS_CREDENTIALS.password}`,
               );
               headers["Authorization"] = `Basic ${auth}`;
             }
@@ -1501,44 +1504,6 @@ async function runCLI() {
             isFreezable: isFreezable.toLowerCase() === "true",
           });
           console.log("Create Token Transaction ID:", result);
-          break;
-        }
-        case "decodetokenidentifier": {
-          const bech32mTokenIdentifier = args[0];
-          const network = getNetworkFromBech32mTokenIdentifier(
-            bech32mTokenIdentifier as Bech32mTokenIdentifier,
-          );
-          const decodedTokenIdentifier = decodeBech32mTokenIdentifier(
-            bech32mTokenIdentifier as Bech32mTokenIdentifier,
-            network,
-          );
-          console.log(
-            "Decoded Raw Token Identifier:",
-            bytesToHex(decodedTokenIdentifier.tokenIdentifier),
-          );
-          break;
-        }
-        case "announcetoken": {
-          if (!wallet) {
-            console.log("Please initialize a wallet first");
-            break;
-          }
-          if (args.length < 5) {
-            console.log(
-              "Usage: announcetoken <tokenName> <tokenTicker> <decimals> <maxSupply> <isFreezable>",
-            );
-            break;
-          }
-          const [tokenName, tokenTicker, decimals, maxSupply, isFreezable] =
-            args;
-          const result = await wallet.announceTokenL1(
-            tokenName,
-            tokenTicker,
-            parseInt(decimals),
-            BigInt(maxSupply),
-            isFreezable.toLowerCase() === "true",
-          );
-          console.log("Token Announcement Transaction ID:", result);
           break;
         }
         case "querytokentransactions": {
@@ -2378,7 +2343,7 @@ async function runCLI() {
 
               if (network === "REGTEST") {
                 const auth = btoa(
-                  `${config.lrc20ApiConfig?.electrsCredentials?.username}:${config.lrc20ApiConfig?.electrsCredentials?.password}`,
+                  `${ELECTRS_CREDENTIALS.username}:${ELECTRS_CREDENTIALS.password}`,
                 );
                 headers["Authorization"] = `Basic ${auth}`;
               }

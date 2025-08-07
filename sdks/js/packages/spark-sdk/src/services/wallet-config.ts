@@ -1,8 +1,4 @@
 import {
-  LRC20WalletApiConfig,
-  MayHaveLrc20WalletApiConfig,
-} from "@buildonspark/lrc20-sdk";
-import {
   MayHaveSspClientOptions,
   SspClientOptions,
 } from "../graphql/client.js";
@@ -23,23 +19,17 @@ const URL_CONFIG = {
   LOCAL: {
     SSP: "http://127.0.0.1:5000",
     ELECTRS: "http://127.0.0.1:30000",
-    LRC20: "http://127.0.0.1:18530",
-    LRC20_NODE: "http://127.0.0.1:18332",
   },
   REGTEST: {
     PROD: {
       SSP: "https://api.lightspark.com",
       ELECTRS: "https://regtest-mempool.us-west-2.sparkinfra.net/api",
-      LRC20: "https://regtest.lrc20.lightspark.com:443",
-      LRC20_NODE: "https://regtest.lrc20.lightspark.com",
     },
   },
   MAINNET: {
     PROD: {
       SSP: "https://api.lightspark.com",
       ELECTRS: "https://mempool.space/api",
-      LRC20: "https://mainnet.lrc20.lightspark.com:443",
-      LRC20_NODE: "https://mainnet.lrc20.lightspark.com",
     },
   },
 } as const;
@@ -61,32 +51,6 @@ export function getElectrsUrl(network: NetworkType): string {
       return URL_CONFIG.MAINNET.PROD.ELECTRS;
     default:
       return URL_CONFIG.LOCAL.ELECTRS;
-  }
-}
-
-export function getLrc20Url(network: NetworkType): string {
-  switch (network) {
-    case "LOCAL":
-      return URL_CONFIG.LOCAL.LRC20;
-    case "REGTEST":
-      return URL_CONFIG.REGTEST.PROD.LRC20;
-    case "MAINNET":
-      return URL_CONFIG.MAINNET.PROD.LRC20;
-    default:
-      return URL_CONFIG.LOCAL.LRC20;
-  }
-}
-
-export function getLrc20NodeUrl(network: NetworkType): string {
-  switch (network) {
-    case "LOCAL":
-      return URL_CONFIG.LOCAL.LRC20_NODE;
-    case "REGTEST":
-      return URL_CONFIG.REGTEST.PROD.LRC20_NODE;
-    case "MAINNET":
-      return URL_CONFIG.MAINNET.PROD.LRC20_NODE;
-    default:
-      return URL_CONFIG.LOCAL.LRC20_NODE;
   }
 }
 
@@ -132,29 +96,25 @@ export type SigningOperator = {
   readonly identityPublicKey: string;
 };
 
-/* Console logging and debug tool options */
 export type ConsoleOptions = {
   otel?: boolean;
 };
 
-export type ConfigOptions = MayHaveLrc20WalletApiConfig &
-  MayHaveSspClientOptions & {
-    readonly network?: NetworkType;
-    readonly signingOperators?: Readonly<Record<string, SigningOperator>>;
-    readonly coordinatorIdentifier?: string;
-    readonly frostSignerAddress?: string;
-    readonly lrc20Address?: string;
-    readonly threshold?: number;
-    readonly tokenSignatures?: "ECDSA" | "SCHNORR";
-    readonly tokenValidityDurationSeconds?: number;
-    readonly tokenTransactionVersion?: "V0" | "V1";
-    readonly electrsUrl?: string;
-    readonly lrc20ApiConfig?: LRC20WalletApiConfig;
-    readonly sspClientOptions?: SspClientOptions;
-    readonly expectedWithdrawBondSats?: number;
-    readonly expectedWithdrawRelativeBlockLocktime?: number;
-    readonly console?: ConsoleOptions;
-  };
+export type ConfigOptions = MayHaveSspClientOptions & {
+  readonly network?: NetworkType;
+  readonly signingOperators?: Readonly<Record<string, SigningOperator>>;
+  readonly coordinatorIdentifier?: string;
+  readonly frostSignerAddress?: string;
+  readonly threshold?: number;
+  readonly tokenSignatures?: "ECDSA" | "SCHNORR";
+  readonly tokenValidityDurationSeconds?: number;
+  readonly tokenTransactionVersion?: "V0" | "V1";
+  readonly electrsUrl?: string;
+  readonly sspClientOptions?: SspClientOptions;
+  readonly expectedWithdrawBondSats?: number;
+  readonly expectedWithdrawRelativeBlockLocktime?: number;
+  readonly console?: ConsoleOptions;
+};
 
 const PROD_PUBKEYS = [
   "03dfbdff4b6332c220f8fa2ba8ed496c698ceada563fa01b67d9983bfc5c95e763",
@@ -168,7 +128,6 @@ function getLocalFrostSignerAddress(): string {
 
 const BASE_CONFIG: Required<ConfigOptions> = {
   network: "LOCAL",
-  lrc20Address: getLrc20Url("LOCAL"),
   coordinatorIdentifier:
     "0000000000000000000000000000000000000000000000000000000000000001",
   frostSignerAddress: getLocalFrostSignerAddress(),
@@ -180,11 +139,6 @@ const BASE_CONFIG: Required<ConfigOptions> = {
   electrsUrl: getElectrsUrl("LOCAL"),
   expectedWithdrawBondSats: 10000,
   expectedWithdrawRelativeBlockLocktime: 1000,
-  lrc20ApiConfig: {
-    electrsUrl: getElectrsUrl("LOCAL"),
-    lrc20NodeUrl: getLrc20NodeUrl("LOCAL"),
-    electrsCredentials: ELECTRS_CREDENTIALS,
-  },
   sspClientOptions: {
     baseUrl: getSspUrl("LOCAL"),
     identityPublicKey: getSspIdentityPublicKey("LOCAL"),
@@ -214,14 +168,8 @@ const LOCAL_WALLET_CONFIG_ECDSA: Required<ConfigOptions> = {
 const REGTEST_WALLET_CONFIG: Required<ConfigOptions> = {
   ...BASE_CONFIG,
   network: "REGTEST",
-  lrc20Address: getLrc20Url("REGTEST"),
   signingOperators: getSigningOperators(),
   electrsUrl: getElectrsUrl("REGTEST"),
-  lrc20ApiConfig: {
-    electrsUrl: getElectrsUrl("REGTEST"),
-    lrc20NodeUrl: getLrc20NodeUrl("REGTEST"),
-    electrsCredentials: ELECTRS_CREDENTIALS,
-  },
   expectedWithdrawBondSats: 10000,
   expectedWithdrawRelativeBlockLocktime: 1000,
   sspClientOptions: {
@@ -233,13 +181,8 @@ const REGTEST_WALLET_CONFIG: Required<ConfigOptions> = {
 const MAINNET_WALLET_CONFIG: Required<ConfigOptions> = {
   ...BASE_CONFIG,
   network: "MAINNET",
-  lrc20Address: getLrc20Url("MAINNET"),
   signingOperators: getSigningOperators(),
   electrsUrl: getElectrsUrl("MAINNET"),
-  lrc20ApiConfig: {
-    electrsUrl: getElectrsUrl("MAINNET"),
-    lrc20NodeUrl: getLrc20NodeUrl("MAINNET"),
-  },
   expectedWithdrawBondSats: 10000,
   expectedWithdrawRelativeBlockLocktime: 1000,
   sspClientOptions: {

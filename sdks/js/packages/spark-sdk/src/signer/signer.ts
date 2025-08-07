@@ -1,10 +1,4 @@
-import { privateAdd, privateNegate } from "@bitcoinerlab/secp256k1";
-import {
-  fromPrivateKey,
-  PARITY,
-  Receipt,
-  TokenSigner,
-} from "@buildonspark/lrc20-sdk";
+import { privateNegate } from "@bitcoinerlab/secp256k1";
 import {
   bytesToHex,
   bytesToNumberBE,
@@ -18,7 +12,6 @@ import { generateMnemonic, mnemonicToSeed } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { Transaction } from "@scure/btc-signer";
 import { taprootTweakPrivKey } from "@scure/btc-signer/utils";
-import type { Psbt } from "bitcoinjs-lib";
 import * as ecies from "eciesjs";
 import { isReactNative } from "../constants.js";
 import { ConfigurationError, ValidationError } from "../errors/types.js";
@@ -292,7 +285,7 @@ class TaprootOutputKeysGenerator implements SparkKeysGenerator {
   }
 }
 
-interface SparkSigner extends TokenSigner {
+interface SparkSigner {
   getIdentityPublicKey(): Promise<Uint8Array>;
   getDepositSigningKey(): Promise<Uint8Array>;
   getStaticDepositSigningKey(idx: number): Promise<Uint8Array>;
@@ -758,44 +751,6 @@ class DefaultSparkSigner implements SparkSigner {
     return secp256k1.verify(signature, message, this.identityKey.publicKey);
   }
 
-  async signPsbt(
-    psbt: Psbt,
-    input: number,
-    sighashTypes?: number[],
-    receipt?: Receipt,
-  ): Promise<Psbt> {
-    if (!this.identityKey?.privateKey) {
-      throw new ConfigurationError("Identity key not initialized", {
-        configKey: "identityKey",
-      });
-    }
-    if (receipt) {
-      const receiptPrivateKey = this.getReceiptPrivateKey(receipt);
-      const tweakedKeyPair = fromPrivateKey(Buffer.from(receiptPrivateKey));
-      psbt.signInput(input, tweakedKeyPair, sighashTypes);
-      return psbt;
-    }
-    const keypair = fromPrivateKey(Buffer.from(this.identityKey!.privateKey));
-    psbt.signInput(input, keypair, sighashTypes);
-    return psbt;
-  }
-
-  private getReceiptPrivateKey(receipt: Receipt): Uint8Array {
-    const pxh = Receipt.receiptHash(receipt);
-    let innerKey = this.identityKey!!.publicKey!;
-    let privateKey = this.identityKey!!.privateKey!;
-
-    if (innerKey[0] === 3) {
-      innerKey = Buffer.concat([PARITY, innerKey.slice(1)]);
-      privateKey = Buffer.from(privateNegate(privateKey));
-    }
-
-    const pxhPubkey = sha256(Buffer.concat([pxh, innerKey]));
-
-    const receiptProof = privateAdd(privateKey, pxhPubkey)!;
-    return Buffer.from(receiptProof);
-  }
-
   signTransactionIndex(
     tx: Transaction,
     index: number,
@@ -944,5 +899,4 @@ export {
   UnsafeStatelessSparkSigner,
   WrappedSegwitSparkSigner,
   type SparkSigner,
-  type TokenSigner,
 };

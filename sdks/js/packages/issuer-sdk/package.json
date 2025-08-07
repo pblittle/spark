@@ -72,12 +72,10 @@
     "types": "tsc"
   },
   "dependencies": {
-    "@buildonspark/lrc20-sdk": "0.0.61",
     "@buildonspark/spark-sdk": "0.2.6",
     "@lightsparkdev/core": "^1.4.2",
     "@noble/curves": "^1.8.0",
     "@scure/btc-signer": "^1.5.0",
-    "bitcoinjs-lib": "^6.1.5",
     "buffer": "^6.0.3",
     "ts-proto": "^2.6.1"
   },
