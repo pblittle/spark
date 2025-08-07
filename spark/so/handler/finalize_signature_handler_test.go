@@ -16,6 +16,7 @@ import (
 )
 
 func TestNewFinalizeSignatureHandler(t *testing.T) {
+	t.Parallel()
 	config := &so.Config{}
 	handler := NewFinalizeSignatureHandler(config)
 
@@ -24,6 +25,7 @@ func TestNewFinalizeSignatureHandler(t *testing.T) {
 }
 
 func TestFinalizeSignatureHandler_FinalizeNodeSignatures_EmptyRequest(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -49,6 +51,7 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignatures_EmptyRequest(t *testing
 }
 
 func TestFinalizeSignatureHandler_FinalizeNodeSignaturesV2_EmptyRequest(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -170,6 +173,7 @@ func TestFinalizeSignatureHandler_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -235,6 +239,7 @@ func createTestTree(t *testing.T, ctx context.Context, network st.Network, statu
 }
 
 func TestFinalizeSignatureHandler_FinalizeNodeSignatures_InvalidIntent(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -275,6 +280,7 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignatures_InvalidIntent(t *testin
 }
 
 func TestFinalizeSignatureHandler_FinalizeNodeSignaturesV2_RequireDirectTx(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -301,6 +307,7 @@ func TestFinalizeSignatureHandler_FinalizeNodeSignaturesV2_RequireDirectTx(t *te
 
 // Regression test for https://linear.app/lightsparkdev/issue/LIG-8045
 func TestConfirmTreeWithNonRootConfirmation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
