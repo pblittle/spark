@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/lightsparkdev/spark/so/errors"
-
 	"github.com/lightsparkdev/spark/so/handler/tokens"
 
 	sparkpb "github.com/lightsparkdev/spark/proto/spark"
@@ -31,7 +29,7 @@ func NewSparkTokenInternalServer(soConfig *so.Config, db *ent.Client) *SparkToke
 func (s *SparkTokenInternalServer) PrepareTransaction(ctx context.Context, req *tokeninternalpb.PrepareTransactionRequest) (*tokeninternalpb.PrepareTransactionResponse, error) {
 	prepareHandler := tokens.NewInternalPrepareTokenHandlerWithPreemption(s.soConfig)
 	resp, err := prepareHandler.PrepareTokenTransactionInternal(ctx, req)
-	return errors.WrapWithGRPCError(resp, err)
+	return resp, err
 }
 
 func (s *SparkTokenInternalServer) SignTokenTransactionFromCoordination(

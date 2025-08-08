@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/lightsparkdev/spark/proto/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -31,7 +30,7 @@ func TestErrorInterceptor_NoError_ReturnsValue(t *testing.T) {
 		return okVal, nil
 	}
 
-	got, err := ErrorInterceptor(true)(context.Background(), nil, serverInfo, okHandler)
+	got, err := ErrorMaskingInterceptor(true)(context.Background(), nil, serverInfo, okHandler)
 
 	require.NoError(t, err)
 	assert.Equal(t, okVal, got)
@@ -73,7 +72,7 @@ func TestInternalErrorDetailMasking(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			serverInfo := &grpc.UnaryServerInfo{FullMethod: tt.fullMethod}
-			_, err := ErrorInterceptor(tt.detailedErrors)(context.Background(), nil, serverInfo, errHandler)
+			_, err := ErrorMaskingInterceptor(tt.detailedErrors)(context.Background(), nil, serverInfo, errHandler)
 			require.Error(t, err)
 
 			if tt.wantDetails {
@@ -86,7 +85,6 @@ func TestInternalErrorDetailMasking(t *testing.T) {
 }
 
 func TestWrapWithGRPCError(t *testing.T) {
-	resp := &mock.CleanUpPreimageShareRequest{PaymentHash: []byte("test")}
 	tests := []struct {
 		name        string
 		err         error
@@ -115,9 +113,8 @@ func TestWrapWithGRPCError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := WrapWithGRPCError(resp, tt.err)
+			err := asGRPCError(tt.err)
 
-			assert.Equal(t, resp, got)
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Equal(t, tt.wantErrCode, status.Convert(err).Code())

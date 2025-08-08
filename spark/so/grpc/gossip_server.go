@@ -5,7 +5,6 @@ import (
 
 	pbgossip "github.com/lightsparkdev/spark/proto/gossip"
 	"github.com/lightsparkdev/spark/so"
-	"github.com/lightsparkdev/spark/so/errors"
 	"github.com/lightsparkdev/spark/so/handler"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -21,5 +20,5 @@ func NewGossipServer(config *so.Config) *GossipServer {
 
 func (s *GossipServer) Gossip(ctx context.Context, req *pbgossip.GossipMessage) (*emptypb.Empty, error) {
 	gossipHandler := handler.NewGossipHandler(s.config)
-	return errors.WrapWithGRPCError(&emptypb.Empty{}, gossipHandler.HandleGossipMessage(ctx, req, false))
+	return &emptypb.Empty{}, gossipHandler.HandleGossipMessage(ctx, req, false)
 }

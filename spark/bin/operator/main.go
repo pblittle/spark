@@ -449,7 +449,8 @@ func main() {
 	serverOpts := []grpc.ServerOption{
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.UnaryInterceptor(grpcmiddleware.ChainUnaryServer(
-			sparkerrors.ErrorInterceptor(config.ReturnDetailedErrors),
+			sparkerrors.ErrorMaskingInterceptor(config.ReturnDetailedErrors),
+			sparkerrors.ErrorWrappingInterceptor(),
 			helper.LogInterceptor(args.LogJSON && args.LogRequestStats),
 			sparkgrpc.SparkTokenMetricsInterceptor(),
 			sparkgrpc.PanicRecoveryInterceptor(config.ReturnDetailedPanicErrors),
@@ -472,6 +473,7 @@ func main() {
 			}(),
 		)),
 		grpc.StreamInterceptor(grpcmiddleware.ChainStreamServer(
+			sparkerrors.ErrorWrappingStreamingInterceptor(),
 			authn.NewInterceptor(sessionTokenCreatorVerifier).StreamAuthnInterceptor,
 			authz.NewAuthzInterceptor(authz.NewAuthzConfig(
 				authz.WithMode(config.ServiceAuthz.Mode),

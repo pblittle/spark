@@ -6,7 +6,6 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 // Error represents an error that can be converted to a gRPC error
@@ -46,12 +45,13 @@ func (e *grpcError) GRPCStatus() *status.Status {
 	return status.New(e.Code, e.Cause.Error())
 }
 
-// WrapWithGRPCError wraps a response and an error into a gRPC error
-func WrapWithGRPCError[T proto.Message](resp T, err error) (T, error) {
+// asGRPCError (un)wraps an error into a gRPC error. If there is a grpcError in the error chain, that error will be returned as is,
+// otherwise it will be wrapped as an Internal error.
+func asGRPCError(err error) error {
 	if err != nil {
-		return resp, toGRPCError(err)
+		return toGRPCError(err)
 	}
-	return resp, nil
+	return nil
 }
 
 // toGRPCError converts any error to an appropriate gRPC error
