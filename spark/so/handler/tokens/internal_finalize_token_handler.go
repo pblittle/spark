@@ -39,6 +39,8 @@ func (h *InternalFinalizeTokenHandler) FinalizeTokenTransactionInternal(
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert token transaction to spark token transaction: %w", err)
 	}
+	ctx, span := tracer.Start(ctx, "InternalFinalizeTokenHandler.FinalizeTokenTransactionInternal", getTokenTransactionAttributes(tokenProtoTokenTransaction))
+	defer span.End()
 	tokenTransaction, err := ent.FetchAndLockTokenTransactionData(ctx, tokenProtoTokenTransaction)
 	if err != nil {
 		return nil, tokens.FormatErrorWithTransactionEnt(tokens.ErrFailedToFetchTransaction, tokenTransaction, err)
@@ -131,6 +133,8 @@ func (h *InternalFinalizeTokenHandler) CancelOrFinalizeExpiredTokenTransaction(
 	config *so.Config,
 	lockedTokenTransaction *ent.TokenTransaction,
 ) error {
+	ctx, span := tracer.Start(ctx, "InternalFinalizeTokenHandler.CancelOrFinalizeExpiredTokenTransaction", getTokenTransactionAttributesFromEnt(lockedTokenTransaction, config))
+	defer span.End()
 	// Verify that the transaction is in a cancellable state locally
 	if lockedTokenTransaction.Status != st.TokenTransactionStatusSigned &&
 		lockedTokenTransaction.Status != st.TokenTransactionStatusStarted {
@@ -281,6 +285,8 @@ func (h *InternalFinalizeTokenHandler) FinalizeCoordinatedTokenTransactionIntern
 	tokenTransactionHash []byte,
 	revocationSecretsToFinalize []*ent.RecoveredRevocationSecret,
 ) error {
+	ctx, span := tracer.Start(ctx, "InternalFinalizeTokenHandler.FinalizeCoordinatedTokenTransactionInternal")
+	defer span.End()
 	tokenTransaction, err := ent.FetchAndLockTokenTransactionDataByHash(ctx, tokenTransactionHash)
 	if err != nil {
 		return tokens.FormatErrorWithTransactionEnt(tokens.ErrFailedToFetchTransaction, tokenTransaction, err)

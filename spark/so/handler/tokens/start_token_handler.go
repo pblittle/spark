@@ -162,6 +162,8 @@ func callPrepareTokenTransactionInternal(ctx context.Context, operator *so.Signi
 	keyshareIDStrings []string, coordinatorPublicKey keys.Public,
 	callSparkTokenInternal bool,
 ) error {
+	ctx, span := tracer.Start(ctx, "StartTokenTransactionHandler.callPrepareTokenTransactionInternal", getTokenTransactionAttributes(finalTokenTransaction))
+	defer span.End()
 	conn, err := operator.NewGRPCConnection()
 	if err != nil {
 		return tokens.FormatErrorWithTransactionProto(fmt.Sprintf(tokens.ErrFailedToConnectToOperator, operator.Identifier), finalTokenTransaction, err)

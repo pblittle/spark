@@ -44,6 +44,8 @@ func NewQueryTokenHandlerWithExpiredTransactions(config *so.Config) *QueryTokenH
 }
 
 func (h *QueryTokenHandler) QueryTokenMetadata(ctx context.Context, req *tokenpb.QueryTokenMetadataRequest) (*tokenpb.QueryTokenMetadataResponse, error) {
+	ctx, span := tracer.Start(ctx, "QueryTokenHandler.QueryTokenMetadata")
+	defer span.End()
 	db, err := ent.GetDbFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
@@ -88,6 +90,8 @@ func (h *QueryTokenHandler) QueryTokenMetadata(ctx context.Context, req *tokenpb
 // b) transactions associated with a particular set of transaction hashes
 // c) all transactions associated with a particular token public key
 func (h *QueryTokenHandler) QueryTokenTransactions(ctx context.Context, req *sparkpb.QueryTokenTransactionsRequest) (*sparkpb.QueryTokenTransactionsResponse, error) {
+	ctx, span := tracer.Start(ctx, "QueryTokenHandler.QueryTokenTransactions")
+	defer span.End()
 	// Convert sparkpb request to tokenpb request
 	tokenReq := protoconverter.TokenProtoQueryTokenTransactionsRequestFromSpark(req)
 
@@ -103,6 +107,8 @@ func (h *QueryTokenHandler) QueryTokenTransactions(ctx context.Context, req *spa
 
 // queryTokenTransactionsInternal is the internal implementation using tokenpb protos
 func (h *QueryTokenHandler) queryTokenTransactionsInternal(ctx context.Context, req *tokenpb.QueryTokenTransactionsRequest) (*tokenpb.QueryTokenTransactionsResponse, error) {
+	ctx, span := tracer.Start(ctx, "QueryTokenHandler.queryTokenTransactionsInternal")
+	defer span.End()
 	db, err := ent.GetDbFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
@@ -252,6 +258,8 @@ func (h *QueryTokenHandler) QueryTokenOutputs(
 	ctx context.Context,
 	req *sparkpb.QueryTokenOutputsRequest,
 ) (*sparkpb.QueryTokenOutputsResponse, error) {
+	ctx, span := tracer.Start(ctx, "QueryTokenHandler.QueryTokenOutputs")
+	defer span.End()
 	// Convert sparkpb request to tokenpb request
 	tokenReq := protoconverter.TokenProtoQueryTokenOutputsRequestFromSpark(req)
 
@@ -270,6 +278,8 @@ func (h *QueryTokenHandler) queryTokenOutputsInternal(
 	ctx context.Context,
 	req *tokenpb.QueryTokenOutputsRequest,
 ) (*tokenpb.QueryTokenOutputsResponse, error) {
+	ctx, span := tracer.Start(ctx, "QueryTokenHandler.queryTokenOutputsInternal")
+	defer span.End()
 	logger := logging.GetLoggerFromContext(ctx)
 
 	// Convert tokenpb request to sparkpb request for internal service calls

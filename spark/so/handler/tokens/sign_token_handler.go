@@ -67,6 +67,8 @@ func (h *SignTokenHandler) SignTokenTransaction(
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert token transaction to spark token transaction: %w", err)
 	}
+	ctx, span := tracer.Start(ctx, "SignTokenHandler.SignTokenTransaction", getTokenTransactionAttributes(tokenProtoTokenTransaction))
+	defer span.End()
 
 	finalTokenTransactionHash, err := utils.HashTokenTransaction(tokenProtoTokenTransaction, false)
 	if err != nil {
@@ -232,6 +234,8 @@ func (h *SignTokenHandler) CommitTransaction(ctx context.Context, req *tokenpb.C
 
 func (h *SignTokenHandler) ExchangeRevocationSecretsAndFinalizeIfPossible(ctx context.Context, tokenTransactionProto *tokenpb.TokenTransaction, internalSignatures map[string]*tokeninternalpb.SignTokenTransactionFromCoordinationResponse, tokenTransactionHash []byte) (*tokenpb.CommitTransactionResponse, error) {
 	logger := logging.GetLoggerFromContext(ctx)
+	ctx, span := tracer.Start(ctx, "SignTokenHandler.ExchangeRevocationSecretsAndFinalizeIfPossible", getTokenTransactionAttributes(tokenTransactionProto))
+	defer span.End()
 	response, err := h.exchangeRevocationSecretShares(ctx, internalSignatures, tokenTransactionProto, tokenTransactionHash)
 	if err != nil {
 		return nil, fmt.Errorf("coordinator failed to exchange revocation secret shares with all other operators for token txHash: %x: %w", tokenTransactionHash, err)
@@ -325,6 +329,8 @@ func (h *SignTokenHandler) checkShouldReturnEarlyWithoutProcessing(
 }
 
 func (h *SignTokenHandler) exchangeRevocationSecretShares(ctx context.Context, allOperatorSignaturesResponse map[string]*tokeninternalpb.SignTokenTransactionFromCoordinationResponse, tokenTransaction *tokenpb.TokenTransaction, tokenTransactionHash []byte) (map[string]*tokeninternalpb.ExchangeRevocationSecretsSharesResponse, error) {
+	ctx, span := tracer.Start(ctx, "SignTokenHandler.exchangeRevocationSecretShares", getTokenTransactionAttributes(tokenTransaction))
+	defer span.End()
 	// prepare the operator signatures package
 	allOperatorSignaturesPackage := make([]*tokeninternalpb.OperatorTransactionSignature, 0, len(allOperatorSignaturesResponse))
 	for identifier, sig := range allOperatorSignaturesResponse {
@@ -384,6 +390,8 @@ func (h *SignTokenHandler) exchangeRevocationSecretShares(ctx context.Context, a
 }
 
 func (h *SignTokenHandler) prepareRevocationSecretSharesForExchange(ctx context.Context, tokenTransaction *tokenpb.TokenTransaction) ([]*tokeninternalpb.OperatorRevocationShares, error) {
+	ctx, span := tracer.Start(ctx, "SignTokenHandler.prepareRevocationSecretSharesForExchange", getTokenTransactionAttributes(tokenTransaction))
+	defer span.End()
 	db, err := ent.GetDbFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
@@ -477,6 +485,8 @@ func (h *SignTokenHandler) localSignAndCommitTransaction(
 	finalTokenTransactionHash []byte,
 	tokenTransaction *ent.TokenTransaction,
 ) (*tokeninternalpb.SignTokenTransactionFromCoordinationResponse, error) {
+	ctx, span := tracer.Start(ctx, "SignTokenHandler.localSignAndCommitTransaction", getTokenTransactionAttributesFromEnt(tokenTransaction, h.config))
+	defer span.End()
 	operatorSpecificSignatures := convertTokenProtoSignaturesToOperatorSpecific(
 		foundOperatorSignatures.TtxoSignatures,
 		finalTokenTransactionHash,

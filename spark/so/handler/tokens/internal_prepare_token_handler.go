@@ -172,6 +172,8 @@ func anyTtxosHaveSpentTransactions(ttxos []*ent.TokenOutput) bool {
 
 // validateAndReserveKeyshares parses keyshare IDs, checks for duplicates, marks them as used, and returns expected revocation public keys
 func (h *InternalPrepareTokenHandler) validateAndReserveKeyshares(ctx context.Context, keyshareIDs []string, finalTokenTransaction *tokenpb.TokenTransaction) ([][]byte, error) {
+	ctx, span := tracer.Start(ctx, "InternalPrepareTokenHandler.validateAndReserveKeyshares", getTokenTransactionAttributes(finalTokenTransaction))
+	defer span.End()
 	logger := logging.GetLoggerFromContext(ctx)
 	keyshareUUIDs := make([]uuid.UUID, len(keyshareIDs))
 	// Ensure that the coordinator SO did not pass duplicate keyshare UUIDs for different outputs.

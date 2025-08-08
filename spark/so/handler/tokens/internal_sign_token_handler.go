@@ -216,6 +216,8 @@ type ShareValue struct {
 type operatorSharesMap map[keys.Public][]*pbtkinternal.RevocationSecretShare
 
 func (h *InternalSignTokenHandler) ExchangeRevocationSecretsShares(ctx context.Context, req *pbtkinternal.ExchangeRevocationSecretsSharesRequest) (*pbtkinternal.ExchangeRevocationSecretsSharesResponse, error) {
+	ctx, span := tracer.Start(ctx, "InternalSignTokenHandler.ExchangeRevocationSecretsShares")
+	defer span.End()
 	if len(req.OperatorShares) == 0 {
 		return nil, fmt.Errorf("no operator shares provided in request")
 	}
@@ -512,6 +514,8 @@ func (h *InternalSignTokenHandler) persistPartialRevocationSecretShares(
 }
 
 func (h *InternalSignTokenHandler) recoverFullRevocationSecretsAndFinalize(ctx context.Context, tokenTransactionHash []byte) (finalized bool, err error) {
+	ctx, span := tracer.Start(ctx, "InternalSignTokenHandler.recoverFullRevocationSecretsAndFinalize")
+	defer span.End()
 	logger := logging.GetLoggerFromContext(ctx)
 	db, err := ent.GetDbFromContext(ctx)
 	if err != nil {
