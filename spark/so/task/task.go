@@ -367,9 +367,15 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 								})
 							}
 						}
-						protoNetwork, err := common.ProtoNetworkFromSchemaNetwork(tokenTransaction.Edges.SpentOutput[0].Network)
-						if err != nil {
-							return fmt.Errorf("unable to get proto network: %w", err)
+
+						var protoNetwork pbspark.Network
+						if tokenTransaction.Edges.CreatedOutput != nil && len(tokenTransaction.Edges.CreatedOutput) > 0 {
+							protoNetwork, err = common.ProtoNetworkFromSchemaNetwork(tokenTransaction.Edges.CreatedOutput[0].Network)
+							if err != nil {
+								return fmt.Errorf("unable to get proto network: %w", err)
+							}
+						} else {
+							return fmt.Errorf("no created outputs found for token transaction: %s", tokenTransaction.ID)
 						}
 
 						if tokenTransaction.Edges.PeerSignatures != nil {
