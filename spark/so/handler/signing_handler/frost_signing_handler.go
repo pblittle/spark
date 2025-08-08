@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
-	"github.com/lightsparkdev/spark/common/logging"
 	pbcommon "github.com/lightsparkdev/spark/proto/common"
 	pbfrost "github.com/lightsparkdev/spark/proto/frost"
 	pb "github.com/lightsparkdev/spark/proto/spark_internal"
@@ -65,101 +64,21 @@ func (h *FrostSigningHandler) GenerateRandomNonces(ctx context.Context, count ui
 }
 
 func (h *FrostSigningHandler) FrostRound1(ctx context.Context, req *pb.FrostRound1Request) (*pb.FrostRound1Response, error) {
-	if req.RandomNonceCount > 0 {
-		return h.GenerateRandomNonces(ctx, req.RandomNonceCount)
-	}
-
-	uuids := make([]uuid.UUID, len(req.KeyshareIds))
-	for i, id := range req.KeyshareIds {
-		uuid, err := uuid.Parse(id)
-		if err != nil {
-			return nil, err
-		}
-		uuids[i] = uuid
-	}
-
-	keyPackages, err := ent.GetKeyPackages(ctx, h.config, uuids)
-	if err != nil {
-		return nil, err
-	}
-	badKeyshares := []string{}
-	for id, kp := range keyPackages {
-		if !bytes.Equal(kp.PublicKey, req.PublicKeys[id.String()]) {
-			badKeyshares = append(badKeyshares, id.String())
-		}
-	}
-	logger := logging.GetLoggerFromContext(ctx)
-	if len(badKeyshares) != 0 {
-		logger.Warn("Detected bad keyshares.", "numBadKeyshares", len(badKeyshares), "badKeyshares", badKeyshares)
-	}
-
-	keyPackagesArray := make([]*pbfrost.KeyPackage, 0)
-	for _, uuid := range uuids {
-		keyPackagesArray = append(keyPackagesArray, keyPackages[uuid])
-	}
-
-	frostConn, err := common.NewGRPCConnectionWithoutTLS(h.config.SignerAddress, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer frostConn.Close()
-
-	frostClient := pbfrost.NewFrostServiceClient(frostConn)
-
-	count := req.Count
-	if count == 0 {
-		count = 1
-	}
-
-	commitments := make([]*pbcommon.SigningCommitment, 0)
-	for range count {
-		round1Response, err := frostClient.FrostNonce(ctx, &pbfrost.FrostNonceRequest{
-			KeyPackages: keyPackagesArray,
-		})
-		if err != nil {
-			return nil, err
+	totalCount := req.RandomNonceCount
+	if req.RandomNonceCount <= 0 {
+		count := req.Count
+		if count == 0 {
+			count = 1
 		}
 
-		db, err := ent.GetDbFromContext(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		entSigningNonces := make([]*ent.SigningNonceCreate, 0, len(round1Response.Results))
-
-		for _, result := range round1Response.Results {
-			nonce := objects.SigningNonce{}
-			err = nonce.UnmarshalProto(result.Nonces)
-			if err != nil {
-				return nil, err
-			}
-			commitment := objects.SigningCommitment{}
-			err = commitment.UnmarshalProto(result.Commitments)
-			if err != nil {
-				return nil, err
-			}
-
-			entSigningNonces = append(
-				entSigningNonces,
-				db.SigningNonce.Create().
-					SetNonce(nonce.MarshalBinary()).
-					SetNonceCommitment(commitment.MarshalBinary()),
-			)
-		}
-
-		_, err = db.SigningNonce.CreateBulk(entSigningNonces...).Save(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, result := range round1Response.Results {
-			commitments = append(commitments, result.Commitments)
-		}
+		totalCount = count * uint32(len(req.KeyshareIds))
 	}
 
-	return &pb.FrostRound1Response{
-		SigningCommitments: commitments,
-	}, nil
+	if totalCount > 1000000 {
+		return nil, fmt.Errorf("too many nonces requested in one request, please split into multiple requests")
+	}
+
+	return h.GenerateRandomNonces(ctx, totalCount)
 }
 
 // FrostRound2 handles FROST signing.
