@@ -84,7 +84,7 @@ func TestInternalErrorDetailMasking(t *testing.T) {
 	}
 }
 
-func TestWrapWithGRPCError(t *testing.T) {
+func TestAsGRPCError(t *testing.T) {
 	tests := []struct {
 		name        string
 		err         error
@@ -123,6 +123,15 @@ func TestWrapWithGRPCError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAsGrpcError_WithGRPCError_PropagatesErrorCode(t *testing.T) {
+	abortedErr := AbortedError(fmt.Errorf("inner aborted error"))
+	wrappedErr := fmt.Errorf("wrapped error: %w", abortedErr)
+	err := asGRPCError(wrappedErr)
+	require.Error(t, err)
+	assert.Equal(t, codes.Aborted, status.Convert(err).Code())
+	assert.Equal(t, "wrapped error: inner aborted error", err.Error())
 }
 
 func TestInvalidUserInputErrorf(t *testing.T) {

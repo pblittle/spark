@@ -45,8 +45,10 @@ func (e *grpcError) GRPCStatus() *status.Status {
 	return status.New(e.Code, e.Cause.Error())
 }
 
-// asGRPCError (un)wraps an error into a gRPC error. If there is a grpcError in the error chain, that error will be returned as is,
-// otherwise it will be wrapped as an Internal error.
+// asGRPCError converts an error into a gRPC error.
+// If there is an error in the chain that explicitly converts to a gRPC error, that error will be returned as is.
+// If there is a grpcError in the error chain, that error code will be preserved and applied to the outermost error and the whole chain will be returned.
+// Otherwise the error will be wrapped as an Internal error.
 func asGRPCError(err error) error {
 	if err != nil {
 		return toGRPCError(err)
@@ -67,7 +69,7 @@ func toGRPCError(err error) error {
 
 	var grpcErr *grpcError
 	if errors.As(err, &grpcErr) {
-		return grpcErr
+		return newGRPCError(grpcErr.Code, err)
 	}
 
 	// Default to Internal error
