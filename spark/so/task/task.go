@@ -207,11 +207,12 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 								transfer.StatusEQ(st.TransferStatusSenderInitiated),
 								transfer.And(
 									transfer.StatusEQ(st.TransferStatusSenderKeyTweakPending),
-									transfer.TypeIn(st.TransferTypeCooperativeExit, st.TransferTypePreimageSwap),
+									transfer.TypeEQ(st.TransferTypePreimageSwap),
 								),
 							),
 							transfer.ExpiryTimeLT(time.Now()),
 							transfer.ExpiryTimeNEQ(time.Unix(0, 0)),
+							transfer.TypeNEQ(st.TransferTypeCooperativeExit),
 						),
 					)
 

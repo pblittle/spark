@@ -629,8 +629,8 @@ func (h *BaseTransferHandler) executeCancelTransfer(ctx context.Context, transfe
 		return fmt.Errorf("transfer %s is expected to be at status TransferStatusSenderInitiated, TransferStatusSenderKeyTweakPending but %s found", transfer.ID.String(), transfer.Status)
 	}
 
-	if transfer.Status == st.TransferStatusSenderKeyTweakPending && (transfer.Type != st.TransferTypeCooperativeExit && transfer.Type != st.TransferTypePreimageSwap) {
-		return fmt.Errorf("transfer %s at status TransferStatusSenderKeyTweakPending can only be cancelled for cooperative exit or preimage swap, but %s found", transfer.ID.String(), transfer.Type)
+	if transfer.Status == st.TransferStatusSenderKeyTweakPending && transfer.Type != st.TransferTypePreimageSwap {
+		return fmt.Errorf("transfer %s at status TransferStatusSenderKeyTweakPending can only be cancelled for preimage swap, but %s found", transfer.ID.String(), transfer.Type)
 	}
 	var err error
 	transfer, err = transfer.Update().SetStatus(st.TransferStatusReturned).Save(ctx)
