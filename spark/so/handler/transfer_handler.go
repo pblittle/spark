@@ -1928,16 +1928,19 @@ func (h *TransferHandler) settleReceiverKeyTweak(ctx context.Context, transfer *
 			UserPublicKeys: userPublicKeys,
 		})
 	})
+	logger := logging.GetLoggerFromContext(ctx)
+	if err != nil {
+		logger.Error("Unable to settle receiver key tweak, you might have a race condition in your implementation", "error", err.Error())
+		action = pbinternal.SettleKeyTweakAction_ROLLBACK
+	}
 
-	internalErr := h.InitiateSettleReceiverKeyTweak(ctx, &pbinternal.InitiateSettleReceiverKeyTweakRequest{
+	err = h.InitiateSettleReceiverKeyTweak(ctx, &pbinternal.InitiateSettleReceiverKeyTweakRequest{
 		TransferId:     transfer.ID.String(),
 		KeyTweakProofs: keyTweakProofs,
 		UserPublicKeys: userPublicKeys,
 	})
-
-	if err != nil || internalErr != nil {
-		logger := logging.GetLoggerFromContext(ctx)
-		logger.Error("Unable to settle receiver key tweak, you might have a race condition in your implementation", "error", err.Error())
+	if err != nil {
+		logger.Error("Unable to settle receiver key tweak internally, you might have a race condition in your implementation", "error", err.Error())
 		action = pbinternal.SettleKeyTweakAction_ROLLBACK
 	}
 
