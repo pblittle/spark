@@ -34,7 +34,7 @@ type SparkFetchResponse = {
 };
 
 /* Minimal API supporting Bare interface and standard fetch */
-type SparkFetch = (
+export type SparkFetch = (
   input: RequestInfo | URL,
   init?: SparkFetchRequestInit,
 ) => Promise<SparkFetchResponse>;
@@ -60,10 +60,12 @@ export const getFetch = () => {
     );
   }
 
-  return {
+  const val = {
     fetch: fetchImpl,
     Headers,
-  } as const;
+  };
+
+  return val;
 };
 
 export const setFetch = (
@@ -72,4 +74,6 @@ export const setFetch = (
 ): void => {
   fetchImpl = fetchImplParam;
   Headers = headersParam;
+  globalThis.fetch = fetchImpl as typeof globalThis.fetch;
+  globalThis.Headers = Headers as typeof globalThis.Headers;
 };

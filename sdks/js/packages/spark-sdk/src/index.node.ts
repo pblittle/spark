@@ -20,6 +20,7 @@ export {
   type SparkSigner,
 } from "./signer/signer.js";
 export * from "./signer/types.js";
+export { type IKeyPackage } from "./spark_bindings/types.js";
 
 export {
   SparkWalletNodeJS as SparkWallet,

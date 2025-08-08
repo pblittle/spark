@@ -18,27 +18,23 @@
     "lint:fix": {
       "dependsOn": ["^build"]
     },
-    "package:checks": {
-      "dependsOn": []
-    },
-    "test": {
-      "dependsOn": ["^build"]
-    },
-    "test:all": {
-      "dependsOn": ["^build"]
-    },
-    "test:integration": {
-      "dependsOn": ["^build"]
-    },
-    "test:integration:ssp": {
-      "dependsOn": ["^build"]
-    },
     "start": {
       "cache": false,
       "persistent": true,
       "dependsOn": ["^build"]
     },
     "types": {
+      "dependsOn": ["^build"]
+    },
+    /* Turbo has this really odd behavior where it runs dependent tasks of workspaces even when
+       the script doesn't exist there. There's a long running discussion to change this here, but
+       until then it's easiest to declare dependencies in the workspace turbo config itself. Let's
+       leave it for unit tests `test` since the task is in every workspace anyways and it would
+       be more work to maintain turbo configs in every workspace. https://github.com/vercel/turborepo/issues/937 */
+    "test:integration": {},
+    "test:integration:ssp": {},
+    "package:checks": {},
+    "test": {
       "dependsOn": ["^build"]
     }
   }

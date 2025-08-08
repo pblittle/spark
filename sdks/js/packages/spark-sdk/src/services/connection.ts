@@ -1,11 +1,12 @@
-import { isError, isNode } from "@lightsparkdev/core";
+import { isBare, isError, isNode } from "@lightsparkdev/core";
 import { sha256 } from "@noble/hashes/sha2";
 import type { Channel, ClientFactory } from "nice-grpc";
 import { retryMiddleware } from "nice-grpc-client-middleware-retry";
 import { ClientMiddlewareCall, Metadata } from "nice-grpc-common";
-import type {
-  Channel as ChannelWeb,
-  ClientFactory as ClientFactoryWeb,
+import {
+  NodeHttpTransport,
+  type Channel as ChannelWeb,
+  type ClientFactory as ClientFactoryWeb,
 } from "nice-grpc-web";
 import { clientEnv, isBun, isReactNative } from "../constants.js";
 import { AuthenticationError, NetworkError } from "../errors/types.js";
@@ -149,7 +150,11 @@ export class ConnectionManager {
 
         return createChannel(
           address,
-          isReactNative ? XHRTransport() : FetchTransport(),
+          isBare
+            ? NodeHttpTransport()
+            : isReactNative
+              ? XHRTransport()
+              : FetchTransport(),
         );
       }
     } catch (error) {

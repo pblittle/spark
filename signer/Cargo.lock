@@ -1996,6 +1996,8 @@ dependencies = [
 name = "spark-frost"
 version = "0.1.0"
 dependencies = [
+ "bitcoin",
+ "ecies",
  "frost-core",
  "frost-secp256k1-tr",
  "hex",

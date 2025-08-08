@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import * as bitcoin from "bitcoinjs-lib";
+/* Note lrc20-sdk will be deprecated and has been removed from Spark JS workspaces.
+   This is temporarily left for testing purposes: */
 import {
   TokenPubkey,
   TokenPubkeyAnnouncement,

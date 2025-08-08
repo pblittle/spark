@@ -9,7 +9,6 @@ const commonConfig = {
   sourcemap: false,
   dts: true,
   clean: false,
-  inject: ["./buffer.js"],
   define: {
     __PACKAGE_VERSION__: JSON.stringify(pkg.version),
   },
@@ -32,6 +31,7 @@ export default defineConfig([
       "src/spark_bindings/wasm/index.ts",
       "src/spark_bindings/native/index.ts",
     ],
+    inject: ["./buffer.js"],
     format: ["cjs", "esm"],
     outDir: "dist",
   },
@@ -48,6 +48,13 @@ export default defineConfig([
           and import react-native-get-random-values first in those modules. */
       js: `require("react-native-get-random-values");`,
     },
+    inject: ["./buffer.js"],
     outDir: "dist/native",
+  },
+  {
+    ...commonConfig,
+    entry: ["src/bare/index.ts"],
+    format: ["cjs", "esm"],
+    outDir: "dist/bare",
   },
 ]);

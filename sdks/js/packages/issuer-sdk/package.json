@@ -73,7 +73,7 @@
   },
   "dependencies": {
     "@buildonspark/spark-sdk": "0.2.6",
-    "@lightsparkdev/core": "^1.4.2",
+    "@lightsparkdev/core": "^1.4.3",
     "@noble/curves": "^1.8.0",
     "@scure/btc-signer": "^1.5.0",
     "buffer": "^6.0.3",

@@ -1,5 +1,6 @@
 use frost_secp256k1_tr::Identifier;
 
+pub mod bridge;
 pub mod proto;
 pub mod signing;
 

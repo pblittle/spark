@@ -632,7 +632,9 @@ class DefaultSparkSigner implements SparkSigner {
       verifyingKey: verifyingKey,
     };
 
-    return SparkFrost.signFrost({
+    const logMessage = bytesToHex(message);
+
+    const result = await SparkFrost.signFrost({
       message,
       keyPackage,
       nonce,
@@ -640,6 +642,8 @@ class DefaultSparkSigner implements SparkSigner {
       statechainCommitments,
       adaptorPubKey,
     });
+
+    return result;
   }
 
   async aggregateFrost({

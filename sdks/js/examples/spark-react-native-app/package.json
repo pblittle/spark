@@ -1,5 +1,5 @@
 {
-  "name": "spark-react-native-app",
+  "name": "@buildonspark/spark-react-native-app",
   "version": "0.0.12",
   "private": true,
   "scripts": {

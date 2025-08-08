@@ -17,7 +17,7 @@ import {
   SignFrostParams,
 } from "../types.js";
 
-export function createKeyPackage(params: IKeyPackage): KeyPackage {
+function createKeyPackage(params: IKeyPackage): KeyPackage {
   return new KeyPackage(
     params.secretKey,
     params.publicKey,
@@ -25,11 +25,11 @@ export function createKeyPackage(params: IKeyPackage): KeyPackage {
   );
 }
 
-export function createSigningNonce(params: ISigningNonce): SigningNonce {
+function createSigningNonce(params: ISigningNonce): SigningNonce {
   return new SigningNonce(params.hiding, params.binding);
 }
 
-export function createSigningCommitment(
+function createSigningCommitment(
   params: ISigningCommitment,
 ): SigningCommitment {
   return new SigningCommitment(params.hiding, params.binding);

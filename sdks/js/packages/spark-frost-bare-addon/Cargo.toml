@@ -1,0 +1,14 @@
+[package]
+name = "spark-frost-bare-addon"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+path = "binding.rs"
+
+[dependencies]
+bare-rust = "0.0.8"
+spark-frost = { path = "../../../../signer/spark-frost" }
+frost-secp256k1-tr = { git = "https://github.com/lightsparkdev/frost", branch = "nested-signing" }
+hex = "0.4"

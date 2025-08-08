@@ -185,7 +185,7 @@ export class SparkWallet extends EventEmitter {
   protected tokenOutputs: TokenOutputsMap = new Map();
 
   // Add this property near the top of the class with other private properties
-  private claimTransfersInterval: NodeJS.Timeout | null = null;
+  private claimTransfersInterval: ReturnType<typeof setInterval> | null = null;
 
   private tracer: Tracer | null = null;
 

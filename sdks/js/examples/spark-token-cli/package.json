@@ -21,6 +21,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "@buildonspark/issuer-sdk": "0.0.85",
     "@buildonspark/lrc20-sdk": "^0.0.54",
     "node-fetch": "^3.3.2",
     "tsx": "^4.19.3"

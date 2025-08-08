@@ -13,10 +13,9 @@ use bitcoin::{
     key::{Secp256k1, TapTweak},
     sighash::{Prevouts, SighashCache},
     transaction::Version,
-    Address, Amount, OutPoint, ScriptBuf, Sequence, TapSighashType, Transaction, TxIn, TxOut, Txid,
+    Address, Amount, OutPoint, ScriptBuf, Sequence, TapSighashType, Transaction, TxIn, TxOut,
     Witness,
 };
-use ecies::{decrypt, encrypt};
 use frost_secp256k1_tr::Identifier;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -201,35 +200,20 @@ pub fn sign_frost(
     statechain_commitments: HashMap<String, SigningCommitment>,
     adaptor_public_key: Option<Vec<u8>>,
 ) -> Result<Vec<u8>, Error> {
-    log_to_file("Entering sign_frost");
-    // Using a fixed UUID instead of generating a random one
-    let job_id = "00000000-0000-0000-0000-000000000000".to_string();
+    let proto_commitments: HashMap<_, _> = statechain_commitments
+        .into_iter()
+        .map(|(k, v)| (k, v.into()))
+        .collect();
 
-    let signing_job = spark_frost::proto::frost::FrostSigningJob {
-        job_id,
-        message: msg,
-        key_package: Some(key_package.clone().into()),
-        nonce: Some(nonce.into()),
-        user_commitments: Some(self_commitment.into()),
-        verifying_key: key_package.clone().verifying_key.clone(),
-        commitments: statechain_commitments
-            .into_iter()
-            .map(|(k, v)| (k, v.into()))
-            .collect(),
-        adaptor_public_key: adaptor_public_key.unwrap_or_default(),
-    };
-    let request = spark_frost::proto::frost::SignFrostRequest {
-        signing_jobs: vec![signing_job],
-        role: spark_frost::proto::frost::SigningRole::User.into(),
-    };
-    let response = spark_frost::signing::sign_frost(&request).map_err(Error::Spark)?;
-    let result = response
-        .results
-        .iter()
-        .next()
-        .ok_or(Error::Spark("No result".to_owned()))?
-        .1;
-    Ok(result.signature_share.clone())
+    spark_frost::bridge::sign_frost(
+        msg,
+        key_package.clone().into(),
+        nonce.into(),
+        self_commitment.into(),
+        proto_commitments,
+        adaptor_public_key,
+    )
+    .map_err(Error::Spark)
 }
 
 #[wasm_bindgen]
@@ -269,29 +253,24 @@ pub fn aggregate_frost(
     adaptor_public_key: Option<Vec<u8>>,
 ) -> Result<Vec<u8>, Error> {
     log_to_file("Entering aggregate_frost");
-    let request = spark_frost::proto::frost::AggregateFrostRequest {
-        message: msg,
-        commitments: statechain_commitments
-            .into_iter()
-            .map(|(k, v)| (k, v.into()))
-            .collect(),
-        user_commitments: Some(self_commitment.into()),
-        user_public_key: self_public_key.clone(),
-        signature_shares: statechain_signatures
-            .into_iter()
-            .map(|(k, v)| (k, v.clone()))
-            .collect(),
-        public_shares: statechain_public_keys
-            .into_iter()
-            .map(|(k, v)| (k, v.clone()))
-            .collect(),
-        verifying_key: verifying_key.clone(),
-        user_signature_share: self_signature.clone(),
-        adaptor_public_key: adaptor_public_key.unwrap_or_default(),
-    };
-    let response =
-        spark_frost::signing::aggregate_frost(&request).map_err(|e| Error::Spark(e.to_string()))?; // Convert the error to String first
-    Ok(response.signature)
+
+    let commitments_proto: HashMap<_, _> = statechain_commitments
+        .into_iter()
+        .map(|(k, v)| (k, v.into()))
+        .collect();
+
+    spark_frost::bridge::aggregate_frost(
+        msg,
+        commitments_proto,
+        self_commitment.into(),
+        statechain_signatures,
+        self_signature,
+        statechain_public_keys,
+        self_public_key,
+        verifying_key,
+        adaptor_public_key,
+    )
+    .map_err(Error::Spark)
 }
 
 pub fn validate_signature_share(
@@ -690,39 +669,13 @@ pub struct DummyTx {
 
 #[wasm_bindgen]
 pub fn create_dummy_tx(address: String, amount_sats: u64) -> Result<DummyTx, Error> {
-    // Create the input
-    let input = TxIn {
-        previous_output: OutPoint {
-            txid: Txid::from_slice(&[0; 32]).unwrap(),
-            vout: 0,
-        },
-        script_sig: ScriptBuf::new(), // Empty for now, will be filled by the signing process
-        sequence: Sequence::from_height(0), // Default sequence number
-        witness: Witness::new(),      // Empty witness for now
-    };
-
-    let dest_address = Address::from_str(&address)
-        .map_err(|e| Error::Spark(e.to_string()))?
-        .assume_checked();
-
-    // Create the P2TR output
-    let output = TxOut {
-        value: Amount::from_sat(amount_sats),
-        script_pubkey: dest_address.script_pubkey(),
-    };
-
-    // Construct the transaction with version 2 for Taproot support
-    let new_tx = Transaction {
-        version: Version::TWO,
-        lock_time: LockTime::ZERO,
-        input: vec![input],
-        output: vec![output],
-    };
-
-    Ok(DummyTx {
-        tx: bitcoin::consensus::serialize(&new_tx),
-        txid: new_tx.compute_txid().to_string(),
-    })
+    match spark_frost::bridge::create_dummy_tx(&address, amount_sats) {
+        Ok(inner) => Ok(DummyTx {
+            tx: inner.tx,
+            txid: inner.txid,
+        }),
+        Err(e) => Err(Error::Spark(e)),
+    }
 }
 
 fn log_to_file(message: &str) {
@@ -737,12 +690,18 @@ fn log_to_file(message: &str) {
 
 #[wasm_bindgen]
 pub fn encrypt_ecies(msg: Vec<u8>, public_key_bytes: Vec<u8>) -> Result<Vec<u8>, Error> {
-    encrypt(&public_key_bytes, &msg).map_err(|e| Error::Spark(e.to_string()))
+    match spark_frost::bridge::encrypt_ecies(&msg, &public_key_bytes) {
+        Ok(v) => Ok(v),
+        Err(e) => Err(Error::Spark(e)),
+    }
 }
 
 #[wasm_bindgen]
 pub fn decrypt_ecies(encrypted_msg: Vec<u8>, private_key_bytes: Vec<u8>) -> Result<Vec<u8>, Error> {
-    decrypt(&private_key_bytes, &encrypted_msg).map_err(|e| Error::Spark(e.to_string()))
+    match spark_frost::bridge::decrypt_ecies(encrypted_msg, private_key_bytes) {
+        Ok(v) => Ok(v),
+        Err(e) => Err(Error::Spark(e)),
+    }
 }
 
 #[wasm_bindgen]
