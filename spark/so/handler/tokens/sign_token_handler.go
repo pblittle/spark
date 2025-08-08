@@ -345,25 +345,7 @@ func (h *SignTokenHandler) exchangeRevocationSecretShares(ctx context.Context, a
 		return nil, fmt.Errorf("failed to prepare coordinator revocation secret shares for exchange: %w for token txHash: %x", err, tokenTransactionHash)
 	}
 
-	// exchange the revocation secret shares with all other operators
-	opSelection := helper.OperatorSelection{Option: helper.OperatorSelectionOptionExcludeSelf}
-	response, errorExchangingWithAllOperators := helper.ExecuteTaskWithAllOperators(ctx, h.config, &opSelection, func(ctx context.Context, operator *so.SigningOperator) (*tokeninternalpb.ExchangeRevocationSecretsSharesResponse, error) {
-		conn, err := operator.NewGRPCConnection()
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to operator %s: %w for token txHash: %x", operator.Identifier, err, tokenTransactionHash)
-		}
-		defer conn.Close()
-		client := tokeninternalpb.NewSparkTokenInternalServiceClient(conn)
-		return client.ExchangeRevocationSecretsShares(ctx, &tokeninternalpb.ExchangeRevocationSecretsSharesRequest{
-			FinalTokenTransaction:         tokenTransaction,
-			FinalTokenTransactionHash:     tokenTransactionHash,
-			OperatorTransactionSignatures: allOperatorSignaturesPackage,
-			OperatorShares:                revocationSecretShares,
-			OperatorIdentityPublicKey:     h.config.IdentityPublicKey().Serialize(),
-		})
-	})
-
-	// We have exchanged our secrets. Mark as revealed and start a new tx in context.
+	// We are about to reveal our revocation secrets. Mark as revealed, then reveal.
 	tx, err := ent.GetDbFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
@@ -381,6 +363,23 @@ func (h *SignTokenHandler) exchangeRevocationSecretShares(ctx context.Context, a
 		return nil, fmt.Errorf("failed to commit and replace transaction after exchanging revocation secret shares: %w for token txHash: %x", err, tokenTransactionHash)
 	}
 
+	// exchange the revocation secret shares with all other operators
+	opSelection := helper.OperatorSelection{Option: helper.OperatorSelectionOptionExcludeSelf}
+	response, errorExchangingWithAllOperators := helper.ExecuteTaskWithAllOperators(ctx, h.config, &opSelection, func(ctx context.Context, operator *so.SigningOperator) (*tokeninternalpb.ExchangeRevocationSecretsSharesResponse, error) {
+		conn, err := operator.NewGRPCConnection()
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to operator %s: %w for token txHash: %x", operator.Identifier, err, tokenTransactionHash)
+		}
+		defer conn.Close()
+		client := tokeninternalpb.NewSparkTokenInternalServiceClient(conn)
+		return client.ExchangeRevocationSecretsShares(ctx, &tokeninternalpb.ExchangeRevocationSecretsSharesRequest{
+			FinalTokenTransaction:         tokenTransaction,
+			FinalTokenTransactionHash:     tokenTransactionHash,
+			OperatorTransactionSignatures: allOperatorSignaturesPackage,
+			OperatorShares:                revocationSecretShares,
+			OperatorIdentityPublicKey:     h.config.IdentityPublicKey().Serialize(),
+		})
+	})
 	// If there was an error exchanging with all operators, we will roll back to the revealed status.
 	if errorExchangingWithAllOperators != nil {
 		return nil, fmt.Errorf("1 failed to exchange revocation secret shares: %w for token txHash: %x", errorExchangingWithAllOperators, tokenTransactionHash)
