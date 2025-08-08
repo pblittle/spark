@@ -293,3 +293,45 @@ func TestDatabaseMiddleware_TestTaskCanCommitTransaction(t *testing.T) {
 
 	require.Nil(t, dbSession.GetTxIfExists(), "Expected no current transaction after task completed.")
 }
+
+func TestPanicRecoveryInterceptor_TestNoPanic(t *testing.T) {
+	config, err := testutil.TestConfig()
+	require.NoError(t, err)
+
+	ctx, dbCtx := db.NewTestSQLiteContext(t, t.Context())
+	defer dbCtx.Close()
+
+	task := BaseTaskSpec{
+		Name:    "Test",
+		Timeout: nil,
+		Task: func(_ context.Context, _ *so.Config) error {
+			return nil // No panic, just cool calm task execution.
+		},
+	}
+
+	taskWithRecovery := task.wrapMiddleware(PanicRecoveryMiddleware())
+
+	err = taskWithRecovery.Task(ctx, config)
+	require.NoError(t, err)
+}
+
+func TestPanicRecoveryInterceptor_TestPanic(t *testing.T) {
+	config, err := testutil.TestConfig()
+	require.NoError(t, err)
+
+	ctx, dbCtx := db.NewTestSQLiteContext(t, t.Context())
+	defer dbCtx.Close()
+
+	task := BaseTaskSpec{
+		Name:    "Test",
+		Timeout: nil,
+		Task: func(_ context.Context, _ *so.Config) error {
+			panic("AHHHHHHHHHHHHHH!")
+		},
+	}
+
+	taskWithRecovery := task.wrapMiddleware(PanicRecoveryMiddleware())
+
+	err = taskWithRecovery.Task(ctx, config)
+	require.ErrorIs(t, err, errTaskPanic)
+}

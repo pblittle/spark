@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common/logging"
@@ -12,7 +13,10 @@ import (
 	"github.com/lightsparkdev/spark/so/ent"
 )
 
-var errTaskTimeout = fmt.Errorf("task timed out")
+var (
+	errTaskTimeout = fmt.Errorf("task timed out")
+	errTaskPanic   = fmt.Errorf("task panicked")
+)
 
 type TaskMiddleware func(context.Context, *so.Config, *BaseTaskSpec) error //nolint:revive
 
@@ -99,5 +103,23 @@ func DatabaseMiddleware(factory db.SessionFactory) TaskMiddleware {
 		}
 
 		return err
+	}
+}
+
+func PanicRecoveryMiddleware() TaskMiddleware {
+	return func(ctx context.Context, config *so.Config, task *BaseTaskSpec) (err error) {
+		logger := logging.GetLoggerFromContext(ctx)
+		defer func() {
+			if r := recover(); r != nil {
+				stack := debug.Stack()
+				logger.Error("Panic in task execution",
+					"panic", fmt.Sprintf("%v", r),
+					"stack", string(stack),
+				)
+				err = errTaskPanic
+			}
+		}()
+
+		return task.Task(ctx, config)
 	}
 }
