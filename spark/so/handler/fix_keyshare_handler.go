@@ -10,6 +10,8 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/google/uuid"
 	secretsharing "github.com/lightsparkdev/spark/common/secret_sharing"
+	"github.com/lightsparkdev/spark/common/secret_sharing/curve"
+	"github.com/lightsparkdev/spark/common/secret_sharing/polynomial"
 	pb "github.com/lightsparkdev/spark/proto/spark_internal"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/ent"
@@ -205,7 +207,7 @@ func (h FixKeyshareHandler) createConfig(args FixKeyshareArgs) (*secretsharing.I
 		BigI:       slices.Collect(maps.Keys(args.goodOperators)),
 	}
 
-	alphas := make(map[secretsharing.PartyIndex]*secretsharing.Scalar)
+	alphas := make(map[secretsharing.PartyIndex]*curve.Scalar)
 	for identifier, operator := range args.goodOperators {
 		// TODO: Don't hardcode the magic (+ 1) mapping
 		// TODO: Somehow avoid unsafe cast
@@ -234,13 +236,13 @@ func (h FixKeyshareHandler) createSender(args FixKeyshareArgs) (*secretsharing.I
 		return nil, err
 	}
 
-	var ownSecretShare secretsharing.Scalar
+	var ownSecretShare curve.Scalar
 	overflowed := ownSecretShare.SetByteSlice(args.badKeyshare.SecretShare)
 	if overflowed {
 		return nil, fmt.Errorf("secret share overflowed when parsing")
 	}
 
-	pubShareEvals := make([]*secretsharing.PointEval, 0)
+	pubShareEvals := make([]*polynomial.PointEval, 0)
 
 	for goodIdentifier, goodOperator := range args.goodOperators {
 		publicShareCompressed := args.badKeyshare.PublicShares[goodIdentifier]
@@ -253,17 +255,17 @@ func (h FixKeyshareHandler) createSender(args FixKeyshareArgs) (*secretsharing.I
 		var sharePoint secp256k1.JacobianPoint
 		sharePubKey.AsJacobian(&sharePoint)
 
-		eval := secretsharing.PointEval{
+		eval := polynomial.PointEval{
 			// TODO: Don't hardcode the magic (+ 1) mapping
 			// TODO: Somehow avoid unsafe cast
-			X: scalarFromInt(uint32(goodOperator.ID) + 1),
+			X: curve.ScalarFromInt(uint32(goodOperator.ID) + 1),
 			Y: &sharePoint,
 		}
 
 		pubShareEvals = append(pubShareEvals, &eval)
 	}
 
-	pubSharesPoly := secretsharing.NewInterpolatingPointPolynomial(pubShareEvals)
+	pubSharesPoly := polynomial.NewInterpolatingPointPolynomial(pubShareEvals)
 
 	sender, err := secretsharing.NewIssueSender(*config, h.config.Identifier, &ownSecretShare, pubSharesPoly)
 	if err != nil {

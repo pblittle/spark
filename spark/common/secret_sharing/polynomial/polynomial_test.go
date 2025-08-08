@@ -1,9 +1,10 @@
-package secretsharing
+package polynomial
 
 import (
 	"testing"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/secret_sharing/curve"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,7 +18,7 @@ func pointFromScalar(scalar *secp256k1.ModNScalar) *secp256k1.JacobianPoint {
 // Test basic ScalarPolynomial creation and evaluation
 func TestScalarPolynomialBasic(t *testing.T) {
 	// Test constant polynomial (degree 0)
-	secret := scalarFromInt(42)
+	secret := curve.ScalarFromInt(42)
 	poly, err := NewScalarPolynomialSharing(secret, 0)
 	if err != nil {
 		t.Fatalf("Failed to create constant polynomial: %v", err)
@@ -34,7 +35,7 @@ func TestScalarPolynomialBasic(t *testing.T) {
 	// Test evaluation at various points
 	testPoints := []uint32{0, 1, 5, 100}
 	for _, x := range testPoints {
-		xScalar := scalarFromInt(x)
+		xScalar := curve.ScalarFromInt(x)
 		result := poly.Eval(xScalar)
 		if !result.Equals(secret) {
 			t.Errorf("Constant polynomial should return %s at x=%d, got %s",
@@ -45,7 +46,7 @@ func TestScalarPolynomialBasic(t *testing.T) {
 
 // Test ScalarPolynomial with higher degrees
 func TestScalarPolynomialDegrees(t *testing.T) {
-	secret := scalarFromInt(123)
+	secret := curve.ScalarFromInt(123)
 
 	// Test polynomials of various degrees
 	degrees := []int{1, 2, 5, 10}
@@ -67,7 +68,7 @@ func TestScalarPolynomialDegrees(t *testing.T) {
 		}
 
 		// Evaluation at x=0 should return the secret
-		zero := scalarFromInt(0)
+		zero := curve.ScalarFromInt(0)
 		result := poly.Eval(zero)
 		if !result.Equals(secret) {
 			t.Errorf("P(0) should equal secret for degree %d, got %s",
@@ -80,9 +81,9 @@ func TestScalarPolynomialDegrees(t *testing.T) {
 func TestManualScalarPolynomial(t *testing.T) {
 	// Create polynomial: 5 + 3x + 2x^2
 	coefs := []*secp256k1.ModNScalar{
-		scalarFromInt(5), // constant term
-		scalarFromInt(3), // x coefficient
-		scalarFromInt(2), // x^2 coefficient
+		curve.ScalarFromInt(5), // constant term
+		curve.ScalarFromInt(3), // x coefficient
+		curve.ScalarFromInt(2), // x^2 coefficient
 	}
 
 	poly := &ScalarPolynomial{Coefs: coefs}
@@ -99,8 +100,8 @@ func TestManualScalarPolynomial(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		x := scalarFromInt(tc.x)
-		expected := scalarFromInt(tc.expected)
+		x := curve.ScalarFromInt(tc.x)
+		expected := curve.ScalarFromInt(tc.expected)
 		result := poly.Eval(x)
 
 		if !result.Equals(expected) {
@@ -113,9 +114,9 @@ func TestManualScalarPolynomial(t *testing.T) {
 func TestPointPolynomial(t *testing.T) {
 	// Create polynomial with point coefficients: G*5 + G*3*x + G*2*x^2
 	coefs := []*secp256k1.JacobianPoint{
-		pointFromScalar(scalarFromInt(5)), // G*5
-		pointFromScalar(scalarFromInt(3)), // G*3
-		pointFromScalar(scalarFromInt(2)), // G*2
+		pointFromScalar(curve.ScalarFromInt(5)), // G*5
+		pointFromScalar(curve.ScalarFromInt(3)), // G*3
+		pointFromScalar(curve.ScalarFromInt(2)), // G*2
 	}
 
 	poly := &PointPolynomial{Coefs: coefs}
@@ -132,11 +133,11 @@ func TestPointPolynomial(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		x := scalarFromInt(tc.x)
-		expectedPoint := pointFromScalar(scalarFromInt(tc.expected))
+		x := curve.ScalarFromInt(tc.x)
+		expectedPoint := pointFromScalar(curve.ScalarFromInt(tc.expected))
 		result := poly.Eval(x)
 
-		if !PointEqual(result, expectedPoint) {
+		if !curve.PointEqual(result, expectedPoint) {
 			t.Errorf("Point polynomial P(%d) gave incorrect result", tc.x)
 		}
 	}
@@ -145,19 +146,19 @@ func TestPointPolynomial(t *testing.T) {
 // Test Lagrange interpolation for scalars
 func TestScalarLagrangeInterpolation(t *testing.T) {
 	// Test with known polynomial: 7 + 4x + 2x^2
-	secret := scalarFromInt(7)
+	secret := curve.ScalarFromInt(7)
 	coefs := []*secp256k1.ModNScalar{
 		secret,
-		scalarFromInt(4),
-		scalarFromInt(2),
+		curve.ScalarFromInt(4),
+		curve.ScalarFromInt(2),
 	}
 	poly := &ScalarPolynomial{Coefs: coefs}
 
 	// Generate evaluation points
 	points := []*ScalarEval{
-		{X: scalarFromInt(1), Y: poly.Eval(scalarFromInt(1))}, // P(1) = 13
-		{X: scalarFromInt(2), Y: poly.Eval(scalarFromInt(2))}, // P(2) = 23
-		{X: scalarFromInt(3), Y: poly.Eval(scalarFromInt(3))}, // P(3) = 37
+		{X: curve.ScalarFromInt(1), Y: poly.Eval(curve.ScalarFromInt(1))}, // P(1) = 13
+		{X: curve.ScalarFromInt(2), Y: poly.Eval(curve.ScalarFromInt(2))}, // P(2) = 23
+		{X: curve.ScalarFromInt(3), Y: poly.Eval(curve.ScalarFromInt(3))}, // P(3) = 37
 	}
 
 	// Reconstruct at x=0 (should give us the secret)
@@ -173,34 +174,34 @@ func TestScalarLagrangeInterpolation(t *testing.T) {
 // Test Lagrange interpolation for points
 func TestPointLagrangeInterpolation(t *testing.T) {
 	// Test with known polynomial over points: G*7 + G*4*x + G*2*x^2
-	secret := scalarFromInt(7)
+	secret := curve.ScalarFromInt(7)
 	secretPoint := pointFromScalar(secret)
 
 	coefs := []*secp256k1.JacobianPoint{
 		secretPoint,
-		pointFromScalar(scalarFromInt(4)),
-		pointFromScalar(scalarFromInt(2)),
+		pointFromScalar(curve.ScalarFromInt(4)),
+		pointFromScalar(curve.ScalarFromInt(2)),
 	}
 	poly := &PointPolynomial{Coefs: coefs}
 
 	// Generate evaluation points
 	points := []*PointEval{
-		{X: scalarFromInt(1), Y: poly.Eval(scalarFromInt(1))},
-		{X: scalarFromInt(2), Y: poly.Eval(scalarFromInt(2))},
-		{X: scalarFromInt(3), Y: poly.Eval(scalarFromInt(3))},
+		{X: curve.ScalarFromInt(1), Y: poly.Eval(curve.ScalarFromInt(1))},
+		{X: curve.ScalarFromInt(2), Y: poly.Eval(curve.ScalarFromInt(2))},
+		{X: curve.ScalarFromInt(3), Y: poly.Eval(curve.ScalarFromInt(3))},
 	}
 
 	// Reconstruct at x=0 (should give us the secret point)
 	reconstructed := ReconstructPoint(points)
 
-	if !PointEqual(reconstructed, secretPoint) {
+	if !curve.PointEqual(reconstructed, secretPoint) {
 		t.Errorf("Point Lagrange interpolation failed to reconstruct secret point")
 	}
 }
 
 // Test threshold secret sharing scenario
 func TestThresholdSecretSharing(t *testing.T) {
-	secret := scalarFromInt(999)
+	secret := curve.ScalarFromInt(999)
 	threshold := 3
 	numShares := 5
 
@@ -213,7 +214,7 @@ func TestThresholdSecretSharing(t *testing.T) {
 	// Generate shares
 	shares := make([]*ScalarEval, numShares)
 	for i := range numShares {
-		x := scalarFromInt(uint32(i + 1)) // Party IDs 1,2,3,4,5
+		x := curve.ScalarFromInt(uint32(i + 1)) // Party IDs 1,2,3,4,5
 		y := poly.Eval(x)
 		shares[i] = &ScalarEval{X: x, Y: y}
 	}
@@ -240,46 +241,46 @@ func TestThresholdSecretSharing(t *testing.T) {
 
 func TestScalarPolynomialEmpty(t *testing.T) {
 	emptyPoly := &ScalarPolynomial{Coefs: []*secp256k1.ModNScalar{}}
-	assert.Equal(t, scalarFromInt(0), emptyPoly.Eval(scalarFromInt(5)))
+	assert.Equal(t, curve.ScalarFromInt(0), emptyPoly.Eval(curve.ScalarFromInt(5)))
 }
 
 func TestPointPolynomialEmpty(t *testing.T) {
 	emptyPoly := &PointPolynomial{Coefs: []*secp256k1.JacobianPoint{}}
 
 	var zeroPoint secp256k1.JacobianPoint
-	assert.True(t, PointEqual(emptyPoly.Eval(scalarFromInt(5)), &zeroPoint), "empty point polynomial should evaluate to zero")
+	assert.True(t, curve.PointEqual(emptyPoly.Eval(curve.ScalarFromInt(5)), &zeroPoint), "empty point polynomial should evaluate to zero")
 }
 
 func TestScalarPolynomialSingeton(t *testing.T) {
 	singleton := []*ScalarEval{
-		{X: scalarFromInt(5), Y: scalarFromInt(42)},
+		{X: curve.ScalarFromInt(5), Y: curve.ScalarFromInt(42)},
 	}
 
-	assert.Equal(t, scalarFromInt(42), ReconstructScalar(singleton), "single eval interpolation failed")
+	assert.Equal(t, curve.ScalarFromInt(42), ReconstructScalar(singleton), "single eval interpolation failed")
 }
 
 func TestPointPolynomialSingleton(t *testing.T) {
-	height := pointFromScalar(scalarFromInt(42))
+	height := pointFromScalar(curve.ScalarFromInt(42))
 	singleton := []*PointEval{
-		{X: scalarFromInt(5), Y: height},
+		{X: curve.ScalarFromInt(5), Y: height},
 	}
 
-	assert.True(t, PointEqual(height, ReconstructPoint(singleton)), "single eval interpolation failed")
+	assert.True(t, curve.PointEqual(height, ReconstructPoint(singleton)), "single eval interpolation failed")
 }
 
 // Test Lagrange basis function
 func TestLagrangeBasis(t *testing.T) {
 	// Test with known x values
 	xs := []*secp256k1.ModNScalar{
-		scalarFromInt(1),
-		scalarFromInt(2),
-		scalarFromInt(3),
+		curve.ScalarFromInt(1),
+		curve.ScalarFromInt(2),
+		curve.ScalarFromInt(3),
 	}
 
 	// Test L_0(0) for first basis polynomial
 	// L_0(0) = (0-2)(0-3) / ((1-2)(1-3)) = 6/2 = 3
-	basis0 := lagrangeBasisAt(xs, 0, scalarFromInt(0))
-	expected0 := scalarFromInt(3)
+	basis0 := LagrangeBasisAt(xs, 0, curve.ScalarFromInt(0))
+	expected0 := curve.ScalarFromInt(3)
 
 	if !basis0.Equals(expected0) {
 		t.Errorf("L_0(0) expected 3, got %s", basis0.String())
@@ -287,9 +288,9 @@ func TestLagrangeBasis(t *testing.T) {
 
 	// Test L_1(0) for second basis polynomial
 	// L_1(0) = (0-1)(0-3) / ((2-1)(2-3)) = 3/(-1) = -3
-	basis1 := lagrangeBasisAt(xs, 1, scalarFromInt(0))
+	basis1 := LagrangeBasisAt(xs, 1, curve.ScalarFromInt(0))
 	expected1 := new(secp256k1.ModNScalar)
-	expected1.NegateVal(scalarFromInt(3))
+	expected1.NegateVal(curve.ScalarFromInt(3))
 
 	if !basis1.Equals(expected1) {
 		t.Errorf("L_1(0) expected -3, got %s", basis1.String())
@@ -297,8 +298,8 @@ func TestLagrangeBasis(t *testing.T) {
 
 	// Test L_2(0) for third basis polynomial
 	// L_2(0) = (0-1)(0-2) / ((3-1)(3-2)) = 2/2 = 1
-	basis2 := lagrangeBasisAt(xs, 2, scalarFromInt(0))
-	expected2 := scalarFromInt(1)
+	basis2 := LagrangeBasisAt(xs, 2, curve.ScalarFromInt(0))
+	expected2 := curve.ScalarFromInt(1)
 
 	if !basis2.Equals(expected2) {
 		t.Errorf("L_2(0) expected 1, got %s", basis2.String())
@@ -307,7 +308,7 @@ func TestLagrangeBasis(t *testing.T) {
 	// Verify that basis polynomials sum to 1 at x=0
 	sum := new(secp256k1.ModNScalar)
 	sum.Add(basis0).Add(basis1).Add(basis2)
-	one := scalarFromInt(1)
+	one := curve.ScalarFromInt(1)
 
 	if !sum.Equals(one) {
 		t.Errorf("Lagrange basis polynomials should sum to 1, got %s", sum.String())
@@ -318,9 +319,9 @@ func TestLagrangeBasis(t *testing.T) {
 func TestScalarPointConsistency(t *testing.T) {
 	// Create matching scalar and point polynomials
 	scalarCoefs := []*secp256k1.ModNScalar{
-		scalarFromInt(10),
-		scalarFromInt(20),
-		scalarFromInt(30),
+		curve.ScalarFromInt(10),
+		curve.ScalarFromInt(20),
+		curve.ScalarFromInt(30),
 	}
 
 	pointCoefs := make([]*secp256k1.JacobianPoint, len(scalarCoefs))
@@ -335,13 +336,13 @@ func TestScalarPointConsistency(t *testing.T) {
 	testPoints := []uint32{0, 1, 2, 5, 10}
 
 	for _, xVal := range testPoints {
-		x := scalarFromInt(xVal)
+		x := curve.ScalarFromInt(xVal)
 
 		scalarResult := scalarPoly.Eval(x)
 		pointResult := pointPoly.Eval(x)
 		expectedPoint := pointFromScalar(scalarResult)
 
-		if !PointEqual(pointResult, expectedPoint) {
+		if !curve.PointEqual(pointResult, expectedPoint) {
 			t.Errorf("Inconsistency at x=%d between scalar and point polynomial", xVal)
 		}
 	}
@@ -351,9 +352,9 @@ func TestScalarPointConsistency(t *testing.T) {
 func TestInterpolatingPointPolynomialFromEvals(t *testing.T) {
 	// Create some test evaluation points
 	evals := []*PointEval{
-		{X: scalarFromInt(1), Y: pointFromScalar(scalarFromInt(10))},
-		{X: scalarFromInt(2), Y: pointFromScalar(scalarFromInt(23))},
-		{X: scalarFromInt(3), Y: pointFromScalar(scalarFromInt(40))},
+		{X: curve.ScalarFromInt(1), Y: pointFromScalar(curve.ScalarFromInt(10))},
+		{X: curve.ScalarFromInt(2), Y: pointFromScalar(curve.ScalarFromInt(23))},
+		{X: curve.ScalarFromInt(3), Y: pointFromScalar(curve.ScalarFromInt(40))},
 	}
 
 	poly := NewInterpolatingPointPolynomial(evals)
@@ -361,18 +362,18 @@ func TestInterpolatingPointPolynomialFromEvals(t *testing.T) {
 	// Test that the polynomial evaluates correctly at the original points
 	for i, eval := range evals {
 		result := poly.Eval(eval.X)
-		if !PointEqual(result, eval.Y) {
+		if !curve.PointEqual(result, eval.Y) {
 			t.Errorf("Interpolating polynomial doesn't match evaluation point %d", i)
 		}
 	}
 
 	// Test evaluation at a new point
-	zero := scalarFromInt(0)
+	zero := curve.ScalarFromInt(0)
 	secretPoint := poly.Eval(zero)
 
 	// Verify using direct interpolation
 	expectedSecret := InterpolatePoint(evals, zero)
-	if !PointEqual(secretPoint, expectedSecret) {
+	if !curve.PointEqual(secretPoint, expectedSecret) {
 		t.Errorf("Interpolating polynomial gives different result than direct interpolation")
 	}
 }
@@ -382,9 +383,9 @@ func TestInterpolatingPointPolynomialFromPolynomial(t *testing.T) {
 	// Create a specific polynomial: (5 + 3 x + 2 x^2) G
 	originalPoly := &PointPolynomial{
 		Coefs: []*secp256k1.JacobianPoint{
-			pointFromScalar(scalarFromInt(5)),
-			pointFromScalar(scalarFromInt(3)),
-			pointFromScalar(scalarFromInt(2)),
+			pointFromScalar(curve.ScalarFromInt(5)),
+			pointFromScalar(curve.ScalarFromInt(3)),
+			pointFromScalar(curve.ScalarFromInt(2)),
 		},
 	}
 
@@ -394,11 +395,11 @@ func TestInterpolatingPointPolynomialFromPolynomial(t *testing.T) {
 	// Test that both polynomials evaluate to the same result at various points
 	testPoints := []uint32{0, 1, 2, 4, 10}
 	for _, xVal := range testPoints {
-		x := scalarFromInt(xVal)
+		x := curve.ScalarFromInt(xVal)
 		originalResult := originalPoly.Eval(x)
 		interpResult := interpPoly.Eval(x)
 
-		if !PointEqual(originalResult, interpResult) {
+		if !curve.PointEqual(originalResult, interpResult) {
 			t.Errorf("InterpolatingPointPolynomial differs from original at x=%d", xVal)
 		}
 	}
@@ -408,10 +409,10 @@ func TestInterpolatingPointPolynomialFromPolynomial(t *testing.T) {
 func TestInterpolatingPointPolynomialEncodeDecode(t *testing.T) {
 	// Create test polynomial
 	evals := []*PointEval{
-		{X: scalarFromInt(1), Y: pointFromScalar(scalarFromInt(17))},
-		{X: scalarFromInt(2), Y: pointFromScalar(scalarFromInt(31))},
-		{X: scalarFromInt(3), Y: pointFromScalar(scalarFromInt(49))},
-		{X: scalarFromInt(4), Y: pointFromScalar(scalarFromInt(71))},
+		{X: curve.ScalarFromInt(1), Y: pointFromScalar(curve.ScalarFromInt(17))},
+		{X: curve.ScalarFromInt(2), Y: pointFromScalar(curve.ScalarFromInt(31))},
+		{X: curve.ScalarFromInt(3), Y: pointFromScalar(curve.ScalarFromInt(49))},
+		{X: curve.ScalarFromInt(4), Y: pointFromScalar(curve.ScalarFromInt(71))},
 	}
 
 	originalPoly := NewInterpolatingPointPolynomial(evals)
@@ -434,11 +435,11 @@ func TestInterpolatingPointPolynomialEncodeDecode(t *testing.T) {
 	// Test that they evaluate to the same results
 	testPoints := []uint32{0, 1, 2, 5, 7}
 	for _, xVal := range testPoints {
-		x := scalarFromInt(xVal)
+		x := curve.ScalarFromInt(xVal)
 		originalResult := originalPoly.Eval(x)
 		decodedResult := decodedPoly.Eval(x)
 
-		if !PointEqual(originalResult, decodedResult) {
+		if !curve.PointEqual(originalResult, decodedResult) {
 			t.Errorf("Decoded polynomial gives different result at x=%d", xVal)
 		}
 	}
@@ -448,8 +449,8 @@ func TestInterpolatingPointPolynomialEncodeDecode(t *testing.T) {
 func TestInterpolatingPointPolynomialEquality(t *testing.T) {
 	// Create two identical polynomials
 	evals := []*PointEval{
-		{X: scalarFromInt(1), Y: pointFromScalar(scalarFromInt(100))},
-		{X: scalarFromInt(2), Y: pointFromScalar(scalarFromInt(200))},
+		{X: curve.ScalarFromInt(1), Y: pointFromScalar(curve.ScalarFromInt(100))},
+		{X: curve.ScalarFromInt(2), Y: pointFromScalar(curve.ScalarFromInt(200))},
 	}
 
 	poly1 := NewInterpolatingPointPolynomial(evals)
@@ -467,8 +468,8 @@ func TestInterpolatingPointPolynomialEquality(t *testing.T) {
 
 	// Create different polynomial
 	differentEvals := []*PointEval{
-		{X: scalarFromInt(1), Y: pointFromScalar(scalarFromInt(101))}, // Different value
-		{X: scalarFromInt(2), Y: pointFromScalar(scalarFromInt(200))},
+		{X: curve.ScalarFromInt(1), Y: pointFromScalar(curve.ScalarFromInt(101))}, // Different value
+		{X: curve.ScalarFromInt(2), Y: pointFromScalar(curve.ScalarFromInt(200))},
 	}
 
 	poly3 := NewInterpolatingPointPolynomial(differentEvals)
@@ -480,7 +481,7 @@ func TestInterpolatingPointPolynomialEquality(t *testing.T) {
 
 	// Test different lengths
 	shorterEvals := []*PointEval{
-		{X: scalarFromInt(1), Y: pointFromScalar(scalarFromInt(100))},
+		{X: curve.ScalarFromInt(1), Y: pointFromScalar(curve.ScalarFromInt(100))},
 	}
 
 	poly4 := NewInterpolatingPointPolynomial(shorterEvals)
@@ -494,22 +495,22 @@ func TestInterpolatingPointPolynomialEquality(t *testing.T) {
 func TestInterpolatingPointPolynomialWellDefined(t *testing.T) {
 	// Create two evaluations of one polynomial
 	p := &ScalarPolynomial{Coefs: []*secp256k1.ModNScalar{
-		scalarFromInt(5),
-		scalarFromInt(3),
-		scalarFromInt(2),
+		curve.ScalarFromInt(5),
+		curve.ScalarFromInt(3),
+		curve.ScalarFromInt(2),
 	}}
 	sourcePoly := p.ToPointPolynomial()
 
 	evals1 := []*PointEval{
-		{X: scalarFromInt(4), Y: sourcePoly.Eval(scalarFromInt(4))},
-		{X: scalarFromInt(5), Y: sourcePoly.Eval(scalarFromInt(5))},
-		{X: scalarFromInt(6), Y: sourcePoly.Eval(scalarFromInt(6))},
+		{X: curve.ScalarFromInt(4), Y: sourcePoly.Eval(curve.ScalarFromInt(4))},
+		{X: curve.ScalarFromInt(5), Y: sourcePoly.Eval(curve.ScalarFromInt(5))},
+		{X: curve.ScalarFromInt(6), Y: sourcePoly.Eval(curve.ScalarFromInt(6))},
 	}
 
 	evals2 := []*PointEval{
-		{X: scalarFromInt(7), Y: sourcePoly.Eval(scalarFromInt(7))},
-		{X: scalarFromInt(8), Y: sourcePoly.Eval(scalarFromInt(8))},
-		{X: scalarFromInt(9), Y: sourcePoly.Eval(scalarFromInt(9))},
+		{X: curve.ScalarFromInt(7), Y: sourcePoly.Eval(curve.ScalarFromInt(7))},
+		{X: curve.ScalarFromInt(8), Y: sourcePoly.Eval(curve.ScalarFromInt(8))},
+		{X: curve.ScalarFromInt(9), Y: sourcePoly.Eval(curve.ScalarFromInt(9))},
 	}
 
 	poly1 := NewInterpolatingPointPolynomial(evals1)
@@ -530,25 +531,25 @@ func TestInterpolatingPointPolynomialEdgeCases(t *testing.T) {
 
 	// Test single evaluation point (constant polynomial)
 	singleEval := []*PointEval{
-		{X: scalarFromInt(5), Y: pointFromScalar(scalarFromInt(42))},
+		{X: curve.ScalarFromInt(5), Y: pointFromScalar(curve.ScalarFromInt(42))},
 	}
 
 	constPoly := NewInterpolatingPointPolynomial(singleEval)
 
 	// Should evaluate to the same point everywhere
 	testPoints := []uint32{0, 1, 2, 10, 100}
-	expectedZeroPoint := pointFromScalar(scalarFromInt(0))
-	expectedConstPoint := pointFromScalar(scalarFromInt(42))
+	expectedZeroPoint := pointFromScalar(curve.ScalarFromInt(0))
+	expectedConstPoint := pointFromScalar(curve.ScalarFromInt(42))
 
 	for _, xVal := range testPoints {
-		x := scalarFromInt(xVal)
+		x := curve.ScalarFromInt(xVal)
 		// result := constPoly.Eval(x)
 
-		if !PointEqual(zeroPoly.Eval(x), expectedZeroPoint) {
+		if !curve.PointEqual(zeroPoly.Eval(x), expectedZeroPoint) {
 			t.Errorf("Constant polynomial should return same value at x=%d", xVal)
 		}
 
-		if !PointEqual(constPoly.Eval(x), expectedConstPoint) {
+		if !curve.PointEqual(constPoly.Eval(x), expectedConstPoint) {
 			t.Errorf("Constant polynomial should return same value at x=%d", xVal)
 		}
 	}
@@ -567,10 +568,10 @@ func TestInterpolatingPointPolynomialEdgeCases(t *testing.T) {
 func TestInterpolatingPointPolynomialConsistency(t *testing.T) {
 	// Create test evaluations
 	evals := []*PointEval{
-		{X: scalarFromInt(1), Y: pointFromScalar(scalarFromInt(7))},
-		{X: scalarFromInt(3), Y: pointFromScalar(scalarFromInt(19))},
-		{X: scalarFromInt(5), Y: pointFromScalar(scalarFromInt(37))},
-		{X: scalarFromInt(7), Y: pointFromScalar(scalarFromInt(61))},
+		{X: curve.ScalarFromInt(1), Y: pointFromScalar(curve.ScalarFromInt(7))},
+		{X: curve.ScalarFromInt(3), Y: pointFromScalar(curve.ScalarFromInt(19))},
+		{X: curve.ScalarFromInt(5), Y: pointFromScalar(curve.ScalarFromInt(37))},
+		{X: curve.ScalarFromInt(7), Y: pointFromScalar(curve.ScalarFromInt(61))},
 	}
 
 	poly := NewInterpolatingPointPolynomial(evals)
@@ -578,11 +579,11 @@ func TestInterpolatingPointPolynomialConsistency(t *testing.T) {
 	// Test that interpolating polynomial gives same results as direct interpolation
 	testPoints := []uint32{0, 2, 4, 6, 8, 10}
 	for _, xVal := range testPoints {
-		x := scalarFromInt(xVal)
+		x := curve.ScalarFromInt(xVal)
 		polyResult := poly.Eval(x)
 		directResult := InterpolatePoint(evals, x)
 
-		if !PointEqual(polyResult, directResult) {
+		if !curve.PointEqual(polyResult, directResult) {
 			t.Errorf("InterpolatingPointPolynomial inconsistent with direct interpolation at x=%d", xVal)
 		}
 	}

@@ -28,6 +28,8 @@ import (
 	"fmt"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/secret_sharing/curve"
+	"github.com/lightsparkdev/spark/common/secret_sharing/polynomial"
 )
 
 type PartyIndex = string
@@ -41,22 +43,22 @@ type IssueRequest struct {
 // IssueConfig is what all parties know.
 type IssueConfig struct {
 	IssueRequest
-	Sid    []byte                 // session ID
-	T      int                    // secret sharing threshold
-	Alphas map[PartyIndex]*Scalar // input, of each participant, to the sharing polynomial
+	Sid    []byte                       // session ID
+	T      int                          // secret sharing threshold
+	Alphas map[PartyIndex]*curve.Scalar // input, of each participant, to the sharing polynomial
 }
 
 // IssueSender is what one sending party knows.
 type IssueSender struct {
 	Config          IssueConfig
 	SmallI          PartyIndex
-	SIScalar        *Scalar
-	MathcalB        InterpolatingPointPolynomial // NOTE: Would be a `PointPolynomial` if following the described protocol.
+	SIScalar        *curve.Scalar
+	MathcalB        polynomial.InterpolatingPointPolynomial // NOTE: Would be a `PointPolynomial` if following the described protocol.
 	allSameMathcalB bool
 }
 
-func NewIssueSender(config IssueConfig, smallI PartyIndex, sIScalar *Scalar, mathcalB InterpolatingPointPolynomial) (*IssueSender, error) {
-	degree := len(mathcalB.standardEvals) - 1
+func NewIssueSender(config IssueConfig, smallI PartyIndex, sIScalar *curve.Scalar, mathcalB polynomial.InterpolatingPointPolynomial) (*IssueSender, error) {
+	degree := mathcalB.Degree() - 1
 	expectedDegree := config.T - 1
 	if degree != expectedDegree {
 		return nil, fmt.Errorf("public sharing polynomial has the wrong degree: expected %d, is %d", expectedDegree, degree)
@@ -88,21 +90,21 @@ type Message[T any] struct {
 // IssuePayload1 is the data from round 1 for other parties.
 // It must be sent securely to its recipient.
 type IssuePayload1 struct {
-	Sid    []byte      `json:"sid"`
-	SArrow ScalarBytes `json:"sArrow"`
+	Sid    []byte            `json:"sid"`
+	SArrow curve.ScalarBytes `json:"sArrow"`
 }
 
 // IssuePayload2 is the data from round 2 for other parties.
 // It must be sent securely to its recipient.
 type IssuePayload2 struct {
-	MathcalB InterpolatingPointPolynomialBytes `json:"mathcalB"` // NOTE: Would be a `PointPolynomialBytes` if following the described protocol.
-	SIIssue  ScalarBytes                       `json:"sIIssue"`
+	MathcalB polynomial.InterpolatingPointPolynomialBytes `json:"mathcalB"` // NOTE: Would be a `PointPolynomialBytes` if following the described protocol.
+	SIIssue  curve.ScalarBytes                            `json:"sIIssue"`
 }
 
 // IssuePayload3 is the final result of round 3.
 type IssuePayload3 struct {
-	MathcalB InterpolatingPointPolynomialBytes `json:"mathcalB"` // NOTE: Would be a `PointPolynomialBytes` if following the described protocol.
-	SIssue   ScalarBytes                       `json:"sIssue"`
+	MathcalB polynomial.InterpolatingPointPolynomialBytes `json:"mathcalB"` // NOTE: Would be a `PointPolynomialBytes` if following the described protocol.
+	SIssue   curve.ScalarBytes                            `json:"sIssue"`
 }
 
 func newIssueError(round int, err error) error {
@@ -132,13 +134,13 @@ func (p IssueSender) checkAssumptions() error {
 		return fmt.Errorf("all parties must have identical secret sharing polynomial coefficients")
 	}
 
-	lhs := new(Point)
+	lhs := new(curve.Point)
 	secp256k1.ScalarBaseMultNonConst(p.SIScalar, lhs)
 
 	alphaI := p.Config.Alphas[p.SmallI]
 	rhs := p.MathcalB.Eval(alphaI)
 
-	if !PointEqual(lhs, rhs) {
+	if !curve.PointEqual(lhs, rhs) {
 		return fmt.Errorf("party %s's secret share does not match the sharing polynomial", p.SmallI)
 	}
 
@@ -154,7 +156,7 @@ func (p IssueSender) Round1() ([]Message[IssuePayload1], error) {
 	// Each party P_i subshares its share:
 
 	// (a) P_i chooses a random polynomial s_i(x) of degree (t - 1) such that s_i(0) = s_i
-	sIPoly, err := NewScalarPolynomialSharing(p.SIScalar, p.Config.T-1)
+	sIPoly, err := polynomial.NewScalarPolynomialSharing(p.SIScalar, p.Config.T-1)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +170,7 @@ func (p IssueSender) Round1() ([]Message[IssuePayload1], error) {
 
 		payload := IssuePayload1{
 			Sid:    p.Config.Sid,
-			SArrow: EncodeScalar(sArrow),
+			SArrow: curve.EncodeScalar(sArrow),
 		}
 		message := Message[IssuePayload1]{
 			From:    p.SmallI,
@@ -181,18 +183,18 @@ func (p IssueSender) Round1() ([]Message[IssuePayload1], error) {
 	return outMessages, nil
 }
 
-func (c IssueConfig) lagrangeBasisAt(i int, x *Scalar) *Scalar {
+func (c IssueConfig) lagrangeBasisAt(i int, x *curve.Scalar) *curve.Scalar {
 	// Let α_1, ... , α_n be distinct field elements.
 	// We denote the Lagrange basis polynomials with respect to a set I ⊆ [n] by { L_i^I(x) }_{i ∈ I}
 	// where L_i^I(x) = prod_{j ∈ I\{i}} (x − α_j) / (α_i − α_j).
 
 	// TODO: Optimize by computing in a constructor
-	var xs []*Scalar
+	var xs []*curve.Scalar
 	for _, j := range c.BigI {
 		xs = append(xs, c.Alphas[j])
 	}
 
-	return lagrangeBasisAt(xs, i, x)
+	return polynomial.LagrangeBasisAt(xs, i, x)
 }
 
 // Round2 is round 2 of the protocol to issue a secret share.
@@ -204,7 +206,7 @@ func (p IssueSender) Round2(payloadFrom map[PartyIndex]IssuePayload1) (Message[I
 
 	// (a) P_i computes s_i^{n + 1} = sum_{j ∈ I} s_{j→i} · L_j^I(α_{n + 1})
 
-	sIIssue := scalarFromInt(0)
+	sIIssue := curve.ScalarFromInt(0)
 
 	alphaIssue := p.Config.Alphas[p.Config.IssueIndex]
 
@@ -212,7 +214,7 @@ func (p IssueSender) Round2(payloadFrom map[PartyIndex]IssuePayload1) (Message[I
 		lagrangeCoeff := p.Config.lagrangeBasisAt(idx, alphaIssue)
 		sArrow := payloadFrom[j].SArrow.Decode()
 
-		term := new(Scalar)
+		term := new(curve.Scalar)
 		term.Set(lagrangeCoeff)
 		term.Mul(sArrow)
 
@@ -224,7 +226,7 @@ func (p IssueSender) Round2(payloadFrom map[PartyIndex]IssuePayload1) (Message[I
 	// and signed with P_i's private signing key, using secure signcryption.)
 	outPayload := IssuePayload2{
 		MathcalB: p.MathcalB.Encode(),
-		SIIssue:  EncodeScalar(sIIssue),
+		SIIssue:  curve.EncodeScalar(sIIssue),
 	}
 	outMessage := Message[IssuePayload2]{
 		From:    p.SmallI,
@@ -245,7 +247,7 @@ func (p IssueReceiver) Round3(payloadFrom map[PartyIndex]IssuePayload2) (*IssueP
 	// (a) P_{n + 1} verifies that all mathcal{B} values are the same from all parties,
 	// and aborts if not
 
-	var mathcalB *InterpolatingPointPolynomial // NOTE: Would be a `PointPolynomial` if following the described protocol.
+	var mathcalB *polynomial.InterpolatingPointPolynomial // NOTE: Would be a `PointPolynomial` if following the described protocol.
 
 	for _, j := range p.Config.BigI {
 		q := payloadFrom[j].MathcalB.Decode()
@@ -261,9 +263,9 @@ func (p IssueReceiver) Round3(payloadFrom map[PartyIndex]IssuePayload2) (*IssueP
 
 	// (b) P_{n + 1} computes s_{n + 1} = sum_{i ∈ I} s_i^{n + 1} · L_i^I(0)
 
-	sIssue := scalarFromInt(0)
+	sIssue := curve.ScalarFromInt(0)
 	for idx, i := range p.Config.BigI {
-		term := p.Config.lagrangeBasisAt(idx, scalarFromInt(0))
+		term := p.Config.lagrangeBasisAt(idx, curve.ScalarFromInt(0))
 		sIIssue := payloadFrom[i].SIIssue.Decode()
 
 		term.Mul(sIIssue)
@@ -272,20 +274,20 @@ func (p IssueReceiver) Round3(payloadFrom map[PartyIndex]IssuePayload2) (*IssueP
 
 	// (c) P_{n + 1} verifies that s_{n + 1} · G = sum_{k = 0}^{t - 1} (α_{n + 1})^k · B_k,
 	// where mathcal{B} = (B_0, . . . , B_{t − 1}), and aborts if not
-	lhs := new(Point)
+	lhs := new(curve.Point)
 	secp256k1.ScalarBaseMultNonConst(sIssue, lhs)
 
 	alphaIssue := p.Config.Alphas[p.Config.IssueIndex]
 	rhs := mathcalB.Eval(alphaIssue)
 
-	if !PointEqual(lhs, rhs) {
+	if !curve.PointEqual(lhs, rhs) {
 		return nil, newIssueError(3, fmt.Errorf("abort: issued share is not correct"))
 	}
 
 	// (d) P_{n + 1} outputs (B, s_{n + 1})
 	outPayload := IssuePayload3{
 		MathcalB: mathcalB.Encode(),
-		SIssue:   EncodeScalar(sIssue),
+		SIssue:   curve.EncodeScalar(sIssue),
 	}
 
 	return &outPayload, nil

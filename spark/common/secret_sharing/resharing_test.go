@@ -4,19 +4,21 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/secret_sharing/curve"
+	"github.com/lightsparkdev/spark/common/secret_sharing/polynomial"
 )
 
 // Helper function to create test shares for a secret
 func createTestShares(secret *secp256k1.ModNScalar, threshold, numShares int) ([]*secp256k1.ModNScalar, error) {
 	// Create polynomial with secret as constant term
-	poly, err := NewScalarPolynomialSharing(secret, threshold-1)
+	poly, err := polynomial.NewScalarPolynomialSharing(secret, threshold-1)
 	if err != nil {
 		return nil, err
 	}
 
 	shares := make([]*secp256k1.ModNScalar, numShares)
 	for i := range numShares {
-		x := scalarFromInt(uint32(i + 1)) // Party IDs start from 1
+		x := curve.ScalarFromInt(uint32(i + 1)) // Party IDs start from 1
 		shares[i] = poly.Eval(x)
 	}
 
@@ -34,7 +36,7 @@ func TestBasicRedistribution(t *testing.T) {
 	}
 
 	// Create a test secret
-	secret := scalarFromInt(12345)
+	secret := curve.ScalarFromInt(12345)
 
 	// Create initial shares for old parties
 	oldShares, err := createTestShares(secret, config.OldThreshold, len(config.OldParties))
@@ -121,15 +123,15 @@ func TestBasicRedistribution(t *testing.T) {
 
 	// Verify that the new shares can reconstruct the original secret
 	// Use any subset of size config.NewThreshold to test reconstruction
-	testPairs := make([]*ScalarEval, config.NewThreshold)
+	testPairs := make([]*polynomial.ScalarEval, config.NewThreshold)
 	for i := range config.NewThreshold {
 		shareID := config.NewParties[i]
-		x := scalarFromInt(uint32(shareID))
-		testPairs[i] = &ScalarEval{X: x, Y: newShares[i]}
+		x := curve.ScalarFromInt(uint32(shareID))
+		testPairs[i] = &polynomial.ScalarEval{X: x, Y: newShares[i]}
 	}
 
 	// Reconstruct the secret using the new shares
-	reconstructedSecret := ReconstructScalar(testPairs)
+	reconstructedSecret := polynomial.ReconstructScalar(testPairs)
 
 	// Verify it matches the original secret
 	if !reconstructedSecret.Equals(secret) {
@@ -153,7 +155,7 @@ func TestInvalidSubshareDetection(t *testing.T) {
 		NewParties:   []ShareID{3, 4},
 	}
 
-	secret := scalarFromInt(54321)
+	secret := curve.ScalarFromInt(54321)
 	oldShares, err := createTestShares(secret, config.OldThreshold, len(config.OldParties))
 	if err != nil {
 		t.Fatalf("Failed to create test shares: %v", err)
@@ -184,7 +186,7 @@ func TestInvalidSubshareDetection(t *testing.T) {
 	for i := range maliciousDirects {
 		if maliciousDirects[i].ToID == newSH.ID {
 			// Replace with random garbage
-			maliciousDirects[i].Payload.Subshare = EncodeScalar(scalarFromInt(99999))
+			maliciousDirects[i].Payload.Subshare = curve.EncodeScalar(curve.ScalarFromInt(99999))
 			break
 		}
 	}
@@ -217,7 +219,7 @@ func TestSecretCommitmentMismatch(t *testing.T) {
 		NewParties:   []ShareID{3},
 	}
 
-	secret := scalarFromInt(11111)
+	secret := curve.ScalarFromInt(11111)
 	oldShares, err := createTestShares(secret, config.OldThreshold, len(config.OldParties))
 	if err != nil {
 		t.Fatalf("Failed to create test shares: %v", err)
@@ -231,7 +233,7 @@ func TestSecretCommitmentMismatch(t *testing.T) {
 	correctCommitment := new(secp256k1.JacobianPoint)
 	secp256k1.ScalarBaseMultNonConst(secret, correctCommitment)
 
-	wrongSecret := scalarFromInt(22222)
+	wrongSecret := curve.ScalarFromInt(22222)
 	wrongCommitment := new(secp256k1.JacobianPoint)
 	secp256k1.ScalarBaseMultNonConst(wrongSecret, wrongCommitment)
 
@@ -279,7 +281,7 @@ func TestAbortPropagation(t *testing.T) {
 
 	// Create fake Round1 state (doesn't matter for this test)
 	fakeState := &Round1State{
-		ReceivedSubshares:   make(map[ShareID]ScalarBytes),
+		ReceivedSubshares:   make(map[ShareID]curve.ScalarBytes),
 		ReceivedCommitments: make(map[ShareID]*Round1BroadcastPayload),
 	}
 

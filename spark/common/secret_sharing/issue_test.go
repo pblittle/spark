@@ -4,6 +4,9 @@ import (
 	"maps"
 	"slices"
 	"testing"
+
+	"github.com/lightsparkdev/spark/common/secret_sharing/curve"
+	"github.com/lightsparkdev/spark/common/secret_sharing/polynomial"
 )
 
 // TestIssueProtocolFull tests the full issue protocol flow
@@ -13,33 +16,33 @@ func TestIssueProtocolFull(t *testing.T) {
 
 	threshold := 3
 
-	establishedShareArgs := map[PartyIndex]*Scalar{
-		"0": scalarFromInt(1),
-		"1": scalarFromInt(2),
-		"2": scalarFromInt(3),
-		"3": scalarFromInt(4),
-		"4": scalarFromInt(5),
+	establishedShareArgs := map[PartyIndex]*curve.Scalar{
+		"0": curve.ScalarFromInt(1),
+		"1": curve.ScalarFromInt(2),
+		"2": curve.ScalarFromInt(3),
+		"3": curve.ScalarFromInt(4),
+		"4": curve.ScalarFromInt(5),
 	}
 
 	issuePartyIndex := PartyIndex("8")
-	issueShareArg := scalarFromInt(9)
+	issueShareArg := curve.ScalarFromInt(9)
 
 	// Create a secret and a verifiable secret sharing of it
-	secret := scalarFromInt(12345)
+	secret := curve.ScalarFromInt(12345)
 
-	sharingPoly, err := NewScalarPolynomialSharing(secret, threshold-1)
+	sharingPoly, err := polynomial.NewScalarPolynomialSharing(secret, threshold-1)
 	if err != nil {
 		t.Fatalf("Failed to create sharing polynomial: %v", err)
 	}
 
 	pubSharingPoly := sharingPoly.ToPointPolynomial()
 
-	establishedShares := make(map[PartyIndex]*Scalar)
+	establishedShares := make(map[PartyIndex]*curve.Scalar)
 	for partyIdx, shareArg := range establishedShareArgs {
 		establishedShares[partyIdx] = sharingPoly.Eval(shareArg)
 	}
 
-	pubSharesInterpolatingPoly := NewInterpolatingPointPolynomialFromPolynomial(pubSharingPoly)
+	pubSharesInterpolatingPoly := polynomial.NewInterpolatingPointPolynomialFromPolynomial(pubSharingPoly)
 
 	// === Request ===
 
@@ -154,19 +157,19 @@ func TestIssueProtocolFull(t *testing.T) {
 	}
 
 	// Verify that the new share can help reconstruct the secret
-	var interpolationEvals []*ScalarEval
+	var interpolationEvals []*polynomial.ScalarEval
 	for _, partyIdx := range req.BigI[:threshold-1] {
-		interpolationEvals = append(interpolationEvals, &ScalarEval{
+		interpolationEvals = append(interpolationEvals, &polynomial.ScalarEval{
 			X: establishedShareArgs[partyIdx],
 			Y: establishedShares[partyIdx],
 		})
 	}
-	interpolationEvals = append(interpolationEvals, &ScalarEval{
+	interpolationEvals = append(interpolationEvals, &polynomial.ScalarEval{
 		X: issueShareArg,
 		Y: sIssue,
 	})
 
-	reconstructedSecret := ReconstructScalar(interpolationEvals)
+	reconstructedSecret := polynomial.ReconstructScalar(interpolationEvals)
 
 	if !reconstructedSecret.Equals(secret) {
 		t.Errorf("Reconstruction with new share failed")

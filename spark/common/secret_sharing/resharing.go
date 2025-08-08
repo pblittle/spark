@@ -5,57 +5,14 @@ import (
 	"fmt"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/secret_sharing/curve"
+	"github.com/lightsparkdev/spark/common/secret_sharing/polynomial"
 )
 
 // ShareID represents a unique identifier for secret sharing participants.
 // Must be non-zero because share ID 0 would give the secret when evaluating polynomials.
 // In the SO context, this is derived from operator.ID + 1.
 type ShareID uint64
-
-// Scalar wrapper for secp256k1 scalars
-type Scalar = secp256k1.ModNScalar
-
-// Point wrapper for secp256k1 curve points
-type Point = secp256k1.JacobianPoint
-
-// ScalarBytes encodes a scalar
-type ScalarBytes [32]byte
-
-// PointBytes encodes a point
-type PointBytes [64]byte // Affine coordinates: 32 bytes X + 32 bytes Y
-
-// Scalar encoding/decoding helpers
-func EncodeScalar(s *Scalar) ScalarBytes {
-	var result ScalarBytes
-	bytes := s.Bytes()
-	copy(result[:], bytes[:])
-	return result
-}
-
-func (sb ScalarBytes) Decode() *Scalar {
-	scalar := new(Scalar)
-	scalar.SetByteSlice(sb[:])
-	return scalar
-}
-
-// Point encoding/decoding helpers
-func EncodePoint(p *Point) PointBytes {
-	var result PointBytes
-	p.ToAffine()
-	x := p.X.Bytes()
-	y := p.Y.Bytes()
-	copy(result[0:32], x[:])
-	copy(result[32:64], y[:])
-	return result
-}
-
-func (pb PointBytes) Decode() *Point {
-	point := new(Point)
-	point.X.SetByteSlice(pb[0:32])
-	point.Y.SetByteSlice(pb[32:64])
-	point.Z.SetInt(1) // Affine coordinates
-	return point
-}
 
 // Protocol configuration
 type RedistConfig struct {
@@ -85,14 +42,14 @@ type BroadcastMessage[T any] struct {
 // TODO: Rename since it is only round 1 of the new shareholder's but round 2 within the overall resharing. Too confusing
 // Round1DirectPayload for point-to-point subshare messages
 type Round1DirectPayload struct {
-	Subshare ScalarBytes // ŝ_ij
+	Subshare curve.ScalarBytes // ŝ_ij
 }
 
 // Round1BroadcastPayload for commitment messages
 type Round1BroadcastPayload struct {
-	ShareCommitment  PointBytes   // g^s_i
-	PolyCommitments  []PointBytes // g^a'_i1, ..., g^a'_i(m'-1)
-	SecretCommitment PointBytes   // g^k
+	ShareCommitment  curve.PointBytes   // g^s_i
+	PolyCommitments  []curve.PointBytes // g^a'_i1, ..., g^a'_i(m'-1)
+	SecretCommitment curve.PointBytes   // g^k
 }
 
 type Round2Payload struct {
@@ -101,7 +58,7 @@ type Round2Payload struct {
 
 // Round1State contains the results of Round 1 processing
 type Round1State struct {
-	ReceivedSubshares   map[ShareID]ScalarBytes
+	ReceivedSubshares   map[ShareID]curve.ScalarBytes
 	ReceivedCommitments map[ShareID]*Round1BroadcastPayload
 }
 
@@ -110,7 +67,7 @@ type Round1State struct {
 // OldShareHolder represents a participant in the old access structure
 type OldShareHolder struct {
 	ID     ShareID
-	Share  *Scalar // s_i
+	Share  *curve.Scalar // s_i
 	Config *RedistConfig
 }
 
@@ -123,7 +80,7 @@ type NewShareHolder struct {
 // === Protocol Implementation ===
 
 // NewOldShareHolder creates a new old shareholder
-func NewOldShareHolder(id ShareID, share *Scalar, config *RedistConfig) *OldShareHolder {
+func NewOldShareHolder(id ShareID, share *curve.Scalar, config *RedistConfig) *OldShareHolder {
 	return &OldShareHolder{
 		ID:     id,
 		Share:  share,
@@ -142,9 +99,9 @@ func NewNewShareHolder(id ShareID, config *RedistConfig) *NewShareHolder {
 // === Old Shareholder Methods ===
 
 // SendSubshares sends subshares to new parties and broadcasts commitments (Protocol Round 1)
-func (o *OldShareHolder) SendSubshares(secretCommitment *Point) ([]DirectMessage[Round1DirectPayload], []BroadcastMessage[Round1BroadcastPayload], error) {
+func (o *OldShareHolder) SendSubshares(secretCommitment *curve.Point) ([]DirectMessage[Round1DirectPayload], []BroadcastMessage[Round1BroadcastPayload], error) {
 	// Create polynomial for resharing: s_i + a'_i1*x + ... + a'_i(m'-1)*x^(m'-1)
-	poly, err := NewScalarPolynomialSharing(o.Share, o.Config.NewThreshold-1)
+	poly, err := polynomial.NewScalarPolynomialSharing(o.Share, o.Config.NewThreshold-1)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create polynomial: %w", err)
 	}
@@ -156,7 +113,7 @@ func (o *OldShareHolder) SendSubshares(secretCommitment *Point) ([]DirectMessage
 	directMessages := make([]DirectMessage[Round1DirectPayload], len(o.Config.NewParties))
 	for i, newPartyID := range o.Config.NewParties {
 		// Evaluate polynomial at new party's ID to get subshare
-		x := new(Scalar)
+		x := new(curve.Scalar)
 		x.SetInt(uint32(newPartyID))
 		subshare := poly.Eval(x)
 
@@ -164,24 +121,24 @@ func (o *OldShareHolder) SendSubshares(secretCommitment *Point) ([]DirectMessage
 			FromID: o.ID,
 			ToID:   newPartyID,
 			Payload: Round1DirectPayload{
-				Subshare: EncodeScalar(subshare),
+				Subshare: curve.EncodeScalar(subshare),
 			},
 		}
 	}
 
 	// Encode polynomial commitments
-	encodedPolyCommitments := make([]PointBytes, len(commitmentPoly.Coefs[1:]))
+	encodedPolyCommitments := make([]curve.PointBytes, len(commitmentPoly.Coefs[1:]))
 	for i, coef := range commitmentPoly.Coefs[1:] {
-		encodedPolyCommitments[i] = EncodePoint(coef)
+		encodedPolyCommitments[i] = curve.EncodePoint(coef)
 	}
 
 	// Create broadcast message (commitments)
 	broadcastMessage := BroadcastMessage[Round1BroadcastPayload]{
 		FromID: o.ID,
 		Payload: Round1BroadcastPayload{
-			ShareCommitment:  EncodePoint(commitmentPoly.Coefs[0]),
+			ShareCommitment:  curve.EncodePoint(commitmentPoly.Coefs[0]),
 			PolyCommitments:  encodedPolyCommitments,
-			SecretCommitment: EncodePoint(secretCommitment),
+			SecretCommitment: curve.EncodePoint(secretCommitment),
 		},
 	}
 
@@ -196,7 +153,7 @@ func (n *NewShareHolder) VerifyAndDecide(
 	broadcastMessages []BroadcastMessage[Round1BroadcastPayload],
 ) (*Round1State, []BroadcastMessage[Round2Payload], error) {
 	// Collect received data
-	receivedSubshares := make(map[ShareID]ScalarBytes)
+	receivedSubshares := make(map[ShareID]curve.ScalarBytes)
 	receivedCommitments := make(map[ShareID]*Round1BroadcastPayload)
 
 	// Process direct messages (subshares)
@@ -275,7 +232,7 @@ func (n *NewShareHolder) VerifyAndDecide(
 }
 
 // GenerateNewShare - New shareholder checks decisions from all parties and generates share if all committed (Protocol Round 3)
-func (n *NewShareHolder) GenerateNewShare(state *Round1State, decisions []BroadcastMessage[Round2Payload]) (*Scalar, error) {
+func (n *NewShareHolder) GenerateNewShare(state *Round1State, decisions []BroadcastMessage[Round2Payload]) (*curve.Scalar, error) {
 	// Check that we have decisions from all new parties
 	expectedParties := len(n.Config.NewParties)
 	if len(decisions) < expectedParties {
@@ -289,16 +246,16 @@ func (n *NewShareHolder) GenerateNewShare(state *Round1State, decisions []Broadc
 		}
 	}
 
-	pairs := make([]*ScalarEval, 0, n.Config.OldThreshold)
+	pairs := make([]*polynomial.ScalarEval, 0, n.Config.OldThreshold)
 
 	for shareID, subshareBytes := range state.ReceivedSubshares {
-		x := new(Scalar).SetInt(uint32(shareID))
-		pairs = append(pairs, &ScalarEval{X: x, Y: subshareBytes.Decode()})
+		x := new(curve.Scalar).SetInt(uint32(shareID))
+		pairs = append(pairs, &polynomial.ScalarEval{X: x, Y: subshareBytes.Decode()})
 	}
 
 	// To generate new share, use Lagrange interpolation to compute
 	// s'_j = Σ b_i * ŝ_ij
-	newShare := ReconstructScalar(pairs)
+	newShare := polynomial.ReconstructScalar(pairs)
 
 	return newShare, nil
 }
@@ -307,27 +264,27 @@ func (n *NewShareHolder) GenerateNewShare(state *Round1State, decisions []Broadc
 
 // verifySubshare verifies that
 // g^ŝ_ij = g^s_i * prod_{l=1}^{m' - 1} (g^a'_il)^j^l
-func (n *NewShareHolder) verifySubshare(subshareBytes ScalarBytes, commitment *Round1BroadcastPayload) error {
+func (n *NewShareHolder) verifySubshare(subshareBytes curve.ScalarBytes, commitment *Round1BroadcastPayload) error {
 	// Left side
-	leftSide := new(Point)
+	leftSide := new(curve.Point)
 	secp256k1.ScalarBaseMultNonConst(subshareBytes.Decode(), leftSide)
 
 	// Right side.
 	// Create polynomial from commitments: [g^s_i, g^a'_i1, g^a'_i2, ...]
-	coefs := make([]*Point, len(commitment.PolyCommitments)+1)
+	coefs := make([]*curve.Point, len(commitment.PolyCommitments)+1)
 	coefs[0] = commitment.ShareCommitment.Decode() // g^s_i (constant term)
 	for i, polyCommitmentBytes := range commitment.PolyCommitments {
 		coefs[i+1] = polyCommitmentBytes.Decode() // g^a'_il coefficients
 	}
 
-	p := PointPolynomial{Coefs: coefs}
+	p := polynomial.PointPolynomial{Coefs: coefs}
 
-	j := new(Scalar)
+	j := new(curve.Scalar)
 	j.SetInt(uint32(n.ID))
 
 	rightSide := p.Eval(j)
 
-	if !PointEqual(leftSide, rightSide) {
+	if !curve.PointEqual(leftSide, rightSide) {
 		return errors.New("subshare verification failed")
 	}
 
@@ -338,7 +295,7 @@ func (n *NewShareHolder) verifySubshare(subshareBytes ScalarBytes, commitment *R
 // g^k = prod_i (g^s_i)^b_i where b_i are Lagrange coefficients
 func (n *NewShareHolder) verifySharesValid(receivedCommitments map[ShareID]*Round1BroadcastPayload) error {
 	// Get first secret commitment (they should all be the same)
-	var gk *Point
+	var gk *curve.Point
 	for _, commitment := range receivedCommitments {
 		// Secret commitments are always present in broadcast messages by construction
 		gk = commitment.SecretCommitment.Decode()
@@ -351,18 +308,18 @@ func (n *NewShareHolder) verifySharesValid(receivedCommitments map[ShareID]*Roun
 
 	// Verify all secret commitments are the same
 	for shareID, commitment := range receivedCommitments {
-		if !PointEqual(gk, commitment.SecretCommitment.Decode()) {
+		if !curve.PointEqual(gk, commitment.SecretCommitment.Decode()) {
 			return fmt.Errorf("inconsistent secret commitment from share %d", shareID)
 		}
 	}
 
 	// Create (x_i, g^s_i) pairs for Lagrange interpolation at zero
-	pairs := make([]*PointEval, 0, n.Config.OldThreshold)
+	pairs := make([]*polynomial.PointEval, 0, n.Config.OldThreshold)
 
 	for shareID, commitment := range receivedCommitments {
-		x := new(Scalar)
+		x := new(curve.Scalar)
 		x.SetInt(uint32(shareID))
-		pairs = append(pairs, &PointEval{X: x, Y: commitment.ShareCommitment.Decode()})
+		pairs = append(pairs, &polynomial.PointEval{X: x, Y: commitment.ShareCommitment.Decode()})
 
 		// Only use first m parties for interpolation
 		if len(pairs) >= n.Config.OldThreshold {
@@ -370,19 +327,11 @@ func (n *NewShareHolder) verifySharesValid(receivedCommitments map[ShareID]*Roun
 		}
 	}
 
-	result := ReconstructPoint(pairs)
+	result := polynomial.ReconstructPoint(pairs)
 
-	if !PointEqual(gk, result) {
+	if !curve.PointEqual(gk, result) {
 		return errors.New("SHARES-VALID condition not satisfied")
 	}
 
 	return nil
-}
-
-// TODO: Replace with secp256k1.EquivalentNonConst from newer module version.
-func PointEqual(p *Point, q *Point) bool {
-	// TODO: Do we need a special case for the neutral point?
-	p.ToAffine()
-	q.ToAffine()
-	return p.X == q.X && p.Y == q.Y && p.Z == q.Z
 }
