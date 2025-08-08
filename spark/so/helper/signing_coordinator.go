@@ -125,7 +125,58 @@ func (c *SparkServiceFrostSignerImpl) CallFrostRound2(ctx context.Context, opera
 
 // frostRound1 performs the first round of the Frost signing. It gathers the signing commitments from all operators.
 func frostRound1(ctx context.Context, config *so.Config, signingKeyshareIDs []uuid.UUID, operatorSelection *OperatorSelection, publicKeyMap map[string][]byte, count uint32, sparkServiceClientFactory SparkServiceFrostSignerFactory) (map[string][]objects.SigningCommitment, error) {
-	return ExecuteTaskWithAllOperators(ctx, config, operatorSelection, func(ctx context.Context, operator *so.SigningOperator) ([]objects.SigningCommitment, error) {
+	keyCount := uint32(len(signingKeyshareIDs)) * count
+
+	operatorList, err := operatorSelection.OperatorList(config)
+	if err != nil {
+		return nil, err
+	}
+
+	resultMap := make(map[string][]objects.SigningCommitment)
+	operatorMissingCommitments := make([]string, 0)
+	for _, operator := range operatorList {
+		entCommitments, err := GetSigningCommitmentsFromContext(ctx, int(keyCount), uint(operator.ID))
+		if err != nil {
+			operatorMissingCommitments = append(operatorMissingCommitments, operator.Identifier)
+		}
+
+		results := make([]objects.SigningCommitment, len(entCommitments))
+		for i, commitment := range entCommitments {
+			nonceCommitment := objects.SigningCommitment{}
+			err := nonceCommitment.UnmarshalBinary(commitment.NonceCommitment)
+			if err != nil {
+				return nil, err
+			}
+			results[i] = nonceCommitment
+		}
+		resultMap[operator.Identifier] = results
+	}
+
+	if len(operatorMissingCommitments) == 0 {
+		return resultMap, nil
+	}
+
+	newSelection, err := NewPreSelectedOperatorSelection(config, operatorMissingCommitments)
+	if err != nil {
+		return nil, err
+	}
+
+	otherOperatorsCommitments, err := ExecuteTaskWithAllOperators(ctx, config, newSelection, func(ctx context.Context, operator *so.SigningOperator) ([]objects.SigningCommitment, error) {
+		keyCount := len(signingKeyshareIDs) * int(count)
+		entCommitments, err := GetSigningCommitmentsFromContext(ctx, keyCount, uint(operator.ID))
+		if err == nil {
+			results := make([]objects.SigningCommitment, len(entCommitments))
+			for i, commitment := range entCommitments {
+				nonceCommitment := objects.SigningCommitment{}
+				err := nonceCommitment.UnmarshalBinary(commitment.NonceCommitment)
+				if err != nil {
+					return nil, err
+				}
+				results[i] = nonceCommitment
+			}
+			return results, nil
+		}
+
 		keyshareIDs := make([]string, len(signingKeyshareIDs))
 		for i, id := range signingKeyshareIDs {
 			keyshareIDs[i] = id.String()
@@ -156,6 +207,16 @@ func frostRound1(ctx context.Context, config *so.Config, signingKeyshareIDs []uu
 
 		return commitments, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	for operatorID, commitments := range otherOperatorsCommitments {
+		resultMap[operatorID] = append(resultMap[operatorID], commitments...)
+	}
+
+	return resultMap, nil
 }
 
 // frostRound2 performs the second round of the Frost signing. It gathers the signature shares from all operators.

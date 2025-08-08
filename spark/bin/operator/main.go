@@ -456,6 +456,7 @@ func main() {
 			sparkgrpc.SparkTokenMetricsInterceptor(),
 			sparkgrpc.PanicRecoveryInterceptor(config.ReturnDetailedPanicErrors),
 			db.SessionMiddleware(db.NewDefaultSessionFactory(dbClient, config.Database.NewTxTimeout)),
+			helper.SigningCommitmentInterceptor(config.SigningOperatorMap, knobsService),
 			authn.NewInterceptor(sessionTokenCreatorVerifier).AuthnInterceptor,
 			authz.NewAuthzInterceptor(authz.NewAuthzConfig(
 				authz.WithMode(config.ServiceAuthz.Mode),
