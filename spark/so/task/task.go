@@ -23,7 +23,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/common/logging"
-	pbcommon "github.com/lightsparkdev/spark/proto/common"
 	pbspark "github.com/lightsparkdev/spark/proto/spark"
 	pbinternal "github.com/lightsparkdev/spark/proto/spark_internal"
 	tokenpb "github.com/lightsparkdev/spark/proto/spark_token"
@@ -98,7 +97,7 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 			},
 		},
 		{
-			ExecutionInterval: 10 * time.Second,
+			ExecutionInterval: 1 * time.Minute,
 			BaseTaskSpec: BaseTaskSpec{
 				Name:         "generate_signing_commitments",
 				RunInTestEnv: false,
@@ -108,75 +107,62 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 						return fmt.Errorf("failed to get or create current tx for request: %w", err)
 					}
 
-					operatorSelection := helper.OperatorSelection{
-						Option: helper.OperatorSelectionOptionAll,
-					}
-
-					signingCommitments, err := helper.ExecuteTaskWithAllOperators(ctx, config, &operatorSelection, func(ctx context.Context, operator *so.SigningOperator) ([]*pbcommon.SigningCommitment, error) {
+					logger := logging.GetLoggerFromContext(ctx)
+					entCommitments := make([]*ent.SigningCommitmentCreate, 0)
+					for _, operator := range config.SigningOperatorMap {
 						count, err := db.SigningCommitment.Query().Where(
 							signingcommitment.OperatorIndexEQ(uint(operator.ID)),
 							signingcommitment.StatusEQ(st.SigningCommitmentStatusAvailable),
 						).Count(ctx)
 						if err != nil {
-							return nil, err
+							logger.Error("failed to query signing commitments for operator", "operator", operator.ID, "error", err)
+							continue
 						}
 
 						if count < spark.SigningCommitmentReserve {
+							var resp *pbinternal.FrostRound1Response
 							if operator.ID == config.Index {
 								signingHandler := signing_handler.NewFrostSigningHandler(config)
-								resp, err := signingHandler.GenerateRandomNonces(ctx, spark.SigningCommitmentBatchSize)
+								resp, err = signingHandler.GenerateRandomNonces(ctx, spark.SigningCommitmentBatchSize)
 								if err != nil {
-									return nil, err
+									return err
 								}
-
-								return resp.SigningCommitments, nil
 							}
 
 							conn, err := operator.NewGRPCConnection()
 							if err != nil {
-								return nil, err
+								return err
 							}
 
 							client := pbinternal.NewSparkInternalServiceClient(conn)
-							resp, err := client.FrostRound1(ctx, &pbinternal.FrostRound1Request{
+							resp, err = client.FrostRound1(ctx, &pbinternal.FrostRound1Request{
 								RandomNonceCount: spark.SigningCommitmentBatchSize,
 							})
 							if err != nil {
-								return nil, err
+								logger.Error("failed to generate signing commitments for operator", "operator", operator.ID, "error", err)
+								continue
 							}
 
-							return resp.SigningCommitments, nil
-						}
+							for _, pbCommitment := range resp.SigningCommitments {
+								commitments := objects.SigningCommitment{}
+								err := commitments.UnmarshalProto(pbCommitment)
+								if err != nil {
+									return err
+								}
 
-						return nil, nil
-					})
+								commitmentBinary := commitments.MarshalBinary()
+								if err != nil {
+									return err
+								}
 
-					if err != nil {
-						return err
-					}
-
-					entCommitments := make([]*ent.SigningCommitmentCreate, 0)
-					for identifier, signingCommitments := range signingCommitments {
-						operatorIndex := config.SigningOperatorMap[identifier].ID
-						for _, pbCommitment := range signingCommitments {
-							commitments := objects.SigningCommitment{}
-							err := commitments.UnmarshalProto(pbCommitment)
-							if err != nil {
-								return err
+								entCommitments = append(
+									entCommitments,
+									db.SigningCommitment.Create().
+										SetOperatorIndex(uint(operator.ID)).
+										SetStatus(st.SigningCommitmentStatusAvailable).
+										SetNonceCommitment(commitmentBinary),
+								)
 							}
-
-							commitmentBinary := commitments.MarshalBinary()
-							if err != nil {
-								return err
-							}
-
-							entCommitments = append(
-								entCommitments,
-								db.SigningCommitment.Create().
-									SetOperatorIndex(uint(operatorIndex)).
-									SetStatus(st.SigningCommitmentStatusAvailable).
-									SetNonceCommitment(commitmentBinary),
-							)
 						}
 					}
 
