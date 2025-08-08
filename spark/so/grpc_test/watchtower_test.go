@@ -184,8 +184,8 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 
 	transferNode := wallet.LeafKeyTweak{
 		Leaf:              senderRootNode,
-		SigningPrivKey:    senderLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    senderLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}
 	leavesToTransfer := []wallet.LeafKeyTweak{transferNode}
 
@@ -198,7 +198,7 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 		senderCtx,
 		walletConfig,
 		leavesToTransfer,
-		receiverPrivKey.Public().Serialize(),
+		receiverPrivKey.Public(),
 		time.Now().Add(10*time.Minute),
 	)
 	require.NoError(t, err, "failed to transfer tree node")
@@ -224,8 +224,8 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 	require.NoError(t, err, "failed to create final node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    newLeafPrivKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    newLeafPrivKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := []wallet.LeafKeyTweak{claimingNode}
 	claimedNodes, err := wallet.ClaimTransfer(
@@ -603,8 +603,8 @@ func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
 
 	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
-		SigningPrivKey:    sspLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}}
 
 	// SSP swaps nodes for preimage (lightning receive)
@@ -650,8 +650,8 @@ func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
 	require.NoError(t, err, "failed to create final node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    newLeafPrivKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    newLeafPrivKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	claimedNodes, err := wallet.ClaimTransfer(

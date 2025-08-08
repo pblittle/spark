@@ -31,8 +31,8 @@ import (
 // LeafKeyTweak is a struct to hold leaf key to tweak.
 type LeafKeyTweak struct {
 	Leaf              *pb.TreeNode
-	SigningPrivKey    []byte
-	NewSigningPrivKey []byte
+	SigningPrivKey    keys.Private
+	NewSigningPrivKey keys.Private
 }
 
 // SendTransfer initiates a transfer from sender.
@@ -60,21 +60,21 @@ func CreateTransferPackage(
 	config *Config,
 	client pb.SparkServiceClient,
 	leaves []LeafKeyTweak,
-	receiverIdentityPubkey []byte,
+	receiverIdentityPubKey keys.Public,
 ) (*pb.TransferPackage, error) {
-	keyTweakInputMap, err := prepareSendTransferKeyTweaks(config, transferID.String(), receiverIdentityPubkey, leaves, map[string][]byte{})
+	keyTweakInputMap, err := prepareSendTransferKeyTweaks(config, transferID.String(), receiverIdentityPubKey, leaves, map[string][]byte{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare transfer data: %w", err)
 	}
 
-	return prepareTransferPackage(ctx, config, client, transferID, keyTweakInputMap, leaves, receiverIdentityPubkey)
+	return prepareTransferPackage(ctx, config, client, transferID, keyTweakInputMap, leaves, receiverIdentityPubKey)
 }
 
 func SendTransferWithKeyTweaks(
 	ctx context.Context,
 	config *Config,
 	leaves []LeafKeyTweak,
-	receiverIdentityPubkey []byte,
+	receiverIdentityPubkey keys.Public,
 	expiryTime time.Time,
 ) (*pb.Transfer, error) {
 	sparkConn, err := common.NewGRPCConnectionWithTestTLS(config.CoodinatorAddress(), nil)
@@ -103,7 +103,7 @@ func SendTransferWithKeyTweaks(
 	resp, err := client.StartTransfer(authCtx, &pb.StartTransferRequest{
 		TransferId:                transferID.String(),
 		OwnerIdentityPublicKey:    config.IdentityPublicKey().Serialize(),
-		ReceiverIdentityPublicKey: receiverIdentityPubkey,
+		ReceiverIdentityPublicKey: receiverIdentityPubkey.Serialize(),
 		ExpiryTime:                timestamppb.New(expiryTime),
 		TransferPackage:           transferPackage,
 	})
@@ -121,7 +121,7 @@ func prepareTransferPackage(
 	transferID uuid.UUID,
 	keyTweakInputMap map[string][]*pb.SendLeafKeyTweak,
 	leaves []LeafKeyTweak,
-	receiverIdentityPubkeyBytes []byte,
+	receiverIdentityPubKey keys.Public,
 ) (*pb.TransferPackage, error) {
 	// Fetch signing commitments.
 	nodes := make([]string, len(leaves))
@@ -141,11 +141,6 @@ func prepareTransferPackage(
 		return nil, err
 	}
 	defer signerConn.Close()
-
-	receiverIdentityPubKey, err := keys.ParsePublicKey(receiverIdentityPubkeyBytes)
-	if err != nil {
-		return nil, err
-	}
 	signingJobs, refundTxs, userCommitments, err := prepareFrostSigningJobsForUserSignedRefund(leaves, signingCommitments.SigningCommitments, receiverIdentityPubKey)
 	if err != nil {
 		return nil, err
@@ -213,7 +208,11 @@ func DeliverTransferPackage(
 	leaves []LeafKeyTweak,
 	refundSignatureMap map[string][]byte,
 ) (*pb.Transfer, error) {
-	keyTweakInputMap, err := prepareSendTransferKeyTweaks(config, transfer.Id, transfer.ReceiverIdentityPublicKey, leaves, refundSignatureMap)
+	transferReceiverPubKey, err := keys.ParsePublicKey(transfer.ReceiverIdentityPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse receiver identity public key: %w", err)
+	}
+	keyTweakInputMap, err := prepareSendTransferKeyTweaks(config, transfer.Id, transferReceiverPubKey, leaves, refundSignatureMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare key tweaks: %w", err)
 	}
@@ -222,7 +221,7 @@ func DeliverTransferPackage(
 		return nil, fmt.Errorf("failed to parse transfer id %s: %w", transfer.Id, err)
 	}
 
-	transferPackage, err := prepareTransferPackage(ctx, config, client, transferUUID, keyTweakInputMap, leaves, transfer.ReceiverIdentityPublicKey)
+	transferPackage, err := prepareTransferPackage(ctx, config, client, transferUUID, keyTweakInputMap, leaves, transferReceiverPubKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare transfer data: %w", err)
 	}
@@ -246,7 +245,11 @@ func SendTransferTweakKey(
 	leaves []LeafKeyTweak,
 	refundSignatureMap map[string][]byte,
 ) (*pb.Transfer, error) {
-	keyTweakInputMap, err := prepareSendTransferKeyTweaks(config, transfer.Id, transfer.ReceiverIdentityPublicKey, leaves, refundSignatureMap)
+	transferReceiverPubKey, err := keys.ParsePublicKey(transfer.ReceiverIdentityPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse receiver identity public key: %w", err)
+	}
+	keyTweakInputMap, err := prepareSendTransferKeyTweaks(config, transfer.Id, transferReceiverPubKey, leaves, refundSignatureMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare transfer data: %w", err)
 	}
@@ -349,14 +352,10 @@ func sendTransferSignRefund(
 
 	leafDataMap := make(map[string]*LeafRefundSigningData)
 	for _, leafKey := range leaves {
-		privKey, err := keys.ParsePrivateKey(leafKey.SigningPrivKey)
-		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to parse private key: %w", err)
-		}
 		nonce, _ := objects.RandomSigningNonce()
 		tx, _ := common.TxFromRawTxBytes(leafKey.Leaf.NodeTx)
 		leafDataMap[leafKey.Leaf.Id] = &LeafRefundSigningData{
-			SigningPrivKey:  privKey.ToBTCEC(),
+			SigningPrivKey:  leafKey.SigningPrivKey.ToBTCEC(),
 			ReceivingPubkey: receiverIdentityPubKey.Serialize(),
 			Nonce:           nonce,
 			Tx:              tx,
@@ -444,8 +443,8 @@ func compareTransfers(transfer1, transfer2 *pb.Transfer) bool {
 		len(transfer1.Leaves) == len(transfer2.Leaves)
 }
 
-func prepareSendTransferKeyTweaks(config *Config, transferID string, receiverIdentityPubkey []byte, leaves []LeafKeyTweak, refundSignatureMap map[string][]byte) (map[string][]*pb.SendLeafKeyTweak, error) {
-	receiverEciesPubKey, err := eciesgo.NewPublicKeyFromBytes(receiverIdentityPubkey)
+func prepareSendTransferKeyTweaks(config *Config, transferID string, receiverIdentityPubkey keys.Public, leaves []LeafKeyTweak, refundSignatureMap map[string][]byte) (map[string][]*pb.SendLeafKeyTweak, error) {
+	receiverEciesPubKey, err := eciesgo.NewPublicKeyFromBytes(receiverIdentityPubkey.Serialize())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse receiver public key: %w", err)
 	}
@@ -464,14 +463,11 @@ func prepareSendTransferKeyTweaks(config *Config, transferID string, receiverIde
 }
 
 func prepareSingleSendTransferKeyTweak(config *Config, transferID string, leaf LeafKeyTweak, receiverEciesPubKey *eciesgo.PublicKey, refundSignature []byte) (map[string]*pb.SendLeafKeyTweak, error) {
-	privKeyTweak, err := common.SubtractPrivateKeys(leaf.SigningPrivKey, leaf.NewSigningPrivKey)
-	if err != nil {
-		return nil, fmt.Errorf("fail to calculate private key tweak: %w", err)
-	}
+	privKeyTweak := leaf.SigningPrivKey.Sub(leaf.NewSigningPrivKey)
 
 	// Calculate secret tweak shares
 	shares, err := secretsharing.SplitSecretWithProofs(
-		new(big.Int).SetBytes(privKeyTweak),
+		new(big.Int).SetBytes(privKeyTweak.Serialize()),
 		secp256k1.S256().N,
 		config.Threshold,
 		len(config.SigningOperators),
@@ -493,7 +489,7 @@ func prepareSingleSendTransferKeyTweak(config *Config, transferID string, leaf L
 		pubkeySharesTweak[identifier] = pubkeyTweak.SerializeCompressed()
 	}
 
-	secretCipher, err := eciesgo.Encrypt(receiverEciesPubKey, leaf.NewSigningPrivKey)
+	secretCipher, err := eciesgo.Encrypt(receiverEciesPubKey, leaf.NewSigningPrivKey.Serialize())
 	if err != nil {
 		return nil, fmt.Errorf("failed to encrypt new signing private key: %w", err)
 	}
@@ -733,14 +729,11 @@ func prepareClaimLeavesKeyTweaks(config *Config, leaves []LeafKeyTweak) (map[str
 }
 
 func prepareClaimLeafKeyTweaks(config *Config, leaf LeafKeyTweak) (map[string]*pb.ClaimLeafKeyTweak, [][]byte, error) {
-	privKeyTweak, err := common.SubtractPrivateKeys(leaf.SigningPrivKey, leaf.NewSigningPrivKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("fail to calculate private key tweak: %w", err)
-	}
+	privKeyTweak := leaf.SigningPrivKey.Sub(leaf.NewSigningPrivKey)
 
 	// Calculate secret tweak shares
 	shares, err := secretsharing.SplitSecretWithProofs(
-		new(big.Int).SetBytes(privKeyTweak),
+		new(big.Int).SetBytes(privKeyTweak.Serialize()),
 		secp256k1.S256().N,
 		config.Threshold,
 		len(config.SigningOperators),
@@ -798,12 +791,11 @@ func ClaimTransferSignRefunds(
 ) ([]*pb.NodeSignatures, error) {
 	leafDataMap := make(map[string]*LeafRefundSigningData)
 	for _, leafKey := range leafKeys {
-		privKey := secp256k1.PrivKeyFromBytes(leafKey.NewSigningPrivKey)
 		nonce, _ := objects.RandomSigningNonce()
 		tx, _ := common.TxFromRawTxBytes(leafKey.Leaf.NodeTx)
 		leafDataMap[leafKey.Leaf.Id] = &LeafRefundSigningData{
-			SigningPrivKey:  privKey,
-			ReceivingPubkey: privKey.PubKey().SerializeCompressed(),
+			SigningPrivKey:  leafKey.NewSigningPrivKey.ToBTCEC(),
+			ReceivingPubkey: leafKey.NewSigningPrivKey.Public().Serialize(),
 			Nonce:           nonce,
 			Tx:              tx,
 			Vout:            int(leafKey.Leaf.Vout),
@@ -870,7 +862,7 @@ func signRefunds(
 		adaptorPublicKeyBytes = adaptorPublicKey.SerializeCompressed()
 	}
 
-	userSigningJobs := []*pbfrost.FrostSigningJob{}
+	var userSigningJobs []*pbfrost.FrostSigningJob
 	jobToAggregateRequestMap := make(map[string]*pbfrost.AggregateFrostRequest)
 	jobToLeafMap := make(map[string]string)
 	for _, operatorSigningResult := range operatorSigningResults {
@@ -916,7 +908,7 @@ func signRefunds(
 		return nil, err
 	}
 
-	nodeSignatures := []*pb.NodeSignatures{}
+	var nodeSignatures []*pb.NodeSignatures
 	for jobID, userSignature := range userSignatures.Results {
 		request := jobToAggregateRequestMap[jobID]
 		request.UserSignatureShare = userSignature.SignatureShare

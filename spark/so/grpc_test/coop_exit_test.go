@@ -36,8 +36,8 @@ func setupUsers(t *testing.T, amountSats int64) (*wallet.Config, *wallet.Config,
 
 	transferNode := wallet.LeafKeyTweak{
 		Leaf:              rootNode,
-		SigningPrivKey:    leafPrivKey.Serialize(),
-		NewSigningPrivKey: sspConfig.IdentityPrivateKey.Serialize(),
+		SigningPrivKey:    leafPrivKey,
+		NewSigningPrivKey: sspConfig.IdentityPrivateKey,
 	}
 
 	return config, sspConfig, transferNode
@@ -177,8 +177,8 @@ func TestCoopExitBasic(t *testing.T) {
 	require.NoError(t, err)
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              senderTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    sspConfig.IdentityPrivateKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspConfig.IdentityPrivateKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	startTime := time.Now()
@@ -282,8 +282,8 @@ func TestCoopExitV2Basic(t *testing.T) {
 	require.NoError(t, err)
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              senderTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    sspConfig.IdentityPrivateKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspConfig.IdentityPrivateKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	startTime := time.Now()
@@ -361,8 +361,8 @@ func TestCoopExitCannotClaimBeforeEnoughConfirmations(t *testing.T) {
 	require.NoError(t, err)
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    sspConfig.IdentityPrivateKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspConfig.IdentityPrivateKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	_, err = wallet.ClaimTransfer(
@@ -411,8 +411,8 @@ func TestCoopExitCannotClaimBeforeConfirm(t *testing.T) {
 	require.NoError(t, err)
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              senderTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    sspConfig.IdentityPrivateKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspConfig.IdentityPrivateKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 
 	// Try to claim leaf before exit tx confirms -> should fail
@@ -548,8 +548,8 @@ func TestCoopExitCannotCancelAfterBroadcast(t *testing.T) {
 	require.NoError(t, err)
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              senderTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    sspConfig.IdentityPrivateKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspConfig.IdentityPrivateKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	startTime = time.Now()

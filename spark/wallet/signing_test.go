@@ -8,7 +8,6 @@ import (
 	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,17 +18,9 @@ import (
 
 var rng = rand2.NewChaCha8([32]byte{1})
 
-func createValidPrivKey(t *testing.T) *secp256k1.PrivateKey {
-	privKey, err := secp256k1.GeneratePrivateKeyFromRand(rng)
-	require.NoError(t, err)
-	return privKey
-}
-
 func TestCreateUserKeyPackage(t *testing.T) {
-	privkey1, err := secp256k1.GeneratePrivateKeyFromRand(rng)
-	require.NoError(t, err)
-	privkey2, err := secp256k1.GeneratePrivateKeyFromRand(rng)
-	require.NoError(t, err)
+	privkey1 := keys.MustGeneratePrivateKeyFromRand(rng)
+	privkey2 := keys.MustGeneratePrivateKeyFromRand(rng)
 
 	tests := []struct {
 		name               string
@@ -61,8 +52,9 @@ func TestCreateUserKeyPackage(t *testing.T) {
 			assert.Equal(t, tt.expectedMinSigners, result.MinSigners)
 
 			// Verify public key is correctly derived
-			privKey := secp256k1.PrivKeyFromBytes(tt.signingPrivateKey)
-			expectedPubKey := privKey.PubKey().SerializeCompressed()
+			privKey, err := keys.ParsePrivateKey(tt.signingPrivateKey)
+			require.NoError(t, err)
+			expectedPubKey := privKey.Public().Serialize()
 			assert.Equal(t, expectedPubKey, result.PublicKey)
 
 			// Verify public shares map contains the identifier
@@ -134,15 +126,15 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 		return buf.Bytes()
 	}
 
-	createReceiverPubKey := func() *secp256k1.PublicKey {
-		return createValidPrivKey(t).PubKey()
+	createReceiverPubKey := func() keys.Public {
+		return keys.MustGeneratePrivateKeyFromRand(rng).Public()
 	}
 
 	tests := []struct {
 		name                     string
 		leaves                   []LeafKeyTweak
 		signingCommitments       []*pb.RequestedSigningCommitments
-		receiverIdentityPubkey   *secp256k1.PublicKey
+		receiverIdentityPubKey   keys.Public
 		expectError              bool
 		expectedErrorContains    string
 		expectedJobsCount        int
@@ -157,9 +149,9 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 						Id:                 "leaf-1",
 						NodeTx:             createValidTx(),
 						RefundTx:           createValidTx(),
-						VerifyingPublicKey: createValidPrivKey(t).PubKey().SerializeCompressed(),
+						VerifyingPublicKey: keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize(),
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			signingCommitments: []*pb.RequestedSigningCommitments{
@@ -172,7 +164,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 					},
 				},
 			},
-			receiverIdentityPubkey:   createReceiverPubKey(),
+			receiverIdentityPubKey:   keys.MustGeneratePrivateKeyFromRand(rng).Public(),
 			expectError:              false,
 			expectedJobsCount:        1,
 			expectedRefundTxsCount:   1,
@@ -186,18 +178,18 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 						Id:                 "leaf-1",
 						NodeTx:             createValidTx(),
 						RefundTx:           createValidTx(),
-						VerifyingPublicKey: createValidPrivKey(t).PubKey().SerializeCompressed(),
+						VerifyingPublicKey: keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize(),
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 				{
 					Leaf: &pb.TreeNode{
 						Id:                 "leaf-2",
 						NodeTx:             createValidTx(),
 						RefundTx:           createValidTx(),
-						VerifyingPublicKey: createValidPrivKey(t).PubKey().SerializeCompressed(),
+						VerifyingPublicKey: keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize(),
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			signingCommitments: []*pb.RequestedSigningCommitments{
@@ -218,7 +210,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 					},
 				},
 			},
-			receiverIdentityPubkey:   createReceiverPubKey(),
+			receiverIdentityPubKey:   keys.MustGeneratePrivateKeyFromRand(rng).Public(),
 			expectError:              false,
 			expectedJobsCount:        2,
 			expectedRefundTxsCount:   2,
@@ -228,7 +220,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 			name:                     "empty leaves",
 			leaves:                   []LeafKeyTweak{},
 			signingCommitments:       []*pb.RequestedSigningCommitments{},
-			receiverIdentityPubkey:   createReceiverPubKey(),
+			receiverIdentityPubKey:   keys.MustGeneratePrivateKeyFromRand(rng).Public(),
 			expectError:              false,
 			expectedJobsCount:        0,
 			expectedRefundTxsCount:   0,
@@ -242,9 +234,9 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 						Id:                 "leaf-1",
 						NodeTx:             []byte{0x01, 0x02}, // invalid tx
 						RefundTx:           createValidTx(),
-						VerifyingPublicKey: createValidPrivKey(t).PubKey().SerializeCompressed(),
+						VerifyingPublicKey: keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize(),
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			signingCommitments: []*pb.RequestedSigningCommitments{
@@ -257,7 +249,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 					},
 				},
 			},
-			receiverIdentityPubkey: createReceiverPubKey(),
+			receiverIdentityPubKey: createReceiverPubKey(),
 			expectError:            true,
 			expectedErrorContains:  "failed to parse node tx",
 		},
@@ -269,9 +261,9 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 						Id:                 "leaf-1",
 						NodeTx:             createValidTx(),
 						RefundTx:           []byte{0x01, 0x02}, // invalid tx
-						VerifyingPublicKey: createValidPrivKey(t).PubKey().SerializeCompressed(),
+						VerifyingPublicKey: keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize(),
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			signingCommitments: []*pb.RequestedSigningCommitments{
@@ -284,7 +276,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 					},
 				},
 			},
-			receiverIdentityPubkey: createReceiverPubKey(),
+			receiverIdentityPubKey: createReceiverPubKey(),
 			expectError:            true,
 			expectedErrorContains:  "failed to parse refund tx",
 		},
@@ -296,18 +288,18 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 						Id:                 "leaf-1",
 						NodeTx:             createValidTx(),
 						RefundTx:           createValidTx(),
-						VerifyingPublicKey: createValidPrivKey(t).PubKey().SerializeCompressed(),
+						VerifyingPublicKey: keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize(),
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 				{
 					Leaf: &pb.TreeNode{
 						Id:                 "leaf-2",
 						NodeTx:             createValidTx(),
 						RefundTx:           createValidTx(),
-						VerifyingPublicKey: createValidPrivKey(t).PubKey().SerializeCompressed(),
+						VerifyingPublicKey: keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize(),
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			signingCommitments: []*pb.RequestedSigningCommitments{
@@ -320,7 +312,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 					},
 				},
 			},
-			receiverIdentityPubkey: createReceiverPubKey(),
+			receiverIdentityPubKey: createReceiverPubKey(),
 			expectError:            true,
 			expectedErrorContains:  "mismatched lengths",
 		},
@@ -331,7 +323,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 			signingJobs, refundTxs, userCommitments, err := prepareFrostSigningJobsForUserSignedRefund(
 				tt.leaves,
 				tt.signingCommitments,
-				keys.PublicKeyFromKey(*tt.receiverIdentityPubkey),
+				tt.receiverIdentityPubKey,
 			)
 
 			if tt.expectError {
@@ -355,7 +347,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 					assert.NotNil(t, job.UserCommitments)
 
 					assert.Equal(t, "0000000000000000000000000000000000000000000000000000000000000063", job.KeyPackage.Identifier)
-					assert.Equal(t, tt.leaves[i].SigningPrivKey, job.KeyPackage.SecretShare)
+					assert.Equal(t, tt.leaves[i].SigningPrivKey.Serialize(), job.KeyPackage.SecretShare)
 					assert.Equal(t, uint32(1), job.KeyPackage.MinSigners)
 				}
 
@@ -399,7 +391,7 @@ func TestPrepareLeafSigningJobs(t *testing.T) {
 					Leaf: &pb.TreeNode{
 						Id: "leaf-1",
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			refundTxs: [][]byte{
@@ -433,13 +425,13 @@ func TestPrepareLeafSigningJobs(t *testing.T) {
 					Leaf: &pb.TreeNode{
 						Id: "leaf-1",
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 				{
 					Leaf: &pb.TreeNode{
 						Id: "leaf-2",
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			refundTxs: [][]byte{
@@ -496,7 +488,7 @@ func TestPrepareLeafSigningJobs(t *testing.T) {
 					Leaf: &pb.TreeNode{
 						Id: "leaf-1",
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			refundTxs: [][]byte{
@@ -526,13 +518,13 @@ func TestPrepareLeafSigningJobs(t *testing.T) {
 					Leaf: &pb.TreeNode{
 						Id: "leaf-1",
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 				{
 					Leaf: &pb.TreeNode{
 						Id: "leaf-2",
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			refundTxs: [][]byte{
@@ -578,13 +570,13 @@ func TestPrepareLeafSigningJobs(t *testing.T) {
 					Leaf: &pb.TreeNode{
 						Id: "leaf-1",
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 				{
 					Leaf: &pb.TreeNode{
 						Id: "leaf-2",
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			refundTxs: [][]byte{
@@ -630,13 +622,13 @@ func TestPrepareLeafSigningJobs(t *testing.T) {
 					Leaf: &pb.TreeNode{
 						Id: "leaf-1",
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 				{
 					Leaf: &pb.TreeNode{
 						Id: "leaf-2",
 					},
-					SigningPrivKey: createValidPrivKey(t).Serialize(),
+					SigningPrivKey: keys.MustGeneratePrivateKeyFromRand(rng),
 				},
 			},
 			refundTxs: [][]byte{
@@ -697,8 +689,7 @@ func TestPrepareLeafSigningJobs(t *testing.T) {
 					assert.Equal(t, tt.signingCommitments[i].SigningNonceCommitments, job.SigningCommitments.SigningCommitments)
 
 					// Verify public key is correctly derived from private key
-					privKey := secp256k1.PrivKeyFromBytes(tt.leaves[i].SigningPrivKey)
-					expectedPubKey := privKey.PubKey().SerializeCompressed()
+					expectedPubKey := tt.leaves[i].SigningPrivKey.Public().Serialize()
 					// Note that the following line acts as a regression test for putting
 					// the signing private key in the signing public key field.
 					// See https://linear.app/lightsparkdev/issue/LIG-8042

@@ -88,7 +88,7 @@ func GetConnectorRefundSignaturesV2(
 
 func createConnectorRefundTransactionSigningJob(
 	leafID string,
-	signingPubkey []byte,
+	signingPubKey keys.Public,
 	nonce *objects.SigningNonce,
 	refundTx *wire.MsgTx,
 ) (*pb.LeafRefundTxSigningJob, error) {
@@ -104,7 +104,7 @@ func createConnectorRefundTransactionSigningJob(
 	return &pb.LeafRefundTxSigningJob{
 		LeafId: leafID,
 		RefundTxSigningJob: &pb.SigningJob{
-			SigningPublicKey:       signingPubkey,
+			SigningPublicKey:       signingPubKey.Serialize(),
 			RawTx:                  rawTx,
 			SigningNonceCommitment: refundNonceCommitmentProto,
 		},
@@ -150,10 +150,8 @@ func signCoopExitRefunds(
 			return nil, nil, fmt.Errorf("failed to create refund transaction: %w", err)
 		}
 		nonce, _ := objects.RandomSigningNonce()
-		signingPrivKey := secp256k1.PrivKeyFromBytes(leaf.SigningPrivKey)
-		signingPubKey := signingPrivKey.PubKey()
 		signingJob, err := createConnectorRefundTransactionSigningJob(
-			leaf.Leaf.Id, signingPubKey.SerializeCompressed(), nonce, refundTx,
+			leaf.Leaf.Id, leaf.SigningPrivKey.Public(), nonce, refundTx,
 		)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create signing job: %w", err)
@@ -163,7 +161,7 @@ func signCoopExitRefunds(
 		tx, _ := common.TxFromRawTxBytes(leaf.Leaf.NodeTx)
 
 		leafDataMap[leaf.Leaf.Id] = &LeafRefundSigningData{
-			SigningPrivKey: signingPrivKey,
+			SigningPrivKey: leaf.SigningPrivKey.ToBTCEC(),
 			RefundTx:       refundTx,
 			Nonce:          nonce,
 			Tx:             tx,

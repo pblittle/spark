@@ -2,10 +2,10 @@ package grpctest
 
 import (
 	"context"
-	"github.com/lightsparkdev/spark/common/keys"
 	"testing"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	testutil "github.com/lightsparkdev/spark/test_util"
 	"github.com/lightsparkdev/spark/wallet"
@@ -67,8 +67,8 @@ func TestEventHandlerTransferNotification(t *testing.T) {
 
 		transferNode := wallet.LeafKeyTweak{
 			Leaf:              rootNode,
-			SigningPrivKey:    leafPrivKey.Serialize(),
-			NewSigningPrivKey: newLeafPrivKey.Serialize(),
+			SigningPrivKey:    leafPrivKey,
+			NewSigningPrivKey: newLeafPrivKey,
 		}
 		leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
 
@@ -222,8 +222,8 @@ func TestMultipleSubscriptions(t *testing.T) {
 	require.NoError(t, err)
 	transferNode := wallet.LeafKeyTweak{
 		Leaf:              rootNode,
-		SigningPrivKey:    leafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    leafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
 

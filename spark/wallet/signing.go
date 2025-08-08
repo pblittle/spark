@@ -87,7 +87,7 @@ func prepareFrostSigningJobsForUserSignedRefund(
 		}
 		userCommitments[i] = signingNonce.SigningCommitment()
 
-		userKeyPackage := CreateUserKeyPackage(leaf.SigningPrivKey)
+		userKeyPackage := CreateUserKeyPackage(leaf.SigningPrivKey.Serialize())
 
 		signingJobs = append(signingJobs, &pbfrost.FrostSigningJob{
 			JobId:           leaf.Leaf.Id,
@@ -128,11 +128,9 @@ func prepareLeafSigningJobs(
 		if err != nil {
 			return nil, err
 		}
-		key := secp256k1.PrivKeyFromBytes(leaf.SigningPrivKey)
-		pubkey := key.PubKey()
 		leafSigningJobs = append(leafSigningJobs, &pb.UserSignedTxSigningJob{
 			LeafId:                 leaf.Leaf.Id,
-			SigningPublicKey:       pubkey.SerializeCompressed(),
+			SigningPublicKey:       leaf.SigningPrivKey.Public().Serialize(),
 			RawTx:                  refundTxs[i],
 			SigningNonceCommitment: userCommitmentProto,
 			UserSignature:          signingResults[leaf.Leaf.Id].SignatureShare,

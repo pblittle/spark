@@ -730,8 +730,8 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 
 	transferNode := wallet.LeafKeyTweak{
 		Leaf:              rootNode,
-		SigningPrivKey:    privKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    privKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
 
@@ -739,7 +739,7 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 		context.Background(),
 		config,
 		leavesToTransfer[:],
-		receiverPrivKey.Public().Serialize(),
+		receiverPrivKey.Public(),
 		time.Now().Add(10*time.Minute),
 	)
 	if err == nil {
@@ -773,7 +773,7 @@ func TestStartDepositTreeCreationOffchain(t *testing.T) {
 		context.Background(),
 		config,
 		leavesToTransfer[:],
-		receiverPrivKey.Public().Serialize(),
+		receiverPrivKey.Public(),
 		time.Now().Add(10*time.Minute),
 	)
 	if err != nil {
@@ -861,8 +861,8 @@ func TestStartDepositTreeCreationUnconfirmed(t *testing.T) {
 
 	transferNode := wallet.LeafKeyTweak{
 		Leaf:              rootNode,
-		SigningPrivKey:    privKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    privKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
 

@@ -213,8 +213,8 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 
 	transferNode := wallet.LeafKeyTweak{
 		Leaf:              sspRootNode,
-		SigningPrivKey:    sspLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
 
@@ -251,10 +251,10 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 		leavesToTransfer[:],
 		spendTx,
 		pb.UtxoSwapRequestType_Fixed,
-		aliceDepositPrivKey.ToBTCEC(),
+		aliceDepositPrivKey,
 		userSignature,
 		sspSignature,
-		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
+		aliceConfig.IdentityPrivateKey.Public(),
 		sspConn,
 		signedDepositTx.TxOut[vout],
 	)
@@ -309,8 +309,8 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 	require.NoError(t, err)
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    newLeafPrivKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    newLeafPrivKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	res, err := wallet.ClaimTransfer(aliceCtx, receiverTransfer, aliceConfig, leavesToClaim[:])
@@ -485,7 +485,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(aliceConfig.IdentityPrivateKey.Public())
+	spendPkScript, err := common.P2TRScriptFromPubKey(aliceConfig.IdentityPublicKey())
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -519,7 +519,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		spendTx,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
-		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
+		aliceConfig.IdentityPublicKey().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		aliceConn,
 	)
@@ -544,7 +544,7 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 		spendTx,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
-		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
+		aliceConfig.IdentityPublicKey().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		aliceConn,
 	)
@@ -636,7 +636,7 @@ func createSspFixedQuoteSignature(
 	return signature.Serialize(), nil
 }
 
-func TestStaticDepositSSPV1(t *testing.T) {
+func TestStaticDepositSSP(t *testing.T) {
 	bitcoinClient := testutil.GetBitcoinClient()
 
 	coin, err := faucet.Fund()
@@ -758,8 +758,8 @@ func TestStaticDepositSSPV1(t *testing.T) {
 
 	transferNode := wallet.LeafKeyTweak{
 		Leaf:              sspRootNode,
-		SigningPrivKey:    sspLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
 
@@ -774,7 +774,7 @@ func TestStaticDepositSSPV1(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(sspConfig.IdentityPrivateKey.Public())
+	spendPkScript, err := common.P2TRScriptFromPubKey(sspConfig.IdentityPublicKey())
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -804,7 +804,6 @@ func TestStaticDepositSSPV1(t *testing.T) {
 		sspConn,
 		signedDepositTx.TxOut[vout],
 	)
-	require.Error(t, err)
 	require.ErrorContains(t, err, "utxo not found")
 
 	// Confirm the deposit on chain
@@ -829,7 +828,7 @@ func TestStaticDepositSSPV1(t *testing.T) {
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
 		sspSignature,
-		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
+		aliceConfig.IdentityPublicKey().ToBTCEC(),
 		sspConn,
 		signedDepositTx.TxOut[vout],
 	)
@@ -885,8 +884,8 @@ func TestStaticDepositSSPV1(t *testing.T) {
 	require.NoError(t, err)
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    newLeafPrivKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    newLeafPrivKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	res, err := wallet.ClaimTransfer(
@@ -1034,7 +1033,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		Witness:          nil,
 		Sequence:         wire.MaxTxInSequenceNum,
 	})
-	spendPkScript, err := common.P2TRScriptFromPubKey(aliceConfig.IdentityPrivateKey.Public())
+	spendPkScript, err := common.P2TRScriptFromPubKey(aliceConfig.IdentityPublicKey())
 	require.NoError(t, err)
 	spendTx.AddTxOut(wire.NewTxOut(int64(quoteAmount), spendPkScript))
 
@@ -1068,7 +1067,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		spendTx,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature,
-		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
+		aliceConfig.IdentityPublicKey().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		aliceConn,
 	)
@@ -1125,7 +1124,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		spendTx2,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature2,
-		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
+		aliceConfig.IdentityPublicKey().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		aliceConn,
 	)
@@ -1184,7 +1183,7 @@ func TestStaticDepositUserRefund(t *testing.T) {
 		spendTx2,
 		aliceDepositPrivKey.ToBTCEC(),
 		userSignature2,
-		aliceConfig.IdentityPrivateKey.Public().ToBTCEC(),
+		aliceConfig.IdentityPublicKey().ToBTCEC(),
 		signedDepositTx.TxOut[vout],
 		bobConn,
 	)

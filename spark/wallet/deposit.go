@@ -407,10 +407,10 @@ func ClaimStaticDepositLegacy(
 	leavesToTransfer []LeafKeyTweak,
 	spendTx *wire.MsgTx,
 	requestType pb.UtxoSwapRequestType,
-	depositAddressSecretKey *secp256k1.PrivateKey,
+	depositAddressSecretKey keys.Private,
 	userSignature []byte,
 	sspSignature []byte,
-	userIdentityPubkey *secp256k1.PublicKey,
+	userIdentityPubKey keys.Public,
 	sspConn *grpc.ClientConn,
 	prevTxOut *wire.TxOut,
 ) (*wire.MsgTx, *pb.Transfer, error) {
@@ -449,7 +449,7 @@ func ClaimStaticDepositLegacy(
 
 	spendTxSigningJob := &pb.SigningJob{
 		RawTx:                  spendTxBytes.Bytes(),
-		SigningPublicKey:       depositAddressSecretKey.PubKey().SerializeCompressed(),
+		SigningPublicKey:       depositAddressSecretKey.Public().Serialize(),
 		SigningNonceCommitment: spendTxNonceCommitmentProto,
 	}
 
@@ -463,11 +463,11 @@ func ClaimStaticDepositLegacy(
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate transfer id: %w", err)
 	}
-	keyTweakInputMap, err := prepareSendTransferKeyTweaks(config, transferID.String(), userIdentityPubkey.SerializeCompressed(), leavesToTransfer, map[string][]byte{})
+	keyTweakInputMap, err := prepareSendTransferKeyTweaks(config, transferID.String(), userIdentityPubKey, leavesToTransfer, map[string][]byte{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare transfer data: %w", err)
 	}
-	transferPackage, err := prepareTransferPackage(ctx, config, sparkClient, transferID, keyTweakInputMap, leavesToTransfer, userIdentityPubkey.SerializeCompressed())
+	transferPackage, err := prepareTransferPackage(ctx, config, sparkClient, transferID, keyTweakInputMap, leavesToTransfer, userIdentityPubKey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare transfer data: %w", err)
 	}
@@ -498,7 +498,7 @@ func ClaimStaticDepositLegacy(
 		Transfer: &pb.StartTransferRequest{
 			TransferId:                transferID.String(),
 			OwnerIdentityPublicKey:    config.IdentityPublicKey().Serialize(),
-			ReceiverIdentityPublicKey: userIdentityPubkey.SerializeCompressed(),
+			ReceiverIdentityPublicKey: userIdentityPubKey.Serialize(),
 			ExpiryTime:                timestamppb.New(time.Now().Add(2 * time.Minute)),
 			TransferPackage:           transferPackage,
 		},
@@ -513,7 +513,7 @@ func ClaimStaticDepositLegacy(
 		Identifier:  frostUserIdentifier,
 		SecretShare: depositAddressSecretKey.Serialize(),
 		PublicShares: map[string][]byte{
-			frostUserIdentifier: depositAddressSecretKey.PubKey().SerializeCompressed(),
+			frostUserIdentifier: depositAddressSecretKey.Public().Serialize(),
 		},
 		PublicKey:  swapResponse.DepositAddress.VerifyingPublicKey,
 		MinSigners: 1,
@@ -567,7 +567,7 @@ func ClaimStaticDepositLegacy(
 		VerifyingKey:       swapResponse.DepositAddress.VerifyingPublicKey,
 		Commitments:        operatorCommitments,
 		UserCommitments:    userCommitmentProto,
-		UserPublicKey:      depositAddressSecretKey.PubKey().SerializeCompressed(),
+		UserPublicKey:      depositAddressSecretKey.Public().Serialize(),
 		UserSignatureShare: userSignatures.Results[userJobID].SignatureShare,
 	})
 	if err != nil {
@@ -839,11 +839,11 @@ func ClaimStaticDeposit(
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate transfer id: %w", err)
 	}
-	keyTweakInputMap, err := prepareSendTransferKeyTweaks(config, transferID.String(), userIdentityPubkey.SerializeCompressed(), leavesToTransfer, map[string][]byte{})
+	keyTweakInputMap, err := prepareSendTransferKeyTweaks(config, transferID.String(), keys.PublicKeyFromKey(*userIdentityPubkey), leavesToTransfer, map[string][]byte{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare transfer data: %w", err)
 	}
-	transferPackage, err := prepareTransferPackage(ctx, config, sparkClient, transferID, keyTweakInputMap, leavesToTransfer, userIdentityPubkey.SerializeCompressed())
+	transferPackage, err := prepareTransferPackage(ctx, config, sparkClient, transferID, keyTweakInputMap, leavesToTransfer, keys.PublicKeyFromKey(*userIdentityPubkey))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare transfer data: %w", err)
 	}

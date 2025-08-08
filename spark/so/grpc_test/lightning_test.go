@@ -151,8 +151,8 @@ func TestReceiveLightningPayment(t *testing.T) {
 
 	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
-		SigningPrivKey:    sspLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}}
 
 	response, err := wallet.SwapNodesForPreimage(
@@ -204,8 +204,8 @@ func TestReceiveLightningPayment(t *testing.T) {
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    newLeafPrivKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    newLeafPrivKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	_, err = wallet.ClaimTransfer(
@@ -248,8 +248,8 @@ func TestReceiveLightningPaymentV2(t *testing.T) {
 
 	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
-		SigningPrivKey:    sspLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}}
 
 	response, err := wallet.SwapNodesForPreimage(
@@ -312,8 +312,8 @@ func TestReceiveLightningPaymentV2(t *testing.T) {
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    newLeafPrivKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    newLeafPrivKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	_, err = wallet.ClaimTransfer(
@@ -357,8 +357,8 @@ func TestReceiveZeroAmountLightningInvoicePayment(t *testing.T) {
 
 	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
-		SigningPrivKey:    sspLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}}
 
 	response, err := wallet.SwapNodesForPreimage(
@@ -398,8 +398,8 @@ func TestReceiveZeroAmountLightningInvoicePayment(t *testing.T) {
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    newLeafPrivKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    newLeafPrivKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	_, err = wallet.ClaimTransfer(
@@ -442,8 +442,8 @@ func TestReceiveLightningPaymentCannotCancelAfterPreimageReveal(t *testing.T) {
 
 	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
-		SigningPrivKey:    sspLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}}
 
 	response, err := wallet.SwapNodesForPreimage(
@@ -490,12 +490,11 @@ func TestSendLightningPayment(t *testing.T) {
 	newLeafPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 
-	leaves := []wallet.LeafKeyTweak{}
-	leaves = append(leaves, wallet.LeafKeyTweak{
+	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
-		SigningPrivKey:    userLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
-	})
+		SigningPrivKey:    userLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
+	}}
 
 	response, err := wallet.SwapNodesForPreimage(
 		context.Background(),
@@ -541,8 +540,8 @@ func TestSendLightningPayment(t *testing.T) {
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    newLeafPrivKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    newLeafPrivKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	_, err = wallet.ClaimTransfer(
@@ -581,8 +580,8 @@ func TestSendLightningPaymentV2(t *testing.T) {
 
 	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
-		SigningPrivKey:    userLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    userLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}}
 
 	response, err := wallet.SwapNodesForPreimage(
@@ -640,8 +639,8 @@ func TestSendLightningPaymentV2(t *testing.T) {
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    newLeafPrivKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    newLeafPrivKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	_, err = wallet.ClaimTransfer(
@@ -680,8 +679,8 @@ func TestSendLightningPaymentWithRejection(t *testing.T) {
 
 	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
-		SigningPrivKey:    userLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    userLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}}
 
 	response, err := wallet.SwapNodesForPreimage(
@@ -773,8 +772,8 @@ func TestReceiveLightningPaymentWithWrongPreimage(t *testing.T) {
 
 	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
-		SigningPrivKey:    sspLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    sspLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}}
 
 	_, err = wallet.SwapNodesForPreimage(
@@ -827,8 +826,8 @@ func TestSendLightningPaymentTwice(t *testing.T) {
 
 	leaves := []wallet.LeafKeyTweak{{
 		Leaf:              nodeToSend,
-		SigningPrivKey:    userLeafPrivKey.Serialize(),
-		NewSigningPrivKey: newLeafPrivKey.Serialize(),
+		SigningPrivKey:    userLeafPrivKey,
+		NewSigningPrivKey: newLeafPrivKey,
 	}}
 
 	response, err := wallet.SwapNodesForPreimage(
@@ -888,8 +887,8 @@ func TestSendLightningPaymentTwice(t *testing.T) {
 	require.NoError(t, err, "failed to create new node signing private key")
 	claimingNode := wallet.LeafKeyTweak{
 		Leaf:              receiverTransfer.Leaves[0].Leaf,
-		SigningPrivKey:    newLeafPrivKey.Serialize(),
-		NewSigningPrivKey: finalLeafPrivKey.Serialize(),
+		SigningPrivKey:    newLeafPrivKey,
+		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := [1]wallet.LeafKeyTweak{claimingNode}
 	_, err = wallet.ClaimTransfer(
