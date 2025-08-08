@@ -8,26 +8,6 @@ import (
 	"github.com/lightsparkdev/spark/so/objects"
 )
 
-// StoreSigningNonce stores the given signing nonce and commitment in the database.
-func StoreSigningNonce(ctx context.Context, _ *so.Config, nonce objects.SigningNonce, commitment objects.SigningCommitment) error {
-	nonceBytes, err := nonce.MarshalBinary()
-	if err != nil {
-		return err
-	}
-	commitmentBytes := commitment.MarshalBinary()
-
-	db, err := GetDbFromContext(ctx)
-	if err != nil {
-		return err
-	}
-
-	_, err = db.SigningNonce.Create().
-		SetNonce(nonceBytes).
-		SetNonceCommitment(commitmentBytes).
-		Save(ctx)
-	return err
-}
-
 // GetSigningNonceFromCommitment returns the signing nonce associated with the given commitment.
 func GetSigningNonceFromCommitment(ctx context.Context, _ *so.Config, commitment objects.SigningCommitment) (*objects.SigningNonce, error) {
 	commitmentBytes := commitment.MarshalBinary()

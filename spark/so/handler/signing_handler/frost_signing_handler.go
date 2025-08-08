@@ -69,13 +69,20 @@ func (h *FrostSigningHandler) FrostRound1(ctx context.Context, req *pb.FrostRoun
 	}
 
 	commitments := make([]*pbcommon.SigningCommitment, 0)
-	for i := 0; i < int(count); i++ {
+	for range count {
 		round1Response, err := frostClient.FrostNonce(ctx, &pbfrost.FrostNonceRequest{
 			KeyPackages: keyPackagesArray,
 		})
 		if err != nil {
 			return nil, err
 		}
+
+		db, err := ent.GetDbFromContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		entSigningNonces := make([]*ent.SigningNonceCreate, 0, len(round1Response.Results))
 
 		for _, result := range round1Response.Results {
 			nonce := objects.SigningNonce{}
@@ -89,10 +96,17 @@ func (h *FrostSigningHandler) FrostRound1(ctx context.Context, req *pb.FrostRoun
 				return nil, err
 			}
 
-			err = ent.StoreSigningNonce(ctx, h.config, nonce, commitment)
-			if err != nil {
-				return nil, err
-			}
+			entSigningNonces = append(
+				entSigningNonces,
+				db.SigningNonce.Create().
+					SetNonce(nonce.MarshalBinary()).
+					SetNonceCommitment(commitment.MarshalBinary()),
+			)
+		}
+
+		_, err = db.SigningNonce.CreateBulk(entSigningNonces...).Save(ctx)
+		if err != nil {
+			return nil, err
 		}
 
 		for _, result := range round1Response.Results {

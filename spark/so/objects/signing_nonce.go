@@ -46,11 +46,11 @@ func (n *SigningNonce) SigningCommitment() *SigningCommitment {
 
 // MarshalBinary serializes the SigningNonce into a byte slice.
 // Returns a 64-byte slice containing the concatenated binding and hiding values.
-func (n SigningNonce) MarshalBinary() ([]byte, error) {
+func (n SigningNonce) MarshalBinary() []byte {
 	bytes := make([]byte, 64)
 	copy(bytes[0:32], n.Binding)
 	copy(bytes[32:64], n.Hiding)
-	return bytes, nil
+	return bytes
 }
 
 // UnmarshalBinary deserializes the SigningNonce from a byte slice.
