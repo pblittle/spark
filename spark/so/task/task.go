@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -1026,37 +1027,26 @@ func RunStartupTasks(config *so.Config, db *ent.Client, runningLocally bool) err
 
 	for _, task := range AllStartupTasks() {
 		if !runningLocally || task.RunInTestEnv {
-			slog.Info("Running startup task", "task", task.Name)
-
 			if task.RetryInterval != nil {
 				go func(task StartupTaskSpec) {
-					timeout := task.getTimeout()
 					retryInterval := *task.RetryInterval
 
-					startTime := time.Now()
 					for {
 						err := task.RunOnce(config, db)
 						if err == nil {
-							slog.Info("Startup task completed successfully", "task", task.Name)
 							break
 						}
 
-						if time.Since(startTime) >= timeout {
-							slog.Error("Startup task failed after timeout", "task", task.Name, "timeout", timeout, "error", err)
+						if errors.Is(err, errTaskTimeout) {
 							break
 						}
 
-						slog.Warn("Startup task failed, retrying", "task", task.Name, "error", err, "retry_in", retryInterval)
+						slog.Warn(fmt.Sprintf("Startup task failed, retrying in %s", retryInterval), "task.name", task.Name, "error", err)
 						time.Sleep(retryInterval)
 					}
 				}(task)
 			} else {
-				err := task.RunOnce(config, db)
-				if err != nil {
-					slog.Error("Startup task failed", "task", task.Name, "error", err)
-				} else {
-					slog.Info("Startup task completed successfully", "task", task.Name)
-				}
+				task.RunOnce(config, db) // nolint: errcheck
 			}
 		}
 	}
