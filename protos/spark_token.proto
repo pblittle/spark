@@ -178,8 +178,8 @@ message QueryTokenMetadataRequest {
 
 message TokenMetadata {
     bytes issuer_public_key = 1 [(validate.rules).bytes.len = 33];
-    string token_name = 2 [(validate.rules).string = {min_len: 3, max_len: 20}];
-    string token_ticker = 3 [(validate.rules).string = {min_len: 3, max_len: 6}];
+    string token_name = 2 [(validate.rules).string = {max_len: 20}];
+    string token_ticker = 3 [(validate.rules).string = {max_len: 6}];
     uint32 decimals = 4 [(validate.rules).uint32.lte = 255];
     bytes max_supply = 5 [(validate.rules).bytes.len = 16]; // Decoded uint128
     bool is_freezable = 6;

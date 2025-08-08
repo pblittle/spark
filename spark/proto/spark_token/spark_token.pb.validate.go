@@ -2371,10 +2371,10 @@ func (m *TokenMetadata) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if l := utf8.RuneCountInString(m.GetTokenName()); l < 3 || l > 20 {
+	if utf8.RuneCountInString(m.GetTokenName()) > 20 {
 		err := TokenMetadataValidationError{
 			field:  "TokenName",
-			reason: "value length must be between 3 and 20 runes, inclusive",
+			reason: "value length must be at most 20 runes",
 		}
 		if !all {
 			return err
@@ -2382,10 +2382,10 @@ func (m *TokenMetadata) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if l := utf8.RuneCountInString(m.GetTokenTicker()); l < 3 || l > 6 {
+	if utf8.RuneCountInString(m.GetTokenTicker()) > 6 {
 		err := TokenMetadataValidationError{
 			field:  "TokenTicker",
-			reason: "value length must be between 3 and 6 runes, inclusive",
+			reason: "value length must be at most 6 runes",
 		}
 		if !all {
 			return err

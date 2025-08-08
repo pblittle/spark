@@ -2067,12 +2067,12 @@ const file_spark_token_proto_rawDesc = "" +
 	"\x0fcommit_progress\x18\x02 \x01(\v2\x1b.spark_token.CommitProgressR\x0ecommitProgress\"\x92\x01\n" +
 	"\x19QueryTokenMetadataRequest\x129\n" +
 	"\x11token_identifiers\x18\x01 \x03(\fB\f\xfaB\t\x92\x01\x06\"\x04z\x02h R\x10tokenIdentifiers\x12:\n" +
-	"\x12issuer_public_keys\x18\x02 \x03(\fB\f\xfaB\t\x92\x01\x06\"\x04z\x02h!R\x10issuerPublicKeys\"\xab\x03\n" +
+	"\x12issuer_public_keys\x18\x02 \x03(\fB\f\xfaB\t\x92\x01\x06\"\x04z\x02h!R\x10issuerPublicKeys\"\xa7\x03\n" +
 	"\rTokenMetadata\x123\n" +
-	"\x11issuer_public_key\x18\x01 \x01(\fB\a\xfaB\x04z\x02h!R\x0fissuerPublicKey\x12(\n" +
+	"\x11issuer_public_key\x18\x01 \x01(\fB\a\xfaB\x04z\x02h!R\x0fissuerPublicKey\x12&\n" +
 	"\n" +
-	"token_name\x18\x02 \x01(\tB\t\xfaB\x06r\x04\x10\x03\x18\x14R\ttokenName\x12,\n" +
-	"\ftoken_ticker\x18\x03 \x01(\tB\t\xfaB\x06r\x04\x10\x03\x18\x06R\vtokenTicker\x12$\n" +
+	"token_name\x18\x02 \x01(\tB\a\xfaB\x04r\x02\x18\x14R\ttokenName\x12*\n" +
+	"\ftoken_ticker\x18\x03 \x01(\tB\a\xfaB\x04r\x02\x18\x06R\vtokenTicker\x12$\n" +
 	"\bdecimals\x18\x04 \x01(\rB\b\xfaB\x05*\x03\x18\xff\x01R\bdecimals\x12&\n" +
 	"\n" +
 	"max_supply\x18\x05 \x01(\fB\a\xfaB\x04z\x02h\x10R\tmaxSupply\x12!\n" +
