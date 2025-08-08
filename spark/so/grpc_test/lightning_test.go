@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lightsparkdev/spark/common/keys"
+	decodepay "github.com/nbd-wtf/ln-decodepay"
 
 	"github.com/lightsparkdev/spark/common"
 	pbmock "github.com/lightsparkdev/spark/proto/mock"
@@ -343,6 +344,9 @@ func TestReceiveZeroAmountLightningInvoicePayment(t *testing.T) {
 	invoice, _, err := wallet.CreateLightningInvoiceWithPreimage(context.Background(), userConfig, fakeInvoiceCreator, invoiceSats, "test", preimage)
 	require.NoError(t, err)
 	assert.NotNil(t, invoice)
+	bolt11, err := decodepay.Decodepay(*invoice)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), bolt11.MSatoshi, "invoice amount should be 0")
 
 	paymentAmountSats := uint64(15000)
 	// SSP creates a node of sats equals to the payment amount
@@ -522,7 +526,7 @@ func TestSendLightningPayment(t *testing.T) {
 		require.NoError(t, err)
 		totalValue += value
 	}
-	assert.Equal(t, totalValue, int64(12345+feeSats-common.DefaultFeeSats))
+	assert.Equal(t, totalValue, int64(12345+feeSats))
 
 	receiverTransfer, err := wallet.ProvidePreimage(context.Background(), sspConfig, preimage[:])
 	require.NoError(t, err)
@@ -621,7 +625,7 @@ func TestSendLightningPaymentV2(t *testing.T) {
 		require.NoError(t, err)
 		totalValue += value
 	}
-	assert.Equal(t, int64(12345+feeSats-common.DefaultFeeSats), totalValue)
+	assert.Equal(t, int64(12345+feeSats), totalValue)
 
 	receiverTransfer, err := wallet.ProvidePreimage(context.Background(), sspConfig, preimage[:])
 	require.NoError(t, err)
@@ -709,7 +713,7 @@ func TestSendLightningPaymentWithRejection(t *testing.T) {
 		require.NoError(t, err)
 		totalValue += value
 	}
-	assert.Equal(t, totalValue, int64(12345+feeSats-common.DefaultFeeSats))
+	assert.Equal(t, totalValue, int64(12345+feeSats))
 
 	err = wallet.ReturnLightningPayment(context.Background(), sspConfig, paymentHash[:])
 	require.NoError(t, err)
@@ -869,7 +873,7 @@ func TestSendLightningPaymentTwice(t *testing.T) {
 		require.NoError(t, err)
 		totalValue += value
 	}
-	assert.Equal(t, totalValue, int64(12345+feeSats-common.DefaultFeeSats))
+	assert.Equal(t, totalValue, int64(12345+feeSats))
 
 	receiverTransfer, err := wallet.ProvidePreimage(context.Background(), sspConfig, preimage[:])
 	require.NoError(t, err)

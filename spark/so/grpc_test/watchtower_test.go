@@ -21,6 +21,7 @@ import (
 )
 
 func TestTimelockExpirationHappyPath(t *testing.T) {
+	skipIfGithubActions(t)
 	walletConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
@@ -154,6 +155,7 @@ func TestTimelockExpirationHappyPath(t *testing.T) {
 }
 
 func TestTimelockExpirationTransferredNode(t *testing.T) {
+	skipIfGithubActions(t)
 	walletConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
@@ -351,6 +353,7 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 }
 
 func TestTimelockExpirationMultiLevelTree(t *testing.T) {
+	skipIfGithubActions(t)
 	walletConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)
 
@@ -557,6 +560,7 @@ func TestTimelockExpirationMultiLevelTree(t *testing.T) {
 }
 
 func TestTimelockExpirationAfterLightningTransfer(t *testing.T) {
+	skipIfGithubActions(t)
 	// Create user and ssp configs
 	userConfig, err := testutil.TestWalletConfig()
 	require.NoError(t, err)

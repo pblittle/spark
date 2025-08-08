@@ -472,13 +472,13 @@ func ExtendTimelock(
 		return fmt.Errorf("failed to increment sequence: %w", err)
 	}
 	newNodeOutPoint := wire.OutPoint{Hash: nodeTx.TxHash(), Index: 0}
-	newNodeTx := createLeafNodeTx(newNodeSequence, &newNodeOutPoint, nodeTx.TxOut[0], false)
+	newNodeTx := createLeafNodeTx(newNodeSequence, &newNodeOutPoint, nodeTx.TxOut[0])
 
 	// Create new refund tx to spend the new node tx
 	// (signing pubkey is used here as the destination for convenience,
 	// though normally it should just be the same output as the refund tx)
 	newRefundOutPoint := wire.OutPoint{Hash: newNodeTx.TxHash(), Index: 0}
-	_, cpfpRefundTx, err := createRefundTxs(spark.InitialSequence(), &newRefundOutPoint, refundTx.TxOut[0].Value, signingPrivKey.Public(), false)
+	cpfpRefundTx, _, err := createRefundTxs(spark.InitialSequence(), &newRefundOutPoint, refundTx.TxOut[0].Value, signingPrivKey.Public(), false)
 	if err != nil {
 		return fmt.Errorf("failed to create refund tx: %w", err)
 	}

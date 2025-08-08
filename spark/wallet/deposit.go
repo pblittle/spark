@@ -245,7 +245,7 @@ func CreateTreeRoot(
 	}
 
 	// Create refund tx
-	_, cpfpRefundTx, err := createRefundTxs(
+	cpfpRefundTx, _, err := createRefundTxs(
 		spark.InitialSequence(),
 		&wire.OutPoint{Hash: rootTx.TxHash(), Index: 0},
 		rootTx.TxOut[0].Value,

@@ -33,7 +33,7 @@ func createRootTx(
 	rootTx.AddTxIn(wire.NewTxIn(depositOutPoint, nil, nil))
 
 	// Create new output with fee-adjusted amount
-	rootTx.AddTxOut(wire.NewTxOut(maybeApplyFee(depositTxOut.Value), depositTxOut.PkScript))
+	rootTx.AddTxOut(wire.NewTxOut(depositTxOut.Value, depositTxOut.PkScript))
 	return rootTx
 }
 
@@ -44,24 +44,8 @@ func createSplitTx(
 	splitTx := wire.NewMsgTx(3)
 	splitTx.AddTxIn(wire.NewTxIn(parentOutPoint, nil, nil))
 
-	// Adjust output amounts to account for fee
-	totalOutputAmount := int64(0)
 	for _, txOut := range childTxOuts {
-		totalOutputAmount += txOut.Value
-	}
-
-	if totalOutputAmount > int64(common.DefaultFeeSats) {
-		// Distribute fee proportionally across outputs
-		feeRatio := float64(common.DefaultFeeSats) / float64(totalOutputAmount)
-		for _, txOut := range childTxOuts {
-			adjustedAmount := int64(float64(txOut.Value) * (1 - feeRatio))
-			splitTx.AddTxOut(wire.NewTxOut(adjustedAmount, txOut.PkScript))
-		}
-	} else {
-		// If fee is larger than total output, just pass through original amounts
-		for _, txOut := range childTxOuts {
-			splitTx.AddTxOut(txOut)
-		}
+		splitTx.AddTxOut(txOut)
 	}
 
 	return splitTx
@@ -77,7 +61,7 @@ func createNodeTx(
 	newNodeTx := wire.NewMsgTx(3)
 	newNodeTx.AddTxIn(wire.NewTxIn(parentOutPoint, nil, nil))
 
-	newNodeTx.AddTxOut(wire.NewTxOut(maybeApplyFee(txOut.Value), txOut.PkScript))
+	newNodeTx.AddTxOut(wire.NewTxOut(txOut.Value, txOut.PkScript))
 	return newNodeTx
 }
 
@@ -91,7 +75,6 @@ func createLeafNodeTx(
 	sequence uint32,
 	parentOutPoint *wire.OutPoint,
 	txOut *wire.TxOut,
-	shouldCalculateFee bool,
 ) *wire.MsgTx {
 	newLeafTx := wire.NewMsgTx(3)
 	newLeafTx.AddTxIn(&wire.TxIn{
@@ -102,11 +85,7 @@ func createLeafNodeTx(
 	})
 	amountSats := txOut.Value
 	outputAmount := amountSats
-	if shouldCalculateFee {
-		outputAmount = maybeApplyFee(amountSats)
-	}
 	newLeafTx.AddTxOut(wire.NewTxOut(outputAmount, txOut.PkScript))
-
 	return newLeafTx
 }
 

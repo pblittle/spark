@@ -188,7 +188,7 @@ func TestTreeQuery(t *testing.T) {
 			OwnerIdentityPublicKey: leafNode.OwnerIdentityPublicKey,
 			Limit:                  1,
 			Offset:                 0,
-			Value:                  30857,
+			Value:                  32768,
 		}
 		resp, err := client.QueryNodesByValue(ctx, req)
 		require.NoError(t, err)
@@ -207,7 +207,7 @@ func TestTreeQuery(t *testing.T) {
 		require.Empty(t, resp.Nodes)
 		require.Equal(t, -1, int(resp.Offset))
 
-		req.Value = 14473
+		req.Value = 16384
 		req.Offset = 0
 		resp, err = client.QueryNodesByValue(ctx, req)
 		require.NoError(t, err)
