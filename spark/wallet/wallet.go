@@ -34,13 +34,13 @@ import (
 // This is the simplest type of wallet and for testing purposes only.
 type SingleKeyWallet struct {
 	Config            *Config
-	SigningPrivateKey []byte
+	SigningPrivateKey keys.Private
 	OwnedNodes        []*pb.TreeNode
 	OwnedTokenOutputs []*pb.OutputWithPreviousTransactionData
 }
 
 // NewSingleKeyWallet creates a new single key wallet.
-func NewSingleKeyWallet(config *Config, signingPrivateKey []byte) *SingleKeyWallet {
+func NewSingleKeyWallet(config *Config, signingPrivateKey keys.Private) *SingleKeyWallet {
 	return &SingleKeyWallet{
 		Config:            config,
 		SigningPrivateKey: signingPrivateKey,
@@ -78,12 +78,6 @@ func (w *SingleKeyWallet) ClaimAllTransfers(ctx context.Context) ([]*pb.TreeNode
 	}
 
 	var nodesResult []*pb.TreeNode
-
-	signingPrivateKey, err := keys.ParsePrivateKey(w.SigningPrivateKey)
-	if err != nil {
-		return nil, err
-	}
-
 	for _, transfer := range pendingTransfers.Transfers {
 		log.Println("Claiming transfer", transfer.Id, transfer.Status)
 		if transfer.Status != pb.TransferStatus_TRANSFER_STATUS_SENDER_KEY_TWEAKED &&
@@ -105,11 +99,10 @@ func (w *SingleKeyWallet) ClaimAllTransfers(ctx context.Context) ([]*pb.TreeNode
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse leaf private key: %w", err)
 			}
-
 			leaves[i] = LeafKeyTweak{
 				Leaf:              leaf.Leaf,
 				SigningPrivKey:    leafPrivKey,
-				NewSigningPrivKey: signingPrivateKey,
+				NewSigningPrivKey: w.SigningPrivateKey,
 			}
 		}
 		nodes, err := ClaimTransfer(ctx, transfer, w.Config, leaves)
@@ -173,10 +166,6 @@ func (w *SingleKeyWallet) PayInvoice(ctx context.Context, invoice string) (strin
 		return "", fmt.Errorf("failed to parse invoice: %w", err)
 	}
 
-	signingPrivateKey, err := keys.ParsePrivateKey(w.SigningPrivateKey)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse signing private key: %w", err)
-	}
 	amount := int64(math.Ceil(float64(bolt11.MSatoshi) / 1000.0))
 	nodes, err := w.leafSelection(amount)
 	if err != nil {
@@ -202,7 +191,7 @@ func (w *SingleKeyWallet) PayInvoice(ctx context.Context, invoice string) (strin
 		}
 		nodeKeyTweaks[i] = LeafKeyTweak{
 			Leaf:              node,
-			SigningPrivKey:    signingPrivateKey,
+			SigningPrivKey:    w.SigningPrivateKey,
 			NewSigningPrivKey: newLeafPrivKey,
 		}
 		nodesToRemove[node.Id] = true
@@ -309,11 +298,6 @@ func (w *SingleKeyWallet) RequestLeavesSwap(ctx context.Context, targetAmount in
 		return nil, fmt.Errorf("failed to select nodes: %w", err)
 	}
 
-	signingPrivateKey, err := keys.ParsePrivateKey(w.SigningPrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse signing private key: %w", err)
-	}
-
 	leafKeyTweaks := make([]LeafKeyTweak, len(nodes))
 	nodesToRemove := make(map[string]bool)
 	for i, node := range nodes {
@@ -323,7 +307,7 @@ func (w *SingleKeyWallet) RequestLeavesSwap(ctx context.Context, targetAmount in
 		}
 		leafKeyTweaks[i] = LeafKeyTweak{
 			Leaf:              node,
-			SigningPrivKey:    signingPrivateKey,
+			SigningPrivKey:    w.SigningPrivateKey,
 			NewSigningPrivKey: newLeafPrivKey,
 		}
 		nodesToRemove[node.Id] = true
@@ -492,10 +476,6 @@ func (w *SingleKeyWallet) SendTransfer(ctx context.Context, receiverIdentityPubK
 	}
 	leafKeyTweaks := make([]LeafKeyTweak, 0, len(nodes))
 	nodesToRemove := make(map[string]bool)
-	signingKey, err := keys.ParsePrivateKey(w.SigningPrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse signing key: %w", err)
-	}
 	for _, node := range nodes {
 		newLeafPrivKey, err := keys.GeneratePrivateKey()
 		if err != nil {
@@ -503,7 +483,7 @@ func (w *SingleKeyWallet) SendTransfer(ctx context.Context, receiverIdentityPubK
 		}
 		leafKeyTweaks = append(leafKeyTweaks, LeafKeyTweak{
 			Leaf:              node,
-			SigningPrivKey:    signingKey,
+			SigningPrivKey:    w.SigningPrivateKey,
 			NewSigningPrivKey: newLeafPrivKey,
 		})
 		nodesToRemove[node.Id] = true
@@ -524,14 +504,9 @@ func (w *SingleKeyWallet) CoopExit(ctx context.Context, targetAmountSats int64, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to select nodes: %w", err)
 	}
-
 	leafIDs := make([]string, len(nodes))
 	leafKeyTweaks := make([]LeafKeyTweak, len(nodes))
 	nodesToRemove := make(map[string]bool)
-	signingKey, err := keys.ParsePrivateKey(w.SigningPrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse signing key: %w", err)
-	}
 	for i, node := range nodes {
 		newLeafPrivKey, err := keys.GeneratePrivateKey()
 		if err != nil {
@@ -539,7 +514,7 @@ func (w *SingleKeyWallet) CoopExit(ctx context.Context, targetAmountSats int64, 
 		}
 		leafKeyTweaks[i] = LeafKeyTweak{
 			Leaf:              node,
-			SigningPrivKey:    signingKey,
+			SigningPrivKey:    w.SigningPrivateKey,
 			NewSigningPrivKey: newLeafPrivKey,
 		}
 		nodesToRemove[node.Id] = true
@@ -642,9 +617,8 @@ func (w *SingleKeyWallet) RefreshTimelocks(ctx context.Context, nodeUUID *uuid.U
 		if !ok {
 			return fmt.Errorf("parent node %s not found", *node.ParentNodeId)
 		}
-		signingPrivKey := secp256k1.PrivKeyFromBytes(w.SigningPrivateKey)
 		nodes, err := RefreshTimelockNodes(
-			ctx, w.Config, []*pb.TreeNode{node}, parentNode, signingPrivKey)
+			ctx, w.Config, []*pb.TreeNode{node}, parentNode, w.SigningPrivateKey.ToBTCEC())
 		if err != nil {
 			return fmt.Errorf("failed to refresh timelock nodes: %w", err)
 		}

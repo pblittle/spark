@@ -177,8 +177,12 @@ func (cli *CLI) Run() error {
 	if err != nil {
 		return fmt.Errorf("failed to create test wallet config: %w", err)
 	}
+	signingPrivateKey, err := keys.ParsePrivateKey(signingKey.Key)
+	if err != nil {
+		return fmt.Errorf("failed to parse private key: %w", err)
+	}
 
-	cli.wallet = wallet.NewSingleKeyWallet(config, signingKey.Key)
+	cli.wallet = wallet.NewSingleKeyWallet(config, signingPrivateKey)
 
 	fmt.Println("\nWallet initialized. Ready for commands.")
 
