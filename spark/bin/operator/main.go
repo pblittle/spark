@@ -46,6 +46,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/propagation"
@@ -540,21 +541,28 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	}))
 	mux.Handle("/metrics", promhttp.Handler())
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// The gRPC server doesn't read the request body until EOF before processing
-		// the request. This can result in the HTTP server receiving a DATA(END_FRAME)
-		// frame after sending the response, which elicits a RST_STREAM(STREAM_CLOSED)
-		// frame. ALB and nginx then respond to the client with RST_STREAM(INTERNAL_ERROR)
-		// which causes the request to fail. The workaround is to buffer the entire
-		// request body before passing to the gRPC server.
-		r.Body = NewBufferedBody(r.Body)
+	mux.Handle("/",
+		otelhttp.NewHandler(
+			http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					// The gRPC server doesn't read the request body until EOF before processing
+					// the request. This can result in the HTTP server receiving a DATA(END_FRAME)
+					// frame after sending the response, which elicits a RST_STREAM(STREAM_CLOSED)
+					// frame. ALB and nginx then respond to the client with RST_STREAM(INTERNAL_ERROR)
+					// which causes the request to fail. The workaround is to buffer the entire
+					// request body before passing to the gRPC server.
+					r.Body = NewBufferedBody(r.Body)
 
-		if strings.ToLower(r.Header.Get("Content-Type")) == "application/grpc" {
-			grpcServer.ServeHTTP(w, r)
-			return
-		}
-		wrappedGrpc.ServeHTTP(w, r)
-	})
+					if strings.ToLower(r.Header.Get("Content-Type")) == "application/grpc" {
+						grpcServer.ServeHTTP(w, r)
+						return
+					}
+					wrappedGrpc.ServeHTTP(w, r)
+				},
+			),
+			"server",
+		),
+	)
 
 	var server *http.Server
 	var startServer StartServerFunc
