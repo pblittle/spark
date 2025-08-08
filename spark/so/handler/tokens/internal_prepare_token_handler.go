@@ -511,13 +511,14 @@ func validateOutputIsSpendable(ctx context.Context, enablePreemption bool, index
 		}
 		if !spentTx.IsExpired(time.Now(), v0DefaultTransactionExpiryDuration) {
 			canPreemptSpentTx := false
+			var cannotPreemptErr error
 			if enablePreemption {
-				cannotPreemptErr := preemptOrRejectTransaction(ctx, tokenTransaction, spentTx)
+				cannotPreemptErr = preemptOrRejectTransaction(ctx, tokenTransaction, spentTx)
 				canPreemptSpentTx = cannotPreemptErr == nil
 			}
 			if !canPreemptSpentTx {
-				return fmt.Errorf("output %d cannot be spent: status must be %s or %s (was %s), or have been spent by an expired or pre-emptable transaction (transaction was not expired or pre-emptable, id: %s, final_hash: %s)",
-					index, st.TokenOutputStatusCreatedFinalized, st.TokenOutputStatusSpentStarted, output.Status, spentTx.ID, hex.EncodeToString(spentTx.FinalizedTokenTransactionHash))
+				return fmt.Errorf("output %d cannot be spent: status must be %s or %s (was %s), or have been spent by an expired or pre-emptable transaction (transaction was not expired or pre-emptable, id: %s, final_hash: %s, error: %w)",
+					index, st.TokenOutputStatusCreatedFinalized, st.TokenOutputStatusSpentStarted, output.Status, spentTx.ID, hex.EncodeToString(spentTx.FinalizedTokenTransactionHash), cannotPreemptErr)
 			}
 		}
 	}
