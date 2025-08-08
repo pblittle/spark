@@ -7,7 +7,6 @@ import (
 	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightsparkdev/spark"
 	"github.com/lightsparkdev/spark/common"
 	pbcommon "github.com/lightsparkdev/spark/proto/common"
@@ -17,16 +16,16 @@ import (
 )
 
 // CreateUserKeyPackage creates a user frost signing key package from a signing private key.
-func CreateUserKeyPackage(signingPrivateKey []byte) *pbfrost.KeyPackage {
-	userIdentifier := "0000000000000000000000000000000000000000000000000000000000000063"
-	pubkey := secp256k1.PrivKeyFromBytes(signingPrivateKey).PubKey()
+func CreateUserKeyPackage(signingPrivateKey keys.Private) *pbfrost.KeyPackage {
+	const userIdentifier = "0000000000000000000000000000000000000000000000000000000000000063"
+	pubKeyBytes := signingPrivateKey.Public().Serialize()
 	userKeyPackage := &pbfrost.KeyPackage{
 		Identifier:  userIdentifier,
-		SecretShare: signingPrivateKey,
+		SecretShare: signingPrivateKey.Serialize(),
 		PublicShares: map[string][]byte{
-			userIdentifier: pubkey.SerializeCompressed(),
+			userIdentifier: pubKeyBytes,
 		},
-		PublicKey:  pubkey.SerializeCompressed(),
+		PublicKey:  pubKeyBytes,
 		MinSigners: 1,
 	}
 	return userKeyPackage
@@ -88,7 +87,7 @@ func prepareFrostSigningJobsForUserSignedRefund(
 		}
 		userCommitments[i] = signingNonce.SigningCommitment()
 
-		userKeyPackage := CreateUserKeyPackage(leaf.SigningPrivKey.Serialize())
+		userKeyPackage := CreateUserKeyPackage(leaf.SigningPrivKey)
 
 		signingJobs = append(signingJobs, &pbfrost.FrostSigningJob{
 			JobId:           leaf.Leaf.Id,

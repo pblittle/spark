@@ -73,14 +73,12 @@ func RefreshTimelockRefundTx(
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal nonce commitment: %w", err)
 	}
-	signingJobs := make([]*pb.SigningJob, 0)
-	signingJobs = append(signingJobs, &pb.SigningJob{
+	signingJobs := []*pb.SigningJob{{
 		SigningPublicKey:       signingPrivKey.PubKey().SerializeCompressed(),
 		RawTx:                  newRefundTxBuf.Bytes(),
 		SigningNonceCommitment: nonceCommitmentProto,
-	})
-	nonces := []*objects.SigningNonce{}
-	nonces = append(nonces, nonce)
+	}}
+	nonces := []*objects.SigningNonce{nonce}
 
 	// Connect and call GRPC
 	sparkConn, err := common.NewGRPCConnectionWithTestTLS(config.CoodinatorAddress(), nil)
@@ -137,7 +135,7 @@ func RefreshTimelockRefundTx(
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal nonce commitment: %w", err)
 		}
-		userKeyPackage := CreateUserKeyPackage(signingPrivKey.Serialize())
+		userKeyPackage := CreateUserKeyPackage(keys.PrivateFromKey(*signingPrivKey))
 
 		userSigningJobID := uuid.New().String()
 
@@ -200,10 +198,7 @@ func RefreshTimelockRefundTx(
 	return resp.Nodes[0], nil
 }
 
-func signingJobFromTx(
-	newTx *wire.MsgTx,
-	signingPrivKey *secp256k1.PrivateKey,
-) (*pb.SigningJob, *objects.SigningNonce, error) {
+func signingJobFromTx(newTx *wire.MsgTx, signingPrivKey keys.Private) (*pb.SigningJob, *objects.SigningNonce, error) {
 	var newTxBuf bytes.Buffer
 	err := newTx.Serialize(&newTxBuf)
 	if err != nil {
@@ -220,7 +215,7 @@ func signingJobFromTx(
 	}
 
 	signingJob := &pb.SigningJob{
-		SigningPublicKey:       signingPrivKey.PubKey().SerializeCompressed(),
+		SigningPublicKey:       signingPrivKey.Public().Serialize(),
 		RawTx:                  newTxBuf.Bytes(),
 		SigningNonceCommitment: nonceCommitmentProto,
 	}
@@ -262,7 +257,7 @@ func RefreshTimelockNodes(
 			newTx.TxIn[0].PreviousOutPoint.Hash = newNodeTxs[i-1].TxHash()
 		}
 
-		signingJob, nonce, err := signingJobFromTx(newTx, signingPrivKey)
+		signingJob, nonce, err := signingJobFromTx(newTx, keys.PrivateFromKey(*signingPrivKey))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signing job: %w", err)
 		}
@@ -279,7 +274,7 @@ func RefreshTimelockNodes(
 	}
 	newRefundTx.TxIn[0].Sequence = spark.InitialSequence()
 	newRefundTx.TxIn[0].PreviousOutPoint.Hash = newNodeTxs[len(newNodeTxs)-1].TxHash()
-	signingJob, nonce, err := signingJobFromTx(newRefundTx, signingPrivKey)
+	signingJob, nonce, err := signingJobFromTx(newRefundTx, keys.PrivateFromKey(*signingPrivKey))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signing job: %w", err)
 	}
@@ -364,7 +359,7 @@ func RefreshTimelockNodes(
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal nonce commitment: %w", err)
 		}
-		userKeyPackage := CreateUserKeyPackage(signingPrivKey.Serialize())
+		userKeyPackage := CreateUserKeyPackage(keys.PrivateFromKey(*signingPrivKey))
 
 		userSigningJobID := uuid.New().String()
 		if i == len(nodes) {
@@ -457,7 +452,7 @@ func ExtendTimelock(
 	ctx context.Context,
 	config *Config,
 	node *pb.TreeNode,
-	signingPrivKey *secp256k1.PrivateKey,
+	signingPrivKey keys.Private,
 ) error {
 	// Insert a new node in between the current refund and the node tx
 	nodeTx, err := common.TxFromRawTxBytes(node.NodeTx)
@@ -483,7 +478,7 @@ func ExtendTimelock(
 	// (signing pubkey is used here as the destination for convenience,
 	// though normally it should just be the same output as the refund tx)
 	newRefundOutPoint := wire.OutPoint{Hash: newNodeTx.TxHash(), Index: 0}
-	_, cpfpRefundTx, err := createRefundTxs(spark.InitialSequence(), &newRefundOutPoint, refundTx.TxOut[0].Value, keys.PrivateFromKey(*signingPrivKey).Public(), false)
+	_, cpfpRefundTx, err := createRefundTxs(spark.InitialSequence(), &newRefundOutPoint, refundTx.TxOut[0].Value, signingPrivKey.Public(), false)
 	if err != nil {
 		return fmt.Errorf("failed to create refund tx: %w", err)
 	}
@@ -579,7 +574,7 @@ func createFrostJobsFromTx(
 	tx *wire.MsgTx,
 	parentTxOut *wire.TxOut,
 	nonce *objects.SigningNonce,
-	signingPrivKey *secp256k1.PrivateKey,
+	signingPrivKey keys.Private,
 	signingResult *pb.ExtendLeafSigningResult,
 ) (*pbfrost.FrostSigningJob, *pbfrost.AggregateFrostRequest, error) {
 	sigHash, err := common.SigHashFromTx(tx, 0, parentTxOut)
@@ -594,7 +589,7 @@ func createFrostJobsFromTx(
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal nonce commitment: %w", err)
 	}
-	frostKeyPackage := CreateUserKeyPackage(signingPrivKey.Serialize())
+	frostKeyPackage := CreateUserKeyPackage(signingPrivKey)
 	userSigningJobID := uuid.New().String()
 	signingJob := &pbfrost.FrostSigningJob{
 		JobId:           userSigningJobID,
@@ -612,7 +607,7 @@ func createFrostJobsFromTx(
 		VerifyingKey:    signingResult.VerifyingKey,
 		Commitments:     signingResult.SigningResult.SigningNonceCommitments,
 		UserCommitments: signingNonceCommitment,
-		UserPublicKey:   signingPrivKey.PubKey().SerializeCompressed(),
+		UserPublicKey:   signingPrivKey.Public().Serialize(),
 	}
 	return signingJob, aggregateJob, nil
 }

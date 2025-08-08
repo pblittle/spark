@@ -871,7 +871,7 @@ func signRefunds(
 		refundTxSighash, _ := common.SigHashFromTx(leafData.RefundTx, 0, leafData.Tx.TxOut[0])
 		nonceProto, _ := leafData.Nonce.MarshalProto()
 		nonceCommitmentProto, _ := leafData.Nonce.SigningCommitment().MarshalProto()
-		userKeyPackage := CreateUserKeyPackage(leafData.SigningPrivKey.Serialize())
+		userKeyPackage := CreateUserKeyPackage(leafData.SigningPrivKey)
 
 		userSigningJobID := uuid.NewString()
 		jobToLeafMap[userSigningJobID] = operatorSigningResult.LeafId

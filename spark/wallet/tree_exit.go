@@ -3,6 +3,7 @@ package wallet
 import (
 	"context"
 	"fmt"
+	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -185,7 +186,7 @@ func userSignTransaction(
 	}
 
 	for index, root := range roots {
-		keyPackage := CreateUserKeyPackage(privKeys[index].Serialize())
+		keyPackage := CreateUserKeyPackage(keys.PrivateFromKey(*privKeys[index]))
 		signingResult := treeToSigningResult[root.TreeId]
 
 		nonceProto, err := nonces[index].MarshalProto()

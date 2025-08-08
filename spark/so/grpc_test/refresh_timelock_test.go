@@ -61,12 +61,11 @@ func TestExtendLeaf(t *testing.T) {
 	require.NoError(t, err)
 	tree, nodes, err := testutil.CreateNewTreeWithLevels(senderConfig, faucet, senderLeafPrivKey, 100_000, 1)
 	require.NoError(t, err)
-	fmt.Println("node count:", len(nodes))
 	require.NotEmpty(t, nodes, "no nodes created when creating tree")
 	node := nodes[len(nodes)-1]
 
-	signingKeyBytes := tree.Children[1].SigningPrivateKey
-	signingKey := secp256k1.PrivKeyFromBytes(signingKeyBytes)
+	signingKey, err := keys.ParsePrivateKey(tree.Children[1].SigningPrivateKey)
+	require.NoError(t, err)
 
 	err = wallet.ExtendTimelock(context.Background(), senderConfig, node, signingKey)
 	require.NoError(t, err)

@@ -397,7 +397,11 @@ func signTreeCreation(
 		currentElement := elements[0]
 		elements = elements[1:]
 
-		keyPackage := CreateUserKeyPackage(currentElement.internalNode.SigningPrivateKey)
+		signingPrivateKey, err := keys.ParsePrivateKey(currentElement.internalNode.SigningPrivateKey)
+		if err != nil {
+			return nil, err
+		}
+		keyPackage := CreateUserKeyPackage(signingPrivateKey)
 		nodeTx, err := common.TxFromRawTxBytes(currentElement.creationNode.NodeTxSigningJob.RawTx)
 		if err != nil {
 			return nil, err

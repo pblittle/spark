@@ -24,19 +24,19 @@ func TestCreateUserKeyPackage(t *testing.T) {
 
 	tests := []struct {
 		name               string
-		signingPrivateKey  []byte
+		signingPrivateKey  keys.Private
 		expectedIdentifier string
 		expectedMinSigners uint32
 	}{
 		{
-			name:               "valid 32-byte private key",
-			signingPrivateKey:  privkey1.Serialize(),
+			name:               "valid private key",
+			signingPrivateKey:  privkey1,
 			expectedIdentifier: "0000000000000000000000000000000000000000000000000000000000000063",
 			expectedMinSigners: 1,
 		},
 		{
 			name:               "different valid private key",
-			signingPrivateKey:  privkey2.Serialize(),
+			signingPrivateKey:  privkey2,
 			expectedIdentifier: "0000000000000000000000000000000000000000000000000000000000000063",
 			expectedMinSigners: 1,
 		},
@@ -48,62 +48,16 @@ func TestCreateUserKeyPackage(t *testing.T) {
 
 			require.NotNil(t, result)
 			assert.Equal(t, tt.expectedIdentifier, result.Identifier)
-			assert.Equal(t, tt.signingPrivateKey, result.SecretShare)
+			assert.Equal(t, tt.signingPrivateKey.Serialize(), result.SecretShare)
 			assert.Equal(t, tt.expectedMinSigners, result.MinSigners)
 
 			// Verify public key is correctly derived
-			privKey, err := keys.ParsePrivateKey(tt.signingPrivateKey)
-			require.NoError(t, err)
-			expectedPubKey := privKey.Public().Serialize()
+			expectedPubKey := tt.signingPrivateKey.Public().Serialize()
 			assert.Equal(t, expectedPubKey, result.PublicKey)
 
 			// Verify public shares map contains the identifier
 			assert.Contains(t, result.PublicShares, tt.expectedIdentifier)
 			assert.Equal(t, expectedPubKey, result.PublicShares[tt.expectedIdentifier])
-		})
-	}
-}
-
-func TestCreateUserKeyPackage_InvalidPrivateKey(t *testing.T) {
-	tests := []struct {
-		name              string
-		signingPrivateKey []byte
-		expectValidResult bool
-	}{
-		{
-			name:              "nil private key",
-			signingPrivateKey: nil,
-			expectValidResult: false,
-		},
-		{
-			name:              "empty private key",
-			signingPrivateKey: []byte{},
-			expectValidResult: false,
-		},
-		{
-			name:              "short private key",
-			signingPrivateKey: make([]byte, 16),
-			expectValidResult: false,
-		},
-		{
-			name:              "long private key",
-			signingPrivateKey: make([]byte, 64),
-			expectValidResult: false,
-		},
-		{
-			name:              "zero private key (invalid on secp256k1)",
-			signingPrivateKey: make([]byte, 32),
-			expectValidResult: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := CreateUserKeyPackage(tt.signingPrivateKey)
-			assert.NotNil(t, result)
-
-			assert.Equal(t, "0000000000000000000000000000000000000000000000000000000000000063", result.Identifier)
-			assert.Equal(t, uint32(1), result.MinSigners)
 		})
 	}
 }

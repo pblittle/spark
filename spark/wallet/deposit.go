@@ -314,7 +314,7 @@ func CreateTreeRoot(
 		return nil, fmt.Errorf("verifying key does not match")
 	}
 
-	userKeyPackage := CreateUserKeyPackage(signingPrivKey.Serialize())
+	userKeyPackage := CreateUserKeyPackage(signingPrivKey)
 
 	nodeJobID := uuid.NewString()
 	refundJobID := uuid.NewString()
