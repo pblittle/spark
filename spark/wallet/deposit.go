@@ -28,26 +28,22 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func validateDepositAddress(config *Config, address *pb.Address, userPubkey []byte) error {
+func validateDepositAddress(config *Config, address *pb.Address, userPubKey keys.Public) error {
 	if address.DepositAddressProof.ProofOfPossessionSignature == nil {
 		return fmt.Errorf("proof of possession signature is nil")
 	}
-
-	operatorPubkey, err := common.SubtractPublicKeys(address.VerifyingKey, userPubkey)
+	verifyingKey, err := keys.ParsePublicKey(address.VerifyingKey)
 	if err != nil {
 		return err
 	}
-	msg := common.ProofOfPossessionMessageHashForDepositAddress(config.IdentityPublicKey().Serialize(), operatorPubkey, []byte(address.Address))
+	operatorPubKey := verifyingKey.Sub(userPubKey)
+	msg := common.ProofOfPossessionMessageHashForDepositAddress(config.IdentityPublicKey().Serialize(), operatorPubKey.Serialize(), []byte(address.Address))
 	sig, err := schnorr.ParseSignature(address.DepositAddressProof.ProofOfPossessionSignature)
 	if err != nil {
 		return err
 	}
 
-	pubKey, err := btcec.ParsePubKey(operatorPubkey)
-	if err != nil {
-		return err
-	}
-	taprootKey := txscript.ComputeTaprootKeyNoScript(pubKey)
+	taprootKey := txscript.ComputeTaprootKeyNoScript(operatorPubKey.ToBTCEC())
 
 	verified := sig.Verify(msg[:], taprootKey)
 	if !verified {
@@ -84,7 +80,7 @@ func validateDepositAddress(config *Config, address *pb.Address, userPubkey []by
 func GenerateDepositAddress(
 	ctx context.Context,
 	config *Config,
-	signingPubkey []byte,
+	signingPubkey keys.Public,
 	// Signing pub key should be generated in a deterministic way from this leaf ID.
 	// This will be used as the leaf ID for the leaf node.
 	customLeafID *string,
@@ -97,7 +93,7 @@ func GenerateDepositAddress(
 	defer sparkConn.Close()
 	sparkClient := pb.NewSparkServiceClient(sparkConn)
 	depositResp, err := sparkClient.GenerateDepositAddress(ctx, &pb.GenerateDepositAddressRequest{
-		SigningPublicKey:  signingPubkey,
+		SigningPublicKey:  signingPubkey.Serialize(),
 		IdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		Network:           config.ProtoNetwork(),
 		LeafId:            customLeafID,
@@ -116,7 +112,7 @@ func GenerateDepositAddress(
 func GenerateStaticDepositAddress(
 	ctx context.Context,
 	config *Config,
-	signingPubkey []byte,
+	signingPubKey keys.Public,
 ) (*pb.GenerateDepositAddressResponse, error) {
 	sparkConn, err := common.NewGRPCConnectionWithTestTLS(config.CoodinatorAddress(), nil)
 	if err != nil {
@@ -126,7 +122,7 @@ func GenerateStaticDepositAddress(
 	sparkClient := pb.NewSparkServiceClient(sparkConn)
 	isStatic := true
 	depositResp, err := sparkClient.GenerateDepositAddress(ctx, &pb.GenerateDepositAddressRequest{
-		SigningPublicKey:  signingPubkey,
+		SigningPublicKey:  signingPubKey.Serialize(),
 		IdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		Network:           config.ProtoNetwork(),
 		IsStatic:          &isStatic,
@@ -134,7 +130,7 @@ func GenerateStaticDepositAddress(
 	if err != nil {
 		return nil, err
 	}
-	if err := validateDepositAddress(config, depositResp.DepositAddress, signingPubkey); err != nil {
+	if err := validateDepositAddress(config, depositResp.DepositAddress, signingPubKey); err != nil {
 		return nil, err
 	}
 	return depositResp, nil
@@ -207,7 +203,6 @@ func QueryStaticDepositAddresses(
 	})
 }
 
-// DepositTreeCreationData holds the data needed to finalize deposit tree creation
 // CreateTreeRoot creates a tree root for a given deposit transaction.
 func CreateTreeRoot(
 	ctx context.Context,
@@ -219,7 +214,7 @@ func CreateTreeRoot(
 	skipFinalizeSignatures bool,
 ) (*pb.FinalizeNodeSignaturesResponse, error) {
 	signingPubKey := signingPrivKey.Public()
-	signingPubkeyBytes := signingPubKey.Serialize()
+	signingPubKeyBytes := signingPubKey.Serialize()
 	// Creat root tx
 	depositOutPoint := &wire.OutPoint{Hash: depositTx.TxHash(), Index: uint32(vout)}
 	rootTx := createRootTx(depositOutPoint, depositTx.TxOut[0])
@@ -298,12 +293,12 @@ func CreateTreeRoot(
 		},
 		RootTxSigningJob: &pb.SigningJob{
 			RawTx:                  rootBuf.Bytes(),
-			SigningPublicKey:       signingPubkeyBytes,
+			SigningPublicKey:       signingPubKeyBytes,
 			SigningNonceCommitment: rootNonceCommitmentProto,
 		},
 		RefundTxSigningJob: &pb.SigningJob{
 			RawTx:                  refundBuf.Bytes(),
-			SigningPublicKey:       signingPubkeyBytes,
+			SigningPublicKey:       signingPubKeyBytes,
 			SigningNonceCommitment: refundNonceCommitmentProto,
 		},
 	})
@@ -341,7 +336,8 @@ func CreateTreeRoot(
 			Nonce:           refundNonceProto,
 			Commitments:     treeResponse.RootNodeSignatureShares.RefundTxSigningResult.SigningNonceCommitments,
 			UserCommitments: refundNonceCommitmentProto,
-		}}
+		},
+	}
 
 	frostConn, err := common.NewGRPCConnectionWithoutTLS(config.FrostSignerAddress, nil)
 	if err != nil {
@@ -366,7 +362,7 @@ func CreateTreeRoot(
 		VerifyingKey:       verifyingKey,
 		Commitments:        treeResponse.RootNodeSignatureShares.NodeTxSigningResult.SigningNonceCommitments,
 		UserCommitments:    rootNonceCommitmentProto,
-		UserPublicKey:      signingPubkeyBytes,
+		UserPublicKey:      signingPubKeyBytes,
 		UserSignatureShare: userSignatures.Results[nodeJobID].SignatureShare,
 	})
 	if err != nil {
@@ -380,7 +376,7 @@ func CreateTreeRoot(
 		VerifyingKey:       verifyingKey,
 		Commitments:        treeResponse.RootNodeSignatureShares.RefundTxSigningResult.SigningNonceCommitments,
 		UserCommitments:    refundNonceCommitmentProto,
-		UserPublicKey:      signingPubkeyBytes,
+		UserPublicKey:      signingPubKeyBytes,
 		UserSignatureShare: userSignatures.Results[refundJobID].SignatureShare,
 	})
 	if err != nil {

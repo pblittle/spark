@@ -36,7 +36,7 @@ func TestTreeCreationAddressGeneration(t *testing.T) {
 	privKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public().Serialize(), &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public(), &leafID, false)
 	require.NoError(t, err, "failed to generate deposit address")
 
 	depositTx, err := testutil.CreateTestP2TRTransaction(depositResp.DepositAddress.Address, 65536)
@@ -78,7 +78,7 @@ func TestTreeCreationWithMultiLevels(t *testing.T) {
 	privKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public().Serialize(), &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public(), &leafID, false)
 	require.NoError(t, err)
 
 	client := testutil.GetBitcoinClient()
@@ -173,7 +173,7 @@ func TestTreeCreationSplitMultipleTimes(t *testing.T) {
 	privKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public().Serialize(), &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public(), &leafID, false)
 	require.NoError(t, err)
 
 	depositTx, err := testutil.CreateTestP2TRTransaction(depositResp.DepositAddress.Address, 65536)
@@ -188,7 +188,7 @@ func TestTreeCreationSplitMultipleTimes(t *testing.T) {
 	depositTx, err = common.TxFromRawTxBytes(decodedBytes)
 	require.NoError(t, err)
 
-	log.Printf("deposit public key: %x", hex.EncodeToString(privKey.Public().Serialize()))
+	log.Printf("deposit public key: %x", privKey.Public().ToHex())
 	tree, err := wallet.GenerateDepositAddressesForTree(ctx, config, depositTx, nil, uint32(vout), privKey.Serialize(), 2)
 	require.NoError(t, err)
 

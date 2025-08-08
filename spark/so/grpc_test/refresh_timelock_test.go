@@ -3,10 +3,10 @@ package grpctest
 import (
 	"context"
 	"fmt"
-	"github.com/lightsparkdev/spark/common/keys"
 	"testing"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightsparkdev/spark/common/keys"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	testutil "github.com/lightsparkdev/spark/test_util"
 	"github.com/lightsparkdev/spark/wallet"
@@ -68,12 +68,7 @@ func TestExtendLeaf(t *testing.T) {
 	signingKeyBytes := tree.Children[1].SigningPrivateKey
 	signingKey := secp256k1.PrivKeyFromBytes(signingKeyBytes)
 
-	err = wallet.ExtendTimelock(
-		context.Background(),
-		senderConfig,
-		node,
-		signingKey,
-	)
+	err = wallet.ExtendTimelock(context.Background(), senderConfig, node, signingKey)
 	require.NoError(t, err)
 
 	// TODO: test that we can refresh where first node has no timelock

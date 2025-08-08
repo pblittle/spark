@@ -131,15 +131,12 @@ func TestStaticDepositSSPLegacy(t *testing.T) {
 	// a Signing key using derivation schema
 	aliceDepositPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	aliceDepositPubKey := aliceDepositPrivKey.Public()
-	aliceDepositPubKeyBytes := aliceDepositPubKey.Serialize()
-
 	leafID := uuid.New().String()
 
 	depositResp, err := wallet.GenerateDepositAddress(
 		aliceCtx,
 		aliceConfig,
-		aliceDepositPubKeyBytes,
+		aliceDepositPrivKey.Public(),
 		&leafID,
 		true,
 	)
@@ -428,13 +425,12 @@ func TestStaticDepositUserRefundLegacy(t *testing.T) {
 	// a Signing key using derivation schema
 	aliceDepositPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	aliceDepositPubKey := aliceDepositPrivKey.Public()
 	leafID := uuid.New().String()
 
 	depositResp, err := wallet.GenerateDepositAddress(
 		aliceCtx,
 		aliceConfig,
-		aliceDepositPubKey.Serialize(),
+		aliceDepositPrivKey.Public(),
 		&leafID,
 		true,
 	)
@@ -687,13 +683,12 @@ func TestStaticDepositSSP(t *testing.T) {
 	// a Signing key using derivation schema
 	aliceDepositPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	aliceDepositPubKey := aliceDepositPrivKey.Public()
 	leafID := uuid.New().String()
 
 	depositResp, err := wallet.GenerateDepositAddress(
 		aliceCtx,
 		aliceConfig,
-		aliceDepositPubKey.Serialize(),
+		aliceDepositPrivKey.Public(),
 		&leafID,
 		true,
 	)
@@ -976,13 +971,12 @@ func TestStaticDepositUserRefund(t *testing.T) {
 	// a Signing key using derivation schema
 	aliceDepositPrivKey, err := keys.GeneratePrivateKey()
 	require.NoError(t, err)
-	aliceDepositPubKey := aliceDepositPrivKey.Public()
 	leafID := uuid.New().String()
 
 	depositResp, err := wallet.GenerateDepositAddress(
 		aliceCtx,
 		aliceConfig,
-		aliceDepositPubKey.Serialize(),
+		aliceDepositPrivKey.Public(),
 		&leafID,
 		true,
 	)

@@ -59,9 +59,8 @@ func CreateNewTree(config *wallet.Config, faucet *Faucet, privKey keys.Private, 
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	userPubKey := privKey.Public()
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKey.Serialize(), &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public(), &leafID, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate deposit address: %w", err)
 	}
@@ -128,9 +127,8 @@ func CreateNewTreeWithLevels(config *wallet.Config, faucet *Faucet, privKey keys
 	}
 	ctx := wallet.ContextWithToken(context.Background(), token)
 
-	userPubKey := privKey.Public()
 	leafID := uuid.New().String()
-	depositResp, err := wallet.GenerateDepositAddress(ctx, config, userPubKey.Serialize(), &leafID, false)
+	depositResp, err := wallet.GenerateDepositAddress(ctx, config, privKey.Public(), &leafID, false)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate deposit address: %w", err)
 	}
