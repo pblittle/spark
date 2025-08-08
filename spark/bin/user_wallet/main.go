@@ -153,17 +153,17 @@ func (cli *CLI) Run() error {
 		return fmt.Errorf("failed to create master key: %w", err)
 	}
 
-	startIndex := 0
+	var startIndex uint32
 	if cli.network == common.Mainnet {
 		startIndex = 2
 	}
 
-	identityKey, err := masterKey.NewChildKey(uint32(startIndex))
+	identityKey, err := masterKey.NewChildKey(startIndex)
 	if err != nil {
 		return fmt.Errorf("failed to create identity key: %w", err)
 	}
 	fmt.Printf("Identity key pubkey: %s\n", hex.EncodeToString(identityKey.PublicKey().Key))
-	signingKey, err := masterKey.NewChildKey(uint32(startIndex + 1 + 0x80000000))
+	signingKey, err := masterKey.NewChildKey(startIndex + 1 + 0x80000000)
 	if err != nil {
 		return fmt.Errorf("failed to create signing key: %w", err)
 	}
@@ -231,13 +231,13 @@ func main() {
 			if len(args) < 2 {
 				return fmt.Errorf("please provide an amount and memo")
 			}
-			amount, err := strconv.ParseUint(args[0], 10, 64)
-			if err != nil {
+			amount, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil || amount < 0 {
 				return fmt.Errorf("invalid amount: %w", err)
 			}
 			memo := args[1]
 			fmt.Printf("Creating invoice for %d with memo %s\n", amount, memo)
-			invoice, fee, err := cli.wallet.CreateLightningInvoice(context.Background(), int64(amount), memo)
+			invoice, fee, err := cli.wallet.CreateLightningInvoice(context.Background(), amount, memo)
 			if err != nil {
 				return fmt.Errorf("failed to create invoice: %w", err)
 			}
@@ -267,9 +267,9 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("failed to claim transfers: %w", err)
 			}
-			amount := 0
+			var amount uint64
 			for _, node := range nodes {
-				amount += int(node.Value)
+				amount += node.Value
 				fmt.Printf("Claimed node %s for %d sats\n", node.Id, node.Value)
 			}
 			fmt.Printf("Total amount claimed: %d sats\n", amount)
@@ -324,10 +324,10 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("failed to sync wallet: %w", err)
 			}
-			balance := 0
+			var balance uint64
 			for _, node := range cli.wallet.OwnedNodes {
 				fmt.Printf("Leaf %s: %d sats\n", node.Id, node.Value)
-				balance += int(node.Value)
+				balance += node.Value
 			}
 			fmt.Printf("Total balance: %d sats\n", balance)
 			return nil
@@ -350,11 +350,11 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("invalid receiver identity pubkey: %w", err)
 			}
-			amount, err := strconv.ParseUint(args[1], 10, 64)
-			if err != nil {
+			amount, err := strconv.ParseInt(args[1], 10, 64)
+			if err != nil || amount < 0 {
 				return fmt.Errorf("invalid amount: %w", err)
 			}
-			transfer, err := cli.wallet.SendTransfer(context.Background(), receiverIdentityPubKey, int64(amount))
+			transfer, err := cli.wallet.SendTransfer(context.Background(), receiverIdentityPubKey, amount)
 			if err != nil {
 				return fmt.Errorf("failed to send transfer: %w", err)
 			}
@@ -372,11 +372,11 @@ func main() {
 				return fmt.Errorf("please provide a phone number and amount")
 			}
 			phoneNumber := args[0]
-			amount, err := strconv.ParseUint(args[1], 10, 64)
-			if err != nil {
+			amount, err := strconv.ParseInt(args[1], 10, 64)
+			if err != nil || amount < 0 {
 				return fmt.Errorf("invalid amount: %w", err)
 			}
-			transfer, err := cli.wallet.SendToPhone(context.Background(), int64(amount), phoneNumber)
+			transfer, err := cli.wallet.SendToPhone(context.Background(), amount, phoneNumber)
 			if err != nil {
 				return fmt.Errorf("failed to send transfer: %w", err)
 			}
@@ -429,13 +429,13 @@ func main() {
 			if len(args) < 2 {
 				return fmt.Errorf("please provide an amount and address")
 			}
-			amountSats, err := strconv.ParseUint(args[0], 10, 64)
-			if err != nil {
+			amountSats, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil || amountSats < 0 {
 				return fmt.Errorf("invalid amount: %w", err)
 			}
 			address := args[1]
 			fmt.Printf("Cooperative exit for %d sats to address %s\n", amountSats, address)
-			transfer, err := cli.wallet.CoopExit(context.Background(), int64(amountSats), address)
+			transfer, err := cli.wallet.CoopExit(context.Background(), amountSats, address)
 			if err != nil {
 				return fmt.Errorf("failed to perform cooperative exit: %w", err)
 			}
@@ -452,17 +452,17 @@ func main() {
 			if len(args) < 1 {
 				return fmt.Errorf("please provide an amount")
 			}
-			amount, err := strconv.ParseUint(args[0], 10, 64)
-			if err != nil {
+			amount, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil || amount < 0 {
 				return fmt.Errorf("invalid amount: %w", err)
 			}
-			nodes, err := cli.wallet.RequestLeavesSwap(context.Background(), int64(amount))
+			nodes, err := cli.wallet.RequestLeavesSwap(context.Background(), amount)
 			if err != nil {
 				return fmt.Errorf("failed to request leaves swap: %w", err)
 			}
-			amountClaimed := 0
+			var amountClaimed uint64
 			for _, node := range nodes {
-				amountClaimed += int(node.Value)
+				amountClaimed += node.Value
 				fmt.Printf("Swapped node %s for %d sats\n", node.Id, node.Value)
 			}
 			fmt.Printf("Total amount claimed: %d sats\n", amountClaimed)
@@ -498,11 +498,11 @@ func main() {
 				return fmt.Errorf("please provide an amount")
 			}
 			amount, err := strconv.ParseUint(args[0], 10, 64)
-			if err != nil {
+			if err != nil || amount < 0 {
 				return fmt.Errorf("invalid amount: %w", err)
 			}
 
-			fmt.Printf("Minting %d tokens with token public key %s\n", amount, hex.EncodeToString(cli.wallet.Config.IdentityPublicKey().Serialize()))
+			fmt.Printf("Minting %d tokens with token public key %s\n", amount, cli.wallet.Config.IdentityPublicKey().ToHex())
 			err = cli.wallet.MintTokens(context.Background(), amount)
 			if err != nil {
 				return fmt.Errorf("failed to mint tokens: %w", err)
