@@ -123,7 +123,7 @@ func signCoopExitRefunds(
 	if len(leaves) != len(connectorOutputs) {
 		return nil, nil, fmt.Errorf("number of leaves and connector outputs must match")
 	}
-	signingJobs := make([]*pb.LeafRefundTxSigningJob, 0)
+	var signingJobs []*pb.LeafRefundTxSigningJob
 	leafDataMap := make(map[string]*LeafRefundSigningData)
 	for i, leaf := range leaves {
 		connectorOutput := connectorOutputs[i]
@@ -161,7 +161,7 @@ func signCoopExitRefunds(
 		tx, _ := common.TxFromRawTxBytes(leaf.Leaf.NodeTx)
 
 		leafDataMap[leaf.Leaf.Id] = &LeafRefundSigningData{
-			SigningPrivKey: leaf.SigningPrivKey.ToBTCEC(),
+			SigningPrivKey: leaf.SigningPrivKey,
 			RefundTx:       refundTx,
 			Nonce:          nonce,
 			Tx:             tx,
@@ -202,7 +202,7 @@ func signCoopExitRefunds(
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initiate cooperative exit: %w", err)
 	}
-	signatures, err := signRefunds(config, leafDataMap, response.SigningResults, nil)
+	signatures, err := signRefunds(config, leafDataMap, response.SigningResults, keys.Public{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to sign refund transactions: %w", err)
 	}

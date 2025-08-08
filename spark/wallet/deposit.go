@@ -532,9 +532,8 @@ func ClaimStaticDepositLegacy(
 	}
 	operatorCommitments := swapResponse.SpendTxSigningResult.SigningNonceCommitments
 
-	userSigningJobs := make([]*pbfrost.FrostSigningJob, 0)
 	userJobID := uuid.NewString()
-	userSigningJobs = append(userSigningJobs, &pbfrost.FrostSigningJob{
+	userSigningJobs := []*pbfrost.FrostSigningJob{{
 		JobId:           userJobID,
 		Message:         spendTxSighash,
 		KeyPackage:      &userKeyPackage,
@@ -542,7 +541,7 @@ func ClaimStaticDepositLegacy(
 		Nonce:           userNonceProto,
 		Commitments:     operatorCommitments,
 		UserCommitments: userCommitmentProto,
-	})
+	}}
 
 	frostConn, err := common.NewGRPCConnectionWithoutTLS(config.FrostSignerAddress, nil)
 	if err != nil {
@@ -711,9 +710,8 @@ func RefundStaticDepositLegacy(
 	}
 	operatorCommitments := swapResponse.SpendTxSigningResult.SigningNonceCommitments
 
-	userSigningJobs := make([]*pbfrost.FrostSigningJob, 0)
 	userJobID := uuid.NewString()
-	userSigningJobs = append(userSigningJobs, &pbfrost.FrostSigningJob{
+	userSigningJobs := []*pbfrost.FrostSigningJob{{
 		JobId:           userJobID,
 		Message:         spendTxSighash,
 		KeyPackage:      &userKeyPackage,
@@ -721,7 +719,7 @@ func RefundStaticDepositLegacy(
 		Nonce:           userNonceProto,
 		Commitments:     operatorCommitments,
 		UserCommitments: userCommitmentProto,
-	})
+	}}
 
 	frostConn, err := common.NewGRPCConnectionWithoutTLS(config.FrostSignerAddress, nil)
 	if err != nil {
@@ -906,9 +904,8 @@ func ClaimStaticDeposit(
 	}
 	operatorCommitments := swapResponse.SpendTxSigningResult.SigningNonceCommitments
 
-	userSigningJobs := make([]*pbfrost.FrostSigningJob, 0)
 	userJobID := uuid.NewString()
-	userSigningJobs = append(userSigningJobs, &pbfrost.FrostSigningJob{
+	userSigningJobs := []*pbfrost.FrostSigningJob{{
 		JobId:           userJobID,
 		Message:         spendTxSighash,
 		KeyPackage:      &userKeyPackage,
@@ -916,7 +913,7 @@ func ClaimStaticDeposit(
 		Nonce:           userNonceProto,
 		Commitments:     operatorCommitments,
 		UserCommitments: userCommitmentProto,
-	})
+	}}
 
 	frostConn, err := common.NewGRPCConnectionWithoutTLS(config.FrostSignerAddress, nil)
 	if err != nil {
@@ -1071,9 +1068,8 @@ func RefundStaticDeposit(
 	}
 	operatorCommitments := swapResponse.RefundTxSigningResult.SigningNonceCommitments
 
-	userSigningJobs := make([]*pbfrost.FrostSigningJob, 0)
 	userJobID := uuid.NewString()
-	userSigningJobs = append(userSigningJobs, &pbfrost.FrostSigningJob{
+	userSigningJobs := []*pbfrost.FrostSigningJob{{
 		JobId:           userJobID,
 		Message:         spendTxSighash,
 		KeyPackage:      &userKeyPackage,
@@ -1081,7 +1077,7 @@ func RefundStaticDeposit(
 		Nonce:           userNonceProto,
 		Commitments:     operatorCommitments,
 		UserCommitments: userCommitmentProto,
-	})
+	}}
 
 	frostConn, err := common.NewGRPCConnectionWithoutTLS(config.FrostSignerAddress, nil)
 	if err != nil {

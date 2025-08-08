@@ -228,12 +228,7 @@ func TestTimelockExpirationTransferredNode(t *testing.T) {
 		NewSigningPrivKey: finalLeafPrivKey,
 	}
 	leavesToClaim := []wallet.LeafKeyTweak{claimingNode}
-	claimedNodes, err := wallet.ClaimTransfer(
-		receiverCtx,
-		receiverTransfer,
-		receiverConfig,
-		leavesToClaim,
-	)
+	claimedNodes, err := wallet.ClaimTransfer(receiverCtx, receiverTransfer, receiverConfig, leavesToClaim)
 	require.NoError(t, err, "failed to claim transfer")
 	require.Len(t, claimedNodes, 1)
 	transferredNode := claimedNodes[0]

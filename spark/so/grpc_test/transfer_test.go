@@ -8,7 +8,6 @@ import (
 
 	"github.com/lightsparkdev/spark/common/keys"
 
-	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightsparkdev/spark/common"
@@ -622,15 +621,16 @@ func TestQueryTransfers(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create adaptor from that signature
-	adaptorAddedSignature, adaptorPrivKey, err := common.GenerateAdaptorFromSignature(signature)
+	adaptorAddedSignature, adaptorPrivKeyBytes, err := common.GenerateAdaptorFromSignature(signature)
 	require.NoError(t, err)
-	_, adaptorPub := btcec.PrivKeyFromBytes(adaptorPrivKey)
+	adaptorPrivKey, err := keys.ParsePrivateKey(adaptorPrivKeyBytes)
+	require.NoError(t, err)
 
 	// Alice sends adaptor and signature to Bob, Bob validates the adaptor
 	nodeVerifyingPubkey, err := secp256k1.ParsePubKey(senderRootNode.VerifyingPublicKey)
 	require.NoError(t, err)
 	taprootKey := txscript.ComputeTaprootKeyNoScript(nodeVerifyingPubkey)
-	err = common.ValidateOutboundAdaptorSignature(taprootKey, sighash, adaptorAddedSignature, adaptorPub.SerializeCompressed())
+	err = common.ValidateOutboundAdaptorSignature(taprootKey, sighash, adaptorAddedSignature, adaptorPrivKey.Public().Serialize())
 	require.NoError(t, err)
 
 	// Bob signs refunds with adaptor
@@ -649,7 +649,7 @@ func TestQueryTransfers(t *testing.T) {
 		receiverLeavesToTransfer[:],
 		senderConfig.IdentityPublicKey(),
 		time.Now().Add(10*time.Minute),
-		adaptorPub,
+		adaptorPrivKey.Public(),
 	)
 	require.NoError(t, err)
 
@@ -661,7 +661,7 @@ func TestQueryTransfers(t *testing.T) {
 	require.NoError(t, err)
 	receiverTaprootKey := txscript.ComputeTaprootKeyNoScript(receiverKey)
 
-	_, err = common.ApplyAdaptorToSignature(receiverTaprootKey, receiverSighash, receiverRefundSignatureMap[receiverLeavesToTransfer[0].Leaf.Id], adaptorPrivKey)
+	_, err = common.ApplyAdaptorToSignature(receiverTaprootKey, receiverSighash, receiverRefundSignatureMap[receiverLeavesToTransfer[0].Leaf.Id], adaptorPrivKeyBytes)
 	require.NoError(t, err)
 
 	// Alice reveals adaptor secret to Bob, Bob combines with existing adaptor signatures to get valid signatures
@@ -678,7 +678,7 @@ func TestQueryTransfers(t *testing.T) {
 		}
 		assert.NotNil(t, verifyingPubkey, "expected signing result for leaf %s", nodeID)
 		taprootKey := txscript.ComputeTaprootKeyNoScript(verifyingPubkey)
-		adaptorSig, err := common.ApplyAdaptorToSignature(taprootKey, sighash, signature, adaptorPrivKey)
+		adaptorSig, err := common.ApplyAdaptorToSignature(taprootKey, sighash, signature, adaptorPrivKeyBytes)
 		require.NoError(t, err)
 		newReceiverRefundSignatureMap[nodeID] = adaptorSig
 	}

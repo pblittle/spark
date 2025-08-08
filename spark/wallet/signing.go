@@ -3,6 +3,7 @@ package wallet
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/lightsparkdev/spark/common/keys"
 
 	"github.com/btcsuite/btcd/wire"

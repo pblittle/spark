@@ -2,7 +2,7 @@ package wallet
 
 import (
 	"bytes"
-	rand2 "math/rand/v2"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lightsparkdev/spark/common/keys"
@@ -16,7 +16,7 @@ import (
 	"github.com/lightsparkdev/spark/so/objects"
 )
 
-var rng = rand2.NewChaCha8([32]byte{1})
+var rng = rand.NewChaCha8([32]byte{1})
 
 func TestCreateUserKeyPackage(t *testing.T) {
 	privkey1 := keys.MustGeneratePrivateKeyFromRand(rng)
@@ -124,10 +124,6 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 		err := tx.Serialize(&buf)
 		require.NoError(t, err)
 		return buf.Bytes()
-	}
-
-	createReceiverPubKey := func() keys.Public {
-		return keys.MustGeneratePrivateKeyFromRand(rng).Public()
 	}
 
 	tests := []struct {
@@ -249,7 +245,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 					},
 				},
 			},
-			receiverIdentityPubKey: createReceiverPubKey(),
+			receiverIdentityPubKey: keys.MustGeneratePrivateKeyFromRand(rng).Public(),
 			expectError:            true,
 			expectedErrorContains:  "failed to parse node tx",
 		},
@@ -276,7 +272,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 					},
 				},
 			},
-			receiverIdentityPubKey: createReceiverPubKey(),
+			receiverIdentityPubKey: keys.MustGeneratePrivateKeyFromRand(rng).Public(),
 			expectError:            true,
 			expectedErrorContains:  "failed to parse refund tx",
 		},
@@ -312,7 +308,7 @@ func TestPrepareFrostSigningJobsForUserSignedRefund(t *testing.T) {
 					},
 				},
 			},
-			receiverIdentityPubKey: createReceiverPubKey(),
+			receiverIdentityPubKey: keys.MustGeneratePrivateKeyFromRand(rng).Public(),
 			expectError:            true,
 			expectedErrorContains:  "mismatched lengths",
 		},

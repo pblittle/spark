@@ -48,7 +48,7 @@ func NewSingleKeyWallet(config *Config, signingPrivateKey []byte) *SingleKeyWall
 }
 
 func (w *SingleKeyWallet) RemoveOwnedNodes(nodeIDs map[string]bool) {
-	newOwnedNodes := make([]*pb.TreeNode, 0)
+	var newOwnedNodes []*pb.TreeNode
 	for i, node := range w.OwnedNodes {
 		if !nodeIDs[node.Id] {
 			newOwnedNodes = append(newOwnedNodes, w.OwnedNodes[i])
@@ -193,7 +193,6 @@ func (w *SingleKeyWallet) PayInvoice(ctx context.Context, invoice string) (strin
 			return "", fmt.Errorf("failed to select nodes: %w", err)
 		}
 	}
-
 	nodeKeyTweaks := make([]LeafKeyTweak, len(nodes))
 	nodesToRemove := make(map[string]bool)
 	for i, node := range nodes {
@@ -354,6 +353,17 @@ func (w *SingleKeyWallet) RequestLeavesSwap(ctx context.Context, targetAmount in
 		AdaptorAddedSignature:        hex.EncodeToString(adaptorSignature),
 	}}
 
+	adaptorPrivateKey, err := keys.ParsePrivateKey(adaptorPrivKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse adaptor: %w", err)
+	}
+
+	identityPublicKeyHex := w.Config.IdentityPublicKey().ToHex()
+	requester, err := sspapi.NewRequesterWithBaseURL(identityPublicKeyHex, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create requester: %w", err)
+	}
+
 	for i, leaf := range transfer.Leaves {
 		if i == 0 {
 			continue
@@ -369,16 +379,6 @@ func (w *SingleKeyWallet) RequestLeavesSwap(ctx context.Context, targetAmount in
 		})
 	}
 
-	adaptorPrivateKey, err := keys.ParsePrivateKey(adaptorPrivKeyBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse adaptor: %w", err)
-	}
-
-	identityPublicKeyHex := w.Config.IdentityPublicKey().ToHex()
-	requester, err := sspapi.NewRequesterWithBaseURL(identityPublicKeyHex, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create requester: %w", err)
-	}
 	api := sspapi.NewSparkServiceAPI(requester)
 
 	requestID, leaves, err := api.RequestLeavesSwap(adaptorPrivateKey.Public().ToHex(), uint64(totalAmount), uint64(targetAmount), 0, userLeaves)
@@ -490,12 +490,12 @@ func (w *SingleKeyWallet) SendTransfer(ctx context.Context, receiverIdentityPubK
 			return nil, fmt.Errorf("failed to select nodes: %w", err)
 		}
 	}
-	signingPrivateKey, err := keys.ParsePrivateKey(w.SigningPrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse signing private key: %w", err)
-	}
 	leafKeyTweaks := make([]LeafKeyTweak, 0, len(nodes))
 	nodesToRemove := make(map[string]bool)
+	signingKey, err := keys.ParsePrivateKey(w.SigningPrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse signing key: %w", err)
+	}
 	for _, node := range nodes {
 		newLeafPrivKey, err := keys.GeneratePrivateKey()
 		if err != nil {
@@ -503,7 +503,7 @@ func (w *SingleKeyWallet) SendTransfer(ctx context.Context, receiverIdentityPubK
 		}
 		leafKeyTweaks = append(leafKeyTweaks, LeafKeyTweak{
 			Leaf:              node,
-			SigningPrivKey:    signingPrivateKey,
+			SigningPrivKey:    signingKey,
 			NewSigningPrivKey: newLeafPrivKey,
 		})
 		nodesToRemove[node.Id] = true
@@ -524,13 +524,14 @@ func (w *SingleKeyWallet) CoopExit(ctx context.Context, targetAmountSats int64, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to select nodes: %w", err)
 	}
-	signingPrivateKey, err := keys.ParsePrivateKey(w.SigningPrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse signing private key: %w", err)
-	}
+
 	leafIDs := make([]string, len(nodes))
 	leafKeyTweaks := make([]LeafKeyTweak, len(nodes))
 	nodesToRemove := make(map[string]bool)
+	signingKey, err := keys.ParsePrivateKey(w.SigningPrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse signing key: %w", err)
+	}
 	for i, node := range nodes {
 		newLeafPrivKey, err := keys.GeneratePrivateKey()
 		if err != nil {
@@ -538,7 +539,7 @@ func (w *SingleKeyWallet) CoopExit(ctx context.Context, targetAmountSats int64, 
 		}
 		leafKeyTweaks[i] = LeafKeyTweak{
 			Leaf:              node,
-			SigningPrivKey:    signingPrivateKey,
+			SigningPrivKey:    signingKey,
 			NewSigningPrivKey: newLeafPrivKey,
 		}
 		nodesToRemove[node.Id] = true
@@ -556,7 +557,7 @@ func (w *SingleKeyWallet) CoopExit(ctx context.Context, targetAmountSats int64, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to initiate coop exit: %w", err)
 	}
-	connectorOutputs := make([]*wire.OutPoint, 0)
+	var connectorOutputs []*wire.OutPoint
 	connectorTxid := connectorTx.TxHash()
 	for i := range connectorTx.TxOut[:len(connectorTx.TxOut)-1] {
 		connectorOutputs = append(connectorOutputs, wire.NewOutPoint(&connectorTxid, uint32(i)))
@@ -926,7 +927,7 @@ func getOwnedOutputsFromTokenTransaction(output *pb.TokenTransaction, walletPubl
 	if err != nil {
 		return nil, err
 	}
-	newOutputsToSpend := make([]*pb.OutputWithPreviousTransactionData, 0)
+	var newOutputsToSpend []*pb.OutputWithPreviousTransactionData
 	for i, output := range output.TokenOutputs {
 		if bytes.Equal(output.OwnerPublicKey, walletPublicKey) {
 			outputWithPrevTxData := &pb.OutputWithPreviousTransactionData{

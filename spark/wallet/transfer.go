@@ -310,7 +310,7 @@ func SendTransferSignRefund(
 	receiverIdentityPubKey keys.Public,
 	expiryTime time.Time,
 ) (*pb.Transfer, map[string][]byte, map[string]*LeafRefundSigningData, error) {
-	senderTransfer, senderRefundSignatureMap, leafDataMap, _, err := sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubKey, expiryTime, false, nil)
+	senderTransfer, senderRefundSignatureMap, leafDataMap, _, err := sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubKey, expiryTime, false, keys.Public{})
 	return senderTransfer, senderRefundSignatureMap, leafDataMap, err
 }
 
@@ -321,7 +321,7 @@ func StartSwapSignRefund(
 	receiverIdentityPubKey keys.Public,
 	expiryTime time.Time,
 ) (*pb.Transfer, map[string][]byte, map[string]*LeafRefundSigningData, error) {
-	senderTransfer, senderRefundSignatureMap, leafDataMap, _, err := sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubKey, expiryTime, true, nil)
+	senderTransfer, senderRefundSignatureMap, leafDataMap, _, err := sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubKey, expiryTime, true, keys.Public{})
 	return senderTransfer, senderRefundSignatureMap, leafDataMap, err
 }
 
@@ -331,7 +331,7 @@ func CounterSwapSignRefund(
 	leaves []LeafKeyTweak,
 	receiverIdentityPubKey keys.Public,
 	expiryTime time.Time,
-	adaptorPublicKey *secp256k1.PublicKey,
+	adaptorPublicKey keys.Public,
 ) (*pb.Transfer, map[string][]byte, map[string]*LeafRefundSigningData, []*pb.LeafRefundTxSigningResult, error) {
 	return sendTransferSignRefund(ctx, config, leaves, receiverIdentityPubKey, expiryTime, true, adaptorPublicKey)
 }
@@ -343,7 +343,7 @@ func sendTransferSignRefund(
 	receiverIdentityPubKey keys.Public,
 	expiryTime time.Time,
 	forSwap bool,
-	adaptorPublicKey *secp256k1.PublicKey,
+	adaptorPublicKey keys.Public,
 ) (*pb.Transfer, map[string][]byte, map[string]*LeafRefundSigningData, []*pb.LeafRefundTxSigningResult, error) {
 	transferID, err := uuid.NewRandom()
 	if err != nil {
@@ -355,8 +355,8 @@ func sendTransferSignRefund(
 		nonce, _ := objects.RandomSigningNonce()
 		tx, _ := common.TxFromRawTxBytes(leafKey.Leaf.NodeTx)
 		leafDataMap[leafKey.Leaf.Id] = &LeafRefundSigningData{
-			SigningPrivKey:  leafKey.SigningPrivKey.ToBTCEC(),
-			ReceivingPubkey: receiverIdentityPubKey.Serialize(),
+			SigningPrivKey:  leafKey.SigningPrivKey,
+			ReceivingPubKey: receiverIdentityPubKey,
 			Nonce:           nonce,
 			Tx:              tx,
 			Vout:            int(leafKey.Leaf.Vout),
@@ -392,7 +392,7 @@ func sendTransferSignRefund(
 	// back the same results.
 	var transfer *pb.Transfer
 	var signingResults []*pb.LeafRefundTxSigningResult
-	if adaptorPublicKey != nil {
+	if adaptorPublicKey != (keys.Public{}) {
 		swapID, err := uuid.NewV7()
 		if err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("failed to generate swap id: %w", err)
@@ -400,7 +400,7 @@ func sendTransferSignRefund(
 		response, err := sparkClient.CounterLeafSwap(tmpCtx, &pb.CounterLeafSwapRequest{
 			Transfer:         startTransferRequest,
 			SwapId:           swapID.String(),
-			AdaptorPublicKey: adaptorPublicKey.SerializeCompressed(),
+			AdaptorPublicKey: adaptorPublicKey.Serialize(),
 		})
 		if err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("failed to start transfer: %w", err)
@@ -483,10 +483,11 @@ func prepareSingleSendTransferKeyTweak(config *Config, transferID string, leaf L
 		if share == nil {
 			return nil, fmt.Errorf("failed to find share for operator %d", operator.ID)
 		}
-		var shareScalar secp256k1.ModNScalar
-		shareScalar.SetByteSlice(share.Share.Bytes())
-		pubkeyTweak := secp256k1.NewPrivateKey(&shareScalar).PubKey()
-		pubkeySharesTweak[identifier] = pubkeyTweak.SerializeCompressed()
+		privKey, err := keys.PrivateKeyFromBigInt(share.Share)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key for operator %d: %w", operator.ID, err)
+		}
+		pubkeySharesTweak[identifier] = privKey.Public().Serialize()
 	}
 
 	secretCipher, err := eciesgo.Encrypt(receiverEciesPubKey, leaf.NewSigningPrivKey.Serialize())
@@ -774,8 +775,8 @@ func prepareClaimLeafKeyTweaks(config *Config, leaf LeafKeyTweak) (map[string]*p
 }
 
 type LeafRefundSigningData struct {
-	SigningPrivKey  *secp256k1.PrivateKey
-	ReceivingPubkey []byte
+	SigningPrivKey  keys.Private
+	ReceivingPubKey keys.Public
 	Tx              *wire.MsgTx
 	RefundTx        *wire.MsgTx
 	Nonce           *objects.SigningNonce
@@ -794,8 +795,8 @@ func ClaimTransferSignRefunds(
 		nonce, _ := objects.RandomSigningNonce()
 		tx, _ := common.TxFromRawTxBytes(leafKey.Leaf.NodeTx)
 		leafDataMap[leafKey.Leaf.Id] = &LeafRefundSigningData{
-			SigningPrivKey:  leafKey.NewSigningPrivKey.ToBTCEC(),
-			ReceivingPubkey: leafKey.NewSigningPrivKey.Public().Serialize(),
+			SigningPrivKey:  leafKey.NewSigningPrivKey,
+			ReceivingPubKey: leafKey.NewSigningPrivKey.Public(),
 			Nonce:           nonce,
 			Tx:              tx,
 			Vout:            int(leafKey.Leaf.Vout),
@@ -827,7 +828,7 @@ func ClaimTransferSignRefunds(
 		return nil, fmt.Errorf("failed to call ClaimTransferSignRefunds: %w", err)
 	}
 
-	return signRefunds(config, leafDataMap, response.SigningResults, nil)
+	return signRefunds(config, leafDataMap, response.SigningResults, keys.Public{})
 }
 
 func FinalizeTransfer(
@@ -855,11 +856,11 @@ func signRefunds(
 	config *Config,
 	leafDataMap map[string]*LeafRefundSigningData,
 	operatorSigningResults []*pb.LeafRefundTxSigningResult,
-	adaptorPublicKey *secp256k1.PublicKey,
+	adaptorPublicKey keys.Public,
 ) ([]*pb.NodeSignatures, error) {
 	var adaptorPublicKeyBytes []byte
-	if adaptorPublicKey != nil {
-		adaptorPublicKeyBytes = adaptorPublicKey.SerializeCompressed()
+	if adaptorPublicKey != (keys.Public{}) {
+		adaptorPublicKeyBytes = adaptorPublicKey.Serialize()
 	}
 
 	var userSigningJobs []*pbfrost.FrostSigningJob
@@ -892,7 +893,7 @@ func signRefunds(
 			VerifyingKey:     operatorSigningResult.VerifyingKey,
 			Commitments:      operatorSigningResult.RefundTxSigningResult.SigningNonceCommitments,
 			UserCommitments:  nonceCommitmentProto,
-			UserPublicKey:    leafData.SigningPrivKey.PubKey().SerializeCompressed(),
+			UserPublicKey:    leafData.SigningPrivKey.Public().Serialize(),
 			AdaptorPublicKey: adaptorPublicKeyBytes,
 		}
 	}
@@ -941,15 +942,11 @@ func prepareRefundSoSigningJobs(
 			return nil, fmt.Errorf("failed to parse refund tx: %w", err)
 		}
 		amountSats := nodeTx.TxOut[0].Value
-		receivingPubkey, err := keys.ParsePublicKey(refundSigningData.ReceivingPubkey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse receiving pubkey: %w", err)
-		}
 		nextSequence, err := spark.NextSequence(currRefundTx.TxIn[0].Sequence)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get next sequence: %w", err)
 		}
-		_, cpfpRefundTx, err := createRefundTxs(nextSequence, &nodeOutPoint, amountSats, receivingPubkey, true)
+		_, cpfpRefundTx, err := createRefundTxs(nextSequence, &nodeOutPoint, amountSats, refundSigningData.ReceivingPubKey, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create refund tx: %w", err)
 		}
@@ -961,11 +958,10 @@ func prepareRefundSoSigningJobs(
 		}
 		refundNonceCommitmentProto, _ := refundSigningData.Nonce.SigningCommitment().MarshalProto()
 
-		signingPubkey := refundSigningData.SigningPrivKey.PubKey().SerializeCompressed()
 		signingJobs = append(signingJobs, &pb.LeafRefundTxSigningJob{
 			LeafId: leaf.Leaf.Id,
 			RefundTxSigningJob: &pb.SigningJob{
-				SigningPublicKey:       signingPubkey,
+				SigningPublicKey:       refundSigningData.SigningPrivKey.Public().Serialize(),
 				RawTx:                  refundBuf.Bytes(),
 				SigningNonceCommitment: refundNonceCommitmentProto,
 			},
@@ -1031,5 +1027,5 @@ func QueryAllTransfersWithTypes(ctx context.Context, config *Config, limit int64
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to call QueryAllTransfers: %w", err)
 	}
-	return response.Transfers, response.Offset, nil
+	return response.GetTransfers(), response.GetOffset(), nil
 }

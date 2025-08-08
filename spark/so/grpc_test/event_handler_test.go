@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lightsparkdev/spark/common/keys"
+
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	testutil "github.com/lightsparkdev/spark/test_util"
 	"github.com/lightsparkdev/spark/wallet"
