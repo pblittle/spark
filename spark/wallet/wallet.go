@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"encoding/binary"
@@ -671,7 +670,7 @@ func (w *SingleKeyWallet) MintTokens(ctx context.Context, amount uint64) error {
 	if err != nil {
 		return fmt.Errorf("failed to broadcast mint transaction: %w", err)
 	}
-	newOwnedOutputs, err := getOwnedOutputsFromTokenTransaction(finalTokenTransaction, w.Config.IdentityPublicKey().Serialize())
+	newOwnedOutputs, err := getOwnedOutputsFromTokenTransaction(finalTokenTransaction, w.Config.IdentityPublicKey())
 	if err != nil {
 		return fmt.Errorf("failed to add owned outputs: %w", err)
 	}
@@ -680,7 +679,7 @@ func (w *SingleKeyWallet) MintTokens(ctx context.Context, amount uint64) error {
 }
 
 // TransferTokens transfers tokens to a receiver. If tokenPublicKey is nil, the wallet's identity public key is used.
-func (w *SingleKeyWallet) TransferTokens(ctx context.Context, amount uint64, receiverPubKey []byte, tokenPublicKey []byte) error {
+func (w *SingleKeyWallet) TransferTokens(ctx context.Context, amount uint64, receiverPubKey keys.Public, tokenPublicKey keys.Public) error {
 	conn, err := common.NewGRPCConnectionWithTestTLS(w.Config.CoodinatorAddress(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to connect to operator: %w", err)
@@ -694,11 +693,11 @@ func (w *SingleKeyWallet) TransferTokens(ctx context.Context, amount uint64, rec
 	ctx = ContextWithToken(ctx, token)
 
 	// If no token public key specified, use wallet's identity public key
-	if tokenPublicKey == nil {
-		tokenPublicKey = w.Config.IdentityPublicKey().Serialize()
+	if tokenPublicKey == (keys.Public{}) {
+		tokenPublicKey = w.Config.IdentityPublicKey()
 	}
 
-	selectedOutputsWithPrevTxData, selectedOutputsAmount, err := selectTokenOutputs(ctx, w.Config, amount, tokenPublicKey, w.Config.IdentityPublicKey().Serialize())
+	selectedOutputsWithPrevTxData, selectedOutputsAmount, err := selectTokenOutputs(ctx, w.Config, amount, tokenPublicKey, w.Config.IdentityPublicKey())
 	if err != nil {
 		return fmt.Errorf("failed to select token outputs: %w", err)
 	}
@@ -724,8 +723,8 @@ func (w *SingleKeyWallet) TransferTokens(ctx context.Context, amount uint64, rec
 		},
 		TokenOutputs: []*pb.TokenOutput{
 			{
-				OwnerPublicKey: receiverPubKey,
-				TokenPublicKey: tokenPublicKey,
+				OwnerPublicKey: receiverPubKey.Serialize(),
+				TokenPublicKey: tokenPublicKey.Serialize(),
 				TokenAmount:    int64ToUint128Bytes(0, amount),
 			},
 		},
@@ -736,7 +735,7 @@ func (w *SingleKeyWallet) TransferTokens(ctx context.Context, amount uint64, rec
 		remainder := selectedOutputsAmount - amount
 		changeOutput := &pb.TokenOutput{
 			OwnerPublicKey: w.Config.IdentityPublicKey().Serialize(),
-			TokenPublicKey: tokenPublicKey,
+			TokenPublicKey: tokenPublicKey.Serialize(),
 			TokenAmount:    int64ToUint128Bytes(0, remainder),
 		}
 		transferTransaction.TokenOutputs = append(transferTransaction.TokenOutputs, changeOutput)
@@ -763,7 +762,7 @@ func (w *SingleKeyWallet) TransferTokens(ctx context.Context, amount uint64, rec
 	w.OwnedTokenOutputs = w.OwnedTokenOutputs[:j]
 
 	// Add the created outputs to the owned outputs list.
-	newOwnedOutputs, err := getOwnedOutputsFromTokenTransaction(finalTokenTransaction, w.Config.IdentityPublicKey().Serialize())
+	newOwnedOutputs, err := getOwnedOutputsFromTokenTransaction(finalTokenTransaction, w.Config.IdentityPublicKey())
 	if err != nil {
 		return fmt.Errorf("failed to add owned outputs: %w", err)
 	}
@@ -783,7 +782,7 @@ func (w *SingleKeyWallet) GetAllTokenBalances(ctx context.Context) (map[string]T
 	response, err := QueryTokenOutputs(
 		ctx,
 		w.Config,
-		[]SerializedPublicKey{w.Config.IdentityPublicKey().Serialize()},
+		[]keys.Public{w.Config.IdentityPublicKey()},
 		nil, // nil to get all tokens
 	)
 	if err != nil {
@@ -809,7 +808,7 @@ func (w *SingleKeyWallet) GetAllTokenBalances(ctx context.Context) (map[string]T
 	return balances, nil
 }
 
-func (w *SingleKeyWallet) GetTokenBalance(ctx context.Context, tokenPublicKey []byte) (int, uint64, error) {
+func (w *SingleKeyWallet) GetTokenBalance(ctx context.Context, tokenPublicKey keys.Public) (int, uint64, error) {
 	// Claim all transfers first to ensure we have the latest state
 	_, err := w.ClaimAllTransfers(ctx)
 	if err != nil {
@@ -820,8 +819,8 @@ func (w *SingleKeyWallet) GetTokenBalance(ctx context.Context, tokenPublicKey []
 	response, err := QueryTokenOutputs(
 		ctx,
 		w.Config,
-		[]SerializedPublicKey{w.Config.IdentityPublicKey().Serialize()},
-		[]SerializedPublicKey{tokenPublicKey},
+		[]keys.Public{w.Config.IdentityPublicKey()},
+		[]keys.Public{tokenPublicKey},
 	)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get owned token outputs: %w", err)
@@ -840,9 +839,9 @@ func (w *SingleKeyWallet) GetTokenBalance(ctx context.Context, tokenPublicKey []
 	return len(response.OutputsWithPreviousTransactionData), totalAmount, nil
 }
 
-func selectTokenOutputs(ctx context.Context, config *Config, targetAmount uint64, tokenPublicKey []byte, ownerPublicKey []byte) ([]*pb.OutputWithPreviousTransactionData, uint64, error) {
+func selectTokenOutputs(ctx context.Context, config *Config, targetAmount uint64, tokenPublicKey keys.Public, ownerPublicKey keys.Public) ([]*pb.OutputWithPreviousTransactionData, uint64, error) {
 	// Fetch owned token leaves
-	ownedOutputsResponse, err := QueryTokenOutputs(ctx, config, []SerializedPublicKey{ownerPublicKey}, []SerializedPublicKey{tokenPublicKey})
+	ownedOutputsResponse, err := QueryTokenOutputs(ctx, config, []keys.Public{ownerPublicKey}, []keys.Public{tokenPublicKey})
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get owned token outputs: %w", err)
 	}
@@ -891,7 +890,7 @@ func int64ToUint128Bytes(high, low uint64) []byte {
 	)
 }
 
-func getOwnedOutputsFromTokenTransaction(output *pb.TokenTransaction, walletPublicKey []byte) ([]*pb.OutputWithPreviousTransactionData, error) {
+func getOwnedOutputsFromTokenTransaction(output *pb.TokenTransaction, walletPublicKey keys.Public) ([]*pb.OutputWithPreviousTransactionData, error) {
 	outputTokenProto, err := protoconverter.TokenProtoFromSparkTokenTransaction(output)
 	if err != nil {
 		return nil, err
@@ -903,7 +902,11 @@ func getOwnedOutputsFromTokenTransaction(output *pb.TokenTransaction, walletPubl
 	}
 	var newOutputsToSpend []*pb.OutputWithPreviousTransactionData
 	for i, output := range output.TokenOutputs {
-		if bytes.Equal(output.OwnerPublicKey, walletPublicKey) {
+		ownerPubKey, err := keys.ParsePublicKey(output.OwnerPublicKey)
+		if err != nil {
+			return nil, err
+		}
+		if ownerPubKey.Equals(walletPublicKey) {
 			outputWithPrevTxData := &pb.OutputWithPreviousTransactionData{
 				Output: &pb.TokenOutput{
 					OwnerPublicKey:       output.OwnerPublicKey,
@@ -926,9 +929,9 @@ func getLeafWithPrevTxKey(output *pb.OutputWithPreviousTransactionData) string {
 }
 
 // FreezeTokens freezes all tokens owned by a specific owner public key.
-func (w *SingleKeyWallet) FreezeTokens(ctx context.Context, ownerPublicKey []byte) ([]string, uint64, error) {
+func (w *SingleKeyWallet) FreezeTokens(ctx context.Context, ownerPublicKey keys.Public) ([]string, uint64, error) {
 	// For simplicity, we're using the wallet's identity public key as the token public key
-	tokenPublicKey := w.Config.IdentityPublicKey().Serialize()
+	tokenPublicKey := w.Config.IdentityPublicKey()
 	response, err := FreezeTokens(ctx, w.Config, ownerPublicKey, tokenPublicKey, false)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to freeze tokens: %w", err)
@@ -944,9 +947,9 @@ func (w *SingleKeyWallet) FreezeTokens(ctx context.Context, ownerPublicKey []byt
 }
 
 // UnfreezeTokens unfreezes all tokens owned by a specific owner public key.
-func (w *SingleKeyWallet) UnfreezeTokens(ctx context.Context, ownerPublicKey []byte) ([]string, uint64, error) {
+func (w *SingleKeyWallet) UnfreezeTokens(ctx context.Context, ownerPublicKey keys.Public) ([]string, uint64, error) {
 	// For simplicity, we're using the wallet's identity public key as the token public key
-	tokenPublicKey := w.Config.IdentityPublicKey().Serialize()
+	tokenPublicKey := w.Config.IdentityPublicKey()
 	response, err := FreezeTokens(ctx, w.Config, ownerPublicKey, tokenPublicKey, true)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to unfreeze tokens: %w", err)

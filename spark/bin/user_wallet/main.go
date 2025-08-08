@@ -524,25 +524,23 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("invalid amount: %w", err)
 			}
-			receiverPublicKey, err := hex.DecodeString(args[1])
+			receiverPublicKeyBytes, err := hex.DecodeString(args[1])
 			if err != nil {
 				return fmt.Errorf("invalid receiver public key: failed to decode hex string: %w", err)
 			}
-			if len(receiverPublicKey) != 33 {
-				return fmt.Errorf("invalid receiver public key: decoded bytes must be 33 bytes (66 hex characters), got %d bytes from %d hex characters: %s",
-					len(receiverPublicKey),
-					len(args[1]),
-					args[1])
+			receiverPublicKey, err := keys.ParsePublicKey(receiverPublicKeyBytes)
+			if err != nil {
+				return fmt.Errorf("invalid receiver public key: %w", err)
 			}
 
-			var tokenPublicKey []byte
+			var tokenPublicKey keys.Public
 			if len(args) > 2 {
-				tokenPublicKey, err = hex.DecodeString(args[2])
+				tokenPublicKeyBytes, err := hex.DecodeString(args[2])
 				if err != nil {
 					return fmt.Errorf("invalid token public key: failed to decode hex string: %w", err)
 				}
-				if len(tokenPublicKey) != 33 {
-					return fmt.Errorf("invalid token public key: decoded bytes must be 33 bytes (66 hex characters)")
+				if tokenPublicKey, err = keys.ParsePublicKey(tokenPublicKeyBytes); err != nil {
+					return fmt.Errorf("invalid token public key: %w", err)
 				}
 			}
 
@@ -563,12 +561,13 @@ func main() {
 		Handler: func(args []string) error {
 			if len(args) > 0 {
 				// If specific token public key provided, show only that balance
-				tokenPublicKey, err := hex.DecodeString(args[0])
+				tokenPublicKeyBytes, err := hex.DecodeString(args[0])
 				if err != nil {
 					return fmt.Errorf("invalid token public key: failed to decode hex string: %w", err)
 				}
-				if len(tokenPublicKey) != 33 {
-					return fmt.Errorf("invalid token public key: decoded bytes must be 33 bytes (66 hex characters)")
+				tokenPublicKey, err := keys.ParsePublicKey(tokenPublicKeyBytes)
+				if err != nil {
+					return fmt.Errorf("invalid token public key: %w", err)
 				}
 
 				numLeaves, totalAmount, err := cli.wallet.GetTokenBalance(context.Background(), tokenPublicKey)
@@ -610,15 +609,13 @@ func main() {
 			if len(args) < 1 {
 				return fmt.Errorf("please provide an owner public key in hex string format")
 			}
-			ownerPublicKey, err := hex.DecodeString(args[0])
+			ownerPublicKeyBytes, err := hex.DecodeString(args[0])
 			if err != nil {
 				return fmt.Errorf("invalid owner public key: failed to decode hex string: %w", err)
 			}
-			if len(ownerPublicKey) != 33 {
-				return fmt.Errorf("invalid owner public key: decoded bytes must be 33 bytes (66 hex characters), got %d bytes from %d hex characters: %s",
-					len(ownerPublicKey),
-					len(args[0]),
-					args[0])
+			ownerPublicKey, err := keys.ParsePublicKey(ownerPublicKeyBytes)
+			if err != nil {
+				return fmt.Errorf("invalid owner public key: %w", err)
 			}
 
 			fmt.Printf("Freezing tokens for owner public key: %s\n", args[0])
@@ -639,15 +636,13 @@ func main() {
 			if len(args) < 1 {
 				return fmt.Errorf("please provide an owner public key in hex string format")
 			}
-			ownerPublicKey, err := hex.DecodeString(args[0])
+			ownerPublicKeyBytes, err := hex.DecodeString(args[0])
 			if err != nil {
 				return fmt.Errorf("invalid owner public key: failed to decode hex string: %w", err)
 			}
-			if len(ownerPublicKey) != 33 {
-				return fmt.Errorf("invalid owner public key: decoded bytes must be 33 bytes (66 hex characters), got %d bytes from %d hex characters: %s",
-					len(ownerPublicKey),
-					len(args[0]),
-					args[0])
+			ownerPublicKey, err := keys.ParsePublicKey(ownerPublicKeyBytes)
+			if err != nil {
+				return fmt.Errorf("invalid owner public key: %w", err)
 			}
 
 			fmt.Printf("Unfreezing tokens for owner public key: %s\n", args[0])

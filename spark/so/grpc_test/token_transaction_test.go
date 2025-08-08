@@ -368,7 +368,7 @@ func TestQueryPartiallySpentTokenOutputsNotReturned(t *testing.T) {
 	notEnoughSignedOutput, err := wallet.QueryTokenOutputs(
 		context.Background(),
 		config,
-		[]wallet.SerializedPublicKey{tokenIdentityPubkeyBytes},
+		[]keys.Public{tokenPrivKey.Public()},
 		nil,
 	)
 	require.NoError(t, err, "failed to query token on not enough signatures")
@@ -382,10 +382,8 @@ func TestQueryTokenOutputsByNetworkReturnsNoneForMismatchedNetwork(t *testing.T)
 	require.NoError(t, err, "failed to create wallet config")
 
 	tokenPrivKey := config.IdentityPrivateKey
-	tokenIdentityPubkeyBytes := tokenPrivKey.Public().Serialize()
-
 	// Create the issuance transaction
-	_, userOutput1PrivKey, _, err := createTestTokenMintTransaction(config, tokenIdentityPubkeyBytes)
+	_, userOutput1PrivKey, _, err := createTestTokenMintTransaction(config, tokenPrivKey.Public().Serialize())
 	require.NoError(t, err, "failed to create test token issuance transaction")
 
 	userOneConfig, err := testutil.TestWalletConfigWithIdentityKey(*userOutput1PrivKey.ToBTCEC())
@@ -394,7 +392,7 @@ func TestQueryTokenOutputsByNetworkReturnsNoneForMismatchedNetwork(t *testing.T)
 	correctNetworkResponse, err := wallet.QueryTokenOutputs(
 		context.Background(),
 		userOneConfig,
-		[]wallet.SerializedPublicKey{tokenIdentityPubkeyBytes},
+		[]keys.Public{tokenPrivKey.Public()},
 		nil,
 	)
 	require.NoError(t, err, "failed to query token outputs")
@@ -406,7 +404,7 @@ func TestQueryTokenOutputsByNetworkReturnsNoneForMismatchedNetwork(t *testing.T)
 	wrongNetworkResponse, err := wallet.QueryTokenOutputs(
 		context.Background(),
 		wrongNetworkConfig,
-		[]wallet.SerializedPublicKey{tokenIdentityPubkeyBytes},
+		[]keys.Public{tokenPrivKey.Public()},
 		nil,
 	)
 	require.NoError(t, err, "failed to query token outputs")
@@ -760,8 +758,8 @@ func TestBroadcastTokenTransactionMintAndTransferTokensLotsOfOutputs(t *testing.
 	tokenOutputsResponse, err := wallet.QueryTokenOutputs(
 		context.Background(),
 		config,
-		[]wallet.SerializedPublicKey{consolidatedOutputPubKeyBytes},
-		[]wallet.SerializedPublicKey{issuerPublicKeyBytes},
+		[]keys.Public{consolidatedOutputPrivKey.Public()},
+		[]keys.Public{tokenPrivKey.Public()},
 	)
 	require.NoError(t, err, "failed to get owned token outputs")
 
@@ -793,12 +791,14 @@ func TestV0FreezeAndUnfreezeTokens(t *testing.T) {
 	}
 
 	// Call FreezeTokens to freeze the created output
+	ownerPublicKey, err := keys.ParsePublicKey(finalIssueTokenTransaction.TokenOutputs[0].OwnerPublicKey)
+	require.NoError(t, err)
 	freezeResponse, err := wallet.FreezeTokens(
 		context.Background(),
 		config,
-		finalIssueTokenTransaction.TokenOutputs[0].OwnerPublicKey, // owner public key of the output to freeze
-		issuerPublicKeyBytes, // token public key
-		false,                // unfreeze
+		ownerPublicKey,        // owner public key of the output to freeze
+		tokenPrivKey.Public(), // token public key
+		false,                 // unfreeze
 	)
 	require.NoError(t, err, "failed to freeze tokens")
 
@@ -841,8 +841,8 @@ func TestV0FreezeAndUnfreezeTokens(t *testing.T) {
 	unfreezeResponse, err := wallet.FreezeTokens(
 		context.Background(),
 		config,
-		finalIssueTokenTransaction.TokenOutputs[0].OwnerPublicKey, // owner public key of the output to freeze
-		issuerPublicKeyBytes,
+		ownerPublicKey, // owner public key of the output to freeze
+		tokenPrivKey.Public(),
 		true, // unfreeze
 	)
 	require.NoError(t, err, "failed to unfreeze tokens")
@@ -898,7 +898,7 @@ func testMintTransactionSigningScenarios(t *testing.T, config *wallet.Config,
 	expectedStartError bool,
 	expectedSigningError bool,
 ) (*pb.TokenTransaction, keys.Private, keys.Private) {
-	issuerPubKeyBytes := config.IdentityPrivateKey.Public().Serialize()
+	issuerPubKeyBytes := config.IdentityPublicKey().Serialize()
 
 	if ownerSigningPrivateKeys == nil {
 		ownerSigningPrivateKeys = []keys.Private{config.IdentityPrivateKey}
@@ -1196,8 +1196,6 @@ func testTransferTransactionSigningScenarios(t *testing.T, config *wallet.Config
 	expectedSigningError bool,
 	expectedStartError bool,
 ) {
-	issuerPubKeyBytes := config.IdentityPrivateKey.Public().Serialize()
-
 	if signingOwnerPrivateKeys == nil {
 		signingOwnerPrivateKeys = startingOwnerPrivateKeys
 	}
@@ -1207,7 +1205,7 @@ func testTransferTransactionSigningScenarios(t *testing.T, config *wallet.Config
 
 	transferTokenTransaction, _, err := createTestTokenTransferTransactionWithParams(config,
 		finalIssueTokenTransactionHash,
-		issuerPubKeyBytes,
+		config.IdentityPublicKey().Serialize(),
 	)
 	require.NoError(t, err, "failed to create test token transfer transaction")
 
@@ -1409,9 +1407,12 @@ func testTransferTransactionSigningScenarios(t *testing.T, config *wallet.Config
 		triggerTaskOnAllOperators(t, config, "cancel_or_finalize_expired_token_transactions")
 
 		// Verify the outputs exist and have the correct amount
-		verifyTokenOutputs(t, config,
-			transferStartResp.FinalTokenTransaction.TokenOutputs[0].OwnerPublicKey,
-			issuerPubKeyBytes, TestTransferOutput1Amount)
+		ownerIdentityPubKey, err := keys.ParsePublicKey(transferStartResp.FinalTokenTransaction.TokenOutputs[0].OwnerPublicKey)
+		require.NoError(t, err)
+		tokenOutputsResponse, err := wallet.QueryTokenOutputs(context.Background(), config, []keys.Public{ownerIdentityPubKey}, []keys.Public{config.IdentityPublicKey()})
+		require.NoError(t, err, "failed to query token outputs")
+		require.Len(t, tokenOutputsResponse.OutputsWithPreviousTransactionData, 1, "expected 1 output after transaction")
+		require.Equal(t, uint64ToBigInt(TestTransferOutput1Amount), bytesToBigInt(tokenOutputsResponse.OutputsWithPreviousTransactionData[0].Output.TokenAmount), "expected correct amount after transaction")
 
 	} else {
 		err = wallet.FinalizeTokenTransaction(
@@ -1690,8 +1691,7 @@ func TestV0FreezeAndUnfreezeTokensSchnorr(t *testing.T) {
 	require.NoError(t, err, "failed to create wallet config")
 
 	tokenPrivKey := config.IdentityPrivateKey
-	issuerPublicKeyBytes := tokenPrivKey.Public().Serialize()
-	issueTokenTransaction, _, _, err := createTestTokenMintTransaction(config, issuerPublicKeyBytes)
+	issueTokenTransaction, _, _, err := createTestTokenMintTransaction(config, tokenPrivKey.Public().Serialize())
 	require.NoError(t, err, "failed to create test token issuance transaction")
 
 	finalIssueTokenTransaction, err := wallet.BroadcastTokenTransaction(
@@ -1701,11 +1701,14 @@ func TestV0FreezeAndUnfreezeTokensSchnorr(t *testing.T) {
 	require.NoError(t, err, "failed to broadcast issuance token transaction")
 	log.Printf("issuance broadcast finalized token transaction: %s", logging.FormatProto("token_transaction", finalIssueTokenTransaction))
 
+	ownerPublicKey, err := keys.ParsePublicKey(finalIssueTokenTransaction.TokenOutputs[0].OwnerPublicKey)
+	require.NoError(t, err)
+
 	_, err = wallet.FreezeTokens(
 		context.Background(),
 		config,
-		finalIssueTokenTransaction.TokenOutputs[0].OwnerPublicKey,
-		issuerPublicKeyBytes,
+		ownerPublicKey,
+		tokenPrivKey.Public(),
 		false,
 	)
 	require.NoError(t, err, "failed to freeze tokens")
@@ -1872,22 +1875,6 @@ func getNonCoordinatorOperator(config *wallet.Config) (string, error) {
 }
 
 // verifyTokenOutputs verifies that a transaction's outputs are properly finalized by querying them
-func verifyTokenOutputs(t *testing.T, config *wallet.Config,
-	ownerPubKey []byte,
-	tokenIdentityPubKeyBytes []byte,
-	expectedAmount uint64,
-) {
-	// Query the outputs to verify they exist and have the correct amount
-	tokenOutputsResponse, err := wallet.QueryTokenOutputs(
-		context.Background(),
-		config,
-		[]wallet.SerializedPublicKey{ownerPubKey},
-		[]wallet.SerializedPublicKey{tokenIdentityPubKeyBytes},
-	)
-	require.NoError(t, err, "failed to query token outputs")
-	require.Len(t, tokenOutputsResponse.OutputsWithPreviousTransactionData, 1, "expected 1 output after transaction")
-	require.Equal(t, uint64ToBigInt(expectedAmount), bytesToBigInt(tokenOutputsResponse.OutputsWithPreviousTransactionData[0].Output.TokenAmount), "expected correct amount after transaction")
-}
 
 // TestCreateNativeSparkToken tests various token creation scenarios
 func TestCreateNativeSparkToken(t *testing.T) {

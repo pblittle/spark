@@ -519,8 +519,8 @@ func BroadcastTokenTransaction(
 func FreezeTokens(
 	ctx context.Context,
 	config *Config,
-	ownerPublicKey SerializedPublicKey,
-	tokenPublicKey SerializedPublicKey,
+	ownerPublicKey keys.Public,
+	tokenPublicKey keys.Public,
 	shouldUnfreeze bool,
 ) (*pb.FreezeTokensResponse, error) {
 	sparkConn, err := common.NewGRPCConnectionWithTestTLS(config.CoodinatorAddress(), nil)
@@ -548,8 +548,8 @@ func FreezeTokens(
 		sparkClient := pb.NewSparkServiceClient(operatorConn)
 
 		payloadSparkProto := &pb.FreezeTokensPayload{
-			OwnerPublicKey:            ownerPublicKey,
-			TokenPublicKey:            tokenPublicKey,
+			OwnerPublicKey:            ownerPublicKey.Serialize(),
+			TokenPublicKey:            tokenPublicKey.Serialize(),
 			OperatorIdentityPublicKey: operator.IdentityPublicKey.Serialize(),
 			IssuerProvidedTimestamp:   timestamp,
 			ShouldUnfreeze:            shouldUnfreeze,
@@ -557,8 +557,8 @@ func FreezeTokens(
 		// Must define explicitly here to use the hash function that only takes a token proto.
 		payloadTokenProto := &tokenpb.FreezeTokensPayload{
 			Version:                   0,
-			OwnerPublicKey:            ownerPublicKey,
-			TokenPublicKey:            tokenPublicKey,
+			OwnerPublicKey:            ownerPublicKey.Serialize(),
+			TokenPublicKey:            tokenPublicKey.Serialize(),
 			OperatorIdentityPublicKey: operator.IdentityPublicKey.Serialize(),
 			IssuerProvidedTimestamp:   timestamp,
 			ShouldUnfreeze:            shouldUnfreeze,
@@ -590,8 +590,8 @@ func FreezeTokens(
 func QueryTokenOutputs(
 	ctx context.Context,
 	config *Config,
-	ownerPublicKeys []SerializedPublicKey,
-	tokenPublicKeys []SerializedPublicKey,
+	ownerPublicKeys []keys.Public,
+	tokenPublicKeys []keys.Public,
 ) (*pb.QueryTokenOutputsResponse, error) {
 	sparkConn, err := common.NewGRPCConnectionWithTestTLS(config.CoodinatorAddress(), nil)
 	if err != nil {
@@ -612,8 +612,8 @@ func QueryTokenOutputs(
 		return nil, fmt.Errorf("failed to convert network to proto network: %w", err)
 	}
 	request := &pb.QueryTokenOutputsRequest{
-		OwnerPublicKeys: toByteSlices(ownerPublicKeys),
-		TokenPublicKeys: toByteSlices(tokenPublicKeys),
+		OwnerPublicKeys: serializeAll(ownerPublicKeys),
+		TokenPublicKeys: serializeAll(tokenPublicKeys),
 		Network:         network,
 	}
 
@@ -765,6 +765,14 @@ func toByteSlices(keys []SerializedPublicKey) [][]byte {
 	result := make([][]byte, len(keys))
 	for i, key := range keys {
 		result[i] = key
+	}
+	return result
+}
+
+func serializeAll(keys []keys.Public) [][]byte {
+	result := make([][]byte, len(keys))
+	for i, key := range keys {
+		result[i] = key.Serialize()
 	}
 	return result
 }
