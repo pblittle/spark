@@ -1701,6 +1701,56 @@ export class SparkWallet extends EventEmitter {
   }
 
   /**
+   * Returns confirmed UTXOs for a given Spark deposit address.
+   *
+   * @param depositAddress - The deposit address to query.
+   * @param limit - Maximum number of UTXOs to return (default 100).
+   * @param offset - Pagination offset (default 0).
+   * @returns {Promise<{ txid: string, vout: number }[]>} List of confirmed UTXOs.
+   */
+  public async getUtxosForDepositAddress(
+    depositAddress: string,
+    limit: number = 100,
+    offset: number = 0,
+  ): Promise<{ txid: string; vout: number }[]> {
+    if (!depositAddress) {
+      throw new ValidationError("Deposit address cannot be empty", {
+        field: "depositAddress",
+      });
+    }
+
+    const sparkClient = await this.connectionManager.createSparkClient(
+      this.config.getCoordinatorAddress(),
+    );
+
+    try {
+      const response = await sparkClient.get_utxos_for_address({
+        address: depositAddress,
+        network: NetworkToProto[this.config.getNetwork()],
+        limit,
+        offset,
+      });
+
+      return (
+        response.utxos.map((utxo) => ({
+          txid: bytesToHex(utxo.txid),
+          vout: utxo.vout,
+        })) ?? []
+      );
+    } catch (error) {
+      throw new NetworkError(
+        "Failed to get UTXOs for deposit address",
+        {
+          operation: "get_utxos_for_address",
+          errorCount: 1,
+          errors: error instanceof Error ? error.message : String(error),
+        },
+        error as Error,
+      );
+    }
+  }
+
+  /**
    * Get a quote on how much credit you can claim for a deposit from the SSP.
    *
    * @param {string} transactionId - The ID of the transaction
@@ -4567,6 +4617,7 @@ export class SparkWallet extends EventEmitter {
       "claimStaticDeposit",
       "refundStaticDeposit",
       "getUnusedDepositAddresses",
+      "getUtxosForDepositAddress",
       "claimDeposit",
       "advancedDeposit",
       "transfer",

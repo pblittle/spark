@@ -6,6 +6,12 @@ import { BitcoinNetwork } from "../types/index.js";
 import { getFetch } from "./fetch.js";
 import { Network, getNetworkFromAddress } from "./network.js";
 
+/**
+ * @deprecated Use `SparkWallet.getUtxosForDepositAddress()` instead.
+ * Retrieves the most recent transaction that pays to the given deposit address
+ * by querying the electrs HTTP API. Retained only for backwards compatibility
+ * and will be removed in a future release.
+ */
 export async function getLatestDepositTxId(
   address: string,
 ): Promise<string | null> {

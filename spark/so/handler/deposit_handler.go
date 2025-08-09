@@ -1371,7 +1371,9 @@ func (o *DepositHandler) GetUtxosForAddress(ctx context.Context, req *pb.GetUtxo
 
 		if depositAddress.ConfirmationHeight <= currentBlockHeight.Height-int64(threshold) {
 			utxosResult = append(utxosResult, &pb.UTXO{
-				Txid: txid,
+				Txid:    txid,
+				Vout:    0,
+				Network: req.Network,
 			})
 		}
 	}
