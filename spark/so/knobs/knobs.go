@@ -22,12 +22,19 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+const (
+	KnobDatabaseStatementTimeout = "spark.database.statement_timeout"
+	KnobRateLimitPeriod          = "spark.so.ratelimit.period"
+	KnobRateLimitLimit           = "spark.so.ratelimit.limit"
+	KnobRateLimitMethods         = "spark.so.ratelimit.methods"
+)
+
 type Config struct {
 	Enabled *bool `yaml:"enabled"`
 }
 
 func GetDatabaseStatementTimeoutMs(k Knobs) uint64 {
-	return uint64(k.GetValue("spark.database.statement_timeout", 60) * 1000)
+	return uint64(k.GetValue(KnobDatabaseStatementTimeout, 60) * 1000)
 }
 
 func (c *Config) IsEnabled() bool {
@@ -70,15 +77,19 @@ func NewWithContext(ctx context.Context, logger *slog.Logger) (*KnobsImpl, error
 	return k, nil
 }
 
+func keyString(knob string, target *string) string {
+	if target != nil {
+		return fmt.Sprintf("%s@%s", knob, *target)
+	}
+	return knob
+}
+
 // GetValueTarget retrieves a knob value for a specific target
 func (k KnobsImpl) GetValueTarget(knob string, target *string, defaultValue float64) float64 {
 	k.inner.RLock()
 	defer k.inner.RUnlock()
 
-	key := knob
-	if target != nil {
-		key = fmt.Sprintf("%s@%s", knob, *target)
-	}
+	key := keyString(knob, target)
 
 	if value, exists := k.values[key]; exists {
 		return value
@@ -298,4 +309,49 @@ func (k KnobsImpl) handleConfigMap(configMap *corev1.ConfigMap) {
 		k.logger.Warn("Unknown knob value type", "name", name, "value", value)
 	}
 	k.logger.Info("Updated knobs", "knobs", k.values)
+}
+
+type fixedKnobs struct {
+	values map[string]float64
+}
+
+// NewFixedKnobs creates a new Knobs instance that simply maps fixed strings to
+// values.  This is useful for testing and development purposes and almost
+// certainly should not be used in production.
+func NewFixedKnobs(values map[string]float64) Knobs {
+	return &fixedKnobs{values: values}
+}
+
+func (m fixedKnobs) GetValueTarget(knob string, target *string, defaultValue float64) float64 {
+	key := knob
+	if target != nil {
+		key = fmt.Sprintf("%s@%s", knob, *target)
+	}
+
+	if value, exists := m.values[key]; exists {
+		return value
+	}
+	return defaultValue
+}
+
+func (m fixedKnobs) GetValue(knob string, defaultValue float64) float64 {
+	return m.GetValueTarget(knob, nil, defaultValue)
+}
+
+func (m fixedKnobs) RolloutRandomTarget(knob string, target *string, defaultValue float64) bool {
+	value := m.GetValueTarget(knob, target, defaultValue)
+	return value > 0
+}
+
+func (m fixedKnobs) RolloutRandom(knob string, defaultValue float64) bool {
+	return m.RolloutRandomTarget(knob, nil, defaultValue)
+}
+
+func (m fixedKnobs) RolloutUUIDTarget(knob string, id uuid.UUID, target *string, defaultValue float64) bool {
+	value := m.GetValueTarget(knob, target, defaultValue)
+	return value > 0
+}
+
+func (m fixedKnobs) RolloutUUID(knob string, id uuid.UUID, defaultValue float64) bool {
+	return m.RolloutUUIDTarget(knob, id, nil, defaultValue)
 }

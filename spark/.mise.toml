@@ -1,5 +1,7 @@
 [tasks]
 lint = "golangci-lint run"
+# Sadly, `mise fmt` is a built in command
+format = "golangci-lint fmt"
 test-unit = """
   gotestsum \
     --format testname \

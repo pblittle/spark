@@ -457,6 +457,14 @@ func main() {
 			helper.LogInterceptor(args.LogJSON && args.LogRequestStats),
 			sparkgrpc.SparkTokenMetricsInterceptor(),
 			sparkgrpc.PanicRecoveryInterceptor(config.ReturnDetailedPanicErrors),
+			func() grpc.UnaryServerInterceptor {
+				if rateLimiter != nil {
+					return rateLimiter.UnaryServerInterceptor()
+				}
+				return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+					return handler(ctx, req)
+				}
+			}(),
 			db.SessionMiddleware(db.NewDefaultSessionFactory(dbClient, config.Database.NewTxTimeout)),
 			helper.SigningCommitmentInterceptor(config.SigningOperatorMap, knobsService),
 			authn.NewInterceptor(sessionTokenCreatorVerifier).AuthnInterceptor,
@@ -467,14 +475,6 @@ func main() {
 				authz.WithXffClientIpPosition(config.XffClientIpPosition),
 			)).UnaryServerInterceptor,
 			sparkgrpc.ValidationInterceptor(),
-			func() grpc.UnaryServerInterceptor {
-				if rateLimiter != nil {
-					return rateLimiter.UnaryServerInterceptor()
-				}
-				return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-					return handler(ctx, req)
-				}
-			}(),
 		)),
 		grpc.StreamInterceptor(grpcmiddleware.ChainStreamServer(
 			sparkerrors.ErrorWrappingStreamingInterceptor(),

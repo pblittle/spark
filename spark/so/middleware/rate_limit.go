@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/lightsparkdev/spark/so/knobs"
 	"github.com/sethvargo/go-limiter"
 	"github.com/sethvargo/go-limiter/memorystore"
 	"google.golang.org/grpc"
@@ -51,6 +52,7 @@ type RateLimiter struct {
 	config *RateLimiterConfig
 	store  MemoryStore
 	clock  Clock
+	knobs  knobs.Knobs
 }
 
 type RateLimiterOption func(*RateLimiter)
@@ -64,6 +66,12 @@ func WithClock(clock Clock) RateLimiterOption {
 func WithStore(store MemoryStore) RateLimiterOption {
 	return func(r *RateLimiter) {
 		r.store = store
+	}
+}
+
+func WithKnobs(knobs knobs.Knobs) RateLimiterOption {
+	return func(r *RateLimiter) {
+		r.knobs = knobs
 	}
 }
 
@@ -96,22 +104,34 @@ func NewRateLimiter(configOrProvider any, opts ...RateLimiterOption) (*RateLimit
 		return nil, fmt.Errorf("invalid config type: %T", configOrProvider)
 	}
 
-	defaultStore, err := memorystore.New(&memorystore.Config{
-		Tokens:   uint64(config.MaxRequests),
-		Interval: config.Window,
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	rateLimiter := &RateLimiter{
 		config: config,
-		store:  &realMemoryStore{store: defaultStore},
 		clock:  &realClock{},
+		knobs:  nil,
 	}
 
 	for _, opt := range opts {
 		opt(rateLimiter)
+	}
+
+	interval := config.Window
+	maxRequests := uint64(config.MaxRequests)
+	// Knob values should not be set to negative values—they will be cast to uint64.
+	if rateLimiter.knobs != nil {
+		interval = time.Duration(uint64(rateLimiter.knobs.GetValue(knobs.KnobRateLimitPeriod, float64(config.Window)))) * time.Second
+		maxRequests = uint64(rateLimiter.knobs.GetValue(knobs.KnobRateLimitLimit, float64(config.MaxRequests)))
+	}
+
+	if rateLimiter.store == nil {
+		defaultStore, err := memorystore.New(&memorystore.Config{
+			Tokens:   maxRequests,
+			Interval: interval,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		rateLimiter.store = &realMemoryStore{store: defaultStore}
 	}
 
 	return rateLimiter, nil
@@ -120,6 +140,17 @@ func NewRateLimiter(configOrProvider any, opts ...RateLimiterOption) (*RateLimit
 func (r *RateLimiter) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		shouldLimit := slices.Contains(r.config.Methods, info.FullMethod)
+		if r.knobs != nil {
+			// A value of > 0 means to enforce rate limiting for the given method.
+			// A value of 0 means to not enforce the limit for the given method.
+			// Any other value means use the default configuration.
+			methodLimitEnabled := int(r.knobs.GetValueTarget(knobs.KnobRateLimitMethods, &info.FullMethod, -1))
+			if methodLimitEnabled > 0 {
+				shouldLimit = true
+			} else if methodLimitEnabled == 0 {
+				shouldLimit = false
+			}
+		}
 
 		if !shouldLimit {
 			return handler(ctx, req)

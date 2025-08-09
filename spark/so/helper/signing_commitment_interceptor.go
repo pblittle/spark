@@ -16,7 +16,7 @@ type signingCommitmentsKeyType string
 
 const signingCommitmentsKey signingCommitmentsKeyType = "ReservedSigningCommitments"
 
-func SigningCommitmentInterceptor(operatorMap map[string]*so.SigningOperator, knobs *knobs.Knobs) grpc.UnaryServerInterceptor {
+func SigningCommitmentInterceptor(operatorMap map[string]*so.SigningOperator, knobs knobs.Knobs) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if knobs == nil || knobs.GetValue("spark.so.enable_prefetch_frost_round_1", 0) == 0 {
 			return handler(ctx, req)

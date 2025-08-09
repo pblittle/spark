@@ -158,6 +158,8 @@ type OperatorConfig struct {
 	XffClientIpPosition int `yaml:"xff_client_ip_position"`
 	// Knobs is the configuration for the knobs
 	Knobs knobs.Config `yaml:"knobs"`
+	// RateLimiter is the configuration for the rate limiter
+	RateLimiter RateLimiterConfig `yaml:"rate_limiter"`
 }
 
 type DkgConfig struct {

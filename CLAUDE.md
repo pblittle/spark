@@ -47,6 +47,8 @@ go test -v ./path/to/package
 mise lint
 # OR
 golangci-lint run
+# To fix linter issues
+golangci-lint fmt
 ```
 
 ### Database Migrations

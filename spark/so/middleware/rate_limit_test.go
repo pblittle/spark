@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lightsparkdev/spark/so/knobs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -290,5 +291,93 @@ func TestRateLimiter(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, codes.ResourceExhausted, status.Code(err))
 		assert.Equal(t, "rate limit exceeded", status.Convert(err).Message())
+	})
+
+	t.Run("knob values enforced", func(t *testing.T) {
+		config := &RateLimiterConfig{
+			Window:      time.Second,
+			MaxRequests: 2,
+			Methods:     []string{"/test.Service/TestMethod"},
+		}
+
+		mockKnobsMap := map[string]float64{
+			knobs.KnobRateLimitPeriod:                                5,  // period expressed in seconds
+			knobs.KnobRateLimitMethods + "@/test.Service/Enable":     1,  // > 0: Enable rate limiting
+			knobs.KnobRateLimitMethods + "@/test.Service/Disable":    0,  // = 0: Disable rate limiting
+			knobs.KnobRateLimitMethods + "@/test.Service/TestMethod": 0,  // = 0: Disable rate limiting (override config)
+			knobs.KnobRateLimitMethods + "@/test.Service/Follow":     -1, // < 0: Follow configuration (not in config Methods list)
+		}
+		mockKnobs := knobs.NewFixedKnobs(mockKnobsMap)
+
+		tests := []struct {
+			name          string
+			method        string
+			expectedError bool
+			requests      int
+		}{
+			{
+				name:          "knob value > 0 enables rate limiting",
+				method:        "/test.Service/Enable",
+				expectedError: false,
+				requests:      2, // Should succeed for first 2 requests
+			},
+			{
+				name:          "knob value > 0 rate limits after max requests",
+				method:        "/test.Service/Enable",
+				expectedError: true,
+				requests:      3, // Third request should fail
+			},
+			{
+				name:          "knob value = 0 disables rate limiting",
+				method:        "/test.Service/Disable",
+				expectedError: false,
+				requests:      5, // Should allow unlimited requests
+			},
+			{
+				name:          "knob value = 0 overrides config method",
+				method:        "/test.Service/TestMethod",
+				expectedError: false,
+				requests:      5, // Should allow unlimited requests despite being in config
+			},
+			{
+				name:          "knob value < 0 follows configuration",
+				method:        "/test.Service/Follow",
+				expectedError: false,
+				requests:      5, // Should allow unlimited requests (not in config)
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				rateLimiter, err := NewRateLimiter(config, WithKnobs(mockKnobs))
+				require.NoError(t, err)
+
+				interceptor := rateLimiter.UnaryServerInterceptor()
+				handler := func(_ context.Context, _ any) (any, error) {
+					return "ok", nil
+				}
+
+				ctx := metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{
+					"x-forwarded-for": "1.2.3.4",
+				}))
+
+				info := &grpc.UnaryServerInfo{FullMethod: tt.method}
+
+				var resp any
+				for i := 0; i < tt.requests-1; i++ {
+					resp, err = interceptor(ctx, "request", info, handler)
+					require.NoError(t, err)
+					require.Equal(t, "ok", resp)
+				}
+				resp, err = interceptor(ctx, "request", info, handler)
+				if tt.expectedError {
+					require.ErrorContains(t, err, "rate limit exceeded")
+					require.Equal(t, codes.ResourceExhausted, status.Code(err))
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, "ok", resp)
+				}
+			})
+		}
 	})
 }
