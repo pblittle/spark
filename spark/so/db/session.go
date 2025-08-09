@@ -298,6 +298,7 @@ func (s *Session) GetOrBeginTx(ctx context.Context) (*ent.Tx, error) {
 				logger.Info("Transaction committed")
 
 				duration := time.Since(s.startTime).Seconds()
+				durationMs := duration * 1000
 
 				err := fn.Commit(ctx, tx)
 				var attrs []attribute.KeyValue
@@ -310,7 +311,7 @@ func (s *Session) GetOrBeginTx(ctx context.Context) (*ent.Tx, error) {
 					// Only set the current tx to nil if the transaction was committed successfully.
 					// Otherwise, the transaction will be rolled back at last.
 					attrs = getOperationAttributes(ctx, attrOperationCommit, attrStatusSuccess)
-					txDurationHistogram.Record(ctx, duration, metric.WithAttributes(attrs...))
+					txDurationHistogram.Record(ctx, durationMs, metric.WithAttributes(attrs...))
 					txActiveGauge.Add(ctx, -1, metric.WithAttributes(getGaugeAttributes(ctx, attrOperationCommit)...))
 					s.timer.Stop()
 					s.timer = nil
