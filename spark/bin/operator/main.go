@@ -391,6 +391,9 @@ func main() {
 				return nil
 			})
 		}
+	}
+
+	if !args.DisableDKG {
 		// Scheduled tasks setup
 		cronCtx, cronCancel := context.WithCancel(errCtx)
 		defer cronCancel()
