@@ -35,7 +35,7 @@
     "hoistingLimits": "dependencies"
   },
   "devDependencies": {
-    "bare": "1.21.2",
+    "bare": "^1.21.3",
     "bare-make": "^1.5.1",
     "cmake-bare": "^1.6.5",
     "cmake-cargo": "^0.0.5",

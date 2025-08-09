@@ -1,9 +1,9 @@
 import "bare-encoding/global";
 import "bare-buffer/global";
-import btoa from "btoa";
 import process from "bare-process";
 import bareUtil from "bare-utils";
 import Module from "bare-module";
+import btoa from "btoa";
 
 globalThis.process = process as unknown as typeof globalThis.process;
 globalThis.btoa = btoa;

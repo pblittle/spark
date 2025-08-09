@@ -10,7 +10,25 @@
   "dependencies": {
     "@buildonspark/bare": "0.0.2",
     "@buildonspark/spark-sdk": "0.2.7",
-    "bare": "1.21.2",
-    "bare-process": "^4.2.1"
+    "bare": "^1.21.3",
+    "bare-assert": "^1.0.2",
+    "bare-async-hooks": "^0.0.0",
+    "bare-buffer": "^3.3.0",
+    "bare-crypto": "^1.9.2",
+    "bare-encoding": "^1.0.0",
+    "bare-fetch": "^2.4.1",
+    "bare-fs": "^4.1.6",
+    "bare-http1": "^4.0.4",
+    "bare-https": "^2.0.0",
+    "bare-module": "^5.0.1",
+    "bare-node-diagnostics-channel": "^0.0.1",
+    "bare-os": "^3.6.1",
+    "bare-path": "^3.0.0",
+    "bare-performance": "^1.0.0",
+    "bare-process": "^4.2.1",
+    "bare-url": "^2.2.1",
+    "bare-utils": "^1.4.0",
+    "bare-worker": "^3.0.0",
+    "bare-ws": "^2.0.3"
   }
 }

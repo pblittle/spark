@@ -1676,26 +1676,12 @@ __metadata:
     "@buildonspark/spark-frost-bare-addon": "npm:0.0.1"
     "@buildonspark/spark-sdk": "npm:0.2.7"
     "@noble/hashes": "npm:^1.7.0"
-    bare-assert: "npm:^1.0.2"
-    bare-async-hooks: "npm:^0.0.0"
     bare-buffer: "npm:^3.3.0"
-    bare-crypto: "npm:^1.9.2"
     bare-encoding: "npm:^1.0.0"
-    bare-fetch: "npm:^2.4.1"
-    bare-fs: "npm:^4.1.6"
-    bare-http1: "npm:^4.0.4"
-    bare-https: "npm:^2.0.0"
     bare-module: "npm:^5.0.1"
-    bare-node-diagnostics-channel: "npm:^0.0.1"
-    bare-os: "npm:^3.6.1"
-    bare-path: "npm:^3.0.0"
-    bare-performance: "npm:^1.0.0"
     bare-process: "npm:^4.2.1"
     bare-type: "npm:^1.0.6"
-    bare-url: "npm:^2.2.1"
     bare-utils: "npm:^1.4.0"
-    bare-worker: "npm:^3.0.0"
-    bare-ws: "npm:^2.0.3"
     btoa: "npm:^1.2.1"
     depcheck: "npm:^1.4.7"
     madge: "npm:^8.0.0"
@@ -1808,8 +1794,26 @@ __metadata:
   dependencies:
     "@buildonspark/bare": "npm:0.0.2"
     "@buildonspark/spark-sdk": "npm:0.2.7"
-    bare: "npm:1.21.2"
+    bare: "npm:^1.21.3"
+    bare-assert: "npm:^1.0.2"
+    bare-async-hooks: "npm:^0.0.0"
+    bare-buffer: "npm:^3.3.0"
+    bare-crypto: "npm:^1.9.2"
+    bare-encoding: "npm:^1.0.0"
+    bare-fetch: "npm:^2.4.1"
+    bare-fs: "npm:^4.1.6"
+    bare-http1: "npm:^4.0.4"
+    bare-https: "npm:^2.0.0"
+    bare-module: "npm:^5.0.1"
+    bare-node-diagnostics-channel: "npm:^0.0.1"
+    bare-os: "npm:^3.6.1"
+    bare-path: "npm:^3.0.0"
+    bare-performance: "npm:^1.0.0"
     bare-process: "npm:^4.2.1"
+    bare-url: "npm:^2.2.1"
+    bare-utils: "npm:^1.4.0"
+    bare-worker: "npm:^3.0.0"
+    bare-ws: "npm:^2.0.3"
   languageName: unknown
   linkType: soft
 
@@ -1900,7 +1904,7 @@ __metadata:
   resolution: "@buildonspark/spark-frost-bare-addon@workspace:packages/spark-frost-bare-addon"
   dependencies:
     "@noble/secp256k1": "npm:^2.3.0"
-    bare: "npm:1.21.2"
+    bare: "npm:^1.21.3"
     bare-make: "npm:^1.5.1"
     cmake-bare: "npm:^1.6.5"
     cmake-cargo: "npm:^0.0.5"
@@ -8617,9 +8621,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-android-arm64@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-android-arm64@npm:1.21.2"
+"bare-runtime-android-arm64@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-android-arm64@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8628,9 +8632,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-android-arm@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-android-arm@npm:1.21.2"
+"bare-runtime-android-arm@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-android-arm@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8639,9 +8643,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-android-ia32@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-android-ia32@npm:1.21.2"
+"bare-runtime-android-ia32@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-android-ia32@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8650,9 +8654,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-android-x64@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-android-x64@npm:1.21.2"
+"bare-runtime-android-x64@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-android-x64@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8661,9 +8665,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-darwin-arm64@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-darwin-arm64@npm:1.21.2"
+"bare-runtime-darwin-arm64@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-darwin-arm64@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8672,9 +8676,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-darwin-x64@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-darwin-x64@npm:1.21.2"
+"bare-runtime-darwin-x64@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-darwin-x64@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8683,9 +8687,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-ios-arm64-simulator@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-ios-arm64-simulator@npm:1.21.2"
+"bare-runtime-ios-arm64-simulator@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-ios-arm64-simulator@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8694,9 +8698,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-ios-arm64@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-ios-arm64@npm:1.21.2"
+"bare-runtime-ios-arm64@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-ios-arm64@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8705,9 +8709,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-ios-x64-simulator@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-ios-x64-simulator@npm:1.21.2"
+"bare-runtime-ios-x64-simulator@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-ios-x64-simulator@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8716,9 +8720,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-linux-arm64@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-linux-arm64@npm:1.21.2"
+"bare-runtime-linux-arm64@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-linux-arm64@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8727,9 +8731,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-linux-x64@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-linux-x64@npm:1.21.2"
+"bare-runtime-linux-x64@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-linux-x64@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8738,9 +8742,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-win32-arm64@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-win32-arm64@npm:1.21.2"
+"bare-runtime-win32-arm64@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-win32-arm64@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8749,9 +8753,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime-win32-x64@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime-win32-x64@npm:1.21.2"
+"bare-runtime-win32-x64@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime-win32-x64@npm:1.21.3"
   dependencies:
     require-asset: "npm:^1.0.2"
   bin:
@@ -8760,25 +8764,25 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare-runtime@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare-runtime@npm:1.21.2"
+"bare-runtime@npm:1.21.3":
+  version: 1.21.3
+  resolution: "bare-runtime@npm:1.21.3"
   dependencies:
     bare-os: "npm:^3.0.1"
     bare-path: "npm:^3.0.0"
-    bare-runtime-android-arm: "npm:1.21.2"
-    bare-runtime-android-arm64: "npm:1.21.2"
-    bare-runtime-android-ia32: "npm:1.21.2"
-    bare-runtime-android-x64: "npm:1.21.2"
-    bare-runtime-darwin-arm64: "npm:1.21.2"
-    bare-runtime-darwin-x64: "npm:1.21.2"
-    bare-runtime-ios-arm64: "npm:1.21.2"
-    bare-runtime-ios-arm64-simulator: "npm:1.21.2"
-    bare-runtime-ios-x64-simulator: "npm:1.21.2"
-    bare-runtime-linux-arm64: "npm:1.21.2"
-    bare-runtime-linux-x64: "npm:1.21.2"
-    bare-runtime-win32-arm64: "npm:1.21.2"
-    bare-runtime-win32-x64: "npm:1.21.2"
+    bare-runtime-android-arm: "npm:1.21.3"
+    bare-runtime-android-arm64: "npm:1.21.3"
+    bare-runtime-android-ia32: "npm:1.21.3"
+    bare-runtime-android-x64: "npm:1.21.3"
+    bare-runtime-darwin-arm64: "npm:1.21.3"
+    bare-runtime-darwin-x64: "npm:1.21.3"
+    bare-runtime-ios-arm64: "npm:1.21.3"
+    bare-runtime-ios-arm64-simulator: "npm:1.21.3"
+    bare-runtime-ios-x64-simulator: "npm:1.21.3"
+    bare-runtime-linux-arm64: "npm:1.21.3"
+    bare-runtime-linux-x64: "npm:1.21.3"
+    bare-runtime-win32-arm64: "npm:1.21.3"
+    bare-runtime-win32-x64: "npm:1.21.3"
     bare-subprocess: "npm:^5.0.0"
   dependenciesMeta:
     bare-runtime-android-arm:
@@ -8809,7 +8813,7 @@ __metadata:
       optional: true
   bin:
     bare: bin/bare
-  checksum: 10/8460f6f0af31cb40d4897816ee4bc9cc96f75cf61ed8fa4a43aed95fe21a7f22921ae4d4f116b19d1cfb92e5b4d47049819a33fd8a22a957c396c0c4f8a584bd
+  checksum: 10/ac9a390faf2c33a45a92b8cbe8b14a71de765152b3a356c3270683742cc95727373330630ab3d5dbcad1afe0a6ac3f1fc63faebf6d206cbd4f351d59e641b1f1
   languageName: node
   linkType: hard
 
@@ -8986,14 +8990,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bare@npm:1.21.2":
-  version: 1.21.2
-  resolution: "bare@npm:1.21.2"
+"bare@npm:^1.21.3":
+  version: 1.21.3
+  resolution: "bare@npm:1.21.3"
   dependencies:
-    bare-runtime: "npm:1.21.2"
+    bare-runtime: "npm:1.21.3"
   bin:
     bare: bin/bare
-  checksum: 10/78b7ebef531ed0db1628c3bbdaba54cb96b12d7e90c9433f07df55a5305a235f7d8cee7da4347fc97e5407621c1d0186fcb1279a7622930167ac649dd94b9dde
+  checksum: 10/228a49a1fc357abe3203cfa6868f9b745fc26eecc63483af158039158f7e5d0f5023221e9f7a8a06ee2171e0b970a1b0c936083313101d03e085d6aef27e6fe2
   languageName: node
   linkType: hard
 
