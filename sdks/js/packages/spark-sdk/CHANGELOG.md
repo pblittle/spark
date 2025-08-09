@@ -1,5 +1,20 @@
 # @buildonspark/spark-sdk
 
+## 0.2.7
+
+### Patch Changes
+
+- - Removed TokenSigner from top-level exports (index.ts/index.node.ts).
+  - Replaced SparkWallet.createSparkPaymentIntent(...) with createSatsInvoice(...) and createTokensInvoice(...).
+  - utils/address invoice schema changed:
+    - PaymentIntentFields → SparkInvoiceFields with versioned structure and union paymentType (tokens/sats), optional senderPublicKey, expiryTime, and optional signature.
+    - encodeSparkAddress now takes sparkInvoiceFields (was paymentIntentFields).
+    - decodeSparkAddress now returns sparkInvoiceFields (was paymentIntentFields) with the new shape.
+    - New exported helper: validateSparkInvoiceFields(...).
+  - Removed ./proto/lrc20 export and dropped LRC20-specific re-exports (e.g., MultisigReceiptInput), along with the @buildonspark/lrc20-sdk dependency.
+  - New @buildonspark/spark-sdk/bare entrypoint for the Bare runtime (exports SparkWallet, utils, signer, and getLatestDepositTxId).
+  - Added top-level export of IKeyPackage type.
+
 ## 0.2.6
 
 ### Patch Changes
