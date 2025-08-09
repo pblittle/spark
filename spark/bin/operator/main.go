@@ -315,10 +315,9 @@ func main() {
 		}()
 	}
 
-	var knobsService *knobs.Knobs
+	var knobsService knobs.Knobs
 	if config.Knobs.IsEnabled() {
-		knobsService = knobs.New(slog.Default().With("component", "knobs"))
-		if err := knobsService.FetchAndUpdate(errCtx); err != nil {
+		if knobsService, err = knobs.New(slog.Default().With("component", "knobs")); err != nil {
 			// Knobs has failed to fetch the config, so the controllers will rely on the default values.
 			slog.Error("Failed to fetch and update knobs", "error", err)
 		}

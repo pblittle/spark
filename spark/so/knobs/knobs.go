@@ -26,27 +26,52 @@ type Config struct {
 	Enabled *bool `yaml:"enabled"`
 }
 
+func GetDatabaseStatementTimeoutMs(k Knobs) uint64 {
+	return uint64(k.GetValue("spark.database.statement_timeout", 60) * 1000)
+}
+
 func (c *Config) IsEnabled() bool {
 	return c.Enabled != nil && *c.Enabled
 }
 
 // Knobs represents a collection of feature flags and their values
-type Knobs struct {
-	inner  sync.RWMutex
+type Knobs interface {
+	GetValue(knob string, defaultValue float64) float64
+	GetValueTarget(knob string, target *string, defaultValue float64) float64
+	RolloutRandomTarget(knob string, target *string, defaultValue float64) bool
+	RolloutRandom(knob string, defaultValue float64) bool
+	RolloutUUIDTarget(knob string, id uuid.UUID, target *string, defaultValue float64) bool
+	RolloutUUID(knob string, id uuid.UUID, defaultValue float64) bool
+}
+
+type KnobsImpl struct {
+	inner  *sync.RWMutex
 	values map[string]float64
 	logger *slog.Logger
 }
 
-// New creates a new Knobs instance
-func New(logger *slog.Logger) *Knobs {
-	return &Knobs{
+// New creates a new Knobs instance, using background context to setup via
+// Kubernetes.
+func New(logger *slog.Logger) (*KnobsImpl, error) {
+	return NewWithContext(context.Background(), logger)
+}
+
+func NewWithContext(ctx context.Context, logger *slog.Logger) (*KnobsImpl, error) {
+	k := &KnobsImpl{
+		inner:  &sync.RWMutex{},
 		values: make(map[string]float64),
 		logger: logger,
 	}
+
+	if err := k.fetchAndUpdate(ctx); err != nil {
+		return nil, fmt.Errorf("failed to fetch and update knobs: %w", err)
+	}
+
+	return k, nil
 }
 
 // GetValueTarget retrieves a knob value for a specific target
-func (k *Knobs) GetValueTarget(knob string, target *string, defaultValue float64) float64 {
+func (k KnobsImpl) GetValueTarget(knob string, target *string, defaultValue float64) float64 {
 	k.inner.RLock()
 	defer k.inner.RUnlock()
 
@@ -62,7 +87,7 @@ func (k *Knobs) GetValueTarget(knob string, target *string, defaultValue float64
 }
 
 // GetValue retrieves a knob value without a target
-func (k *Knobs) GetValue(knob string, defaultValue float64) float64 {
+func (k KnobsImpl) GetValue(knob string, defaultValue float64) float64 {
 	return k.GetValueTarget(knob, nil, defaultValue)
 }
 
@@ -84,7 +109,7 @@ func (k *Knobs) GetValue(knob string, defaultValue float64) float64 {
 //
 // Note: This function uses rand.Float64() which means results are not deterministic
 // across different calls, unlike RolloutUUIDTarget which is deterministic.
-func (k *Knobs) RolloutRandomTarget(knob string, target *string, defaultValue float64) bool {
+func (k KnobsImpl) RolloutRandomTarget(knob string, target *string, defaultValue float64) bool {
 	value := defaultValue
 	if v := k.GetValueTarget(knob, target, defaultValue); v != defaultValue {
 		value = v
@@ -93,7 +118,7 @@ func (k *Knobs) RolloutRandomTarget(knob string, target *string, defaultValue fl
 }
 
 // RolloutRandom determines if a feature should be rolled out based on a random value without a target
-func (k *Knobs) RolloutRandom(knob string, defaultValue float64) bool {
+func (k KnobsImpl) RolloutRandom(knob string, defaultValue float64) bool {
 	return k.RolloutRandomTarget(knob, nil, defaultValue)
 }
 
@@ -125,7 +150,7 @@ func (k *Knobs) RolloutRandom(knob string, defaultValue float64) bool {
 //   - Uniform distribution: UUIDs are distributed evenly across rollout percentages
 //   - Stable: Results remain consistent across application restarts
 //   - Independent: Different knobs with same UUID can have different results
-func (k *Knobs) RolloutUUIDTarget(knob string, id uuid.UUID, target *string, defaultValue float64) bool {
+func (k KnobsImpl) RolloutUUIDTarget(knob string, id uuid.UUID, target *string, defaultValue float64) bool {
 	value := defaultValue
 	if v := k.GetValueTarget(knob, target, defaultValue); v != defaultValue {
 		value = v
@@ -148,7 +173,7 @@ func (k *Knobs) RolloutUUIDTarget(knob string, id uuid.UUID, target *string, def
 }
 
 // RolloutUUID determines if a feature should be rolled out based on a UUID without a target
-func (k *Knobs) RolloutUUID(knob string, id uuid.UUID, defaultValue float64) bool {
+func (k KnobsImpl) RolloutUUID(knob string, id uuid.UUID, defaultValue float64) bool {
 	return k.RolloutUUIDTarget(knob, id, nil, defaultValue)
 }
 
@@ -176,7 +201,7 @@ func (k *Knobs) RolloutUUID(knob string, id uuid.UUID, defaultValue float64) boo
 //
 // Permissions Required:
 //   - WATCH permission on ConfigMaps in "knobs" namespace (LIST permission not required)
-func (k *Knobs) FetchAndUpdate(ctx context.Context) error {
+func (k KnobsImpl) fetchAndUpdate(ctx context.Context) error {
 	// Get Kubernetes config
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -243,7 +268,7 @@ func (k *Knobs) FetchAndUpdate(ctx context.Context) error {
 }
 
 // handleConfigMap processes updates from the ConfigMap
-func (k *Knobs) handleConfigMap(configMap *corev1.ConfigMap) {
+func (k KnobsImpl) handleConfigMap(configMap *corev1.ConfigMap) {
 	if configMap.Data == nil {
 		return
 	}
@@ -252,7 +277,7 @@ func (k *Knobs) handleConfigMap(configMap *corev1.ConfigMap) {
 	k.inner.Lock()
 	defer k.inner.Unlock()
 
-	k.values = make(map[string]float64)
+	clear(k.values)
 
 	for name, value := range configMap.Data {
 		var parsedFloat float64
@@ -273,8 +298,4 @@ func (k *Knobs) handleConfigMap(configMap *corev1.ConfigMap) {
 		k.logger.Warn("Unknown knob value type", "name", name, "value", value)
 	}
 	k.logger.Info("Updated knobs", "knobs", k.values)
-}
-
-func (k *Knobs) GetDatabaseStatementTimeoutMs(ctx context.Context) uint64 {
-	return uint64(k.GetValue("spark.database.statement_timeout", 60) * 1000)
 }

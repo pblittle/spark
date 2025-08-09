@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"testing"
 
+	"sync"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,8 +13,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// newTestKnobs creates a knobs instance for testing that bypasses Kubernetes connectivity
+func newTestKnobs(t *testing.T) *KnobsImpl {
+	k := &KnobsImpl{
+		inner:  &sync.RWMutex{},
+		values: make(map[string]float64),
+		logger: slog.Default().With("component", "knobs"),
+	}
+
+	return k
+}
+
 func TestKnobs(t *testing.T) {
-	k := New(slog.Default().With("component", "knobs"))
+	k := newTestKnobs(t)
 
 	// Test GetValue with no value set
 	value := k.GetValue("test_knob", 0.0)
@@ -81,7 +94,7 @@ func TestKnobs(t *testing.T) {
 }
 
 func TestKnobs_HandleConfigMap(t *testing.T) {
-	k := New(slog.Default().With("component", "knobs"))
+	k := newTestKnobs(t)
 
 	tests := []struct {
 		name           string
@@ -148,7 +161,6 @@ func TestKnobs_HandleConfigMap(t *testing.T) {
 			k.values = make(map[string]float64)
 			k.inner.Unlock()
 
-			// Create ConfigMap
 			configMap := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "knobs",
@@ -157,7 +169,6 @@ func TestKnobs_HandleConfigMap(t *testing.T) {
 				Data: tt.configMapData,
 			}
 
-			// Handle the ConfigMap
 			k.handleConfigMap(configMap)
 
 			// Verify expected values
@@ -174,14 +185,12 @@ func TestKnobs_HandleConfigMap(t *testing.T) {
 }
 
 func TestKnobs_HandleConfigMap_NilData(t *testing.T) {
-	k := New(slog.Default().With("component", "knobs"))
+	k := newTestKnobs(t)
 
-	// Set some initial values
 	k.inner.Lock()
 	k.values["existing_knob"] = 42.0
 	k.inner.Unlock()
 
-	// Create ConfigMap with nil data
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "knobs",
@@ -190,10 +199,8 @@ func TestKnobs_HandleConfigMap_NilData(t *testing.T) {
 		Data: nil,
 	}
 
-	// Handle the ConfigMap
 	k.handleConfigMap(configMap)
 
-	// Verify values remain unchanged
 	k.inner.RLock()
 	value, exists := k.values["existing_knob"]
 	k.inner.RUnlock()
@@ -203,7 +210,7 @@ func TestKnobs_HandleConfigMap_NilData(t *testing.T) {
 }
 
 func TestKnobs_RolloutUUIDConsistent(t *testing.T) {
-	k := New(slog.Default().With("component", "knobs"))
+	k := newTestKnobs(t)
 
 	// Test specific UUIDs for deterministic rollout behavior matching Python implementation
 	// Values verified with Python using knob="test" and default=50.0

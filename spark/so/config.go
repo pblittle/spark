@@ -408,7 +408,7 @@ type DBConnector struct {
 	pool   *pgxpool.Pool
 }
 
-func NewDBConnector(ctx context.Context, soConfig *Config, knobsService *knobs.Knobs) (*DBConnector, error) {
+func NewDBConnector(ctx context.Context, soConfig *Config, knobsService knobs.Knobs) (*DBConnector, error) {
 	uri, err := url.Parse(soConfig.DatabasePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse database path: %w", err)
@@ -481,7 +481,7 @@ func NewDBConnector(ctx context.Context, soConfig *Config, knobsService *knobs.K
 			if knobsService == nil {
 				return nil
 			}
-			statementTimeoutMs := knobsService.GetDatabaseStatementTimeoutMs(ctx)
+			statementTimeoutMs := knobs.GetDatabaseStatementTimeoutMs(knobsService)
 			_, err := conn.Exec(ctx, fmt.Sprintf("SET statement_timeout = %d", statementTimeoutMs))
 			if err != nil {
 				return fmt.Errorf("failed to set statement_timeout: %w", err)
