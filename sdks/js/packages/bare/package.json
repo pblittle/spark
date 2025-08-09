@@ -1,6 +1,6 @@
 {
   "name": "@buildonspark/bare",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -60,7 +60,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "@buildonspark/spark-frost-bare-addon": "0.0.0",
+    "@buildonspark/spark-frost-bare-addon": "0.0.1",
     "@buildonspark/spark-sdk": "0.2.7",
     "@noble/hashes": "^1.7.0",
     "bare-assert": "^1.0.2",
