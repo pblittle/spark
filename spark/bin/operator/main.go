@@ -315,9 +315,11 @@ func main() {
 		}()
 	}
 
+	// Knobs service is only initialized if the config is enabled.
+	// Make sure to check knobsService != nil before using it!
 	var knobsService knobs.Knobs
 	if config.Knobs.IsEnabled() {
-		if knobsService, err = knobs.New(slog.Default().With("component", "knobs")); err != nil {
+		if knobsService, err = knobs.NewWithContext(errCtx, slog.Default().With("component", "knobs")); err != nil {
 			// Knobs has failed to fetch the config, so the controllers will rely on the default values.
 			slog.Error("Failed to fetch and update knobs", "error", err)
 		}
