@@ -1,4 +1,4 @@
-import { isNode } from "@lightsparkdev/core";
+import { isNode, isBare } from "@lightsparkdev/core";
 
 export const isReactNative =
   typeof navigator !== "undefined" && navigator.product === "ReactNative";
@@ -19,6 +19,12 @@ if (isBun) {
   baseEnvStr = `node/${process.version}`;
 } else if (isReactNative) {
   baseEnvStr = "react-native";
+} else if (isBare) {
+  type BareType = {
+    version: string;
+  };
+  const bareVersion = (Bare as BareType).version;
+  baseEnvStr = `bare/${bareVersion}`;
 } else {
   const userAgent =
     (typeof navigator !== "undefined" && navigator.userAgent) ||
