@@ -1,6 +1,6 @@
 [package]
 name = "spark-frost-bare-addon"
-edition = "2024"
+edition = "2021"
 publish = false
 
 [lib]

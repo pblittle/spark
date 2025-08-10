@@ -16,8 +16,7 @@
   "addon": true,
   "scripts": {
     "build": "./build.sh",
-    "test-cmd": "bare test.js",
-    "test": "echo 'Skipping for now'",
+    "test": "bare ./test.js",
     "format:fix": "prettier . --write",
     "format": "prettier . --check"
   },
@@ -35,7 +34,10 @@
     "hoistingLimits": "dependencies"
   },
   "devDependencies": {
+    "@noble/curves": "^1.8.0",
     "bare": "^1.21.3",
+    "bare-crypto": "^1.9.2",
+    "bare-fs": "^4.1.6",
     "bare-make": "^1.5.1",
     "cmake-bare": "^1.6.5",
     "cmake-cargo": "^0.0.5",

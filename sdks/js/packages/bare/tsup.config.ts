@@ -20,6 +20,5 @@ export default defineConfig([
     entry: ["src/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist",
-    onSuccess: "cp src/imports.json dist/imports.json",
   },
 ]);

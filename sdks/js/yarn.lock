@@ -1903,8 +1903,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@buildonspark/spark-frost-bare-addon@workspace:packages/spark-frost-bare-addon"
   dependencies:
+    "@noble/curves": "npm:^1.8.0"
     "@noble/secp256k1": "npm:^2.3.0"
     bare: "npm:^1.21.3"
+    bare-crypto: "npm:^1.9.2"
+    bare-fs: "npm:^4.1.6"
     bare-make: "npm:^1.5.1"
     cmake-bare: "npm:^1.6.5"
     cmake-cargo: "npm:^0.0.5"
