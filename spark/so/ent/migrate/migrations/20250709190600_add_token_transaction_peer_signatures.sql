@@ -1,4 +1,0 @@
--- Create "token_transaction_peer_signatures" table
-CREATE TABLE "token_transaction_peer_signatures" ("id" uuid NOT NULL, "create_time" timestamptz NOT NULL, "update_time" timestamptz NOT NULL, "operator_identity_public_key" bytea NOT NULL, "signature" bytea NOT NULL, "token_transaction_peer_signatures" uuid NOT NULL, PRIMARY KEY ("id"), CONSTRAINT "token_transaction_peer_signatu_5b885be86fd67c744678ef8d30ce746c" FOREIGN KEY ("token_transaction_peer_signatures") REFERENCES "token_transactions" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION);
--- Create index "tokentransactionpeersignature__b2060c33b501808290e63c93649c9394" to table: "token_transaction_peer_signatures"
-CREATE UNIQUE INDEX "tokentransactionpeersignature__b2060c33b501808290e63c93649c9394" ON "token_transaction_peer_signatures" ("operator_identity_public_key", "token_transaction_peer_signatures");
