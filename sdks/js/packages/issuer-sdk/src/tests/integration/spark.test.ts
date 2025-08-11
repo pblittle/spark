@@ -113,7 +113,7 @@ describe.each(TEST_CONFIGS)(
       await expect(wallet.mintTokens(tokenAmount)).rejects.toThrow();
     });
 
-    it("should create, andfail when minting more than max supply", async () => {
+    it("should create, and fail when minting more than max supply", async () => {
       const tokenAmount: bigint = 1000n;
       const { wallet } = await IssuerSparkWalletTesting.initialize({
         options: config,
