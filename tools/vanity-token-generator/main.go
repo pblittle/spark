@@ -143,7 +143,7 @@ func parseMaxSupply(maxSupplyStr string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid max supply format: %s", maxSupplyStr)
 	}
 
-	if maxSupplyBase.Sign() <= 0 {
+	if maxSupplyBase.Sign() < 0 {
 		return nil, fmt.Errorf("max supply must be positive, got %s", maxSupplyStr)
 	}
 
