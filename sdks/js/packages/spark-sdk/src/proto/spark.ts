@@ -670,7 +670,9 @@ export interface TokenMintInput {
 
 export interface TokenCreateInput {
   issuerPublicKey: Uint8Array;
+  /** No minimum length because a single utf-8 character can be 3 bytes. */
   tokenName: string;
+  /** No minimum length because a single utf-8 character can be 3 bytes. */
   tokenTicker: string;
   decimals: number;
   /** Decoded uint128 */
@@ -18122,22 +18124,6 @@ export const SparkServiceDefinition = {
       responseStream: false,
       options: {},
     },
-    prepare_tree_address: {
-      name: "prepare_tree_address",
-      requestType: PrepareTreeAddressRequest,
-      requestStream: false,
-      responseType: PrepareTreeAddressResponse,
-      responseStream: false,
-      options: {},
-    },
-    create_tree: {
-      name: "create_tree",
-      requestType: CreateTreeRequest,
-      requestStream: false,
-      responseType: CreateTreeResponse,
-      responseStream: false,
-      options: {},
-    },
     get_signing_operator_list: {
       name: "get_signing_operator_list",
       requestType: Empty,
@@ -18309,14 +18295,6 @@ export const SparkServiceDefinition = {
      * The following endpoints enforce inclusion of Direct Transactions used
      * for unilateral exits
      */
-    create_tree_v2: {
-      name: "create_tree_v2",
-      requestType: CreateTreeRequest,
-      requestStream: false,
-      responseType: CreateTreeResponse,
-      responseStream: false,
-      options: {},
-    },
     cooperative_exit_v2: {
       name: "cooperative_exit_v2",
       requestType: CooperativeExitRequest,
@@ -18512,14 +18490,6 @@ export interface SparkServiceImplementation<CallContextExt = {}> {
     request: ExtendLeafRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<ExtendLeafResponse>>;
-  prepare_tree_address(
-    request: PrepareTreeAddressRequest,
-    context: CallContext & CallContextExt,
-  ): Promise<DeepPartial<PrepareTreeAddressResponse>>;
-  create_tree(
-    request: CreateTreeRequest,
-    context: CallContext & CallContextExt,
-  ): Promise<DeepPartial<CreateTreeResponse>>;
   get_signing_operator_list(
     request: Empty,
     context: CallContext & CallContextExt,
@@ -18615,10 +18585,6 @@ export interface SparkServiceImplementation<CallContextExt = {}> {
    * The following endpoints enforce inclusion of Direct Transactions used
    * for unilateral exits
    */
-  create_tree_v2(
-    request: CreateTreeRequest,
-    context: CallContext & CallContextExt,
-  ): Promise<DeepPartial<CreateTreeResponse>>;
   cooperative_exit_v2(
     request: CooperativeExitRequest,
     context: CallContext & CallContextExt,
@@ -18773,14 +18739,6 @@ export interface SparkServiceClient<CallOptionsExt = {}> {
     request: DeepPartial<ExtendLeafRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<ExtendLeafResponse>;
-  prepare_tree_address(
-    request: DeepPartial<PrepareTreeAddressRequest>,
-    options?: CallOptions & CallOptionsExt,
-  ): Promise<PrepareTreeAddressResponse>;
-  create_tree(
-    request: DeepPartial<CreateTreeRequest>,
-    options?: CallOptions & CallOptionsExt,
-  ): Promise<CreateTreeResponse>;
   get_signing_operator_list(
     request: DeepPartial<Empty>,
     options?: CallOptions & CallOptionsExt,
@@ -18876,10 +18834,6 @@ export interface SparkServiceClient<CallOptionsExt = {}> {
    * The following endpoints enforce inclusion of Direct Transactions used
    * for unilateral exits
    */
-  create_tree_v2(
-    request: DeepPartial<CreateTreeRequest>,
-    options?: CallOptions & CallOptionsExt,
-  ): Promise<CreateTreeResponse>;
   cooperative_exit_v2(
     request: DeepPartial<CooperativeExitRequest>,
     options?: CallOptions & CallOptionsExt,

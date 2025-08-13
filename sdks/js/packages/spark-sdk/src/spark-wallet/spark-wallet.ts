@@ -46,8 +46,6 @@ import {
   TransferStatus,
   TransferType,
   TreeNode,
-  TokensPayment,
-  SatsPayment,
   UtxoSwapRequestType,
 } from "../proto/spark.js";
 import { WalletConfigService } from "../services/config.js";
@@ -58,10 +56,6 @@ import { LightningService } from "../services/lightning.js";
 import { TokenTransactionService } from "../services/token-transactions.js";
 import type { LeafKeyTweak } from "../services/transfer.js";
 import { TransferService } from "../services/transfer.js";
-import {
-  DepositAddressTree,
-  TreeCreationService,
-} from "../services/tree-creation.js";
 import {
   ConfigOptions,
   ELECTRS_CREDENTIALS,
@@ -160,7 +154,6 @@ export class SparkWallet extends EventEmitter {
   protected tracerId = "spark-sdk";
 
   private depositService: DepositService;
-  private treeCreationService: TreeCreationService;
   private lightningService: LightningService;
   private coopExitService: CoopExitService;
   private signingService: SigningService;
@@ -203,10 +196,6 @@ export class SparkWallet extends EventEmitter {
       this.config,
       this.connectionManager,
       this.signingService,
-    );
-    this.treeCreationService = new TreeCreationService(
-      this.config,
-      this.connectionManager,
     );
     this.tokenTransactionService = new TokenTransactionService(
       this.config,
@@ -3374,59 +3363,6 @@ export class SparkWallet extends EventEmitter {
     }
     const satsFeeEstimate = mapCurrencyAmount(feeEstimate.feeEstimate);
     return Math.ceil(satsFeeEstimate.sats);
-  }
-
-  // ***** Tree Creation Flow *****
-
-  /**
-   * Generates a deposit address for a tree.
-   *
-   * @param {number} vout - The vout index
-   * @param {Uint8Array} parentSigningPubKey - The parent signing public key
-   * @param {Transaction} [parentTx] - Optional parent transaction
-   * @param {TreeNode} [parentNode] - Optional parent node
-   * @returns {Promise<Object>} Deposit address information
-   * @private
-   */
-  private async generateDepositAddressForTree(
-    vout: number,
-    parentSigningPubKey: Uint8Array,
-    parentTx?: Transaction,
-    parentNode?: TreeNode,
-  ) {
-    return await this.treeCreationService!.generateDepositAddressForTree(
-      vout,
-      parentSigningPubKey,
-      parentTx,
-      parentNode,
-    );
-  }
-
-  /**
-   * Creates a tree structure.
-   *
-   * @param {number} vout - The vout index
-   * @param {DepositAddressTree} root - The root of the tree
-   * @param {boolean} createLeaves - Whether to create leaves
-   * @param {Transaction} [parentTx] - Optional parent transaction
-   * @param {TreeNode} [parentNode] - Optional parent node
-   * @returns {Promise<Object>} The created tree
-   * @private
-   */
-  private async createTree(
-    vout: number,
-    root: DepositAddressTree,
-    createLeaves: boolean,
-    parentTx?: Transaction,
-    parentNode?: TreeNode,
-  ) {
-    return await this.treeCreationService!.createTree(
-      vout,
-      root,
-      createLeaves,
-      parentTx,
-      parentNode,
-    );
   }
 
   // ***** Cooperative Exit Flow *****
