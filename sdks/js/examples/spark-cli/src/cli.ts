@@ -1391,6 +1391,21 @@ async function runCLI() {
           console.log(fee);
           break;
         }
+        case "decodetokenidentifier": {
+          const bech32mTokenIdentifier = args[0];
+          const network = getNetworkFromBech32mTokenIdentifier(
+            bech32mTokenIdentifier as Bech32mTokenIdentifier,
+          );
+          const decodedTokenIdentifier = decodeBech32mTokenIdentifier(
+            bech32mTokenIdentifier as Bech32mTokenIdentifier,
+            network,
+          );
+          console.log(
+            "Decoded Raw Token Identifier:",
+            bytesToHex(decodedTokenIdentifier.tokenIdentifier),
+          );
+          break;
+        }
         case "gettokenl1address": {
           if (!wallet) {
             console.log("Please initialize a wallet first");
