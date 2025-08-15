@@ -44,7 +44,7 @@ export class IssuerTokenTransactionService extends TokenTransactionService {
     tokenAmount: bigint,
   ): Promise<TokenTransaction> {
     return {
-      version: 1,
+      version: 2,
       network: this.config.getNetworkProto(),
       tokenInputs: {
         $case: "mintInput",
@@ -64,6 +64,7 @@ export class IssuerTokenTransactionService extends TokenTransactionService {
       sparkOperatorIdentityPublicKeys:
         super.collectOperatorIdentityPublicKeys(),
       expiryTime: undefined,
+      invoiceAttachments: [],
     };
   }
 
@@ -76,7 +77,7 @@ export class IssuerTokenTransactionService extends TokenTransactionService {
     isFreezable: boolean,
   ): Promise<TokenTransaction> {
     return {
-      version: 1,
+      version: 2,
       network: this.config.getNetworkProto(),
       tokenInputs: {
         $case: "createInput",
@@ -94,6 +95,7 @@ export class IssuerTokenTransactionService extends TokenTransactionService {
       sparkOperatorIdentityPublicKeys:
         super.collectOperatorIdentityPublicKeys(),
       expiryTime: undefined,
+      invoiceAttachments: [],
     };
   }
 }

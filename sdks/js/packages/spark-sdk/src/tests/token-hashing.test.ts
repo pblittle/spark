@@ -2,6 +2,7 @@ import { numberToBytesBE } from "@noble/curves/abstract/utils";
 import {
   hashTokenTransactionV0,
   hashTokenTransactionV1,
+  hashTokenTransactionV2,
 } from "../utils/token-hashing.js";
 import { Network, OutputWithPreviousTransactionData } from "../proto/spark.js";
 import { TokenTransactionService } from "../services/token-transactions.js";
@@ -29,6 +30,17 @@ const TEST_OPERATOR_PUB_KEY = new Uint8Array([
   200, 155, 208, 90, 72, 211, 120, 244, 69, 99, 28, 101, 149, 222, 123, 50, 252,
   63, 99, 54, 137, 226, 7, 224, 163, 122, 93, 248, 42, 159, 173, 46,
 ]);
+
+const TEST_INVOICE_ATTACHMENTS = [
+  {
+    sparkInvoice:
+      "sprt1pgssypkrjhrpzt2hw0ggrmndanmm035ley75nxu3gejaju4wx9nq86lwzfjqsqgjzqqe3zul2fm8a24y576t0ne2ehup5fg2yz4r6hxlhatyu9kpw09s2fk36ta5j0k85qascf6snpuy4sp0rp4ezyspvs4qgmt9d4hnyggzqmpet3s394th85ypaek7eaahc60uj02fnwg5vewew2hrzesra0hqflc0vn",
+  },
+  {
+    sparkInvoice:
+      "sprt1pgssypkrjhrpzt2hw0ggrmndanmm035ley75nxu3gejaju4wx9nq86lwzf5ssqgjzqqe3zulcs6h42v0kqkdsv9utxyp5fs2yz4r6hxlhatyu9kpw09s2fk36ta5j0k85qascf6snpuy4sp0rp4ezyszq86z5zryd9nxvmt9d4hnyggzqmpet3s394th85ypaek7eaahc60uj02fnwg5vewew2hrzesra0hql7r5ne",
+  },
+];
 
 const TEST_LEAF_ID = "db1a4e48-0fc5-4f6c-8a80-d9d6c561a436";
 const TEST_BOND_SATS = 10000;
@@ -217,6 +229,7 @@ describe("hash token transaction", () => {
       network: Network.REGTEST,
       expiryTime: new Date(TEST_EXPIRY_TIME),
       clientCreatedTimestamp: new Date(TEST_CLIENT_TIMESTAMP),
+      invoiceAttachments: [],
     };
 
     const hash = hashTokenTransactionV1(tokenTransaction, false);
@@ -246,6 +259,7 @@ describe("hash token transaction", () => {
       network: Network.REGTEST,
       expiryTime: new Date(TEST_EXPIRY_TIME),
       clientCreatedTimestamp: new Date(TEST_CLIENT_TIMESTAMP),
+      invoiceAttachments: [],
     };
 
     const hash = hashTokenTransactionV1(tokenTransaction, false);
@@ -285,6 +299,7 @@ describe("hash token transaction", () => {
       network: Network.REGTEST,
       expiryTime: new Date(TEST_EXPIRY_TIME),
       clientCreatedTimestamp: new Date(TEST_CLIENT_TIMESTAMP),
+      invoiceAttachments: [],
     };
 
     const hash = hashTokenTransactionV1(tokenTransaction, false);
@@ -295,177 +310,150 @@ describe("hash token transaction", () => {
       35,
     ]);
   });
-});
 
-describe("select token outputs", () => {
-  let tokenTransactionService: TokenTransactionService;
+  it("should produce the exact same hash for mint v2", () => {
+    const tokenTransaction = {
+      version: 2,
+      tokenInputs: {
+        $case: "mintInput" as const,
+        mintInput: {
+          issuerPublicKey: TEST_TOKEN_PUBLIC_KEY,
+          tokenIdentifier: TEST_TOKEN_IDENTIFIER,
+        },
+      },
+      tokenOutputs: [
+        {
+          id: TEST_LEAF_ID,
+          ownerPublicKey: TEST_IDENTITY_PUB_KEY,
+          withdrawBondSats: TEST_WITHDRAW_BOND_SATS,
+          withdrawRelativeBlockLocktime: TEST_WITHDRAW_RELATIVE_BLOCK_LOCKTIME,
+          tokenPublicKey: TEST_TOKEN_PUBLIC_KEY,
+          tokenAmount: numberToBytesBE(TEST_TOKEN_AMOUNT, 16),
+          revocationCommitment: TEST_REVOCATION_PUB_KEY,
+        },
+      ],
+      sparkOperatorIdentityPublicKeys: [TEST_OPERATOR_PUB_KEY],
+      network: Network.REGTEST,
+      expiryTime: new Date(TEST_EXPIRY_TIME),
+      clientCreatedTimestamp: new Date(TEST_CLIENT_TIMESTAMP),
+      invoiceAttachments: [],
+    };
 
-  beforeEach(() => {
-    const mockConfig = {} as WalletConfigService;
-    const mockConnectionManager = {} as ConnectionManager;
-    tokenTransactionService = new TokenTransactionService(
-      mockConfig,
-      mockConnectionManager,
-    );
+    const hash = hashTokenTransactionV1(tokenTransaction, false);
+
+    expect(Array.from(hash)).toEqual([
+      2, 4, 36, 141, 246, 170, 160, 204, 181, 102, 122, 220, 56, 182, 138, 153,
+      199, 216, 80, 3, 35, 2, 146, 139, 209, 31, 195, 129, 121, 120, 236, 126,
+    ]);
   });
 
-  const createMockTokenOutput = (
-    id: string,
-    tokenAmount: bigint,
-    tokenPublicKey: Uint8Array = new Uint8Array(32).fill(1),
-    ownerPublicKey: Uint8Array = new Uint8Array(32).fill(2),
-  ): OutputWithPreviousTransactionData => ({
-    output: {
-      id,
-      ownerPublicKey,
-      tokenPublicKey,
-      tokenAmount: numberToBytesBE(tokenAmount, 16),
-      revocationCommitment: new Uint8Array(32).fill(3),
-    },
-    previousTransactionHash: new Uint8Array(32).fill(4),
-    previousTransactionVout: 0,
+  it("should produce the exact same hash for create v2", () => {
+    const tokenTransaction = {
+      version: 2,
+      tokenInputs: {
+        $case: "createInput" as const,
+        createInput: {
+          issuerPublicKey: TEST_TOKEN_PUBLIC_KEY,
+          tokenName: TEST_TOKEN_NAME,
+          tokenTicker: TEST_TOKEN_TICKER,
+          decimals: TEST_DECIMALS,
+          maxSupply: TEST_MAX_SUPPLY,
+          isFreezable: false,
+        },
+      },
+      tokenOutputs: [],
+      sparkOperatorIdentityPublicKeys: [TEST_OPERATOR_PUB_KEY],
+      network: Network.REGTEST,
+      expiryTime: new Date(TEST_EXPIRY_TIME),
+      clientCreatedTimestamp: new Date(TEST_CLIENT_TIMESTAMP),
+      invoiceAttachments: [],
+    };
+
+    const hash = hashTokenTransactionV1(tokenTransaction, false);
+
+    expect(Array.from(hash)).toEqual([
+      92, 161, 134, 55, 164, 211, 69, 97, 149, 43, 29, 110, 94, 225, 55, 59,
+      178, 51, 203, 51, 189, 197, 203, 56, 6, 105, 55, 156, 106, 147, 155, 185,
+    ]);
   });
 
-  describe("exact match scenarios", () => {
-    it("should return exact match when available", () => {
-      const tokenOutputs = [
-        createMockTokenOutput("output1", 100n),
-        createMockTokenOutput("output2", 500n),
-        createMockTokenOutput("output3", 1000n),
-      ];
+  it("should produce the exact same hash for transfer v2", () => {
+    const tokenTransaction = {
+      version: 2,
+      tokenInputs: {
+        $case: "transferInput" as const,
+        transferInput: {
+          outputsToSpend: [
+            {
+              prevTokenTransactionHash: PREV_TX_HASH,
+              prevTokenTransactionVout: 0,
+            },
+          ],
+        },
+      },
+      tokenOutputs: [
+        {
+          id: TEST_LEAF_ID,
+          ownerPublicKey: TEST_IDENTITY_PUB_KEY,
+          tokenPublicKey: TEST_TOKEN_PUBLIC_KEY,
+          tokenAmount: numberToBytesBE(TEST_TOKEN_AMOUNT, 16),
+          revocationCommitment: TEST_REVOCATION_PUB_KEY,
+          withdrawBondSats: TEST_BOND_SATS,
+          withdrawRelativeBlockLocktime: TEST_LOCKTIME,
+        },
+      ],
+      sparkOperatorIdentityPublicKeys: [TEST_OPERATOR_PUB_KEY],
+      network: Network.REGTEST,
+      expiryTime: new Date(TEST_EXPIRY_TIME),
+      clientCreatedTimestamp: new Date(TEST_CLIENT_TIMESTAMP),
+      invoiceAttachments: [],
+    };
 
-      const result = tokenTransactionService.selectTokenOutputs(
-        tokenOutputs,
-        500n,
-        "SMALL_FIRST",
-      );
+    const hash = hashTokenTransactionV2(tokenTransaction, false);
 
-      expect(result).toHaveLength(1);
-      expect(result[0]!.output!.id).toBe("output2");
-    });
+    expect(Array.from(hash)).toEqual([
+      21, 226, 190, 223, 0, 62, 121, 223, 94, 193, 34, 62, 186, 68, 52, 197, 6,
+      189, 107, 37, 65, 141, 222, 109, 212, 128, 5, 40, 81, 247, 15, 249,
+    ]);
   });
 
-  describe("SMALL_FIRST strategy", () => {
-    it("should select smallest outputs first when no exact match", () => {
-      const tokenOutputs = [
-        createMockTokenOutput("output1", 1000n),
-        createMockTokenOutput("output2", 100n),
-        createMockTokenOutput("output3", 300n),
-      ];
+  it("should produce the exact same hash for transfer v2 with invoice attachments", () => {
+    const tokenTransaction = {
+      version: 2,
+      tokenInputs: {
+        $case: "transferInput" as const,
+        transferInput: {
+          outputsToSpend: [
+            {
+              prevTokenTransactionHash: PREV_TX_HASH,
+              prevTokenTransactionVout: 0,
+            },
+          ],
+        },
+      },
+      tokenOutputs: [
+        {
+          id: TEST_LEAF_ID,
+          ownerPublicKey: TEST_IDENTITY_PUB_KEY,
+          tokenPublicKey: TEST_TOKEN_PUBLIC_KEY,
+          tokenAmount: numberToBytesBE(TEST_TOKEN_AMOUNT, 16),
+          revocationCommitment: TEST_REVOCATION_PUB_KEY,
+          withdrawBondSats: TEST_BOND_SATS,
+          withdrawRelativeBlockLocktime: TEST_LOCKTIME,
+        },
+      ],
+      sparkOperatorIdentityPublicKeys: [TEST_OPERATOR_PUB_KEY],
+      network: Network.REGTEST,
+      expiryTime: new Date(TEST_EXPIRY_TIME),
+      clientCreatedTimestamp: new Date(TEST_CLIENT_TIMESTAMP),
+      invoiceAttachments: TEST_INVOICE_ATTACHMENTS,
+    };
 
-      const result = tokenTransactionService.selectTokenOutputs(
-        tokenOutputs,
-        350n,
-        "SMALL_FIRST",
-      );
+    const hash = hashTokenTransactionV2(tokenTransaction, false);
 
-      expect(result).toHaveLength(2);
-      expect(result[0]!.output!.id).toBe("output2"); // 100n
-      expect(result[1]!.output!.id).toBe("output3"); // 300n
-      // Total: 400n >= 350n
-    });
-
-    it("should select minimum number of outputs needed", () => {
-      const tokenOutputs = [
-        createMockTokenOutput("output1", 50n),
-        createMockTokenOutput("output2", 100n),
-        createMockTokenOutput("output3", 200n),
-        createMockTokenOutput("output4", 1000n),
-      ];
-
-      const result = tokenTransactionService.selectTokenOutputs(
-        tokenOutputs,
-        300n,
-        "SMALL_FIRST",
-      );
-
-      expect(result).toHaveLength(3);
-      expect(result[0]!.output!.id).toBe("output1"); // 50n
-      expect(result[1]!.output!.id).toBe("output2"); // 100n
-      expect(result[2]!.output!.id).toBe("output3"); // 200n
-      // Total: 350n >= 300n
-    });
-  });
-
-  describe("LARGE_FIRST strategy", () => {
-    it("should select largest outputs first when no exact match", () => {
-      const tokenOutputs = [
-        createMockTokenOutput("output1", 100n),
-        createMockTokenOutput("output2", 1000n),
-        createMockTokenOutput("output3", 300n),
-      ];
-
-      const result = tokenTransactionService.selectTokenOutputs(
-        tokenOutputs,
-        350n,
-        "LARGE_FIRST",
-      );
-
-      expect(result).toHaveLength(1);
-      expect(result[0]!.output!.id).toBe("output2"); // 1000n >= 350n
-    });
-
-    it("should select multiple outputs if largest is insufficient", () => {
-      const tokenOutputs = [
-        createMockTokenOutput("output1", 100n),
-        createMockTokenOutput("output2", 200n),
-        createMockTokenOutput("output3", 150n),
-      ];
-
-      const result = tokenTransactionService.selectTokenOutputs(
-        tokenOutputs,
-        350n,
-        "LARGE_FIRST",
-      );
-
-      expect(result).toHaveLength(2);
-      expect(result[0]!.output!.id).toBe("output2"); // 200n
-      expect(result[1]!.output!.id).toBe("output3"); // 150n
-      // Total: 350n >= 350n
-    });
-  });
-
-  describe("edge cases", () => {
-    it("should handle single output that exactly matches", () => {
-      const tokenOutputs = [createMockTokenOutput("output1", 500n)];
-
-      const result = tokenTransactionService.selectTokenOutputs(
-        tokenOutputs,
-        500n,
-        "SMALL_FIRST",
-      );
-
-      expect(result).toHaveLength(1);
-      expect(result[0]!.output!.id).toBe("output1");
-    });
-
-    it("should handle zero amount request", () => {
-      const tokenOutputs = [createMockTokenOutput("output1", 100n)];
-
-      const result = tokenTransactionService.selectTokenOutputs(
-        tokenOutputs,
-        0n,
-        "SMALL_FIRST",
-      );
-
-      expect(result).toHaveLength(0);
-    });
-
-    it("should select all outputs if needed", () => {
-      const tokenOutputs = [
-        createMockTokenOutput("output1", 100n),
-        createMockTokenOutput("output2", 200n),
-        createMockTokenOutput("output3", 300n),
-      ];
-
-      const result = tokenTransactionService.selectTokenOutputs(
-        tokenOutputs,
-        600n,
-        "SMALL_FIRST",
-      );
-
-      expect(result).toHaveLength(3);
-      // Total: 600n >= 600n
-    });
+    expect(Array.from(hash)).toEqual([
+      139, 4, 220, 112, 69, 32, 149, 81, 90, 67, 151, 101, 240, 182, 13, 123,
+      70, 4, 153, 159, 172, 225, 15, 120, 71, 219, 154, 27, 72, 167, 2, 149,
+    ]);
   });
 });

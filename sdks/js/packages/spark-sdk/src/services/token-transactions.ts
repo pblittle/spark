@@ -17,6 +17,7 @@ import {
   QueryTokenTransactionsRequest as QueryTokenTransactionsRequestV0,
   RevocationSecretWithIndex,
   SignTokenTransactionResponse,
+  SparkInvoiceFields,
   TokenTransaction as TokenTransactionV0,
   TokenTransactionWithStatus as TokenTransactionWithStatusV0,
 } from "../proto/spark.js";
@@ -30,7 +31,7 @@ import {
 } from "../proto/spark_token.js";
 import { TokenOutputsMap } from "../spark-wallet/types.js";
 import { SparkCallOptions } from "../types/grpc.js";
-import { decodeSparkAddress } from "../utils/address.js";
+import { decodeSparkAddress, SparkAddressFormat } from "../utils/address.js";
 import { collectResponses } from "../utils/response-validation.js";
 import {
   hashOperatorSpecificTokenTransactionSignablePayload,
@@ -87,16 +88,21 @@ export class TokenTransactionService {
     this.connectionManager = connectionManager;
   }
 
-  public async tokenTransfer(
-    tokenOutputs: TokenOutputsMap,
+  public async tokenTransfer({
+    tokenOutputs,
+    receiverOutputs,
+    outputSelectionStrategy = "SMALL_FIRST",
+    selectedOutputs,
+  }: {
+    tokenOutputs: TokenOutputsMap;
     receiverOutputs: {
       tokenIdentifier: Bech32mTokenIdentifier;
       tokenAmount: bigint;
       receiverSparkAddress: string;
-    }[],
-    outputSelectionStrategy: "SMALL_FIRST" | "LARGE_FIRST" = "SMALL_FIRST",
-    selectedOutputs?: OutputWithPreviousTransactionData[],
-  ): Promise<string> {
+    }[];
+    outputSelectionStrategy?: "SMALL_FIRST" | "LARGE_FIRST";
+    selectedOutputs?: OutputWithPreviousTransactionData[];
+  }): Promise<string> {
     if (!Array.isArray(receiverOutputs) || receiverOutputs.length === 0) {
       throw new ValidationError("No receiver outputs provided", {
         field: "receiverOutputs",
@@ -184,8 +190,21 @@ export class TokenTransactionService {
         transfer.receiverSparkAddress,
         this.config.getNetworkType(),
       );
+
+      if (
+        this.config.getTokenTransactionVersion() !== "V0" &&
+        receiverAddress.sparkInvoiceFields
+      ) {
+        return {
+          receiverPublicKey: hexToBytes(receiverAddress.identityPublicKey),
+          rawTokenIdentifier,
+          tokenAmount: transfer.tokenAmount,
+          sparkInvoice: transfer.receiverSparkAddress,
+        };
+      }
+
       return {
-        receiverSparkAddress: hexToBytes(receiverAddress.identityPublicKey),
+        receiverPublicKey: hexToBytes(receiverAddress.identityPublicKey),
         rawTokenIdentifier,
         tokenPublicKey, // Remove for full v0 deprecation
         tokenAmount: transfer.tokenAmount,
@@ -198,7 +217,11 @@ export class TokenTransactionService {
       // remove for full v0 deprecation
       tokenTransaction = await this.constructTransferTokenTransactionV0(
         outputsToUse,
-        tokenOutputData,
+        tokenOutputData as Array<{
+          receiverPublicKey: Uint8Array;
+          tokenPublicKey: Uint8Array;
+          tokenAmount: bigint;
+        }>,
       );
     } else {
       tokenTransaction = await this.constructTransferTokenTransaction(
@@ -218,7 +241,7 @@ export class TokenTransactionService {
   public async constructTransferTokenTransactionV0(
     selectedOutputs: OutputWithPreviousTransactionData[],
     tokenOutputData: Array<{
-      receiverSparkAddress: Uint8Array;
+      receiverPublicKey: Uint8Array;
       tokenPublicKey: Uint8Array;
       tokenAmount: bigint;
     }>,
@@ -237,7 +260,7 @@ export class TokenTransactionService {
     );
 
     const tokenOutputs = tokenOutputData.map((output) => ({
-      ownerPublicKey: output.receiverSparkAddress,
+      ownerPublicKey: output.receiverPublicKey,
       tokenPublicKey: output.tokenPublicKey,
       tokenAmount: numberToBytesBE(output.tokenAmount, 16),
     }));
@@ -272,10 +295,11 @@ export class TokenTransactionService {
   public async constructTransferTokenTransaction(
     selectedOutputs: OutputWithPreviousTransactionData[],
     tokenOutputData: Array<{
-      receiverSparkAddress: Uint8Array;
+      receiverPublicKey: Uint8Array;
       rawTokenIdentifier: Uint8Array;
       tokenAmount: bigint;
     }>,
+    sparkInvoice?: SparkAddressFormat,
   ): Promise<TokenTransaction> {
     selectedOutputs.sort(
       (a, b) => a.previousTransactionVout - b.previousTransactionVout,
@@ -289,7 +313,7 @@ export class TokenTransactionService {
 
     const tokenOutputs: TokenOutput[] = tokenOutputData.map(
       (output): TokenOutput => ({
-        ownerPublicKey: output.receiverSparkAddress,
+        ownerPublicKey: output.receiverPublicKey,
         tokenIdentifier: output.rawTokenIdentifier,
         tokenAmount: numberToBytesBE(output.tokenAmount, 16),
       }),
@@ -307,7 +331,7 @@ export class TokenTransactionService {
     }
 
     return {
-      version: 1,
+      version: 2,
       network: this.config.getNetworkProto(),
       tokenInputs: {
         $case: "transferInput",
@@ -322,6 +346,7 @@ export class TokenTransactionService {
       sparkOperatorIdentityPublicKeys: this.collectOperatorIdentityPublicKeys(),
       expiryTime: undefined,
       clientCreatedTimestamp: new Date(),
+      invoiceAttachments: sparkInvoice ? [{ sparkInvoice }] : [],
     };
   }
 
@@ -1079,6 +1104,7 @@ export class TokenTransactionService {
           sparkOperatorIdentityPublicKeys:
             tx.tokenTransaction!.sparkOperatorIdentityPublicKeys!,
           expiryTime: undefined, // V0 doesn't have expiry time
+          invoiceAttachments: [],
           clientCreatedTimestamp:
             tx.tokenTransaction?.tokenInputs?.$case === "mintInput"
               ? new Date(

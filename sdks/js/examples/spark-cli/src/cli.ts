@@ -351,6 +351,8 @@ const commands = [
   "testonly_generateutxostring",
   "testonly_expiretimelock",
 
+  "fulfillsparkinvoice",
+
   "help",
   "exit",
   "quit",
@@ -649,6 +651,7 @@ async function runCLI() {
   Token Holder Commands:
     transfertokens <tokenIdentifier> <receiverAddress> <amount>        - Transfer tokens
     batchtransfertokens <tokenIdentifier> <receiverAddress1:amount1> <receiverAddress2:amount2> ... - Transfer tokens with multiple outputs
+    fulfillsparkinvoice <invoice1[:amount1]> <invoice2[:amount2]> ... - Fulfill one or more Spark token invoices (append :amount if invoice has no preset amount)
     querytokentransactions [--ownerPublicKeys] [--issuerPublicKeys] [--tokenTransactionHashes] [--tokenIdentifiers] [--outputIds] - Query token transaction history
 
   Token Issuer Commands:
@@ -1345,6 +1348,68 @@ async function runCLI() {
             console.error(`Failed to batch transfer tokens: ${errorMsg}`);
           }
           break;
+        case "fulfillsparkinvoice": {
+          if (!wallet) {
+            console.log("Please initialize a wallet first");
+            break;
+          }
+          if (args.length < 1) {
+            console.log(
+              "Usage: fulfillsparkinvoice <invoice1[:amount1]> <invoice2[:amount2]> ...",
+            );
+            break;
+          }
+
+          const sparkInvoices: {
+            invoice: SparkAddressFormat;
+            amount?: bigint;
+          }[] = [];
+
+          for (let i = 0; i < args.length; i++) {
+            const token = args[i];
+            let invoice: string = token;
+            let amount: bigint | undefined = undefined;
+
+            const lastColon = token.lastIndexOf(":");
+            if (lastColon > 0) {
+              const maybeInvoice = token.slice(0, lastColon);
+              const maybeAmount = token.slice(lastColon + 1);
+              if (/^\d+$/.test(maybeAmount)) {
+                invoice = maybeInvoice;
+                try {
+                  amount = BigInt(maybeAmount);
+                } catch {
+                  console.log(
+                    `Invalid amount for argument ${i}: ${maybeAmount}`,
+                  );
+                  break;
+                }
+              }
+            }
+
+            sparkInvoices.push({
+              invoice: invoice as SparkAddressFormat,
+              amount,
+            });
+          }
+
+          if (sparkInvoices.length === 0) {
+            console.log("No valid invoices provided");
+            break;
+          }
+
+          try {
+            const txId = await wallet.fulfillSparkInvoice(sparkInvoices as any);
+            console.log("Fulfill Spark Invoice Transaction ID:", txId);
+          } catch (error) {
+            let errorMsg = "Unknown error";
+            if (error instanceof Error) {
+              errorMsg = error.message;
+            }
+            console.error(`Failed to fulfill spark invoice(s): ${errorMsg}`);
+          }
+          break;
+        }
         case "withdraw":
           if (!wallet) {
             console.log("Please initialize a wallet first");

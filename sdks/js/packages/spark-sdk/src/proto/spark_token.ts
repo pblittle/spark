@@ -57,6 +57,45 @@ export function tokenTransactionTypeToJSON(object: TokenTransactionType): string
   }
 }
 
+export enum CommitStatus {
+  COMMIT_UNSPECIFIED = 0,
+  COMMIT_PROCESSING = 1,
+  COMMIT_FINALIZED = 2,
+  UNRECOGNIZED = -1,
+}
+
+export function commitStatusFromJSON(object: any): CommitStatus {
+  switch (object) {
+    case 0:
+    case "COMMIT_UNSPECIFIED":
+      return CommitStatus.COMMIT_UNSPECIFIED;
+    case 1:
+    case "COMMIT_PROCESSING":
+      return CommitStatus.COMMIT_PROCESSING;
+    case 2:
+    case "COMMIT_FINALIZED":
+      return CommitStatus.COMMIT_FINALIZED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return CommitStatus.UNRECOGNIZED;
+  }
+}
+
+export function commitStatusToJSON(object: CommitStatus): string {
+  switch (object) {
+    case CommitStatus.COMMIT_UNSPECIFIED:
+      return "COMMIT_UNSPECIFIED";
+    case CommitStatus.COMMIT_PROCESSING:
+      return "COMMIT_PROCESSING";
+    case CommitStatus.COMMIT_FINALIZED:
+      return "COMMIT_FINALIZED";
+    case CommitStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export enum TokenTransactionStatus {
   TOKEN_TRANSACTION_STARTED = 0,
   TOKEN_TRANSACTION_SIGNED = 1,
@@ -140,7 +179,9 @@ export interface TokenMintInput {
 
 export interface TokenCreateInput {
   issuerPublicKey: Uint8Array;
+  /** No minimum length because a single utf-8 character can be 3 bytes. */
   tokenName: string;
+  /** No minimum length because a single utf-8 character can be 3 bytes. */
   tokenTicker: string;
   decimals: number;
   /** Decoded uint128 */
@@ -201,7 +242,15 @@ export interface TokenTransaction {
    * determine which transaction should win in a race condition. Earlier
    * timestamps win over later ones.
    */
-  clientCreatedTimestamp: Date | undefined;
+  clientCreatedTimestamp:
+    | Date
+    | undefined;
+  /** The spark invoices this transaction fulfills. */
+  invoiceAttachments: InvoiceAttachment[];
+}
+
+export interface InvoiceAttachment {
+  sparkInvoice: string;
 }
 
 export interface SignatureWithIndex {
@@ -256,7 +305,14 @@ export interface CommitTransactionRequest {
   ownerIdentityPublicKey: Uint8Array;
 }
 
+export interface CommitProgress {
+  committedOperatorPublicKeys: Uint8Array[];
+  uncommittedOperatorPublicKeys: Uint8Array[];
+}
+
 export interface CommitTransactionResponse {
+  commitStatus: CommitStatus;
+  commitProgress: CommitProgress | undefined;
 }
 
 export interface QueryTokenMetadataRequest {
@@ -947,6 +1003,7 @@ function createBaseTokenTransaction(): TokenTransaction {
     expiryTime: undefined,
     network: 0,
     clientCreatedTimestamp: undefined,
+    invoiceAttachments: [],
   };
 }
 
@@ -980,6 +1037,9 @@ export const TokenTransaction: MessageFns<TokenTransaction> = {
     }
     if (message.clientCreatedTimestamp !== undefined) {
       Timestamp.encode(toTimestamp(message.clientCreatedTimestamp), writer.uint32(74).fork()).join();
+    }
+    for (const v of message.invoiceAttachments) {
+      InvoiceAttachment.encode(v!, writer.uint32(82).fork()).join();
     }
     return writer;
   },
@@ -1066,6 +1126,14 @@ export const TokenTransaction: MessageFns<TokenTransaction> = {
           message.clientCreatedTimestamp = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
           continue;
         }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.invoiceAttachments.push(InvoiceAttachment.decode(reader, reader.uint32()));
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1096,6 +1164,9 @@ export const TokenTransaction: MessageFns<TokenTransaction> = {
       clientCreatedTimestamp: isSet(object.clientCreatedTimestamp)
         ? fromJsonTimestamp(object.clientCreatedTimestamp)
         : undefined,
+      invoiceAttachments: globalThis.Array.isArray(object?.invoiceAttachments)
+        ? object.invoiceAttachments.map((e: any) => InvoiceAttachment.fromJSON(e))
+        : [],
     };
   },
 
@@ -1125,6 +1196,9 @@ export const TokenTransaction: MessageFns<TokenTransaction> = {
     }
     if (message.clientCreatedTimestamp !== undefined) {
       obj.clientCreatedTimestamp = message.clientCreatedTimestamp.toISOString();
+    }
+    if (message.invoiceAttachments?.length) {
+      obj.invoiceAttachments = message.invoiceAttachments.map((e) => InvoiceAttachment.toJSON(e));
     }
     return obj;
   },
@@ -1169,6 +1243,65 @@ export const TokenTransaction: MessageFns<TokenTransaction> = {
     message.expiryTime = object.expiryTime ?? undefined;
     message.network = object.network ?? 0;
     message.clientCreatedTimestamp = object.clientCreatedTimestamp ?? undefined;
+    message.invoiceAttachments = object.invoiceAttachments?.map((e) => InvoiceAttachment.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseInvoiceAttachment(): InvoiceAttachment {
+  return { sparkInvoice: "" };
+}
+
+export const InvoiceAttachment: MessageFns<InvoiceAttachment> = {
+  encode(message: InvoiceAttachment, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sparkInvoice !== "") {
+      writer.uint32(10).string(message.sparkInvoice);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): InvoiceAttachment {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseInvoiceAttachment();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sparkInvoice = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): InvoiceAttachment {
+    return { sparkInvoice: isSet(object.sparkInvoice) ? globalThis.String(object.sparkInvoice) : "" };
+  },
+
+  toJSON(message: InvoiceAttachment): unknown {
+    const obj: any = {};
+    if (message.sparkInvoice !== "") {
+      obj.sparkInvoice = message.sparkInvoice;
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<InvoiceAttachment>): InvoiceAttachment {
+    return InvoiceAttachment.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<InvoiceAttachment>): InvoiceAttachment {
+    const message = createBaseInvoiceAttachment();
+    message.sparkInvoice = object.sparkInvoice ?? "";
     return message;
   },
 };
@@ -1666,12 +1799,98 @@ export const CommitTransactionRequest: MessageFns<CommitTransactionRequest> = {
   },
 };
 
+function createBaseCommitProgress(): CommitProgress {
+  return { committedOperatorPublicKeys: [], uncommittedOperatorPublicKeys: [] };
+}
+
+export const CommitProgress: MessageFns<CommitProgress> = {
+  encode(message: CommitProgress, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.committedOperatorPublicKeys) {
+      writer.uint32(10).bytes(v!);
+    }
+    for (const v of message.uncommittedOperatorPublicKeys) {
+      writer.uint32(18).bytes(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CommitProgress {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCommitProgress();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.committedOperatorPublicKeys.push(reader.bytes());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.uncommittedOperatorPublicKeys.push(reader.bytes());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CommitProgress {
+    return {
+      committedOperatorPublicKeys: globalThis.Array.isArray(object?.committedOperatorPublicKeys)
+        ? object.committedOperatorPublicKeys.map((e: any) => bytesFromBase64(e))
+        : [],
+      uncommittedOperatorPublicKeys: globalThis.Array.isArray(object?.uncommittedOperatorPublicKeys)
+        ? object.uncommittedOperatorPublicKeys.map((e: any) => bytesFromBase64(e))
+        : [],
+    };
+  },
+
+  toJSON(message: CommitProgress): unknown {
+    const obj: any = {};
+    if (message.committedOperatorPublicKeys?.length) {
+      obj.committedOperatorPublicKeys = message.committedOperatorPublicKeys.map((e) => base64FromBytes(e));
+    }
+    if (message.uncommittedOperatorPublicKeys?.length) {
+      obj.uncommittedOperatorPublicKeys = message.uncommittedOperatorPublicKeys.map((e) => base64FromBytes(e));
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<CommitProgress>): CommitProgress {
+    return CommitProgress.fromPartial(base ?? {});
+  },
+  fromPartial(object: DeepPartial<CommitProgress>): CommitProgress {
+    const message = createBaseCommitProgress();
+    message.committedOperatorPublicKeys = object.committedOperatorPublicKeys?.map((e) => e) || [];
+    message.uncommittedOperatorPublicKeys = object.uncommittedOperatorPublicKeys?.map((e) => e) || [];
+    return message;
+  },
+};
+
 function createBaseCommitTransactionResponse(): CommitTransactionResponse {
-  return {};
+  return { commitStatus: 0, commitProgress: undefined };
 }
 
 export const CommitTransactionResponse: MessageFns<CommitTransactionResponse> = {
-  encode(_: CommitTransactionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: CommitTransactionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.commitStatus !== 0) {
+      writer.uint32(8).int32(message.commitStatus);
+    }
+    if (message.commitProgress !== undefined) {
+      CommitProgress.encode(message.commitProgress, writer.uint32(18).fork()).join();
+    }
     return writer;
   },
 
@@ -1682,6 +1901,22 @@ export const CommitTransactionResponse: MessageFns<CommitTransactionResponse> = 
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.commitStatus = reader.int32() as any;
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.commitProgress = CommitProgress.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1691,20 +1926,33 @@ export const CommitTransactionResponse: MessageFns<CommitTransactionResponse> = 
     return message;
   },
 
-  fromJSON(_: any): CommitTransactionResponse {
-    return {};
+  fromJSON(object: any): CommitTransactionResponse {
+    return {
+      commitStatus: isSet(object.commitStatus) ? commitStatusFromJSON(object.commitStatus) : 0,
+      commitProgress: isSet(object.commitProgress) ? CommitProgress.fromJSON(object.commitProgress) : undefined,
+    };
   },
 
-  toJSON(_: CommitTransactionResponse): unknown {
+  toJSON(message: CommitTransactionResponse): unknown {
     const obj: any = {};
+    if (message.commitStatus !== 0) {
+      obj.commitStatus = commitStatusToJSON(message.commitStatus);
+    }
+    if (message.commitProgress !== undefined) {
+      obj.commitProgress = CommitProgress.toJSON(message.commitProgress);
+    }
     return obj;
   },
 
   create(base?: DeepPartial<CommitTransactionResponse>): CommitTransactionResponse {
     return CommitTransactionResponse.fromPartial(base ?? {});
   },
-  fromPartial(_: DeepPartial<CommitTransactionResponse>): CommitTransactionResponse {
+  fromPartial(object: DeepPartial<CommitTransactionResponse>): CommitTransactionResponse {
     const message = createBaseCommitTransactionResponse();
+    message.commitStatus = object.commitStatus ?? 0;
+    message.commitProgress = (object.commitProgress !== undefined && object.commitProgress !== null)
+      ? CommitProgress.fromPartial(object.commitProgress)
+      : undefined;
     return message;
   },
 };

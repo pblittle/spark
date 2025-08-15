@@ -16,6 +16,7 @@ import { uuidv7, uuidv7obj } from "uuidv7";
 import {
   ConfigurationError,
   NetworkError,
+  NotImplementedError,
   RPCError,
   ValidationError,
 } from "../errors/types.js";
@@ -828,7 +829,7 @@ export class SparkWallet extends EventEmitter {
       senderPublicKey: senderPublicKey
         ? hexToBytes(senderPublicKey)
         : undefined,
-      expiryTime: expiryTime,
+      expiryTime: expiryTime ?? undefined,
     };
     validateSparkInvoiceFields(invoiceFields);
     return encodeSparkAddress({
@@ -894,7 +895,7 @@ export class SparkWallet extends EventEmitter {
       senderPublicKey: senderPublicKey
         ? hexToBytes(senderPublicKey)
         : undefined,
-      expiryTime: expiryTime,
+      expiryTime: expiryTime ?? undefined,
     };
     validateSparkInvoiceFields(invoiceFields);
     return encodeSparkAddress({
@@ -2604,6 +2605,21 @@ export class SparkWallet extends EventEmitter {
       });
     }
 
+    const addressData = decodeSparkAddress(
+      receiverSparkAddress,
+      this.config.getNetworkType(),
+    );
+
+    if (addressData.sparkInvoiceFields) {
+      throw new ValidationError(
+        "Spark address is a Spark invoice. Use fulfillSparkInvoice instead.",
+        {
+          field: "receiverSparkAddress",
+          value: receiverSparkAddress,
+        },
+      );
+    }
+
     if (!Number.isSafeInteger(amountSats)) {
       throw new ValidationError("Sats amount must be less than 2^53", {
         field: "amountSats",
@@ -3339,6 +3355,128 @@ export class SparkWallet extends EventEmitter {
     });
   }
 
+  public async fulfillSparkInvoice(
+    sparkInvoices: {
+      invoice: SparkAddressFormat;
+      amount?: bigint; // preferred
+      amountForNullInvoice?: bigint; // deprecated alias kept for backward-compatibility
+    }[],
+  ): Promise<string> {
+    if (!Array.isArray(sparkInvoices) || sparkInvoices.length === 0) {
+      throw new ValidationError("No spark invoices provided", {
+        field: "sparkInvoices",
+        value: sparkInvoices,
+        expected: "Non-empty array",
+      });
+    }
+
+    const decoded = sparkInvoices.map((input, index) => {
+      const { invoice, amount, amountForNullInvoice } = input;
+
+      const addressData = decodeSparkAddress(
+        invoice,
+        this.config.getNetworkType(),
+      );
+
+      if (!addressData.sparkInvoiceFields) {
+        throw new ValidationError("Spark invoice not present", {
+          field: "sparkInvoice",
+          value: invoice,
+          index,
+        });
+      }
+
+      const fields = addressData.sparkInvoiceFields;
+
+      if (fields.paymentType?.type === "sats") {
+        throw new NotImplementedError("Sats payments are not supported yet");
+      }
+
+      if (fields.expiryTime) {
+        if (fields.expiryTime.getTime() <= Date.now()) {
+          throw new ValidationError("Spark invoice is expired", {
+            field: "expiryTime",
+            value: fields.expiryTime,
+            index,
+            expected: "future date",
+          });
+        }
+      }
+
+      if (fields.paymentType?.type !== "tokens") {
+        throw new ValidationError("Invalid payment type", {
+          field: "paymentType",
+          value: fields.paymentType,
+          expected: "tokens",
+          index,
+        });
+      }
+
+      const tokenIdentifierHex = fields.paymentType.tokenIdentifier;
+      if (!tokenIdentifierHex) {
+        throw new ValidationError("Token identifier missing in invoice", {
+          field: "paymentType.tokenIdentifier",
+          value: tokenIdentifierHex,
+          index,
+        });
+      }
+
+      // Determine amount
+      const providedAmount = amount ?? amountForNullInvoice;
+      let tokenAmount: bigint =
+        (fields.paymentType.amount as bigint | undefined) ?? providedAmount!;
+
+      if (!tokenAmount) {
+        throw new ValidationError(
+          "Missing token amount. Provide an amount in the invoice or as a parameter.",
+          {
+            field: "amount",
+            index,
+          },
+        );
+      }
+
+      return {
+        invoice,
+        tokenIdentifierHex,
+        tokenAmount,
+      };
+    });
+
+    const firstTokenIdentifierHex = decoded[0]!.tokenIdentifierHex;
+    const allSameToken = decoded.every(
+      (d) => d.tokenIdentifierHex === firstTokenIdentifierHex,
+    );
+    if (!allSameToken) {
+      throw new ValidationError(
+        "All spark invoices must have the same token identifier",
+        {
+          field: "sparkInvoices",
+          value: sparkInvoices,
+          expected: "All invoices reference the same token identifier",
+        },
+      );
+    }
+
+    await this.syncTokenOutputs();
+
+    const bech32mTokenIdentifier = encodeBech32mTokenIdentifier({
+      tokenIdentifier: hexToBytes(firstTokenIdentifierHex),
+      network: this.config.getNetworkType(),
+    }) as Bech32mTokenIdentifier;
+
+    const receiverOutputs = decoded.map((d) => ({
+      tokenIdentifier: bech32mTokenIdentifier,
+      tokenAmount: d.tokenAmount,
+      receiverSparkAddress: d.invoice,
+    }));
+
+    return this.tokenTransactionService.tokenTransfer({
+      tokenOutputs: this.tokenOutputs,
+      receiverOutputs,
+    });
+  }
+
   /**
    * Gets fee estimate for sending Lightning payments.
    *
@@ -3789,20 +3927,35 @@ export class SparkWallet extends EventEmitter {
     outputSelectionStrategy?: "SMALL_FIRST" | "LARGE_FIRST";
     selectedOutputs?: OutputWithPreviousTransactionData[];
   }): Promise<string> {
+    const addressData = decodeSparkAddress(
+      receiverSparkAddress,
+      this.config.getNetworkType(),
+    );
+
+    if (addressData.sparkInvoiceFields) {
+      throw new ValidationError(
+        "Spark address is a Spark invoice. Use fulfillSparkInvoice instead.",
+        {
+          field: "receiverSparkAddress",
+          value: receiverSparkAddress,
+        },
+      );
+    }
+
     await this.syncTokenOutputs();
 
-    return this.tokenTransactionService.tokenTransfer(
-      this.tokenOutputs,
-      [
+    return this.tokenTransactionService.tokenTransfer({
+      tokenOutputs: this.tokenOutputs,
+      receiverOutputs: [
         {
           tokenIdentifier,
           tokenAmount,
           receiverSparkAddress,
         },
       ],
-      outputSelectionStrategy ?? "SMALL_FIRST",
+      outputSelectionStrategy: outputSelectionStrategy ?? "SMALL_FIRST",
       selectedOutputs,
-    );
+    });
   }
 
   /**
@@ -3855,12 +4008,12 @@ export class SparkWallet extends EventEmitter {
       receiverSparkAddress: output.receiverSparkAddress,
     }));
 
-    return this.tokenTransactionService.tokenTransfer(
-      this.tokenOutputs,
-      transferOutputs,
+    return this.tokenTransactionService.tokenTransfer({
+      tokenOutputs: this.tokenOutputs,
+      receiverOutputs: transferOutputs,
       outputSelectionStrategy,
       selectedOutputs,
-    );
+    });
   }
 
   /**
