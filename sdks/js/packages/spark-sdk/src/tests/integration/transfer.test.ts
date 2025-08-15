@@ -1092,4 +1092,74 @@ describe.each(walletTypes)("transfer v2", ({ name, Signer, createTree }) => {
     expect(claimTransferCoreSpy).toHaveBeenCalledTimes(2);
     expect((await sdk2.getBalance()).balance).toBe(1000n);
   });
+
+  it(`${name} - test claiming already claimed transfer`, async () => {
+    const faucet = BitcoinFaucet.getInstance();
+
+    const { wallet: sdk } = await SparkWalletTesting.initialize({
+      options: {
+        network: "LOCAL",
+      },
+      signer: new Signer(),
+    });
+
+    const depositResp = await sdk.getSingleUseDepositAddress();
+    if (!depositResp) {
+      throw new RPCError("Deposit address not found", {
+        method: "getDepositAddress",
+      });
+    }
+
+    const signedTx = await faucet.sendToAddress(depositResp, 1_000n);
+
+    await sdk.claimDeposit(signedTx.id);
+
+    const balance = await sdk.getBalance();
+    expect(balance.balance).toBe(1_000n);
+
+    const { wallet: sdk2 } = await SparkWalletTesting.initialize({
+      options: {
+        network: "LOCAL",
+      },
+      signer: new Signer(),
+    });
+
+    await sdk.transfer({
+      amountSats: 1000,
+      receiverSparkAddress: await sdk2.getSparkAddress(),
+    });
+
+    const pendingTransfers = await sdk2.queryPendingTransfers();
+    expect(pendingTransfers.transfers.length).toBe(1);
+    const transfer = pendingTransfers.transfers[0]!;
+
+    await (sdk2 as any).claimTransfer({ transfer });
+
+    const claimTransferCoreSpy = jest.spyOn(sdk2 as any, "claimTransferCore");
+
+    const claim1 = await (sdk2 as any).claimTransfer({
+      transfer: {
+        ...transfer,
+        status: TransferStatus.TRANSFER_STATUS_SENDER_KEY_TWEAKED,
+      },
+    });
+    expect(claim1.length).toBe(0);
+
+    const claim2 = await (sdk2 as any).claimTransfer({
+      transfer: {
+        ...transfer,
+        status: TransferStatus.TRANSFER_STATUS_RECEIVER_KEY_TWEAKED,
+      },
+    });
+    expect(claim2.length).toBe(0);
+
+    const claim3 = await (sdk2 as any).claimTransfer({
+      transfer,
+    });
+
+    expect(claim3.length).toBe(0);
+
+    // Expect 3 because we call claimTransfer 3 times and we expect there to be 0 retries.
+    expect(claimTransferCoreSpy).toHaveBeenCalledTimes(3);
+  });
 });

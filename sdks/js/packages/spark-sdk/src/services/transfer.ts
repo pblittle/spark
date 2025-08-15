@@ -12,6 +12,7 @@ import * as ecies from "eciesjs";
 import { uuidv7 } from "uuidv7";
 import {
   NetworkError,
+  RPCError,
   SparkSDKError,
   ValidationError,
 } from "../errors/index.js";
@@ -1264,15 +1265,15 @@ export class TransferService extends BaseTransferService {
               await this.config.signer.getIdentityPublicKey(),
             leavesToReceive,
           });
-        } catch (error) {
+        } catch (error: any) {
           errors.push(
-            new NetworkError(
+            new RPCError(
               "Failed to claim transfer tweak keys",
               {
                 method: "POST",
               },
-              error as Error,
-            ) as SparkSDKError,
+              error,
+            ),
           );
           return;
         }
@@ -1282,15 +1283,7 @@ export class TransferService extends BaseTransferService {
     await Promise.all(promises);
 
     if (errors.length > 0) {
-      throw new NetworkError(
-        "Failed to claim transfer tweak keys",
-        {
-          method: "POST",
-          errorCount: errors.length,
-          errors: errors.map((e) => e.message).join(", "),
-        },
-        errors[0],
-      );
+      throw errors[0];
     }
 
     return proofMap;
@@ -1429,8 +1422,14 @@ export class TransferService extends BaseTransferService {
         ownerIdentityPublicKey: await this.config.signer.getIdentityPublicKey(),
         signingJobs,
       });
-    } catch (error) {
-      throw new Error(`Error claiming transfer sign refunds: ${error}`);
+    } catch (error: any) {
+      throw new RPCError(
+        "Failed to claim transfer sign refunds",
+        {
+          method: "POST",
+        },
+        error,
+      );
     }
     return this.signRefunds(leafDataMap, resp.signingResults);
   }

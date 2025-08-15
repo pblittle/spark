@@ -96,6 +96,7 @@ import {
   SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { EventEmitter } from "eventemitter3";
+import { ClientError, Status } from "nice-grpc-common";
 import { isReactNative } from "../constants.js";
 import { Network as NetworkProto, networkToJSON } from "../proto/spark.js";
 import { TokenTransactionWithStatus } from "../proto/spark_token.js";
@@ -124,7 +125,7 @@ import {
 import { chunkArray } from "../utils/chunkArray.js";
 import { getFetch } from "../utils/fetch.js";
 import { addPublicKeys } from "../utils/keys.js";
-import { withRetry } from "../utils/retry.js";
+import { RetryContext, withRetry } from "../utils/retry.js";
 import {
   Bech32mTokenIdentifier,
   decodeBech32mTokenIdentifier,
@@ -2914,11 +2915,36 @@ export class SparkWallet extends EventEmitter {
     emit?: boolean;
     optimize?: boolean;
   }) {
+    const onError = (
+      context: RetryContext<TreeNode[], Transfer>,
+    ): TreeNode[] | null => {
+      const error = context.error;
+      if (
+        error instanceof RPCError &&
+        error.originalError instanceof ClientError &&
+        error.originalError.code === Status.ALREADY_EXISTS
+      ) {
+        return [];
+      }
+      return null;
+    };
+
     try {
-      const result = await withRetry(async (updatedTransfer?: Transfer) => {
-        const transferToUse = updatedTransfer ?? transfer;
-        return await this.claimTransferCore(transferToUse);
-      });
+      const result = await withRetry(
+        async (updatedTransfer?: Transfer) => {
+          const transferToUse = updatedTransfer ?? transfer;
+          return await this.claimTransferCore(transferToUse);
+        },
+        {
+          callbacks: {
+            onError,
+          },
+        },
+      );
+
+      if (result.length === 0) {
+        return [];
+      }
 
       return await this.processClaimedTransferResults(
         result,
