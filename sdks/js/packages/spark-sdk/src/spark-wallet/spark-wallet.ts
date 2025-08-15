@@ -124,6 +124,7 @@ import {
 import { chunkArray } from "../utils/chunkArray.js";
 import { getFetch } from "../utils/fetch.js";
 import { addPublicKeys } from "../utils/keys.js";
+import { withRetry } from "../utils/retry.js";
 import {
   Bech32mTokenIdentifier,
   decodeBech32mTokenIdentifier,
@@ -1475,7 +1476,6 @@ export class SparkWallet extends EventEmitter {
       return await this.claimTransfer({
         transfer: incomingTransfer,
         emit: false,
-        retryCount: 0,
         optimize: false,
       });
     } catch (e) {
@@ -2831,6 +2831,74 @@ export class SparkWallet extends EventEmitter {
     return validNodes;
   }
 
+  private async claimTransferCore(transfer: Transfer) {
+    return await this.claimTransferMutex.runExclusive(async () => {
+      const leafPubKeyMap =
+        await this.transferService.verifyPendingTransfer(transfer);
+
+      let leavesToClaim: LeafKeyTweak[] = [];
+
+      for (const leaf of transfer.leaves) {
+        if (leaf.leaf) {
+          const leafPubKey = leafPubKeyMap.get(leaf.leaf.id);
+          if (leafPubKey) {
+            leavesToClaim.push({
+              leaf: {
+                ...leaf.leaf,
+                refundTx: leaf.intermediateRefundTx,
+                directRefundTx: leaf.intermediateDirectRefundTx,
+                directFromCpfpRefundTx: leaf.intermediateDirectFromCpfpRefundTx,
+              },
+              keyDerivation: {
+                type: KeyDerivationType.ECIES,
+                path: leaf.secretCipher,
+              },
+              newKeyDerivation: {
+                type: KeyDerivationType.LEAF,
+                path: leaf.leaf.id,
+              },
+            });
+          }
+        }
+      }
+
+      const response = await this.transferService.claimTransfer(
+        transfer,
+        leavesToClaim,
+      );
+
+      return response.nodes;
+    });
+  }
+
+  private async processClaimedTransferResults(
+    result: TreeNode[],
+    transfer: Transfer,
+    emit?: boolean,
+    optimize?: boolean,
+  ): Promise<TreeNode[]> {
+    result = await this.checkRefreshTimelockNodes(result);
+    result = await this.checkExtendTimeLockNodes(result);
+
+    const existingIds = new Set(this.leaves.map((leaf) => leaf.id));
+    const uniqueResults = result.filter((node) => !existingIds.has(node.id));
+    this.leaves.push(...uniqueResults);
+
+    if (optimize && transfer.type !== TransferType.COUNTER_SWAP) {
+      await this.optimizeLeaves();
+    }
+
+    if (emit) {
+      this.emit(
+        "transfer:claimed",
+        transfer.id,
+        (await this.getBalance()).balance,
+      );
+    }
+
+    return result;
+  }
+
   /**
    * Claims a specific transfer.
    *
@@ -2840,111 +2908,38 @@ export class SparkWallet extends EventEmitter {
   private async claimTransfer({
     transfer,
     emit,
-    retryCount,
     optimize,
   }: {
     transfer: Transfer;
     emit?: boolean;
-    retryCount?: number;
     optimize?: boolean;
   }) {
-    const MAX_RETRIES = 5;
-    const BASE_DELAY_MS = 1000;
-    const MAX_DELAY_MS = 10000;
-
-    if (retryCount && retryCount > 0) {
-      const delayMs = Math.min(
-        BASE_DELAY_MS * Math.pow(2, retryCount - 1),
-        MAX_DELAY_MS,
-      );
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
     try {
-      let result = await this.claimTransferMutex.runExclusive(async () => {
-        const leafPubKeyMap =
-          await this.transferService.verifyPendingTransfer(transfer);
-
-        let leavesToClaim: LeafKeyTweak[] = [];
-
-        for (const leaf of transfer.leaves) {
-          if (leaf.leaf) {
-            const leafPubKey = leafPubKeyMap.get(leaf.leaf.id);
-            if (leafPubKey) {
-              leavesToClaim.push({
-                leaf: {
-                  ...leaf.leaf,
-                  refundTx: leaf.intermediateRefundTx,
-                  directRefundTx: leaf.intermediateDirectRefundTx,
-                  directFromCpfpRefundTx:
-                    leaf.intermediateDirectFromCpfpRefundTx,
-                },
-                keyDerivation: {
-                  type: KeyDerivationType.ECIES,
-                  path: leaf.secretCipher,
-                },
-                newKeyDerivation: {
-                  type: KeyDerivationType.LEAF,
-                  path: leaf.leaf.id,
-                },
-              });
-            }
-          }
-        }
-
-        const response = await this.transferService.claimTransfer(
-          transfer,
-          leavesToClaim,
-        );
-
-        if (emit) {
-          this.emit(
-            "transfer:claimed",
-            transfer.id,
-            (await this.getBalance()).balance,
-          );
-        }
-
-        return response.nodes;
+      const result = await withRetry(async (updatedTransfer?: Transfer) => {
+        const transferToUse = updatedTransfer ?? transfer;
+        return await this.claimTransferCore(transferToUse);
       });
 
-      result = await this.checkRefreshTimelockNodes(result);
-      result = await this.checkExtendTimeLockNodes(result);
-
-      const existingIds = new Set(this.leaves.map((leaf) => leaf.id));
-      const uniqueResults = result.filter((node) => !existingIds.has(node.id));
-      this.leaves.push(...uniqueResults);
-
-      if (optimize && transfer.type !== TransferType.COUNTER_SWAP) {
-        await this.optimizeLeaves();
-      }
-
-      return result;
+      return await this.processClaimedTransferResults(
+        result,
+        transfer,
+        emit,
+        optimize,
+      );
     } catch (error) {
-      if (retryCount && retryCount < MAX_RETRIES) {
-        this.claimTransfer({
-          transfer,
-          emit,
-          retryCount: retryCount + 1,
-          optimize,
-        });
-        return [];
-      } else if (retryCount) {
-        console.warn(
-          "Failed to claim transfer. Please try reinitializing your wallet in a few minutes. Transfer ID: " +
-            transfer.id,
-          error,
-        );
-        return [];
-      } else {
-        throw new NetworkError(
-          "Failed to claim transfer",
-          {
-            operation: "claimTransfer",
-            errors: error instanceof Error ? error.message : String(error),
-          },
-          error instanceof Error ? error : undefined,
-        );
-      }
+      console.warn(
+        `Failed to claim transfer after all retries. Please try reinitializing your wallet in a few minutes. Transfer ID: ${transfer.id}`,
+        error,
+      );
+
+      throw new NetworkError(
+        "Failed to claim transfer",
+        {
+          operation: "claimTransfer",
+          errors: error instanceof Error ? error.message : String(error),
+        },
+        error instanceof Error ? error : undefined,
+      );
     }
   }
 

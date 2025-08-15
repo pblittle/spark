@@ -1036,4 +1036,60 @@ describe.each(walletTypes)("transfer v2", ({ name, Signer, createTree }) => {
     const newBalance = await sdk.getBalance();
     expect(newBalance.balance).toBe(1000n);
   });
+
+  it(`${name} - test transfer with retry`, async () => {
+    const faucet = BitcoinFaucet.getInstance();
+
+    const { wallet: sdk } = await SparkWalletTesting.initialize({
+      options: {
+        network: "LOCAL",
+      },
+      signer: new Signer(),
+    });
+
+    const depositResp = await sdk.getSingleUseDepositAddress();
+    if (!depositResp) {
+      throw new RPCError("Deposit address not found", {
+        method: "getDepositAddress",
+      });
+    }
+
+    const signedTx = await faucet.sendToAddress(depositResp, 1_000n);
+
+    await sdk.claimDeposit(signedTx.id);
+
+    const balance = await sdk.getBalance();
+    expect(balance.balance).toBe(1_000n);
+
+    const { wallet: sdk2 } = await SparkWalletTesting.initialize({
+      options: {
+        network: "LOCAL",
+      },
+      signer: new Signer(),
+    });
+
+    await sdk.transfer({
+      amountSats: 1000,
+      receiverSparkAddress: await sdk2.getSparkAddress(),
+    });
+
+    const pendingTransfers = await sdk2.queryPendingTransfers();
+    expect(pendingTransfers.transfers.length).toBe(1);
+    const transfer = pendingTransfers.transfers[0]!;
+
+    const originalClaimTransferCore = (sdk2 as any).claimTransferCore.bind(
+      sdk2,
+    );
+    const claimTransferCoreSpy = jest
+      .spyOn(sdk2 as any, "claimTransferCore")
+      .mockRejectedValueOnce(new Error("Network error"))
+      .mockImplementation(async (transfer) => {
+        return await originalClaimTransferCore(transfer);
+      });
+
+    await (sdk2 as any).claimTransfer({ transfer });
+
+    expect(claimTransferCoreSpy).toHaveBeenCalledTimes(2);
+    expect((await sdk2.getBalance()).balance).toBe(1000n);
+  });
 });
