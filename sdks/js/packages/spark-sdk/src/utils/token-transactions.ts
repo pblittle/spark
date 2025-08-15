@@ -6,15 +6,19 @@ import {
   Bech32mTokenIdentifier,
   decodeBech32mTokenIdentifier,
 } from "./token-identifier.js";
-import { NetworkType } from "./network.js";
 
 export function sumAvailableTokens(
   outputs: OutputWithPreviousTransactionData[],
 ): bigint {
-  return outputs.reduce(
-    (sum, output) => sum + BigInt(bytesToNumberBE(output.output!.tokenAmount!)),
-    BigInt(0),
-  );
+  try {
+    return outputs.reduce(
+      (sum, output) =>
+        sum + BigInt(bytesToNumberBE(output.output!.tokenAmount!)),
+      BigInt(0),
+    );
+  } catch (error) {
+    return 0n;
+  }
 }
 
 export function checkIfSelectedOutputsAreAvailable(

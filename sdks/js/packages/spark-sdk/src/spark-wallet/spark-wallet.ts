@@ -3379,20 +3379,23 @@ export class SparkWallet extends EventEmitter {
   public async fulfillSparkInvoice(
     sparkInvoices: {
       invoice: SparkAddressFormat;
-      amount?: bigint; // preferred
-      amountForNullInvoice?: bigint; // deprecated alias kept for backward-compatibility
+      amount?: bigint;
     }[],
   ): Promise<string> {
     if (!Array.isArray(sparkInvoices) || sparkInvoices.length === 0) {
-      throw new ValidationError("No spark invoices provided", {
+      throw new ValidationError("No Spark invoices provided", {
         field: "sparkInvoices",
         value: sparkInvoices,
         expected: "Non-empty array",
       });
     }
 
+    const identityPublicKey = await this.getIdentityPublicKey();
+
+    let firstTokenIdentifierHexSeen: string | undefined;
+
     const decoded = sparkInvoices.map((input, index) => {
-      const { invoice, amount, amountForNullInvoice } = input;
+      const { invoice, amount } = input;
 
       const addressData = decodeSparkAddress(
         invoice,
@@ -3433,6 +3436,15 @@ export class SparkWallet extends EventEmitter {
         });
       }
 
+      if (
+        fields.senderPublicKey &&
+        fields.senderPublicKey !== identityPublicKey
+      ) {
+        throw new ValidationError("Sender public key does not match", {
+          field: "senderPublicKey",
+        });
+      }
+
       const tokenIdentifierHex = fields.paymentType.tokenIdentifier;
       if (!tokenIdentifierHex) {
         throw new ValidationError("Token identifier missing in invoice", {
@@ -3442,10 +3454,22 @@ export class SparkWallet extends EventEmitter {
         });
       }
 
-      // Determine amount
-      const providedAmount = amount ?? amountForNullInvoice;
+      if (!firstTokenIdentifierHexSeen) {
+        firstTokenIdentifierHexSeen = tokenIdentifierHex;
+      } else if (tokenIdentifierHex !== firstTokenIdentifierHexSeen) {
+        throw new ValidationError(
+          "All spark invoices must have the same token identifier",
+          {
+            field: "sparkInvoices",
+            value: sparkInvoices,
+            expected: "All invoices reference the same token identifier",
+            index,
+          },
+        );
+      }
+
       let tokenAmount: bigint =
-        (fields.paymentType.amount as bigint | undefined) ?? providedAmount!;
+        (fields.paymentType.amount as bigint | undefined) ?? amount!;
 
       if (!tokenAmount) {
         throw new ValidationError(
@@ -3464,25 +3488,10 @@ export class SparkWallet extends EventEmitter {
       };
     });
 
-    const firstTokenIdentifierHex = decoded[0]!.tokenIdentifierHex;
-    const allSameToken = decoded.every(
-      (d) => d.tokenIdentifierHex === firstTokenIdentifierHex,
-    );
-    if (!allSameToken) {
-      throw new ValidationError(
-        "All spark invoices must have the same token identifier",
-        {
-          field: "sparkInvoices",
-          value: sparkInvoices,
-          expected: "All invoices reference the same token identifier",
-        },
-      );
-    }
-
     await this.syncTokenOutputs();
 
     const bech32mTokenIdentifier = encodeBech32mTokenIdentifier({
-      tokenIdentifier: hexToBytes(firstTokenIdentifierHex),
+      tokenIdentifier: hexToBytes(firstTokenIdentifierHexSeen!),
       network: this.config.getNetworkType(),
     }) as Bech32mTokenIdentifier;
 
@@ -4006,18 +4015,24 @@ export class SparkWallet extends EventEmitter {
       });
     }
     const firstBech32mTokenIdentifier = receiverOutputs[0]!.tokenIdentifier;
-    const allSameToken = receiverOutputs.every(
-      (output) => output.tokenIdentifier === firstBech32mTokenIdentifier,
-    );
-    if (!allSameToken) {
-      throw new ValidationError(
-        "All receiver outputs must have the same token public key",
-        {
+    for (const output of receiverOutputs) {
+      if (output.tokenIdentifier !== firstBech32mTokenIdentifier) {
+        throw new ValidationError(
+          "All receiver outputs must have the same token public key",
+          {
+            field: "receiverOutputs",
+            value: receiverOutputs,
+            expected: "All outputs must have the same token public key",
+          },
+        );
+      }
+      if (output.tokenAmount <= 0n) {
+        throw new ValidationError("Token amount must be greater than 0", {
           field: "receiverOutputs",
           value: receiverOutputs,
-          expected: "All outputs must have the same token public key",
-        },
-      );
+          expected: "All outputs must have tokenAmount > 0",
+        });
+      }
     }
 
     await this.syncTokenOutputs();

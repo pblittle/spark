@@ -185,11 +185,17 @@ export class TokenTransactionService {
       tokenPublicKey = tokenMetadata.tokenMetadata[0]!.issuerPublicKey;
     }
 
+    let sparkInvoices: SparkAddressFormat[] = [];
+
     const tokenOutputData = receiverOutputs.map((transfer) => {
       const receiverAddress = decodeSparkAddress(
         transfer.receiverSparkAddress,
         this.config.getNetworkType(),
       );
+
+      if (receiverAddress.sparkInvoiceFields) {
+        sparkInvoices.push(transfer.receiverSparkAddress as SparkAddressFormat);
+      }
 
       if (
         this.config.getTokenTransactionVersion() !== "V0" &&
@@ -227,6 +233,7 @@ export class TokenTransactionService {
       tokenTransaction = await this.constructTransferTokenTransaction(
         outputsToUse,
         tokenOutputData,
+        sparkInvoices,
       );
     }
     const txId = await this.broadcastTokenTransaction(
@@ -299,7 +306,7 @@ export class TokenTransactionService {
       rawTokenIdentifier: Uint8Array;
       tokenAmount: bigint;
     }>,
-    sparkInvoice?: SparkAddressFormat,
+    sparkInvoices?: SparkAddressFormat[],
   ): Promise<TokenTransaction> {
     selectedOutputs.sort(
       (a, b) => a.previousTransactionVout - b.previousTransactionVout,
@@ -346,7 +353,9 @@ export class TokenTransactionService {
       sparkOperatorIdentityPublicKeys: this.collectOperatorIdentityPublicKeys(),
       expiryTime: undefined,
       clientCreatedTimestamp: new Date(),
-      invoiceAttachments: sparkInvoice ? [{ sparkInvoice }] : [],
+      invoiceAttachments: sparkInvoices
+        ? sparkInvoices.map((invoice) => ({ sparkInvoice: invoice }))
+        : [],
     };
   }
 
@@ -1188,6 +1197,14 @@ export class TokenTransactionService {
     tokenAmount: bigint,
     strategy: "SMALL_FIRST" | "LARGE_FIRST",
   ): OutputWithPreviousTransactionData[] {
+    if (tokenAmount <= 0n) {
+      throw new ValidationError("Token amount must be greater than 0", {
+        field: "tokenAmount",
+        value: tokenAmount,
+        expected: "Greater than 0",
+      });
+    }
+
     if (sumAvailableTokens(tokenOutputs) < tokenAmount) {
       throw new ValidationError("Insufficient token amount", {
         field: "tokenAmount",

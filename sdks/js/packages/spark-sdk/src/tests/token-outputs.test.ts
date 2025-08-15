@@ -3,6 +3,7 @@ import { OutputWithPreviousTransactionData } from "../proto/spark.js";
 import { TokenTransactionService } from "../services/token-transactions.js";
 import { WalletConfigService } from "../services/config.js";
 import { ConnectionManager } from "../services/connection.js";
+import { ValidationError } from "../errors/types.js";
 
 describe("select token outputs", () => {
   let tokenTransactionService: TokenTransactionService;
@@ -146,16 +147,31 @@ describe("select token outputs", () => {
       expect(result[0]!.output!.id).toBe("output1");
     });
 
-    it("should handle zero amount request", () => {
+    it("should throw ValidationError when tokenAmount is 0", () => {
       const tokenOutputs = [createMockTokenOutput("output1", 100n)];
 
-      const result = tokenTransactionService.selectTokenOutputs(
-        tokenOutputs,
-        0n,
-        "SMALL_FIRST",
-      );
+      expect(() =>
+        tokenTransactionService.selectTokenOutputs(
+          tokenOutputs,
+          0n,
+          "SMALL_FIRST",
+        ),
+      ).toThrow(ValidationError);
+    });
 
-      expect(result).toHaveLength(0);
+    it("should throw ValidationError when available token amount is less than needed", () => {
+      const tokenOutputs = [
+        createMockTokenOutput("output1", 100n),
+        createMockTokenOutput("output2", 50n),
+      ];
+
+      expect(() =>
+        tokenTransactionService.selectTokenOutputs(
+          tokenOutputs,
+          500n,
+          "SMALL_FIRST",
+        ),
+      ).toThrow(ValidationError);
     });
 
     it("should select all outputs if needed", () => {
