@@ -1307,10 +1307,8 @@ export class SparkWallet extends EventEmitter {
         adaptorPubkey: cpfpAdaptorPubkey,
         directAdaptorPubkey: directAdaptorPubkey,
         directFromCpfpAdaptorPubkey: directFromCpfpAdaptorPubkey,
-        targetAmountSats:
-          targetAmounts?.reduce((acc, amount) => acc + amount, 0) ||
-          leavesBatch.reduce((acc, leaf) => acc + leaf.value, 0),
-        totalAmountSats: leavesBatch.reduce((acc, leaf) => acc + leaf.value, 0),
+        targetAmountSats,
+        totalAmountSats,
         targetAmountSatsList: targetAmounts,
         // TODO: Request fee from SSP
         feeSats: 0,
