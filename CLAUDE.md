@@ -47,7 +47,10 @@ go test -v ./path/to/package
 mise lint
 # OR
 golangci-lint run
+
 # To fix linter issues
+mise format
+# OR
 golangci-lint fmt
 ```
 
