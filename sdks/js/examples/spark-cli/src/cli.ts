@@ -510,7 +510,7 @@ function parseCreateSparkInvoiceArgsWithYargs(
 
     const parsed = yargs(args)
       .command(
-        "$0 <asset> <amount> [memo] [senderPublicKey] [expiryTime]",
+        "$0 <asset> [amount] [memo] [senderPublicKey] [expiryTime]",
         false,
         (y) =>
           y
@@ -519,7 +519,7 @@ function parseCreateSparkInvoiceArgsWithYargs(
               type: "string",
             })
             .positional("amount", {
-              describe: "Amount to send",
+              describe: "Amount to send (optional)",
               type: "string",
             })
             .positional("memo", {
@@ -549,7 +549,7 @@ function parseCreateSparkInvoiceArgsWithYargs(
     };
   } catch (err) {
     console.error(
-      "Error: createsparkinvoice <asset> <amount> [memo] [senderPublicKey] [expiryTime]",
+      "Error: createsparkinvoice <asset> [amount] [memo] [senderPublicKey] [expiryTime]",
       err,
     );
     throw err;
@@ -624,7 +624,7 @@ async function runCLI() {
   gettransfers [limit] [offset]                                       - Get a list of transfers
   createinvoice <amount> <memo> <includeSparkAddress> [receiverIdentityPubkey] [descriptionHash] - Create a new lightning invoice
   payinvoice <invoice> <maxFeeSats> <preferSpark> [amountSatsToSend]  - Pay a lightning invoice
-  createsparkinvoice <asset("btc" | tokenIdentifier)> <amount> <memo> <senderPublicKey> <expiryTime> - Create a spark payment request, pass _ for any undefined optional fields eg createsparkinvoice btc 1000 memo _ _
+  createsparkinvoice <asset("btc" | tokenIdentifier)> [amount] [memo] [senderPublicKey] [expiryTime] - Create a spark payment request. Amount is optional. Use _ for empty optional fields eg createsparkinvoice btc _ memo _ _
   sendtransfer <amount> <receiverSparkAddress>                        - Send a spark transfer
   withdraw <amount> <onchainAddress> <exitSpeed(FAST|MEDIUM|SLOW)> [deductFeeFromWithdrawalAmount(true|false)] - Withdraw funds to an L1 address
   withdrawalfee <amount> <withdrawalAddress>                          - Get a fee estimate for a withdrawal (cooperative exit)
