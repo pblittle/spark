@@ -782,7 +782,10 @@ export class TransferService extends BaseTransferService {
     return await this.finalizeNodeSignatures(signatures);
   }
 
-  async queryPendingTransfers(): Promise<QueryTransfersResponse> {
+  // When transferIds is not provided, all pending transfers for the receiver will be returned.
+  async queryPendingTransfers(
+    transferIds?: string[],
+  ): Promise<QueryTransfersResponse> {
     const sparkClient = await this.connectionManager.createSparkClient(
       this.config.getCoordinatorAddress(),
     );
@@ -794,7 +797,8 @@ export class TransferService extends BaseTransferService {
           receiverIdentityPublicKey:
             await this.config.signer.getIdentityPublicKey(),
         },
-        network: NetworkToProto[this.config.getNetwork()],
+        transferIds,
+        network: this.config.getNetworkProto(),
       });
     } catch (error) {
       throw new Error(`Error querying pending transfers: ${error}`);

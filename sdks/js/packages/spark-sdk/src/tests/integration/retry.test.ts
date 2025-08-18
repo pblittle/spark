@@ -15,7 +15,9 @@ describe("Retry Test", () => {
       .fn<() => Promise<string>>()
       .mockResolvedValue("success");
     const onRetry = jest.fn<() => Promise<void>>();
-    const onError = jest.fn<() => string | null>().mockReturnValue(null);
+    const onError = jest
+      .fn<() => string | undefined>()
+      .mockReturnValue(undefined);
 
     const result = await withRetry<string>(operation, {
       callbacks: {
@@ -38,7 +40,9 @@ describe("Retry Test", () => {
       .mockResolvedValue("success");
 
     const onRetry = jest.fn<() => Promise<void>>();
-    const onError = jest.fn<() => string | null>().mockReturnValue(null);
+    const onError = jest
+      .fn<() => string | undefined>()
+      .mockReturnValue(undefined);
 
     const promise = withRetry<string>(operation, {
       callbacks: {

@@ -15,12 +15,14 @@ export interface RetryContext<T, TData = any> {
 }
 
 export interface RetryCallbacks<T, TData = any> {
-  fetchData?: (context: RetryContext<T, TData>) => Promise<TData>;
+  fetchData?: (context: RetryContext<T, TData>) => Promise<TData | undefined>;
   onRetry?: (context: RetryContext<T, TData>) => Promise<void> | void;
-  onError?: (context: RetryContext<T, TData>) => Promise<T | null> | T | null;
+  onError?: (
+    context: RetryContext<T, TData>,
+  ) => Promise<T | undefined> | T | undefined;
   onMaxAttemptsReached?: (
     context: RetryContext<T, TData>,
-  ) => Promise<T | null> | T | null;
+  ) => Promise<T | undefined> | T | undefined;
   onStart?: () => Promise<void> | void;
 }
 
@@ -87,7 +89,7 @@ export async function withRetry<T, TData = any>(
 
       if (onError) {
         const result = await onError(context);
-        if (result !== null) {
+        if (result) {
           return result;
         }
       }
@@ -95,7 +97,7 @@ export async function withRetry<T, TData = any>(
       if (attempt === config.maxAttempts) {
         if (onMaxAttemptsReached) {
           const result = await onMaxAttemptsReached(context);
-          if (result !== null) {
+          if (result) {
             return result;
           }
         }

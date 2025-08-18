@@ -1162,4 +1162,86 @@ describe.each(walletTypes)("transfer v2", ({ name, Signer, createTree }) => {
     // Expect 3 because we call claimTransfer 3 times and we expect there to be 0 retries.
     expect(claimTransferCoreSpy).toHaveBeenCalledTimes(3);
   });
+
+  it(`${name} - test querying updated transfer after error`, async () => {
+    const faucet = BitcoinFaucet.getInstance();
+
+    const options: ConfigOptions = {
+      network: "LOCAL",
+    };
+
+    const { wallet: sdk } = await SparkWalletTesting.initialize({
+      options,
+      signer: new Signer(),
+    });
+
+    const depositResp = await sdk.getSingleUseDepositAddress();
+    if (!depositResp) {
+      throw new RPCError("Deposit address not found", {
+        method: "getDepositAddress",
+      });
+    }
+
+    const signedTx = await faucet.sendToAddress(depositResp, 1_000n);
+
+    await sdk.claimDeposit(signedTx.id);
+
+    const balance = await sdk.getBalance();
+    expect(balance.balance).toBe(1_000n);
+
+    const { wallet: sdk2 } = await SparkWalletTesting.initialize({
+      options: {
+        network: "LOCAL",
+      },
+      signer: new Signer(),
+    });
+
+    const receiverConfigService = new WalletConfigService(
+      options,
+      sdk2.getSigner(),
+    );
+    const receiverConnectionManager = new ConnectionManager(
+      receiverConfigService,
+    );
+    const receiverSigningService = new SigningService(receiverConfigService);
+    const receiverTransferService = new TransferService(
+      receiverConfigService,
+      receiverConnectionManager,
+      receiverSigningService,
+    );
+
+    await sdk.transfer({
+      amountSats: 1000,
+      receiverSparkAddress: await sdk2.getSparkAddress(),
+    });
+
+    const pendingTransfers = await sdk2.queryPendingTransfers();
+    expect(pendingTransfers.transfers.length).toBe(1);
+    const transfer = pendingTransfers.transfers[0]!;
+
+    const leaves: LeafKeyTweak[] = transfer.leaves.map((leaf) => ({
+      leaf: {
+        ...leaf.leaf!,
+        refundTx: leaf.intermediateRefundTx,
+        directRefundTx: leaf.intermediateDirectRefundTx,
+        directFromCpfpRefundTx: leaf.intermediateDirectFromCpfpRefundTx,
+      },
+      keyDerivation: {
+        type: KeyDerivationType.ECIES,
+        path: leaf.secretCipher,
+      },
+      newKeyDerivation: {
+        type: KeyDerivationType.LEAF,
+        path: leaf.leaf!.id,
+      },
+    }));
+    await receiverTransferService.claimTransferTweakKeys(transfer, leaves);
+
+    const claimTransferCoreSpy = jest.spyOn(sdk2 as any, "claimTransferCore");
+
+    const res = await (sdk2 as any).claimTransfer({ transfer });
+    expect(res.length).toBe(1);
+
+    expect(claimTransferCoreSpy).toHaveBeenCalledTimes(2);
+  });
 });

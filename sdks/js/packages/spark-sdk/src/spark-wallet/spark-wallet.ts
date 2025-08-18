@@ -2917,7 +2917,7 @@ export class SparkWallet extends EventEmitter {
   }) {
     const onError = (
       context: RetryContext<TreeNode[], Transfer>,
-    ): TreeNode[] | null => {
+    ): TreeNode[] | undefined => {
       const error = context.error;
       if (
         error instanceof RPCError &&
@@ -2926,7 +2926,18 @@ export class SparkWallet extends EventEmitter {
       ) {
         return [];
       }
-      return null;
+      return;
+    };
+
+    const fetchData = async (context: RetryContext<TreeNode[], Transfer>) => {
+      const transferToUse = context.data || transfer;
+      const updatedTransfer = await this.transferService.queryPendingTransfers([
+        transferToUse.id,
+      ]);
+      if (!updatedTransfer.transfers[0]) {
+        return undefined;
+      }
+      return updatedTransfer.transfers[0];
     };
 
     try {
@@ -2938,6 +2949,7 @@ export class SparkWallet extends EventEmitter {
         {
           callbacks: {
             onError,
+            fetchData,
           },
         },
       );
