@@ -745,7 +745,7 @@ describe.each(walletTypes)(
       //   "should not allow transfer from %s to %s network due to address validation",
       //   async (sourceNetwork, targetNetwork) => {
       //     const sourceOptions: ConfigOptions = {
-      //       network: sourceNetwork,
+      //       network: sourceNetwork
       //     };
       //     const targetOptions: ConfigOptions = {
       //       network: targetNetwork,
@@ -1104,6 +1104,7 @@ describe.each(walletTypes)("transfer v2", ({ name, Signer, createTree }) => {
     });
 
     const depositResp = await sdk.getSingleUseDepositAddress();
+
     if (!depositResp) {
       throw new RPCError("Deposit address not found", {
         method: "getDepositAddress",
@@ -1159,7 +1160,7 @@ describe.each(walletTypes)("transfer v2", ({ name, Signer, createTree }) => {
 
     expect(claim3.length).toBe(0);
 
-    // Expect 3 because we call claimTransfer 3 times and we expect there to be 0 retries.
+    // Expect 3 because we call claimTransfer 3 times and we expect there to be 0 retries
     expect(claimTransferCoreSpy).toHaveBeenCalledTimes(3);
   });
 
@@ -1176,6 +1177,7 @@ describe.each(walletTypes)("transfer v2", ({ name, Signer, createTree }) => {
     });
 
     const depositResp = await sdk.getSingleUseDepositAddress();
+
     if (!depositResp) {
       throw new RPCError("Deposit address not found", {
         method: "getDepositAddress",
@@ -1235,6 +1237,7 @@ describe.each(walletTypes)("transfer v2", ({ name, Signer, createTree }) => {
         path: leaf.leaf!.id,
       },
     }));
+
     await receiverTransferService.claimTransferTweakKeys(transfer, leaves);
 
     const claimTransferCoreSpy = jest.spyOn(sdk2 as any, "claimTransferCore");
@@ -1243,5 +1246,78 @@ describe.each(walletTypes)("transfer v2", ({ name, Signer, createTree }) => {
     expect(res.length).toBe(1);
 
     expect(claimTransferCoreSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it(`${name} - transfer between two wallets that are using different coordinators`, async () => {
+    const faucet = BitcoinFaucet.getInstance();
+
+    const localOperators = Object.values(getLocalSigningOperators());
+    const { wallet: alice } = await SparkWalletTesting.initialize({
+      options: {
+        network: "LOCAL",
+        coordinatorIdentifier: localOperators[0]!.identifier,
+      },
+      signer: new Signer(),
+    });
+    const depositResp = await alice.getSingleUseDepositAddress();
+
+    if (!depositResp) {
+      throw new RPCError("Deposit address not found", {
+        method: "getDepositAddress",
+      });
+    }
+
+    const signedTx = await faucet.sendToAddress(depositResp, 1_000n);
+
+    await faucet.mineBlocks(1);
+
+    await alice.claimDeposit(signedTx.id);
+
+    const balance = await alice.getBalance();
+    expect(balance.balance).toBe(1_000n);
+
+    const options: ConfigOptions = {
+      network: "LOCAL",
+      coordinatorIdentifier: localOperators[1]!.identifier,
+    };
+    const { wallet: bob } = await SparkWalletTesting.initialize({
+      options,
+      signer: new Signer(),
+    });
+
+    const bobConfigService = new WalletConfigService(options, bob.getSigner());
+    const bobConnectionManager = new ConnectionManager(bobConfigService);
+    const bobSigningService = new SigningService(bobConfigService);
+
+    const bobTransferService = new TransferService(
+      bobConfigService,
+      bobConnectionManager,
+      bobSigningService,
+    );
+
+    const sparkAddress = await bob.getSparkAddress();
+
+    await alice.transfer({
+      amountSats: 1000,
+      receiverSparkAddress: sparkAddress,
+    });
+
+    const pendingTransfers = await bob.queryPendingTransfers();
+    expect(pendingTransfers.transfers.length).toBe(1);
+    const transfer = pendingTransfers.transfers[0]!;
+
+    const claimingNodes: LeafKeyTweak[] = transfer!.leaves.map((leaf) => ({
+      leaf: leaf.leaf!,
+      keyDerivation: {
+        type: KeyDerivationType.ECIES,
+        path: leaf.secretCipher,
+      },
+      newKeyDerivation: {
+        type: KeyDerivationType.LEAF,
+        path: leaf.leaf!.id,
+      },
+    }));
+
+    await bobTransferService.claimTransfer(transfer!, claimingNodes);
   });
 });
