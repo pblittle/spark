@@ -113,6 +113,7 @@ export type ConfigOptions = MayHaveSspClientOptions & {
   readonly sspClientOptions?: SspClientOptions;
   readonly expectedWithdrawBondSats?: number;
   readonly expectedWithdrawRelativeBlockLocktime?: number;
+  readonly signerWithPreExistingKeys?: boolean;
   readonly console?: ConsoleOptions;
 };
 
@@ -144,6 +145,7 @@ const BASE_CONFIG: Required<ConfigOptions> = {
     identityPublicKey: getSspIdentityPublicKey("LOCAL"),
     schemaEndpoint: getSspSchemaEndpoint("LOCAL"),
   },
+  signerWithPreExistingKeys: false,
   console: {
     otel: false,
   },

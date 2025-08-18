@@ -1,17 +1,10 @@
 import { SparkWallet as BaseSparkWallet } from "./spark-wallet.js";
-import {
-  ConsoleSpanExporter,
-  SimpleSpanProcessor,
-  SpanProcessor,
-  WebTracerProvider,
-} from "@opentelemetry/sdk-trace-web";
+import { WebTracerProvider } from "@opentelemetry/sdk-trace-web";
 import { registerInstrumentations } from "@opentelemetry/instrumentation";
 import { FetchInstrumentation } from "@opentelemetry/instrumentation-fetch";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { propagation } from "@opentelemetry/api";
 import { SparkWalletProps } from "../spark-wallet/types.js";
-import type { ConfigOptions } from "../services/wallet-config.js";
-import type { SparkSigner } from "../signer/signer.js";
 
 export class SparkWalletBrowser extends BaseSparkWallet {
   public static async initialize({
@@ -22,6 +15,14 @@ export class SparkWalletBrowser extends BaseSparkWallet {
   }: SparkWalletProps) {
     const wallet = new SparkWalletBrowser(options, signer);
     wallet.initializeTracer(wallet);
+
+    if (options && options.signerWithPreExistingKeys) {
+      await wallet.initWalletWithoutSeed();
+
+      return {
+        wallet,
+      };
+    }
 
     const initResponse = await wallet.initWallet(mnemonicOrSeed, accountNumber);
 

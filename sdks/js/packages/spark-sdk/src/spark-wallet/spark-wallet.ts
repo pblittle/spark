@@ -228,6 +228,14 @@ export class SparkWallet extends EventEmitter {
     const wallet = new SparkWallet(options, signer);
     wallet.initializeTracer(wallet);
 
+    if (options && options.signerWithPreExistingKeys) {
+      await wallet.initWalletWithoutSeed();
+
+      return {
+        wallet,
+      };
+    }
+
     const initResponse = await wallet.initWallet(mnemonicOrSeed, accountNumber);
 
     return {
@@ -964,10 +972,34 @@ export class SparkWallet extends EventEmitter {
   }
 
   /**
+   * Initializes the wallet without a seed. Meant for use with a signer with pre-existing keys.
+   * @private
+   */
+  protected async initWalletWithoutSeed() {
+    await this.initializeWallet();
+
+    const identityPublicKey = await this.config.signer.getIdentityPublicKey();
+
+    if (!identityPublicKey || identityPublicKey.length === 0) {
+      throw new ValidationError("Identity public key not found in signer", {
+        field: "identityPublicKey",
+        value: identityPublicKey,
+      });
+    }
+
+    this.sparkAddress = encodeSparkAddress({
+      identityPublicKey: bytesToHex(identityPublicKey),
+      network: this.config.getNetworkType(),
+    });
+
+    return this.sparkAddress;
+  }
+
+  /**
    * Initializes a wallet from a seed.
    *
    * @param {Uint8Array | string} seed - The seed to initialize the wallet from
-   * @returns {Promise<string>} The identity public key
+   * @returns {Promise<string>} The Spark address
    * @private
    */
   private async initWalletFromSeed(

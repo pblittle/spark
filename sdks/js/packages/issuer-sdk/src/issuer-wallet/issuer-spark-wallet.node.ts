@@ -14,6 +14,14 @@ export class IssuerSparkWalletNodeJS extends BaseIssuerSparkWallet {
     const wallet = new IssuerSparkWalletNodeJS(options, signer);
     wallet.initializeTracer(wallet);
 
+    if (options && options.signerWithPreExistingKeys) {
+      await wallet.initWalletWithoutSeed();
+
+      return {
+        wallet,
+      };
+    }
+
     const initResponse = await wallet.initWallet(mnemonicOrSeed, accountNumber);
 
     return {

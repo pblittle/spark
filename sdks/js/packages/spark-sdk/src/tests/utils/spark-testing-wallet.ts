@@ -35,14 +35,22 @@ export class SparkWalletTesting
       disableEvents,
     );
 
-    const initResponse = await wallet.initWallet(
-      props.mnemonicOrSeed,
-      props.accountNumber,
-    );
-    return {
-      wallet,
-      mnemonic: initResponse?.mnemonic,
-    };
+    if (props.options && props.options.signerWithPreExistingKeys) {
+      await wallet.initWalletWithoutSeed();
+
+      return {
+        wallet,
+      };
+    } else {
+      const initResponse = await wallet.initWallet(
+        props.mnemonicOrSeed,
+        props.accountNumber,
+      );
+      return {
+        wallet,
+        mnemonic: initResponse?.mnemonic,
+      };
+    }
   }
 
   protected override async setupBackgroundStream() {

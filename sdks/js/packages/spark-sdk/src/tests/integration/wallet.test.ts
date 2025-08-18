@@ -3,6 +3,18 @@ import { ConfigOptions } from "../../services/wallet-config.js";
 import { NetworkType } from "../../utils/network.js";
 import { walletTypes } from "../test-utils.js";
 import { SparkWalletTesting } from "../utils/spark-testing-wallet.js";
+import { secp256k1, schnorr } from "@noble/curves/secp256k1";
+import { bytesToHex } from "@noble/curves/abstract/utils";
+import type { SparkSigner } from "../../signer/signer.js";
+import type { Transaction } from "@scure/btc-signer";
+import type {
+  AggregateFrostParams,
+  KeyDerivation,
+  SigningCommitmentWithOptionalNonce,
+  SignFrostParams,
+  SplitSecretWithProofsParams,
+} from "../../signer/types.js";
+import type { VerifiableSecretShare } from "../../utils/secret-sharing.js";
 
 describe.each(walletTypes)("wallet", ({ name, Signer }) => {
   it(`${name} - should initialize a wallet`, async () => {
@@ -78,4 +90,152 @@ describe.each(walletTypes)("wallet", ({ name, Signer }) => {
       ).rejects.toThrow();
     }
   });
+});
+
+class PreinitializedTestSigner implements SparkSigner {
+  private readonly identityPrivateKey: Uint8Array;
+  private readonly depositPrivateKey: Uint8Array;
+
+  constructor(params?: {
+    identityPrivateKey?: Uint8Array;
+    depositPrivateKey?: Uint8Array;
+  }) {
+    this.identityPrivateKey =
+      params?.identityPrivateKey ?? secp256k1.utils.randomPrivateKey();
+    this.depositPrivateKey =
+      params?.depositPrivateKey ?? secp256k1.utils.randomPrivateKey();
+  }
+
+  async getIdentityPublicKey(): Promise<Uint8Array> {
+    return secp256k1.getPublicKey(this.identityPrivateKey);
+  }
+  async getDepositSigningKey(): Promise<Uint8Array> {
+    return secp256k1.getPublicKey(this.depositPrivateKey);
+  }
+  async getStaticDepositSigningKey(_idx: number): Promise<Uint8Array> {
+    // Not used in this test; return a valid pubkey
+    return secp256k1.getPublicKey(secp256k1.utils.randomPrivateKey());
+  }
+  async getStaticDepositSecretKey(_idx: number): Promise<Uint8Array> {
+    // Not used in this test
+    return secp256k1.utils.randomPrivateKey();
+  }
+
+  async generateMnemonic(): Promise<string> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+  async mnemonicToSeed(_mnemonic: string): Promise<Uint8Array> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+  async createSparkWalletFromSeed(
+    _seed: Uint8Array | string,
+    _accountNumber?: number,
+  ): Promise<string> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+  async getPublicKeyFromDerivation(
+    _keyDerivation?: KeyDerivation,
+  ): Promise<Uint8Array> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+
+  async signSchnorrWithIdentityKey(message: Uint8Array): Promise<Uint8Array> {
+    return schnorr.sign(message, this.identityPrivateKey);
+  }
+
+  async subtractPrivateKeysGivenDerivationPaths(
+    _first: string,
+    _second: string,
+  ): Promise<Uint8Array> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+  async subtractAndSplitSecretWithProofsGivenDerivations(
+    _params: Omit<SplitSecretWithProofsParams, "secret"> & {
+      first: KeyDerivation;
+      second?: KeyDerivation | undefined;
+    },
+  ): Promise<VerifiableSecretShare[]> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+  async subtractSplitAndEncrypt(
+    _params: Omit<SplitSecretWithProofsParams, "secret"> & {
+      first: KeyDerivation;
+      second: KeyDerivation;
+      receiverPublicKey: Uint8Array;
+    },
+  ): Promise<{ shares: VerifiableSecretShare[]; secretCipher: Uint8Array }> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+  async splitSecretWithProofs(
+    _params: SplitSecretWithProofsParams,
+  ): Promise<VerifiableSecretShare[]> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+  async signFrost(_params: SignFrostParams): Promise<Uint8Array> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+  async aggregateFrost(_params: AggregateFrostParams): Promise<Uint8Array> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+
+  async signMessageWithIdentityKey(
+    message: Uint8Array,
+    compact?: boolean,
+  ): Promise<Uint8Array> {
+    const signature = secp256k1.sign(message, this.identityPrivateKey);
+    return compact ? signature.toCompactRawBytes() : signature.toDERRawBytes();
+  }
+  async validateMessageWithIdentityKey(
+    message: Uint8Array,
+    signature: Uint8Array,
+  ): Promise<boolean> {
+    return secp256k1.verify(
+      signature,
+      message,
+      secp256k1.getPublicKey(this.identityPrivateKey),
+    );
+  }
+
+  signTransactionIndex(
+    _tx: Transaction,
+    _index: number,
+    _publicKey: Uint8Array,
+  ): void {
+    // Not used in this test
+    return;
+  }
+
+  async decryptEcies(_ciphertext: Uint8Array): Promise<Uint8Array> {
+    throw new Error("Not implemented in PreinitializedTestSigner");
+  }
+
+  async getRandomSigningCommitment(): Promise<SigningCommitmentWithOptionalNonce> {
+    // Provide a structurally valid fake commitment
+    const binding = secp256k1.utils.randomPrivateKey();
+    const hiding = secp256k1.utils.randomPrivateKey();
+    return { commitment: { binding, hiding } };
+  }
+}
+
+it("PreinitializedTestSigner - should initialize a wallet without seed using pre-existing keys", async () => {
+  const identityPrivateKey = secp256k1.utils.randomPrivateKey();
+  const signer = new PreinitializedTestSigner({ identityPrivateKey });
+
+  const { wallet } = await SparkWalletTesting.initialize({
+    options: {
+      network: "LOCAL",
+      signerWithPreExistingKeys: true,
+    },
+    signer,
+  });
+
+  expect(wallet).toBeDefined();
+  const identityPubkeyHex = bytesToHex(
+    secp256k1.getPublicKey(identityPrivateKey),
+  );
+  const walletIdentityPubkey = await wallet.getIdentityPublicKey();
+  expect(walletIdentityPubkey).toEqual(identityPubkeyHex);
+
+  const sparkAddress = await wallet.getSparkAddress();
+  expect(sparkAddress).toBeDefined();
 });

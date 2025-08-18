@@ -73,11 +73,9 @@
   },
   "dependencies": {
     "@buildonspark/spark-sdk": "0.2.7",
-    "@lightsparkdev/core": "^1.4.3",
     "@noble/curves": "^1.8.0",
     "@scure/btc-signer": "^1.5.0",
-    "buffer": "^6.0.3",
-    "ts-proto": "^2.6.1"
+    "buffer": "^6.0.3"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.17.4",

@@ -14,6 +14,14 @@ export class IssuerSparkWalletBrowser extends BaseIssuerSparkWallet {
     const wallet = new IssuerSparkWalletBrowser(options, signer);
     wallet.initializeTracer(wallet);
 
+    if (options && options.signerWithPreExistingKeys) {
+      await wallet.initWalletWithoutSeed();
+
+      return {
+        wallet,
+      };
+    }
+
     const initResponse = await wallet.initWallet(mnemonicOrSeed, accountNumber);
 
     return {

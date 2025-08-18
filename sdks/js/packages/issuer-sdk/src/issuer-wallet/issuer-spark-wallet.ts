@@ -4,7 +4,6 @@ import {
   SparkWalletProps,
   ValidationError,
 } from "@buildonspark/spark-sdk";
-import { isNode } from "@lightsparkdev/core";
 import {
   decodeSparkAddress,
   encodeSparkAddress,
@@ -57,6 +56,14 @@ export class IssuerSparkWallet extends SparkWallet {
   }: SparkWalletProps) {
     const wallet = new IssuerSparkWallet(options, signer);
     wallet.initializeTracer(wallet);
+
+    if (options && options.signerWithPreExistingKeys) {
+      await wallet.initWalletWithoutSeed();
+
+      return {
+        wallet,
+      };
+    }
 
     const initResponse = await wallet.initWallet(mnemonicOrSeed, accountNumber);
 
