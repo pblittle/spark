@@ -30,6 +30,9 @@ ent:
 	cd spark && go generate ./so/ent/...
 	@echo "\n!!!!\nEnts generated. Remember to add migration changes with atlas! See README.md for more info.\n!!!!\n"
 
+ssp:
+	cd spark && go generate ./testing/wallet/ssp_api/...
+
 copy-protos:
 	cp protos/common.proto signer/spark-frost/protos/
 	cp protos/frost.proto signer/spark-frost/protos/
