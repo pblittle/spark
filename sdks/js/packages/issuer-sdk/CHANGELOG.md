@@ -1,5 +1,18 @@
 # @buildonspark/issuer-sdk
 
+## 0.0.87
+
+### Patch Changes
+
+- -- Added spark invoice support for token transfers
+  -- Added support for initialization SparkWallet with pre-existing keys
+  -- Return bare info in x-client-env
+  -- Improved test coverage for multiple coordinators
+  -- Improved retry mechanism for transfer claim
+  -- Improved error handling for alreaday exists
+- Updated dependencies
+  - @buildonspark/spark-sdk@0.2.8
+
 ## 0.0.86
 
 ### Patch Changes
