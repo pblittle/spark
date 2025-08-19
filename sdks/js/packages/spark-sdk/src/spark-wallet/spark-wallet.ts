@@ -2618,12 +2618,12 @@ export class SparkWallet extends EventEmitter {
       });
     }
 
-    const addressData = decodeSparkAddress(
+    const receiverAddress = decodeSparkAddress(
       receiverSparkAddress,
       this.config.getNetworkType(),
     );
 
-    if (addressData.sparkInvoiceFields) {
+    if (receiverAddress.sparkInvoiceFields) {
       throw new ValidationError(
         "Spark address is a Spark invoice. Use fulfillSparkInvoice instead.",
         {
@@ -2647,11 +2647,6 @@ export class SparkWallet extends EventEmitter {
         value: amountSats,
       });
     }
-
-    const receiverAddress = decodeSparkAddress(
-      receiverSparkAddress,
-      this.config.getNetworkType(),
-    );
 
     const signerIdentityPublicKey =
       await this.config.signer.getIdentityPublicKey();
