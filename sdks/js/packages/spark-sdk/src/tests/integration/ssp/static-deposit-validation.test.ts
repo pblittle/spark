@@ -71,7 +71,7 @@ describe("SSP static deposit validation tests", () => {
     // Invalid transaction ID
     await expect(
       userWallet.getClaimStaticDepositQuote("invalid-txid", vout!),
-    ).rejects.toThrow("Invalid transaction ID:");
+    ).rejects.toThrow(/InvalidInputException/);
 
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
