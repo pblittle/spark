@@ -67,6 +67,11 @@ service SparkInternalService {
     rpc fix_keyshare_round2(FixKeyshareRound2Request) returns (FixKeyshareRound2Response) {}
 
     rpc get_transfers(GetTransfersRequest) returns (GetTransfersResponse) {}
+
+    // Generate proofs of possession for a static deposit address.
+    // The client can use them to validate that all SOs know about this address.
+    // The coordinator can use them to validate if an address was created correctly.
+    rpc generate_static_deposit_address_proofs(GenerateStaticDepositAddressProofsRequest) returns (GenerateStaticDepositAddressProofsResponse) {}
 }
 
 message MarkKeysharesAsUsedRequest {
@@ -394,3 +399,16 @@ message GetTransfersRequest {
 message GetTransfersResponse {
     repeated spark.Transfer transfers = 1;
 }
+
+message GenerateStaticDepositAddressProofsRequest {
+    string keyshare_id = 1;
+    string address = 2;
+    bytes owner_identity_public_key = 3;
+}
+
+message GenerateStaticDepositAddressProofsResponse {
+    bytes address_signature = 1;
+    bytes possession_signature = 2;
+
+}
+

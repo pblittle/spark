@@ -21,39 +21,40 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SparkInternalService_MarkKeysharesAsUsed_FullMethodName            = "/spark_internal.SparkInternalService/mark_keyshares_as_used"
-	SparkInternalService_MarkKeyshareForDepositAddress_FullMethodName  = "/spark_internal.SparkInternalService/mark_keyshare_for_deposit_address"
-	SparkInternalService_ReserveEntityDkgKey_FullMethodName            = "/spark_internal.SparkInternalService/reserve_entity_dkg_key"
-	SparkInternalService_FinalizeTreeCreation_FullMethodName           = "/spark_internal.SparkInternalService/finalize_tree_creation"
-	SparkInternalService_FrostRound1_FullMethodName                    = "/spark_internal.SparkInternalService/frost_round1"
-	SparkInternalService_FrostRound2_FullMethodName                    = "/spark_internal.SparkInternalService/frost_round2"
-	SparkInternalService_FinalizeTransfer_FullMethodName               = "/spark_internal.SparkInternalService/finalize_transfer"
-	SparkInternalService_FinalizeRefreshTimelock_FullMethodName        = "/spark_internal.SparkInternalService/finalize_refresh_timelock"
-	SparkInternalService_FinalizeExtendLeaf_FullMethodName             = "/spark_internal.SparkInternalService/finalize_extend_leaf"
-	SparkInternalService_InitiatePreimageSwap_FullMethodName           = "/spark_internal.SparkInternalService/initiate_preimage_swap"
-	SparkInternalService_ProvidePreimage_FullMethodName                = "/spark_internal.SparkInternalService/provide_preimage"
-	SparkInternalService_UpdatePreimageRequest_FullMethodName          = "/spark_internal.SparkInternalService/update_preimage_request"
-	SparkInternalService_PrepareTreeAddress_FullMethodName             = "/spark_internal.SparkInternalService/prepare_tree_address"
-	SparkInternalService_InitiateTransfer_FullMethodName               = "/spark_internal.SparkInternalService/initiate_transfer"
-	SparkInternalService_DeliverSenderKeyTweak_FullMethodName          = "/spark_internal.SparkInternalService/deliver_sender_key_tweak"
-	SparkInternalService_InitiateCooperativeExit_FullMethodName        = "/spark_internal.SparkInternalService/initiate_cooperative_exit"
-	SparkInternalService_ReturnLightningPayment_FullMethodName         = "/spark_internal.SparkInternalService/return_lightning_payment"
-	SparkInternalService_StartTokenTransactionInternal_FullMethodName  = "/spark_internal.SparkInternalService/start_token_transaction_internal"
-	SparkInternalService_QueryTokenOutputsInternal_FullMethodName      = "/spark_internal.SparkInternalService/query_token_outputs_internal"
-	SparkInternalService_InitiateSettleReceiverKeyTweak_FullMethodName = "/spark_internal.SparkInternalService/initiate_settle_receiver_key_tweak"
-	SparkInternalService_SettleReceiverKeyTweak_FullMethodName         = "/spark_internal.SparkInternalService/settle_receiver_key_tweak"
-	SparkInternalService_SettleSenderKeyTweak_FullMethodName           = "/spark_internal.SparkInternalService/settle_sender_key_tweak"
-	SparkInternalService_CreateUtxoSwap_FullMethodName                 = "/spark_internal.SparkInternalService/create_utxo_swap"
-	SparkInternalService_CreateStaticDepositUtxoSwap_FullMethodName    = "/spark_internal.SparkInternalService/create_static_deposit_utxo_swap"
-	SparkInternalService_CreateStaticDepositUtxoRefund_FullMethodName  = "/spark_internal.SparkInternalService/create_static_deposit_utxo_refund"
-	SparkInternalService_RollbackUtxoSwap_FullMethodName               = "/spark_internal.SparkInternalService/rollback_utxo_swap"
-	SparkInternalService_UtxoSwapCompleted_FullMethodName              = "/spark_internal.SparkInternalService/utxo_swap_completed"
-	SparkInternalService_QueryLeafSigningPubkeys_FullMethodName        = "/spark_internal.SparkInternalService/query_leaf_signing_pubkeys"
-	SparkInternalService_ResolveLeafInvestigation_FullMethodName       = "/spark_internal.SparkInternalService/resolve_leaf_investigation"
-	SparkInternalService_FixKeyshare_FullMethodName                    = "/spark_internal.SparkInternalService/fix_keyshare"
-	SparkInternalService_FixKeyshareRound1_FullMethodName              = "/spark_internal.SparkInternalService/fix_keyshare_round1"
-	SparkInternalService_FixKeyshareRound2_FullMethodName              = "/spark_internal.SparkInternalService/fix_keyshare_round2"
-	SparkInternalService_GetTransfers_FullMethodName                   = "/spark_internal.SparkInternalService/get_transfers"
+	SparkInternalService_MarkKeysharesAsUsed_FullMethodName                = "/spark_internal.SparkInternalService/mark_keyshares_as_used"
+	SparkInternalService_MarkKeyshareForDepositAddress_FullMethodName      = "/spark_internal.SparkInternalService/mark_keyshare_for_deposit_address"
+	SparkInternalService_ReserveEntityDkgKey_FullMethodName                = "/spark_internal.SparkInternalService/reserve_entity_dkg_key"
+	SparkInternalService_FinalizeTreeCreation_FullMethodName               = "/spark_internal.SparkInternalService/finalize_tree_creation"
+	SparkInternalService_FrostRound1_FullMethodName                        = "/spark_internal.SparkInternalService/frost_round1"
+	SparkInternalService_FrostRound2_FullMethodName                        = "/spark_internal.SparkInternalService/frost_round2"
+	SparkInternalService_FinalizeTransfer_FullMethodName                   = "/spark_internal.SparkInternalService/finalize_transfer"
+	SparkInternalService_FinalizeRefreshTimelock_FullMethodName            = "/spark_internal.SparkInternalService/finalize_refresh_timelock"
+	SparkInternalService_FinalizeExtendLeaf_FullMethodName                 = "/spark_internal.SparkInternalService/finalize_extend_leaf"
+	SparkInternalService_InitiatePreimageSwap_FullMethodName               = "/spark_internal.SparkInternalService/initiate_preimage_swap"
+	SparkInternalService_ProvidePreimage_FullMethodName                    = "/spark_internal.SparkInternalService/provide_preimage"
+	SparkInternalService_UpdatePreimageRequest_FullMethodName              = "/spark_internal.SparkInternalService/update_preimage_request"
+	SparkInternalService_PrepareTreeAddress_FullMethodName                 = "/spark_internal.SparkInternalService/prepare_tree_address"
+	SparkInternalService_InitiateTransfer_FullMethodName                   = "/spark_internal.SparkInternalService/initiate_transfer"
+	SparkInternalService_DeliverSenderKeyTweak_FullMethodName              = "/spark_internal.SparkInternalService/deliver_sender_key_tweak"
+	SparkInternalService_InitiateCooperativeExit_FullMethodName            = "/spark_internal.SparkInternalService/initiate_cooperative_exit"
+	SparkInternalService_ReturnLightningPayment_FullMethodName             = "/spark_internal.SparkInternalService/return_lightning_payment"
+	SparkInternalService_StartTokenTransactionInternal_FullMethodName      = "/spark_internal.SparkInternalService/start_token_transaction_internal"
+	SparkInternalService_QueryTokenOutputsInternal_FullMethodName          = "/spark_internal.SparkInternalService/query_token_outputs_internal"
+	SparkInternalService_InitiateSettleReceiverKeyTweak_FullMethodName     = "/spark_internal.SparkInternalService/initiate_settle_receiver_key_tweak"
+	SparkInternalService_SettleReceiverKeyTweak_FullMethodName             = "/spark_internal.SparkInternalService/settle_receiver_key_tweak"
+	SparkInternalService_SettleSenderKeyTweak_FullMethodName               = "/spark_internal.SparkInternalService/settle_sender_key_tweak"
+	SparkInternalService_CreateUtxoSwap_FullMethodName                     = "/spark_internal.SparkInternalService/create_utxo_swap"
+	SparkInternalService_CreateStaticDepositUtxoSwap_FullMethodName        = "/spark_internal.SparkInternalService/create_static_deposit_utxo_swap"
+	SparkInternalService_CreateStaticDepositUtxoRefund_FullMethodName      = "/spark_internal.SparkInternalService/create_static_deposit_utxo_refund"
+	SparkInternalService_RollbackUtxoSwap_FullMethodName                   = "/spark_internal.SparkInternalService/rollback_utxo_swap"
+	SparkInternalService_UtxoSwapCompleted_FullMethodName                  = "/spark_internal.SparkInternalService/utxo_swap_completed"
+	SparkInternalService_QueryLeafSigningPubkeys_FullMethodName            = "/spark_internal.SparkInternalService/query_leaf_signing_pubkeys"
+	SparkInternalService_ResolveLeafInvestigation_FullMethodName           = "/spark_internal.SparkInternalService/resolve_leaf_investigation"
+	SparkInternalService_FixKeyshare_FullMethodName                        = "/spark_internal.SparkInternalService/fix_keyshare"
+	SparkInternalService_FixKeyshareRound1_FullMethodName                  = "/spark_internal.SparkInternalService/fix_keyshare_round1"
+	SparkInternalService_FixKeyshareRound2_FullMethodName                  = "/spark_internal.SparkInternalService/fix_keyshare_round2"
+	SparkInternalService_GetTransfers_FullMethodName                       = "/spark_internal.SparkInternalService/get_transfers"
+	SparkInternalService_GenerateStaticDepositAddressProofs_FullMethodName = "/spark_internal.SparkInternalService/generate_static_deposit_address_proofs"
 )
 
 // SparkInternalServiceClient is the client API for SparkInternalService service.
@@ -99,6 +100,10 @@ type SparkInternalServiceClient interface {
 	FixKeyshareRound1(ctx context.Context, in *FixKeyshareRound1Request, opts ...grpc.CallOption) (*FixKeyshareRound1Response, error)
 	FixKeyshareRound2(ctx context.Context, in *FixKeyshareRound2Request, opts ...grpc.CallOption) (*FixKeyshareRound2Response, error)
 	GetTransfers(ctx context.Context, in *GetTransfersRequest, opts ...grpc.CallOption) (*GetTransfersResponse, error)
+	// Generate proofs of possession for a static deposit address.
+	// The client can use them to validate that all SOs know about this address.
+	// The coordinator can use them to validate if an address was created correctly.
+	GenerateStaticDepositAddressProofs(ctx context.Context, in *GenerateStaticDepositAddressProofsRequest, opts ...grpc.CallOption) (*GenerateStaticDepositAddressProofsResponse, error)
 }
 
 type sparkInternalServiceClient struct {
@@ -440,6 +445,16 @@ func (c *sparkInternalServiceClient) GetTransfers(ctx context.Context, in *GetTr
 	return out, nil
 }
 
+func (c *sparkInternalServiceClient) GenerateStaticDepositAddressProofs(ctx context.Context, in *GenerateStaticDepositAddressProofsRequest, opts ...grpc.CallOption) (*GenerateStaticDepositAddressProofsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GenerateStaticDepositAddressProofsResponse)
+	err := c.cc.Invoke(ctx, SparkInternalService_GenerateStaticDepositAddressProofs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SparkInternalServiceServer is the server API for SparkInternalService service.
 // All implementations must embed UnimplementedSparkInternalServiceServer
 // for forward compatibility.
@@ -483,6 +498,10 @@ type SparkInternalServiceServer interface {
 	FixKeyshareRound1(context.Context, *FixKeyshareRound1Request) (*FixKeyshareRound1Response, error)
 	FixKeyshareRound2(context.Context, *FixKeyshareRound2Request) (*FixKeyshareRound2Response, error)
 	GetTransfers(context.Context, *GetTransfersRequest) (*GetTransfersResponse, error)
+	// Generate proofs of possession for a static deposit address.
+	// The client can use them to validate that all SOs know about this address.
+	// The coordinator can use them to validate if an address was created correctly.
+	GenerateStaticDepositAddressProofs(context.Context, *GenerateStaticDepositAddressProofsRequest) (*GenerateStaticDepositAddressProofsResponse, error)
 	mustEmbedUnimplementedSparkInternalServiceServer()
 }
 
@@ -591,6 +610,9 @@ func (UnimplementedSparkInternalServiceServer) FixKeyshareRound2(context.Context
 }
 func (UnimplementedSparkInternalServiceServer) GetTransfers(context.Context, *GetTransfersRequest) (*GetTransfersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTransfers not implemented")
+}
+func (UnimplementedSparkInternalServiceServer) GenerateStaticDepositAddressProofs(context.Context, *GenerateStaticDepositAddressProofsRequest) (*GenerateStaticDepositAddressProofsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateStaticDepositAddressProofs not implemented")
 }
 func (UnimplementedSparkInternalServiceServer) mustEmbedUnimplementedSparkInternalServiceServer() {}
 func (UnimplementedSparkInternalServiceServer) testEmbeddedByValue()                              {}
@@ -1207,6 +1229,24 @@ func _SparkInternalService_GetTransfers_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SparkInternalService_GenerateStaticDepositAddressProofs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GenerateStaticDepositAddressProofsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SparkInternalServiceServer).GenerateStaticDepositAddressProofs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SparkInternalService_GenerateStaticDepositAddressProofs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SparkInternalServiceServer).GenerateStaticDepositAddressProofs(ctx, req.(*GenerateStaticDepositAddressProofsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SparkInternalService_ServiceDesc is the grpc.ServiceDesc for SparkInternalService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1345,6 +1385,10 @@ var SparkInternalService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "get_transfers",
 			Handler:    _SparkInternalService_GetTransfers_Handler,
+		},
+		{
+			MethodName: "generate_static_deposit_address_proofs",
+			Handler:    _SparkInternalService_GenerateStaticDepositAddressProofs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

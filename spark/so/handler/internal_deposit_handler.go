@@ -82,6 +82,53 @@ func (h *InternalDepositHandler) MarkKeyshareForDepositAddress(ctx context.Conte
 	}, nil
 }
 
+// GenerateStaticDepositAddressProofs generates proofs of possession for a static deposit address.
+func (h *InternalDepositHandler) GenerateStaticDepositAddressProofs(ctx context.Context, req *pbinternal.GenerateStaticDepositAddressProofsRequest) (*pbinternal.GenerateStaticDepositAddressProofsResponse, error) {
+	logger := logging.GetLoggerFromContext(ctx)
+
+	keyshareID, err := uuid.Parse(req.KeyshareId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse keyshare ID: %w", err)
+	}
+
+	db, err := ent.GetDbFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
+	}
+
+	depositAddress, err := db.DepositAddress.Query().
+		Where(depositaddress.AddressEQ(req.Address)).
+		Where(depositaddress.IsStaticEQ(true)).
+		Where(depositaddress.HasSigningKeyshareWith(signingkeyshare.IDEQ(keyshareID))).
+		Where(depositaddress.OwnerIdentityPubkeyEQ(req.OwnerIdentityPublicKey)).
+		WithSigningKeyshare().
+		Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deposit address: %w", err)
+	}
+
+	logger.Info("Generating proofs of possession for static deposit address generated from keyshare", "keyshare_id", req.KeyshareId, "address", req.Address)
+
+	signingKey := h.config.IdentityPrivateKey
+	addrHash := sha256.Sum256([]byte(depositAddress.Address))
+	addressSignature := ecdsa.Sign(signingKey.ToBTCEC(), addrHash[:])
+
+	keyshare, err := depositAddress.Edges.SigningKeyshareOrErr()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get keyshare: %w", err)
+	}
+	msg := common.ProofOfPossessionMessageHashForDepositAddress(depositAddress.OwnerIdentityPubkey, keyshare.PublicKey, []byte(depositAddress.Address))
+	proofOfPossessionSignature, err := helper.GenerateProofOfPossessionSignatures(ctx, h.config, [][]byte{msg}, []*ent.SigningKeyshare{keyshare})
+	if err != nil {
+		return nil, err
+	}
+
+	return &pbinternal.GenerateStaticDepositAddressProofsResponse{
+		AddressSignature:    addressSignature.Serialize(),
+		PossessionSignature: proofOfPossessionSignature[0],
+	}, nil
+}
+
 // FinalizeTreeCreation finalizes a tree creation during deposit
 func (h *InternalDepositHandler) FinalizeTreeCreation(ctx context.Context, req *pbinternal.FinalizeTreeCreationRequest) error {
 	logger := logging.GetLoggerFromContext(ctx)

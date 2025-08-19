@@ -55,6 +55,11 @@ func (s *SparkInternalServer) MarkKeyshareForDepositAddress(ctx context.Context,
 	return depositHandler.MarkKeyshareForDepositAddress(ctx, req)
 }
 
+func (s *SparkInternalServer) GenerateStaticDepositAddressProofs(ctx context.Context, req *pb.GenerateStaticDepositAddressProofsRequest) (*pb.GenerateStaticDepositAddressProofsResponse, error) {
+	depositHandler := handler.NewInternalDepositHandler(s.config)
+	return depositHandler.GenerateStaticDepositAddressProofs(ctx, req)
+}
+
 func (s *SparkInternalServer) ReserveEntityDkgKey(ctx context.Context, req *pb.ReserveEntityDkgKeyRequest) (*emptypb.Empty, error) {
 	entityDkgKeyHandler := handler.NewEntityDkgKeyHandler(s.config)
 	if err := entityDkgKeyHandler.ReserveEntityDkgKey(ctx, req); err != nil {
