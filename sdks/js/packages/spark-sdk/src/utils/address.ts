@@ -1,12 +1,21 @@
-import { secp256k1 } from "@noble/curves/secp256k1";
+import { secp256k1, schnorr } from "@noble/curves/secp256k1";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { bech32m } from "@scure/base";
-import { SparkInvoiceFields, SparkAddress } from "../proto/spark.js";
+import {
+  SparkInvoiceFields,
+  SparkAddress,
+  TokensPayment,
+  SatsPayment,
+} from "../proto/spark.js";
 import { NetworkType } from "./network.js";
 import { ValidationError } from "../errors/index.js";
-
+import { HashSparkInvoice } from "./invoice-hashing.js";
 import { UUID } from "uuidv7";
 import { bytesToNumberBE } from "@noble/curves/abstract/utils";
+import { Timestamp } from "../proto/google/protobuf/timestamp.js";
+import { BinaryWriter } from "@bufbuild/protobuf/wire";
+
+const BECH32M_LIMIT = 1024;
 
 const AddressNetwork: Record<NetworkType, string> = {
   MAINNET: "sp",
@@ -44,8 +53,16 @@ export interface DecodedSparkAddressData {
 export function encodeSparkAddress(
   payload: SparkAddressData,
 ): SparkAddressFormat {
+  return encodeSparkAddressWithSignature(payload);
+}
+
+export function encodeSparkAddressWithSignature(
+  payload: SparkAddressData,
+  signature?: Uint8Array,
+): SparkAddressFormat {
   try {
     isValidPublicKey(payload.identityPublicKey);
+    const identityPublicKey = hexToBytes(payload.identityPublicKey);
 
     let sparkInvoiceFields: SparkInvoiceFields | undefined;
     if (payload.sparkInvoiceFields) {
@@ -53,18 +70,26 @@ export function encodeSparkAddress(
       sparkInvoiceFields = payload.sparkInvoiceFields;
     }
 
-    const sparkAddressProto = SparkAddress.create({
-      identityPublicKey: hexToBytes(payload.identityPublicKey),
-      sparkInvoiceFields,
-    });
+    const w = new BinaryWriter();
 
-    const serializedPayload = SparkAddress.encode(sparkAddressProto).finish();
+    // SparkAddress.identity_public_key (1)
+    w.uint32(10).bytes(identityPublicKey);
+    // SparkAddress.spark_invoice_fields (2) with canonical inner order
+    if (sparkInvoiceFields) {
+      const inner = encodeSparkInvoiceFieldsV1Canonical(sparkInvoiceFields);
+      w.uint32(18).bytes(inner);
+    }
+    // SparkAddress.signature (3)
+    if (signature && signature.length) {
+      w.uint32(26).bytes(signature);
+    }
+
+    const serializedPayload = w.finish();
     const words = bech32m.toWords(serializedPayload);
 
-    return bech32m.encode(
+    return bech32mEncode(
       AddressNetwork[payload.network],
       words,
-      500,
     ) as SparkAddressFormat;
   } catch (error) {
     throw new ValidationError(
@@ -83,7 +108,7 @@ export function decodeSparkAddress(
   network: NetworkType,
 ): DecodedSparkAddressData {
   try {
-    const decoded = bech32m.decode(address as SparkAddressFormat, 500);
+    const decoded = bech32mDecode(address as SparkAddressFormat);
 
     if (decoded.prefix !== AddressNetwork[network]) {
       throw new ValidationError("Invalid Spark address prefix", {
@@ -316,4 +341,120 @@ export function validateSparkInvoiceFields(
       });
     }
   }
+}
+
+export function validateSparkInvoiceSignature(invoice: SparkAddressFormat) {
+  try {
+    const decoded = bech32mDecode(invoice as SparkAddressFormat);
+    const network = getNetworkFromSparkAddress(invoice);
+    const payload = SparkAddress.decode(bech32m.fromWords(decoded.words));
+    const { identityPublicKey, sparkInvoiceFields, signature } = payload;
+    if (!sparkInvoiceFields) {
+      throw new ValidationError("Spark invoice fields are required", {
+        field: "sparkInvoiceFields",
+        value: sparkInvoiceFields,
+      });
+    }
+    if (!signature) {
+      throw new ValidationError("Signature is required", {
+        field: "signature",
+        value: signature,
+      });
+    }
+    if (!identityPublicKey) {
+      throw new ValidationError("Identity public key is required", {
+        field: "identityPublicKey",
+        value: identityPublicKey,
+      });
+    }
+    const hash = HashSparkInvoice(
+      sparkInvoiceFields,
+      identityPublicKey,
+      network,
+    );
+    const sec256k1PublicKey = secp256k1.Point.fromHex(identityPublicKey);
+    const compressed = sec256k1PublicKey.toBytes(true);
+    const xOnly = compressed.slice(1);
+    const isValid = schnorr.verify(signature, hash, xOnly);
+    if (!isValid) {
+      throw new ValidationError("Invalid signature", {
+        field: "signature",
+        value: signature,
+      });
+    }
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    throw new ValidationError(
+      "Failed to validate Spark invoice signature",
+      {
+        field: "invoice",
+        value: invoice,
+      },
+      error as Error,
+    );
+  }
+}
+
+export function getNetworkFromSparkAddress(address: SparkAddressFormat) {
+  const { prefix } = bech32mDecode(address as SparkAddressFormat);
+  const network = Object.entries(AddressNetwork).find(
+    ([, p]) => p === prefix,
+  )?.[0] as NetworkType | undefined;
+  if (!network) {
+    throw new ValidationError("Invalid Spark address network", {
+      field: "network",
+      value: address,
+      expected: Object.values(AddressNetwork),
+    });
+  }
+  return network;
+}
+
+export function toProtoTimestamp(date: Date) {
+  const ms = date.getTime();
+  return { seconds: Math.floor(ms / 1000), nanos: (ms % 1000) * 1_000_000 };
+}
+
+export function bech32mDecode(address: SparkAddressFormat) {
+  return bech32m.decode(address, BECH32M_LIMIT);
+}
+
+function bech32mEncode(prefix: string, words: number[] | Uint8Array) {
+  return bech32m.encode(prefix, words, BECH32M_LIMIT) as SparkAddressFormat;
+}
+
+function encodeSparkInvoiceFieldsV1Canonical(
+  f: SparkInvoiceFields,
+): Uint8Array {
+  const w = new BinaryWriter();
+  // version (1)
+  if (f.version !== 0) w.uint32(8).uint32(f.version);
+  // id (2)
+  if (f.id && f.id.length) w.uint32(18).bytes(f.id);
+  // memo (5)
+  if (f.memo !== undefined) w.uint32(42).string(f.memo);
+  // sender_public_key (6)
+  if (f.senderPublicKey !== undefined) w.uint32(50).bytes(f.senderPublicKey);
+  // expiry_time (7)
+  if (f.expiryTime !== undefined) {
+    Timestamp.encode(
+      toProtoTimestamp(f.expiryTime),
+      w.uint32(58).fork(),
+    ).join();
+  }
+  // payment_type oneof last: tokens (3) or sats (4)
+  switch (f.paymentType?.$case) {
+    case "tokensPayment":
+      TokensPayment.encode(
+        f.paymentType.tokensPayment,
+        w.uint32(26).fork(),
+      ).join();
+      break;
+    case "satsPayment":
+      SatsPayment.encode(f.paymentType.satsPayment, w.uint32(34).fork()).join();
+      break;
+  }
+  return w.finish();
 }

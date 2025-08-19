@@ -18,6 +18,7 @@ import {
   protoToNetwork,
   WalletConfig,
   SparkAddressFormat,
+  validateSparkInvoiceSignature,
 } from "@buildonspark/spark-sdk";
 import {
   TokenTransactionStatus,
@@ -352,6 +353,7 @@ const commands = [
   "testonly_expiretimelock",
 
   "fulfillsparkinvoice",
+  "validateinvoicesig",
 
   "help",
   "exit",
@@ -531,7 +533,7 @@ function parseCreateSparkInvoiceArgsWithYargs(
               type: "string",
             })
             .positional("expiryTime", {
-              describe: "Optional RFC-3339 or epoch ms, use _ for empty",
+              describe: "seconds from now, use _ for empty",
               type: "string",
             }),
       )
@@ -1221,6 +1223,11 @@ async function runCLI() {
           });
           console.log(payment);
           break;
+        case "validateinvoicesig":
+          const sig = args[0];
+          validateSparkInvoiceSignature(sig as SparkAddressFormat);
+          console.log("signature valid");
+          break;
         case "createsparkinvoice":
           if (!wallet) {
             console.log("Please initialize a wallet first");
@@ -1231,13 +1238,21 @@ async function runCLI() {
           if (args.includes("--help")) {
             break;
           }
+          let expiryDate: Date | undefined;
+          if (expiryTime) {
+            const secs = Number(expiryTime);
+            if (!Number.isFinite(secs) || secs < 0)
+              throw new Error(`Invalid expiryTime: ${expiryTime}`);
+            expiryDate = new Date(Date.now() + secs * 1000);
+          }
+
           let sparkInvoice: SparkAddressFormat;
           if (asset === "btc") {
             sparkInvoice = await wallet.createSatsInvoice({
               amount: amount ? parseInt(amount) : undefined,
               memo,
               senderPublicKey: senderPublicKey,
-              expiryTime: expiryTime ? new Date(expiryTime) : undefined,
+              expiryTime: expiryDate,
             });
           } else {
             sparkInvoice = await wallet.createTokensInvoice({
@@ -1245,7 +1260,7 @@ async function runCLI() {
               amount: amount ? BigInt(amount) : undefined,
               memo,
               senderPublicKey,
-              expiryTime: expiryTime ? new Date(expiryTime) : undefined,
+              expiryTime: expiryDate,
             });
           }
           console.log(sparkInvoice);

@@ -119,6 +119,7 @@ import {
 import {
   decodeSparkAddress,
   encodeSparkAddress,
+  encodeSparkAddressWithSignature,
   SparkAddressFormat,
   validateSparkInvoiceFields,
 } from "../utils/address.js";
@@ -143,6 +144,7 @@ import type {
   TransferParams,
   UserTokenMetadata,
 } from "./types.js";
+import { HashSparkInvoice } from "../utils/invoice-hashing.js";
 
 /**
  * The SparkWallet class is the primary interface for interacting with the Spark network.
@@ -814,41 +816,7 @@ export class SparkWallet extends EventEmitter {
     senderPublicKey?: string;
     expiryTime?: Date;
   }): Promise<SparkAddressFormat> {
-    const MAX_SATS_AMOUNT = 2_100_000_000_000_000; // 21_000_000 BTC * 100_000_000 sats/BTC
-    if (amount && (amount < 0 || amount > MAX_SATS_AMOUNT)) {
-      throw new ValidationError(
-        `Amount must be between 0 and ${MAX_SATS_AMOUNT} sats`,
-        {
-          field: "amount",
-          value: amount,
-          expected: `less than or equal to ${MAX_SATS_AMOUNT}`,
-        },
-      );
-    }
-    const protoPayment = {
-      $case: "satsPayment",
-      satsPayment: {
-        amount: amount,
-      },
-    } as const;
-    const invoiceFields = {
-      version: 1,
-      id: uuidv7obj().bytes,
-      paymentType: protoPayment,
-      memo: memo,
-      senderPublicKey: senderPublicKey
-        ? hexToBytes(senderPublicKey)
-        : undefined,
-      expiryTime: expiryTime ?? undefined,
-    };
-    validateSparkInvoiceFields(invoiceFields);
-    return encodeSparkAddress({
-      identityPublicKey: bytesToHex(
-        await this.config.signer.getIdentityPublicKey(),
-      ),
-      network: this.config.getNetworkType(),
-      sparkInvoiceFields: invoiceFields,
-    });
+    throw new NotImplementedError("sats invoices are not yet supported.");
   }
 
   /**
@@ -890,10 +858,11 @@ export class SparkWallet extends EventEmitter {
         this.config.getNetworkType(),
       ).tokenIdentifier;
     }
+
     const protoPayment = {
       $case: "tokensPayment",
       tokensPayment: {
-        tokenIdentifier: decodedTokenIdentifier,
+        tokenIdentifier: decodedTokenIdentifier ?? undefined,
         amount: amount ? numberToVarBytesBE(amount) : undefined,
       },
     } as const;
@@ -901,20 +870,30 @@ export class SparkWallet extends EventEmitter {
       version: 1,
       id: uuidv7obj().bytes,
       paymentType: protoPayment,
-      memo: memo,
+      memo: memo ?? undefined,
       senderPublicKey: senderPublicKey
         ? hexToBytes(senderPublicKey)
         : undefined,
       expiryTime: expiryTime ?? undefined,
     };
     validateSparkInvoiceFields(invoiceFields);
-    return encodeSparkAddress({
-      identityPublicKey: bytesToHex(
-        await this.config.signer.getIdentityPublicKey(),
-      ),
-      network: this.config.getNetworkType(),
-      sparkInvoiceFields: invoiceFields,
-    });
+
+    const identityPublicKey = await this.config.signer.getIdentityPublicKey();
+    const hash = HashSparkInvoice(
+      invoiceFields,
+      identityPublicKey,
+      this.config.getNetworkType(),
+    );
+    const signature = await this.config.signer.signSchnorrWithIdentityKey(hash);
+
+    return encodeSparkAddressWithSignature(
+      {
+        identityPublicKey: bytesToHex(identityPublicKey),
+        network: this.config.getNetworkType(),
+        sparkInvoiceFields: invoiceFields,
+      },
+      signature,
+    );
   }
 
   /**

@@ -10,7 +10,17 @@ import {
   hexToBytes,
   numberToVarBytesBE,
 } from "@noble/curves/abstract/utils";
-import { encodeSparkAddress, decodeSparkAddress } from "../utils/address.js";
+import {
+  encodeSparkAddress,
+  decodeSparkAddress,
+  getNetworkFromSparkAddress,
+  encodeSparkAddressWithSignature,
+  SparkAddressData,
+  bech32mDecode,
+  SparkAddressFormat,
+} from "../utils/address.js";
+import { SparkAddress } from "../proto/spark.js";
+import { bech32m } from "@scure/base";
 
 describe("Spark Invoice Encode/Decode", () => {
   const testCases = [
@@ -211,5 +221,81 @@ describe("Spark Invoice Encode/Decode", () => {
         );
       }
     });
+  });
+});
+
+describe("getNetworkFromSparkAddress", () => {
+  test("REGTEST", () => {
+    const network = getNetworkFromSparkAddress(
+      "sprt1pgssx63fa5g6uyv450rajp5ndwy9laxzpsp9e37su58jddmcdsvhgm5n7y0ud6",
+    );
+    expect(network).toBe("REGTEST");
+  });
+  test("MAINNET", () => {
+    const network = getNetworkFromSparkAddress(
+      "sp1pgssxwh6hznfdc3c0cuqrhgttder539d52a0rqcf34amge69huh664gd2ew787",
+    );
+    expect(network).toBe("MAINNET");
+  });
+});
+
+describe("knownSparkAddress", () => {
+  test("known spark address decodes and encodes to the same address", () => {
+    const address =
+      "sprt1pgss8stv8nfkamyea7mtc8werley55anfnnpgtnglff0wmxwm52mkyk6zfeqsqgjzqqe3dvr6e48l2alnpagf7ny3vlj5pr5v4ehgv3pqwd7wxx3awkku9p3epk73na6hcf9220h8kue2tmlkqx8tcrfpsf5ywsvpzgd9px9qcgvpzy8ecp35fg2yq4r39r4njq3slgcul7laarh9sndex9uejz7vwrcrz4g7n4egvwt5yspvsdyped46sflczvrzh0jzksgqnvaqlk02cz4vkwjrkwuep9zsrz5vmjp7mqxq7762tfjczy07at2fvzd7cgk2sqsxrmqdxnpy464rmq2nzdqzpuhme";
+    const decoded = bech32mDecode(address as SparkAddressFormat);
+    const payload = SparkAddress.decode(bech32m.fromWords(decoded.words));
+
+    const { identityPublicKey, sparkInvoiceFields, signature } = payload;
+
+    const sparkAddressData: SparkAddressData = {
+      identityPublicKey: bytesToHex(identityPublicKey),
+      network: "REGTEST",
+      sparkInvoiceFields: sparkInvoiceFields,
+    };
+    const reEncoded = encodeSparkAddressWithSignature(
+      sparkAddressData,
+      signature,
+    );
+    expect(reEncoded).toBe(address);
+  });
+
+  test("known spark address decodes to expected fields", () => {
+    const address =
+      "sprt1pgss8stv8nfkamyea7mtc8werley55anfnnpgtnglff0wmxwm52mkyk6zfeqsqgjzqqe3dvr6e48l2alnpagf7ny3vl35fg2yq4r39r4njq3slgcul7laarh9sndex9uejz7vwrcrz4g7n4egvwt5yspvs4qgar9wd6ryggrn0n3350t44hpgvwgdh5vlw47zf2jnaeahx2j7lasp367q6gvzdpr5rqgjrfgf3gxzrqg3p7wqvdyped46sflczvrzh0jzksgqnvaqlk02cz4vkwjrkwuep9zsrz5vmjp7mqxq7762tfjczy07at2fvzd7cgk2sqsxrmqdxnpy464rmq2nzdqneal34";
+
+    const decoded = decodeSparkAddress(address, "REGTEST");
+
+    expect(decoded.network).toBe("REGTEST");
+    expect(decoded.identityPublicKey).toBe(
+      "03c16c3cd36eec99efb6bc1dd91ff24a53b34ce6142e68fa52f76ccedd15bb12da",
+    );
+
+    const f = decoded.sparkInvoiceFields!;
+    expect(f.version).toBe(1);
+    expect(f.id).toBe("0198b583-d66a-7fab-bf98-7a84fa648b3f");
+
+    expect(f.paymentType?.type).toBe("tokens");
+    expect(
+      f.paymentType && "tokenIdentifier" in f.paymentType
+        ? f.paymentType.tokenIdentifier
+        : undefined,
+    ).toBe("2a3894759c81187d18e7fdfef4772c26dc98bccc85e6387818aa8f4eb9431cba");
+    expect(
+      f.paymentType && "amount" in f.paymentType
+        ? f.paymentType.amount
+        : undefined,
+    ).toBe(100n);
+
+    expect(f.memo).toBe("test");
+    expect(f.senderPublicKey).toBe(
+      "039be718d1ebad6e1431c86de8cfbabe125529f73db9952f7fb00c75e0690c1342",
+    );
+
+    expect(f.expiryTime?.toISOString()).toBe("2025-08-17T00:57:52.969Z");
+
+    expect(decoded.signature).toBe(
+      "e5b5d413fc098315df215a0804d9d07ecf56055659d21d9dcc84a280c5466e41f6c0607bda52d32c088ff756a4b04df61165401030f6069a61257551ec0a989a",
+    );
   });
 });
