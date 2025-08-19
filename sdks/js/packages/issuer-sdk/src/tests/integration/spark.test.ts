@@ -615,10 +615,11 @@ describe.each(TEST_CONFIGS)(
       );
       expect(userBalance.balance).toBeGreaterThanOrEqual(tokenAmount);
 
-      const transactions = await issuerWallet.queryTokenTransactions({
+      const response = await issuerWallet.queryTokenTransactions({
         tokenIdentifiers: [tokenIdentifier!],
         ownerPublicKeys: [issuerPublicKey],
       });
+      const transactions = response.tokenTransactionsWithStatus;
       expect(transactions.length).toBeGreaterThanOrEqual(2);
 
       let mint_operation = 0;
@@ -677,10 +678,11 @@ describe.each(TEST_CONFIGS)(
 
       await issuerWallet.burnTokens(250n);
 
-      const transactions = await issuerWallet.queryTokenTransactions({
+      const res = await issuerWallet.queryTokenTransactions({
         tokenIdentifiers: [tokenIdentifier!],
         ownerPublicKeys: [issuerPublicKey],
       });
+      const transactions = res.tokenTransactionsWithStatus;
 
       const mintTransaction = transactions.find(
         (tx) => tx.tokenTransaction?.tokenInputs?.$case === "mintInput",
@@ -727,9 +729,10 @@ describe.each(TEST_CONFIGS)(
       await issuerWallet.mintTokens(tokenAmount);
 
       {
-        const transactions = await issuerWallet.queryTokenTransactions({
+        const res = await issuerWallet.queryTokenTransactions({
           tokenIdentifiers: [tokenIdentifier!],
         });
+        const transactions = res.tokenTransactionsWithStatus;
         const amount_of_transactions = transactions.length;
         expect(amount_of_transactions).toEqual(1);
       }
@@ -741,9 +744,10 @@ describe.each(TEST_CONFIGS)(
       });
 
       {
-        const transactions = await issuerWallet.queryTokenTransactions({
+        const res = await issuerWallet.queryTokenTransactions({
           tokenIdentifiers: [tokenIdentifier!],
         });
+        const transactions = res.tokenTransactionsWithStatus;
         const amount_of_transactions = transactions.length;
         expect(amount_of_transactions).toEqual(2);
       }
@@ -758,10 +762,11 @@ describe.each(TEST_CONFIGS)(
       } // 202 in total
 
       {
-        const transactions = await issuerWallet.queryTokenTransactions({
+        const res = await issuerWallet.queryTokenTransactions({
           tokenIdentifiers: [tokenIdentifier!],
           pageSize: 10,
         });
+        const transactions = res.tokenTransactionsWithStatus;
         const amount_of_transactions = transactions.length;
         expect(amount_of_transactions).toEqual(10);
       }
@@ -774,22 +779,23 @@ describe.each(TEST_CONFIGS)(
         let page_num = 0;
 
         while (true) {
-          const transactionsPage = await issuerWallet.queryTokenTransactions({
+          const res = await issuerWallet.queryTokenTransactions({
             tokenIdentifiers: [tokenIdentifier!],
             pageSize,
             offset,
           });
+          const transactions = res.tokenTransactionsWithStatus;
 
-          if (transactionsPage.length === 0) {
+          if (transactions.length === 0) {
             break;
           }
 
           if (offset === 0) {
-            expect(transactionsPage.length).toEqual(pageSize);
+            expect(transactions.length).toEqual(pageSize);
           }
 
-          for (let index = 0; index < transactionsPage.length; ++index) {
-            const element = transactionsPage[index];
+          for (let index = 0; index < transactions.length; ++index) {
+            const element = transactions[index];
             if (element.tokenTransaction !== undefined) {
               const hash: String = bytesToHex(element.tokenTransactionHash);
               if (hashset_of_all_transactions.has(hash)) {
@@ -807,7 +813,7 @@ describe.each(TEST_CONFIGS)(
           }
 
           // Prepare for next iteration.
-          offset += transactionsPage.length;
+          offset += transactions.length;
           page_num += 1;
         }
 

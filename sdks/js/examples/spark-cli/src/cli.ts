@@ -380,6 +380,8 @@ interface QueryTokenTransactionsArgs {
   outputIds?: string[];
   useWalletIdentityKeyForOwner: boolean;
   useWalletIdentityKeyForIssuer: boolean;
+  pageSize?: number;
+  offset?: number;
 }
 
 function showQueryTokenTransactionsHelp() {
@@ -417,6 +419,7 @@ function showQueryTokenTransactionsHelp() {
   console.log(
     "  querytokentransactions --ownerPublicKeys , --tokenIdentifiers def456...",
   );
+  console.log("  querytokentransactions --pageSize 10 --offset 0");
 }
 
 function parseQueryTokenTransactionsArgsWithYargs(
@@ -463,6 +466,16 @@ function parseQueryTokenTransactionsArgsWithYargs(
         description: "Comma-separated list of output IDs",
         coerce: (value: string) => (value ? value.split(",") : []),
       })
+      .option("pageSize", {
+        type: "number",
+        description: "Limit the number of results",
+        default: 10,
+      })
+      .option("offset", {
+        type: "number",
+        description: "Offset the results",
+        default: 0,
+      })
       .help(false) // Disable yargs built-in help
       .parseSync();
 
@@ -498,6 +511,8 @@ function parseQueryTokenTransactionsArgsWithYargs(
         !explicitEmptyOwnerKeys &&
         (ownerPublicKeys.length === 0 || useWalletForOwner),
       useWalletIdentityKeyForIssuer: useWalletForIssuer,
+      pageSize: parsed.pageSize,
+      offset: parsed.offset,
     };
   } catch (error) {
     showQueryTokenTransactionsHelp();
@@ -1622,13 +1637,16 @@ async function runCLI() {
             issuerPublicKeys.push(await wallet.getIdentityPublicKey());
           }
 
-          const transactions = await wallet.queryTokenTransactions({
+          const res = await wallet.queryTokenTransactions({
             ownerPublicKeys,
             issuerPublicKeys,
             tokenTransactionHashes: parsedArgs.tokenTransactionHashes,
             tokenIdentifiers: parsedArgs.tokenIdentifiers,
             outputIds: parsedArgs.outputIds,
+            pageSize: parsedArgs.pageSize,
+            offset: parsedArgs.offset,
           });
+          const transactions = res.tokenTransactionsWithStatus;
 
           console.log("\nToken Transactions:");
           for (const tx of transactions) {
@@ -1724,7 +1742,18 @@ async function runCLI() {
                 console.log("    ---");
               }
             }
+
+            if (tx.tokenTransaction?.invoiceAttachments) {
+              console.log("  Invoice Attachments:");
+              for (const attachment of tx.tokenTransaction.invoiceAttachments) {
+                console.log(`    Invoice: ${attachment.sparkInvoice}`);
+              }
+            }
+
             console.log("----------------------------------------");
+          }
+          if (res.offset !== undefined) {
+            console.log(`  Next offset: ${res.offset}`);
           }
           break;
         }

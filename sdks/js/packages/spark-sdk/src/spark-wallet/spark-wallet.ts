@@ -49,6 +49,7 @@ import {
   TreeNode,
   UtxoSwapRequestType,
 } from "../proto/spark.js";
+import { QueryTokenTransactionsResponse } from "../proto/spark_token.js";
 import { WalletConfigService } from "../services/config.js";
 import { ConnectionManager } from "../services/connection.js";
 import { CoopExitService } from "../services/coop-exit.js";
@@ -4103,7 +4104,7 @@ export class SparkWallet extends EventEmitter {
     outputIds?: string[];
     pageSize?: number;
     offset?: number;
-  }): Promise<TokenTransactionWithStatus[]> {
+  }): Promise<QueryTokenTransactionsResponse> {
     return this.tokenTransactionService.queryTokenTransactions({
       ownerPublicKeys,
       issuerPublicKeys,
@@ -4112,7 +4113,7 @@ export class SparkWallet extends EventEmitter {
       outputIds,
       pageSize: pageSize ?? 100,
       offset: offset ?? 0,
-    }) as Promise<TokenTransactionWithStatus[]>;
+    });
   }
 
   public async getTokenL1Address(): Promise<string> {

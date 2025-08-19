@@ -24,6 +24,7 @@ import {
 import {
   InputTtxoSignaturesPerOperator,
   QueryTokenTransactionsRequest as QueryTokenTransactionsRequestV1,
+  QueryTokenTransactionsResponse,
   SignatureWithIndex,
   TokenOutput,
   TokenTransaction,
@@ -990,7 +991,7 @@ export class TokenTransactionService {
 
   public async queryTokenTransactions(
     params: QueryTokenTransactionsParams,
-  ): Promise<TokenTransactionWithStatusV0[] | TokenTransactionWithStatusV1[]> {
+  ): Promise<QueryTokenTransactionsResponse> {
     if (this.config.getTokenTransactionVersion() === "V0") {
       return this.queryTokenTransactionsV0(params);
     } else {
@@ -1070,7 +1071,7 @@ export class TokenTransactionService {
 
   private async queryTokenTransactionsV0(
     params: QueryTokenTransactionsParams,
-  ): Promise<TokenTransactionWithStatusV1[]> {
+  ): Promise<QueryTokenTransactionsResponse> {
     const {
       ownerPublicKeys,
       issuerPublicKeys,
@@ -1103,33 +1104,38 @@ export class TokenTransactionService {
 
     try {
       const response = await sparkClient.query_token_transactions(queryParams);
-      return response.tokenTransactionsWithStatus.map((tx) => {
-        // Convert V0 structure to V1 structure
-        const v1TokenTransaction: TokenTransaction = {
-          version: 1,
-          network: tx.tokenTransaction!.network,
-          tokenInputs: tx.tokenTransaction!.tokenInputs,
-          tokenOutputs: tx.tokenTransaction!.tokenOutputs!,
-          sparkOperatorIdentityPublicKeys:
-            tx.tokenTransaction!.sparkOperatorIdentityPublicKeys!,
-          expiryTime: undefined, // V0 doesn't have expiry time
-          invoiceAttachments: [],
-          clientCreatedTimestamp:
-            tx.tokenTransaction?.tokenInputs?.$case === "mintInput"
-              ? new Date(
-                  tx.tokenTransaction.tokenInputs.mintInput
-                    .issuerProvidedTimestamp * 1000,
-                )
-              : new Date(),
-        };
+      return {
+        tokenTransactionsWithStatus: response.tokenTransactionsWithStatus.map(
+          (tx) => {
+            // Convert V0 structure to V1 structure
+            const v1TokenTransaction: TokenTransaction = {
+              version: 1,
+              network: tx.tokenTransaction!.network,
+              tokenInputs: tx.tokenTransaction!.tokenInputs,
+              tokenOutputs: tx.tokenTransaction!.tokenOutputs!,
+              sparkOperatorIdentityPublicKeys:
+                tx.tokenTransaction!.sparkOperatorIdentityPublicKeys!,
+              expiryTime: undefined, // V0 doesn't have expiry time
+              clientCreatedTimestamp:
+                tx.tokenTransaction?.tokenInputs?.$case === "mintInput"
+                  ? new Date(
+                      tx.tokenTransaction.tokenInputs.mintInput
+                        .issuerProvidedTimestamp * 1000,
+                    )
+                  : new Date(),
+              invoiceAttachments: [],
+            };
 
-        return {
-          tokenTransaction: v1TokenTransaction,
-          status: tx.status,
-          confirmationMetadata: tx.confirmationMetadata,
-          tokenTransactionHash: tx.tokenTransactionHash,
-        };
-      });
+            return {
+              tokenTransaction: v1TokenTransaction,
+              status: tx.status,
+              confirmationMetadata: tx.confirmationMetadata,
+              tokenTransactionHash: tx.tokenTransactionHash,
+            };
+          },
+        ),
+        offset: response.offset,
+      };
     } catch (error) {
       throw new NetworkError(
         "Failed to query token transactions",
@@ -1145,7 +1151,7 @@ export class TokenTransactionService {
 
   private async queryTokenTransactionsV1(
     params: QueryTokenTransactionsParams,
-  ): Promise<TokenTransactionWithStatusV1[]> {
+  ): Promise<QueryTokenTransactionsResponse> {
     const {
       ownerPublicKeys,
       issuerPublicKeys,
@@ -1177,8 +1183,7 @@ export class TokenTransactionService {
     };
 
     try {
-      const response = await tokenClient.query_token_transactions(queryParams);
-      return response.tokenTransactionsWithStatus;
+      return await tokenClient.query_token_transactions(queryParams);
     } catch (error) {
       throw new NetworkError(
         "Failed to query token transactions",
