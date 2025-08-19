@@ -1,0 +1,22 @@
+# The codegen configuration for the mutations in ./mutations.
+# To regenerate the code, use the go:generate command in typed_api.go.
+# For full documentation see: https://github.com/Khan/genqlient/blob/main/docs/genqlient.yaml
+schema: spark_schema.graphql
+operations:
+- 'mutations/*.graphql'
+generated: mutations/generated.go
+bindings:
+  DateTime:
+    type: time.Time
+  UUID:
+    type: github.com/google/uuid.UUID
+  Long:
+    type: int64
+  PublicKey:
+    type: string
+  Void:
+    type: any
+  Hash32:
+    type: '[]byte'
+casing:
+  default: auto_camel_case

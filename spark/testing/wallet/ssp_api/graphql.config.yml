@@ -1,0 +1,3 @@
+# Specifies the GraphQL schema for the mutations in ./mutations.
+schema: spark_schema.graphql
+documents: '**/*.graphql'

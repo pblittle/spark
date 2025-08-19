@@ -1,0 +1,24 @@
+[tasks]
+build = "go build -tags=lightspark ./bin/operator"
+lint = "golangci-lint run"
+# Sadly, `mise fmt` is a built in command
+format = "golangci-lint fmt"
+test-unit = """
+  gotestsum \
+    --format testname \
+    $(go list ./... | grep -v -E 'so/grpc_test|so/tree')
+"""
+test-unit-with-postgres = """
+  gotestsum \
+    --format testname \
+    -- \
+    -tags=postgres \
+    $(go list ./... | grep -v -E 'so/grpc_test|so/tree')
+"""
+test-grpc = """
+  gotestsum \
+    --format testname \
+    --rerun-fails \
+    --rerun-fails-max-failures=1000 \
+    --packages=./so/grpc_test/...
+"""

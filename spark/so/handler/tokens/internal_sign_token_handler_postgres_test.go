@@ -1,0 +1,139 @@
+//go:build postgres
+// +build postgres
+
+package tokens
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"math/big"
+	"testing"
+
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	secretsharing "github.com/lightsparkdev/spark/common/secret_sharing"
+	"github.com/lightsparkdev/spark/so"
+	"github.com/lightsparkdev/spark/so/db"
+	"github.com/lightsparkdev/spark/so/ent"
+	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
+	sparktesting "github.com/lightsparkdev/spark/testing"
+)
+
+// Helper to spin up Postgres-backed handler
+func setupInternalSignTokenTestHandlerPostgres(t *testing.T) (*InternalSignTokenHandler, context.Context, func()) {
+	t.Helper()
+
+	cfg, err := sparktesting.TestConfig()
+	require.NoError(t, err)
+
+	baseCtx := t.Context()
+	dsn, stopPg := db.SpinUpPostgres(t)
+	ctx, pgCtx, err := db.NewPgTestContext(t, baseCtx, dsn)
+	require.NoError(t, err)
+
+	handler := &InternalSignTokenHandler{config: cfg}
+
+	cleanup := func() {
+		pgCtx.Close()
+		stopPg()
+	}
+
+	return handler, ctx, cleanup
+}
+
+// createTestSpentOutputWithShares creates a spent output with one partial share and returns it.
+func createTestSpentOutputWithShares(t *testing.T, ctx context.Context, tx *ent.Tx, handler *InternalSignTokenHandler, secretPriv *secp256k1.PrivateKey, shares []*secretsharing.SecretShare, operatorIDs []string) *ent.TokenOutput {
+	t.Helper()
+
+	coordinatorShare := shares[0] // index 1
+	keyshare := tx.SigningKeyshare.Create().
+		SetSecretShare(coordinatorShare.Share.FillBytes(make([]byte, 32))).
+		SetPublicKey(secretPriv.PubKey().SerializeCompressed()).
+		SetStatus(st.KeyshareStatusInUse).
+		SetPublicShares(map[string][]byte{}).
+		SetMinSigners(1).
+		SetCoordinatorIndex(1).
+		SaveX(ctx)
+
+	ownerPubKey := handler.config.IdentityPublicKey().Serialize()
+
+	output := tx.TokenOutput.Create().
+		SetID(uuid.New()).
+		SetOwnerPublicKey(ownerPubKey).
+		SetTokenPublicKey(ownerPubKey).
+		SetTokenAmount([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100}).
+		SetRevocationKeyshare(keyshare).
+		SetStatus(st.TokenOutputStatusSpentSigned).
+		SetWithdrawBondSats(1).
+		SetWithdrawRelativeBlockLocktime(1).
+		SetWithdrawRevocationCommitment(secretPriv.PubKey().SerializeCompressed()).
+		SetCreatedTransactionOutputVout(0).
+		SetNetwork(st.NetworkRegtest).
+		SetTokenIdentifier([]byte("token_identifier")).
+		SetSpentTransactionInputVout(0).
+		SaveX(ctx)
+
+	// add partial share for operator 2
+	opPub := handler.config.SigningOperatorMap[operatorIDs[1]].IdentityPublicKey
+	tx.TokenPartialRevocationSecretShare.Create().
+		SetTokenOutput(output).
+		SetOperatorIdentityPublicKey(opPub.Serialize()).
+		SetSecretShare(shares[1].Share.FillBytes(make([]byte, 32))).
+		SaveX(ctx)
+
+	return output
+}
+
+func TestRecoverFullRevocationSecretsAndFinalize_RequireThresholdOperators(t *testing.T) {
+	handler, ctx, cleanup := setupInternalSignTokenTestHandlerPostgres(t)
+	defer cleanup()
+
+	tx, err := ent.GetDbFromContext(ctx)
+	require.NoError(t, err)
+
+	// Configure 3 operators, threshold 2.
+	limitedOps := make(map[string]*so.SigningOperator)
+	ids := make([]string, 0, 3)
+	for i := 0; i < 3; i++ {
+		id := fmt.Sprintf("%064x", i+1)
+		limitedOps[id] = handler.config.SigningOperatorMap[id]
+		ids = append(ids, id)
+	}
+	handler.config.SigningOperatorMap = limitedOps
+	handler.config.Threshold = 2
+
+	priv, err := secp256k1.GeneratePrivateKey()
+	require.NoError(t, err)
+	secretInt := new(big.Int).SetBytes(priv.Serialize())
+	shares, err := secretsharing.SplitSecret(secretInt, secp256k1.S256().N, 2, 3)
+	require.NoError(t, err)
+
+	output := createTestSpentOutputWithShares(t, ctx, tx, handler, priv, shares, ids)
+
+	hash := bytes.Repeat([]byte{0x24}, 32)
+	tokenTx := tx.TokenTransaction.Create().
+		SetPartialTokenTransactionHash(hash).
+		SetFinalizedTokenTransactionHash(hash).
+		SetStatus(st.TokenTransactionStatusSigned).
+		SaveX(ctx)
+	tokenTx.Update().AddSpentOutput(output).ExecX(ctx)
+
+	// Commit so data visible in new transaction.
+	require.NoError(t, tx.Commit())
+	t.Run("flag false does not finalize when threshold requirement disabled", func(t *testing.T) {
+		handler.config.Token.RequireThresholdOperators = false
+		finalized, err := handler.recoverFullRevocationSecretsAndFinalize(ctx, hash)
+		assert.False(t, finalized)
+		require.NoError(t, err)
+	})
+	t.Run("flag true finalizes when threshold requirement enabled", func(t *testing.T) {
+		handler.config.Token.RequireThresholdOperators = true
+		finalized, err := handler.recoverFullRevocationSecretsAndFinalize(ctx, hash)
+		assert.True(t, finalized)
+		require.NoError(t, err)
+	})
+}

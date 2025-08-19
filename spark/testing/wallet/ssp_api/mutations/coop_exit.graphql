@@ -1,0 +1,40 @@
+mutation RequestCoopExit(
+    $leaf_external_ids: [UUID!]!
+    $withdrawal_address: String!
+    $idempotency_key: String!
+    $exit_speed: ExitSpeed!
+) {
+    request_coop_exit(input: {
+        leaf_external_ids: $leaf_external_ids
+        withdrawal_address: $withdrawal_address
+        idempotency_key: $idempotency_key
+        exit_speed: $exit_speed
+    }) {
+        request {
+            id
+            created_at
+            updated_at
+            fee {
+                original_value
+                original_unit
+            }
+            status
+            raw_connector_transaction
+            expires_at
+        }
+    }
+}
+
+mutation CompleteCoopExit(
+    $user_outbound_transfer_external_id: UUID!
+    $coop_exit_request_id: ID!
+) {
+    complete_coop_exit(input: {
+        user_outbound_transfer_external_id: $user_outbound_transfer_external_id
+        coop_exit_request_id: $coop_exit_request_id
+    }) {
+        request {
+            id
+        }
+    }
+}

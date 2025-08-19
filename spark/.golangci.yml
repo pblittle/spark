@@ -1,0 +1,77 @@
+version: "2"
+linters:
+  enable:
+    - depguard
+    - revive
+    - staticcheck
+    - exhaustive
+    - ineffassign
+    - unused
+    - govet
+    - usetesting
+    - durationcheck # Checks for durations multiplied together
+    - errorlint # Checks for incorrect wrapping of errors
+    - exptostd # Detects functions from golang.org/x/exp/ that can be replaced by std functions
+    - gocheckcompilerdirectives # Checks that go compiler directive comments (//go:) are valid
+    - iface # Detects the incorrect use of interfaces
+    - mirror # Replaces e.g. someRegex.Match([]byte(str)) with someRegex.MatchString(str)
+    - nosprintfhostport # Checks for misuse of Sprintf to construct a host with port in a URL
+    - predeclared # Finds code that shadows one of Go's predeclared identifiers
+    - testifylint # Checks that testify test assertions are correct
+    - unconvert # Checks for no-op type conversions
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+  settings:
+    depguard:
+      rules:
+        logging:
+          list-mode: lax
+          files:
+            - "$all"
+            - "!$test"
+            - "!**/wallet/**.go"
+            - "!**/testing/**.go"
+          deny:
+            - pkg: "log$"
+              desc: "use logging.GetLoggerFromContext() or slog.Default()"
+    revive:
+      # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#context-as-argument
+      rules:
+        - name: context-as-argument
+          arguments:
+            - allowTypesBefore: "*testing.T,*testing.B,testing.TB,github.com/lightsparkdev/spark/so/ent/enttest.TestingT,enttest.TestingT"
+        - name: errorf # errors.New(fmt.Sprintf()) -> fmt.Errorf()
+        - name: error-return # Errors should be last in the list of returned values by a function.
+        - name: error-strings # Error messages should not be capitalized or end with punctuation or a newline
+        - name: var-declaration #  Proposes simplifications of variable declarations
+        - name: range # Suggests a shorter way of writing ranges that do not use the second value.
+        - name: time-naming # Using unit-specific suffix like "Secs", "Mins", ... when naming variables of type time.Duration can be misleading, this rule highlights those cases.
+        - name: empty-block # Empty blocks make code less readable and could be a symptom of a bug or unfinished refactoring.
+        - name: unreachable-code # Spots and proposes to remove unreachable code.
+        - name: use-any # Use any instead of interface{}
+        - name: atomic # Check for commonly mistaken usages of the sync/atomic package
+        - name: time-equal # Suggests time.Equal instead of == for time.Time values
+    errcheck:
+      exclude-functions:
+        - (*google.golang.org/grpc.ClientConn).Close
+        - (*database/sql.DB).Close
+        - (*github.com/lightsparkdev/spark/so/ent.Client).Close
+    staticcheck:
+      checks:
+        - "-SA1019"
+    exhaustive:
+      default-signifies-exhaustive: true
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+    usetesting:
+      context-background: true
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax

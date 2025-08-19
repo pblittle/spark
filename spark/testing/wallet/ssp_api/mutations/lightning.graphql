@@ -1,0 +1,46 @@
+mutation RequestLightningSend(
+    $encoded_invoice: String!
+    $idempotency_key: String!
+) {
+    request_lightning_send(input: {
+        encoded_invoice: $encoded_invoice
+        idempotency_key: $idempotency_key
+    }) {
+        request {
+            id
+            created_at
+            updated_at
+            encoded_invoice
+            fee {
+                original_value
+                original_unit
+            }
+            status
+        }
+    }
+}
+
+mutation RequestLightningReceive(
+    $network: BitcoinNetwork!
+    $amount_sats: Long!
+    $payment_hash: Hash32!
+    $expiry_secs: Int
+    $memo: String
+) {
+    request_lightning_receive(input: {
+        network: $network
+        amount_sats: $amount_sats
+        payment_hash: $payment_hash
+        expiry_secs: $expiry_secs
+        memo: $memo
+    }) {
+        request {
+            id
+            created_at
+            updated_at
+            invoice {
+                encoded_invoice
+            }
+        }
+    }
+}
