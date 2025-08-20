@@ -214,8 +214,7 @@ func (h *SignTokenHandler) CommitTransaction(ctx context.Context, req *tokenpb.C
 		return nil, tokens.FormatErrorWithTransactionEnt("failed to validate signature package and persist peer signatures", tokenTransaction, err)
 	}
 
-	logger.Info("Successfully signed and committed token transaction",
-		"transaction_hash", req.FinalTokenTransactionHash)
+	logger.Info("Successfully signed and persisted token transaction")
 
 	switch inferredTxType {
 	case utils.TokenTransactionTypeCreate, utils.TokenTransactionTypeMint:
@@ -360,7 +359,7 @@ func (h *SignTokenHandler) exchangeRevocationSecretShares(ctx context.Context, a
 		return nil, fmt.Errorf("failed to update token transaction status to Revealed: %w for token txHash: %x", err, tokenTransactionHash)
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit and replace transaction after exchanging revocation secret shares: %w for token txHash: %x", err, tokenTransactionHash)
+		return nil, fmt.Errorf("failed to commit and replace transaction after setting status to revealed: %w for token txHash: %x", err, tokenTransactionHash)
 	}
 
 	// exchange the revocation secret shares with all other operators

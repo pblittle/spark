@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"slices"
 	"time"
 
 	"github.com/lightsparkdev/spark"
@@ -466,7 +467,7 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 						}
 
 						var protoNetwork pbspark.Network
-						if tokenTransaction.Edges.CreatedOutput != nil && len(tokenTransaction.Edges.CreatedOutput) > 0 {
+						if len(tokenTransaction.Edges.CreatedOutput) > 0 {
 							protoNetwork, err = common.ProtoNetworkFromSchemaNetwork(tokenTransaction.Edges.CreatedOutput[0].Network)
 							if err != nil {
 								return fmt.Errorf("unable to get proto network: %w", err)
@@ -506,8 +507,8 @@ func AllScheduledTasks() []ScheduledTaskSpec {
 						}
 						logger.Info("[cron] Finalizing token transaction",
 							"num_signatures", len(signaturesPackage),
-							"operator_ids", maps.Keys(signaturesPackage),
-							"tx_hash", hex.EncodeToString(tokenTransaction.FinalizedTokenTransactionHash))
+							"operator_ids", slices.Collect(maps.Keys(signaturesPackage)),
+							"transaction_hash", hex.EncodeToString(tokenTransaction.FinalizedTokenTransactionHash))
 						signTokenHandler := tokens.NewSignTokenHandler(config)
 						commitTransactionResponse, err := signTokenHandler.ExchangeRevocationSecretsAndFinalizeIfPossible(ctx, tokenPb, signaturesPackage, tokenTransaction.FinalizedTokenTransactionHash)
 						if err != nil {
