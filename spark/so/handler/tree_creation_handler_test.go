@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createTestHandler(t *testing.T) *TreeCreationHandler {
+func createTestHandler(_ *testing.T) *TreeCreationHandler {
 	config := &so.Config{
 		BitcoindConfigs: map[string]so.BitcoindConfig{
 			"regtest": {
@@ -31,7 +31,7 @@ func createTestHandler(t *testing.T) *TreeCreationHandler {
 	return NewTreeCreationHandler(config)
 }
 
-func createTestTx(t *testing.T) *wire.MsgTx {
+func createTestTx(_ *testing.T) *wire.MsgTx {
 	tx := wire.NewMsgTx(wire.TxVersion)
 	// Add a proper input
 	tx.AddTxIn(&wire.TxIn{
@@ -44,7 +44,7 @@ func createTestTx(t *testing.T) *wire.MsgTx {
 	return tx
 }
 
-func createTestUTXO(t *testing.T, rawTx []byte, vout uint32) *pb.UTXO {
+func createTestUTXO(_ *testing.T, rawTx []byte, vout uint32) *pb.UTXO {
 	return &pb.UTXO{
 		RawTx:   rawTx,
 		Vout:    vout,

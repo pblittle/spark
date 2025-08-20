@@ -42,7 +42,6 @@ const (
 	testTokenMaxSupply   = 1000
 	testTokenAmount      = 100
 	testTokenIsFreezable = true
-	testNetworkString    = "REGTEST"
 	// LRC20 Regtest config values
 	testWithdrawBondSats              = 10000 // From WithdrawalBondSatsInConfig
 	testWithdrawRelativeBlockLocktime = 1000  // From WithdrawalRelativeBlockLocktimeInConfig
@@ -110,7 +109,7 @@ func startMockGRPCServer(t *testing.T, mockServer *mockSparkTokenInternalService
 	return addr, stop
 }
 
-func createTestSigningKeyshare(t *testing.T, ctx context.Context, client *ent.Client) *ent.SigningKeyshare {
+func createTestSigningKeyshare(_ *testing.T, ctx context.Context, client *ent.Client) *ent.SigningKeyshare {
 	return client.SigningKeyshare.Create().
 		SetStatus(schematype.KeyshareStatusAvailable).
 		SetSecretShare([]byte("test")).
@@ -508,7 +507,7 @@ func setupDBTransferTokenTransactionInternalSignFailedScenario(t *testing.T, set
 
 // createInputTtxoSignatures creates the input TTXO signatures for a commit transaction request
 func createInputTtxoSignatures(t *testing.T, setup *testSetupCommon, finalTxHash []byte, inputCount int) []*tokenpb.InputTtxoSignaturesPerOperator {
-	createSignatureForOperator := func(operatorPubKey []byte, inputIndex uint32) []byte {
+	createSignatureForOperator := func(operatorPubKey []byte, _ uint32) []byte {
 		payload := &sparkpb.OperatorSpecificTokenTransactionSignablePayload{
 			FinalTokenTransactionHash: finalTxHash,
 			OperatorIdentityPublicKey: operatorPubKey,

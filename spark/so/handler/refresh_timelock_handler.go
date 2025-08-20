@@ -69,25 +69,27 @@ func (h *RefreshTimelockHandler) refreshTimelock(ctx context.Context, req *pb.Re
 		var rawTxBytes []byte
 		if len(req.SigningJobs) == 3 && len(node.DirectRefundTx) > 0 && len(node.DirectFromCpfpRefundTx) > 0 {
 			// Only refund signing jobs are present
-			if i == 0 {
+			switch i {
+			case 0:
 				rawTxBytes = node.RawRefundTx
-			} else if i == 1 {
+			case 1:
 				rawTxBytes = node.DirectRefundTx
-			} else {
+			default:
 				rawTxBytes = node.DirectFromCpfpRefundTx
 			}
 		} else if len(req.SigningJobs) >= 5 && len(node.DirectTx) > 0 && len(node.DirectRefundTx) > 0 && len(node.DirectFromCpfpRefundTx) > 0 {
-			if i == len(req.SigningJobs)-1 {
+			switch i {
+			case len(req.SigningJobs) - 1:
 				rawTxBytes = node.DirectFromCpfpRefundTx
-			} else if i == len(req.SigningJobs)-2 {
+			case len(req.SigningJobs) - 2:
 				rawTxBytes = node.DirectRefundTx
-			} else if i == len(req.SigningJobs)-3 {
+			case len(req.SigningJobs) - 3:
 				rawTxBytes = node.RawRefundTx
-			} else if i == len(req.SigningJobs)-4 {
+			case len(req.SigningJobs) - 4:
 				rawTxBytes = node.DirectTx
-			} else if i == len(req.SigningJobs)-5 {
+			case len(req.SigningJobs) - 5:
 				rawTxBytes = node.RawTx
-			} else {
+			default:
 				node, err = node.QueryParent().First(ctx)
 				if err != nil {
 					return nil, fmt.Errorf("unable to query parent node: %w", err)

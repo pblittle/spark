@@ -592,7 +592,7 @@ func verifyOperatorSignatures(
 	return nil
 }
 
-func (h *SignTokenHandler) getSignedCommitProgress(ctx context.Context, tt *ent.TokenTransaction) (*tokenpb.CommitProgress, error) {
+func (h *SignTokenHandler) getSignedCommitProgress(_ context.Context, tt *ent.TokenTransaction) (*tokenpb.CommitProgress, error) {
 	peerSigs := tt.Edges.PeerSignatures
 	if peerSigs == nil {
 		return nil, fmt.Errorf("no peer signatures")

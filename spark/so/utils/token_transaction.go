@@ -220,7 +220,7 @@ func hashTokenTransactionV1(tokenTransaction *tokenpb.TokenTransaction, partialH
 		}
 
 		ownerPubKey := output.GetOwnerPublicKey()
-		if ownerPubKey == nil || len(ownerPubKey) == 0 {
+		if len(ownerPubKey) == 0 {
 			return nil, fmt.Errorf("owner public key at index %d cannot be nil or empty", i)
 		}
 		h.Write(ownerPubKey)
@@ -228,7 +228,7 @@ func hashTokenTransactionV1(tokenTransaction *tokenpb.TokenTransaction, partialH
 		// Revocation public key is not set in the partial token transaction.
 		if !partialHash {
 			revPubKey := output.GetRevocationCommitment()
-			if revPubKey == nil || len(revPubKey) == 0 {
+			if len(revPubKey) == 0 {
 				return nil, fmt.Errorf("revocation public key at index %d cannot be nil or empty", i)
 			}
 			h.Write(revPubKey)
@@ -243,21 +243,21 @@ func hashTokenTransactionV1(tokenTransaction *tokenpb.TokenTransaction, partialH
 		}
 
 		tokenPubKey := output.GetTokenPublicKey()
-		if tokenPubKey == nil || len(tokenPubKey) == 0 {
+		if len(tokenPubKey) == 0 {
 			h.Write(make([]byte, 33))
 		} else {
 			h.Write(tokenPubKey)
 		}
 
 		tokenIdentifier := output.GetTokenIdentifier()
-		if tokenIdentifier == nil || len(tokenIdentifier) == 0 {
+		if len(tokenIdentifier) == 0 {
 			h.Write(make([]byte, 32))
 		} else {
 			h.Write(tokenIdentifier)
 		}
 
 		tokenAmount := output.GetTokenAmount()
-		if tokenAmount == nil || len(tokenAmount) == 0 {
+		if len(tokenAmount) == 0 {
 			return nil, fmt.Errorf("token amount at index %d cannot be nil or empty", i)
 		}
 		h.Write(tokenAmount)
@@ -367,7 +367,7 @@ func hashCreateInputV1(h hash.Hash, createInput *tokenpb.TokenCreateInput, parti
 	var createHashes []byte
 	h.Reset()
 	pubKey := createInput.GetIssuerPublicKey()
-	if pubKey == nil || len(pubKey) == 0 {
+	if len(pubKey) == 0 {
 		return nil, fmt.Errorf("issuer public key cannot be nil or empty")
 	}
 	h.Write(pubKey)
@@ -433,7 +433,7 @@ func hashMintInputV1(h hash.Hash, mintInput *tokenpb.TokenMintInput) ([]byte, er
 	var mintHashes []byte
 	h.Reset()
 	pubKey := mintInput.GetIssuerPublicKey()
-	if pubKey == nil || len(pubKey) == 0 {
+	if len(pubKey) == 0 {
 		return nil, fmt.Errorf("issuer public key cannot be nil or empty")
 	}
 	h.Write(pubKey)
@@ -846,13 +846,14 @@ func hashFreezePayloadContents(h hash.Hash, payload *tokenpb.FreezeTokensPayload
 	allHashes = append(allHashes, h.Sum(nil)...)
 
 	h.Reset()
-	if payload.Version == 0 {
+	switch payload.Version {
+	case 0:
 		tokenPublicKey := payload.GetTokenPublicKey()
 		if len(tokenPublicKey) == 0 {
 			return nil, fmt.Errorf("token public key cannot be empty")
 		}
 		h.Write(tokenPublicKey)
-	} else if payload.Version == 1 {
+	default:
 		tokenIdentifier := payload.GetTokenIdentifier()
 		if tokenIdentifier == nil {
 			return nil, fmt.Errorf("token identifier cannot be nil")

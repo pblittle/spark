@@ -333,9 +333,10 @@ func TestHandleBlock_MixedTransactions(t *testing.T) {
 	// Verify the first token (valid announcement)
 	var validToken, duplicateToken *ent.L1TokenCreate
 	for _, token := range l1CreatedTokens {
-		if token.TokenName == "TestToken" {
+		switch token.TokenName {
+		case "TestToken":
 			validToken = token
-		} else if token.TokenName == "DUP1" {
+		case "DUP1":
 			duplicateToken = token
 		}
 	}
