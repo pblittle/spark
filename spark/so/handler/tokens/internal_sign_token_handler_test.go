@@ -59,10 +59,23 @@ func TestExchangeRevocationSecretsShares(t *testing.T) {
 		0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80,
 		0x90, 0xa0, 0xb0, 0xc0, 0xd0, 0xe0, 0xf0, 0x00,
 	}
+	// Minimal TokenCreate required for TokenTransaction
+	tokenCreate := tx.TokenCreate.Create().
+		SetIssuerPublicKey(handler.config.IdentityPublicKey().Serialize()).
+		SetTokenName("test token").
+		SetTokenTicker("TTK").
+		SetDecimals(8).
+		SetMaxSupply([]byte{1}).
+		SetIsFreezable(true).
+		SetNetwork(st.NetworkRegtest).
+		SetTokenIdentifier([]byte("token_identifier")).
+		SetCreationEntityPublicKey(handler.config.IdentityPublicKey().Serialize()).
+		SaveX(ctx)
 	testTransaction := tx.TokenTransaction.Create().
 		SetPartialTokenTransactionHash(testHash).
 		SetFinalizedTokenTransactionHash(testHash).
 		SetStatus(st.TokenTransactionStatusSigned).
+		SetCreateID(tokenCreate.ID).
 		SaveX(ctx)
 
 	t.Run("fails when no operator shares provided", func(t *testing.T) {
@@ -139,6 +152,19 @@ func TestGetSecretSharesNotInInput(t *testing.T) {
 		SetCoordinatorIndex(1).
 		SaveX(ctx)
 
+	// Minimal TokenCreate required for TokenOutput and TokenTransaction relationships
+	tokenCreate := tx.TokenCreate.Create().
+		SetIssuerPublicKey(handler.config.IdentityPublicKey().Serialize()).
+		SetTokenName("test token").
+		SetTokenTicker("TTK").
+		SetDecimals(8).
+		SetMaxSupply([]byte{1}).
+		SetIsFreezable(true).
+		SetNetwork(st.NetworkRegtest).
+		SetTokenIdentifier([]byte("token_identifier")).
+		SetCreationEntityPublicKey(handler.config.IdentityPublicKey().Serialize()).
+		SaveX(ctx)
+
 	tokenOutputInDb := tx.TokenOutput.Create().
 		SetID(uuid.New()).
 		SetOwnerPublicKey(aliceOperatorPubKey.Serialize()).
@@ -152,6 +178,7 @@ func TestGetSecretSharesNotInInput(t *testing.T) {
 		SetCreatedTransactionOutputVout(0).
 		SetNetwork(st.NetworkRegtest).
 		SetTokenIdentifier([]byte("token_identifier")).
+		SetTokenCreateID(tokenCreate.ID).
 		SaveX(ctx)
 
 	tx.TokenPartialRevocationSecretShare.Create().
@@ -325,10 +352,22 @@ func TestValidateSignaturesPackageAndPersistPeerSignatures_RequireThresholdOpera
 
 	// Prepare a fake transaction in the DB.
 	testHash := bytes.Repeat([]byte{0x42}, 32)
+	tokenCreate := tx.TokenCreate.Create().
+		SetIssuerPublicKey(handler.config.IdentityPublicKey().Serialize()).
+		SetTokenName("test token").
+		SetTokenTicker("TTK").
+		SetDecimals(8).
+		SetMaxSupply([]byte{1}).
+		SetIsFreezable(true).
+		SetNetwork(st.NetworkRegtest).
+		SetTokenIdentifier([]byte("token_identifier")).
+		SetCreationEntityPublicKey(handler.config.IdentityPublicKey().Serialize()).
+		SaveX(ctx)
 	tokenTransaction := tx.TokenTransaction.Create().
 		SetPartialTokenTransactionHash(testHash).
 		SetFinalizedTokenTransactionHash(testHash).
 		SetStatus(st.TokenTransactionStatusStarted).
+		SetCreateID(tokenCreate.ID).
 		SaveX(ctx)
 
 	// Helper to build signatures map with operators 0 and 1.

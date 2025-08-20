@@ -35,8 +35,8 @@ func (TokenOutput) Fields() []ent.Field {
 		field.Bytes("spent_revocation_secret").Optional(),
 		field.Bytes("confirmed_withdraw_block_hash").Optional(),
 		field.Enum("network").GoType(st.Network("")).Optional(),
-		field.Bytes("token_identifier").Optional(),            // Remove immutable for backfill, set immutable and required afterwards
-		field.UUID("token_create_id", uuid.UUID{}).Optional(), // Not immutable for backfill, set immutable and required afterwards
+		field.Bytes("token_identifier").Immutable(),
+		field.UUID("token_create_id", uuid.UUID{}).Immutable(),
 	}
 }
 
@@ -57,7 +57,9 @@ func (TokenOutput) Edges() []ent.Edge {
 		edge.
 			From("token_create", TokenCreate.Type).
 			Ref("token_output").
+			Immutable().
 			Unique().
+			Required().
 			Field("token_create_id").
 			Comment("Token create contains the token metadata associated with this output."),
 	}

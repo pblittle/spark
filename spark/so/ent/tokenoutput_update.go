@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/so/ent/predicate"
 	"github.com/lightsparkdev/spark/so/ent/schema/schematype"
-	"github.com/lightsparkdev/spark/so/ent/tokencreate"
 	"github.com/lightsparkdev/spark/so/ent/tokenoutput"
 	"github.com/lightsparkdev/spark/so/ent/tokenpartialrevocationsecretshare"
 	"github.com/lightsparkdev/spark/so/ent/tokentransaction"
@@ -148,38 +147,6 @@ func (tou *TokenOutputUpdate) ClearNetwork() *TokenOutputUpdate {
 	return tou
 }
 
-// SetTokenIdentifier sets the "token_identifier" field.
-func (tou *TokenOutputUpdate) SetTokenIdentifier(b []byte) *TokenOutputUpdate {
-	tou.mutation.SetTokenIdentifier(b)
-	return tou
-}
-
-// ClearTokenIdentifier clears the value of the "token_identifier" field.
-func (tou *TokenOutputUpdate) ClearTokenIdentifier() *TokenOutputUpdate {
-	tou.mutation.ClearTokenIdentifier()
-	return tou
-}
-
-// SetTokenCreateID sets the "token_create_id" field.
-func (tou *TokenOutputUpdate) SetTokenCreateID(u uuid.UUID) *TokenOutputUpdate {
-	tou.mutation.SetTokenCreateID(u)
-	return tou
-}
-
-// SetNillableTokenCreateID sets the "token_create_id" field if the given value is not nil.
-func (tou *TokenOutputUpdate) SetNillableTokenCreateID(u *uuid.UUID) *TokenOutputUpdate {
-	if u != nil {
-		tou.SetTokenCreateID(*u)
-	}
-	return tou
-}
-
-// ClearTokenCreateID clears the value of the "token_create_id" field.
-func (tou *TokenOutputUpdate) ClearTokenCreateID() *TokenOutputUpdate {
-	tou.mutation.ClearTokenCreateID()
-	return tou
-}
-
 // SetOutputCreatedTokenTransactionID sets the "output_created_token_transaction" edge to the TokenTransaction entity by ID.
 func (tou *TokenOutputUpdate) SetOutputCreatedTokenTransactionID(id uuid.UUID) *TokenOutputUpdate {
 	tou.mutation.SetOutputCreatedTokenTransactionID(id)
@@ -233,11 +200,6 @@ func (tou *TokenOutputUpdate) AddTokenPartialRevocationSecretShares(t ...*TokenP
 	return tou.AddTokenPartialRevocationSecretShareIDs(ids...)
 }
 
-// SetTokenCreate sets the "token_create" edge to the TokenCreate entity.
-func (tou *TokenOutputUpdate) SetTokenCreate(t *TokenCreate) *TokenOutputUpdate {
-	return tou.SetTokenCreateID(t.ID)
-}
-
 // Mutation returns the TokenOutputMutation object of the builder.
 func (tou *TokenOutputUpdate) Mutation() *TokenOutputMutation {
 	return tou.mutation
@@ -274,12 +236,6 @@ func (tou *TokenOutputUpdate) RemoveTokenPartialRevocationSecretShares(t ...*Tok
 		ids[i] = t[i].ID
 	}
 	return tou.RemoveTokenPartialRevocationSecretShareIDs(ids...)
-}
-
-// ClearTokenCreate clears the "token_create" edge to the TokenCreate entity.
-func (tou *TokenOutputUpdate) ClearTokenCreate() *TokenOutputUpdate {
-	tou.mutation.ClearTokenCreate()
-	return tou
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -332,6 +288,9 @@ func (tou *TokenOutputUpdate) check() error {
 	}
 	if tou.mutation.RevocationKeyshareCleared() && len(tou.mutation.RevocationKeyshareIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "TokenOutput.revocation_keyshare"`)
+	}
+	if tou.mutation.TokenCreateCleared() && len(tou.mutation.TokenCreateIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "TokenOutput.token_create"`)
 	}
 	return nil
 }
@@ -395,12 +354,6 @@ func (tou *TokenOutputUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if tou.mutation.NetworkCleared() {
 		_spec.ClearField(tokenoutput.FieldNetwork, field.TypeEnum)
-	}
-	if value, ok := tou.mutation.TokenIdentifier(); ok {
-		_spec.SetField(tokenoutput.FieldTokenIdentifier, field.TypeBytes, value)
-	}
-	if tou.mutation.TokenIdentifierCleared() {
-		_spec.ClearField(tokenoutput.FieldTokenIdentifier, field.TypeBytes)
 	}
 	if tou.mutation.OutputCreatedTokenTransactionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -498,35 +451,6 @@ func (tou *TokenOutputUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(tokenpartialrevocationsecretshare.FieldID, field.TypeUUID),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if tou.mutation.TokenCreateCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   tokenoutput.TokenCreateTable,
-			Columns: []string{tokenoutput.TokenCreateColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tokencreate.FieldID, field.TypeUUID),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := tou.mutation.TokenCreateIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   tokenoutput.TokenCreateTable,
-			Columns: []string{tokenoutput.TokenCreateColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tokencreate.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -669,38 +593,6 @@ func (touo *TokenOutputUpdateOne) ClearNetwork() *TokenOutputUpdateOne {
 	return touo
 }
 
-// SetTokenIdentifier sets the "token_identifier" field.
-func (touo *TokenOutputUpdateOne) SetTokenIdentifier(b []byte) *TokenOutputUpdateOne {
-	touo.mutation.SetTokenIdentifier(b)
-	return touo
-}
-
-// ClearTokenIdentifier clears the value of the "token_identifier" field.
-func (touo *TokenOutputUpdateOne) ClearTokenIdentifier() *TokenOutputUpdateOne {
-	touo.mutation.ClearTokenIdentifier()
-	return touo
-}
-
-// SetTokenCreateID sets the "token_create_id" field.
-func (touo *TokenOutputUpdateOne) SetTokenCreateID(u uuid.UUID) *TokenOutputUpdateOne {
-	touo.mutation.SetTokenCreateID(u)
-	return touo
-}
-
-// SetNillableTokenCreateID sets the "token_create_id" field if the given value is not nil.
-func (touo *TokenOutputUpdateOne) SetNillableTokenCreateID(u *uuid.UUID) *TokenOutputUpdateOne {
-	if u != nil {
-		touo.SetTokenCreateID(*u)
-	}
-	return touo
-}
-
-// ClearTokenCreateID clears the value of the "token_create_id" field.
-func (touo *TokenOutputUpdateOne) ClearTokenCreateID() *TokenOutputUpdateOne {
-	touo.mutation.ClearTokenCreateID()
-	return touo
-}
-
 // SetOutputCreatedTokenTransactionID sets the "output_created_token_transaction" edge to the TokenTransaction entity by ID.
 func (touo *TokenOutputUpdateOne) SetOutputCreatedTokenTransactionID(id uuid.UUID) *TokenOutputUpdateOne {
 	touo.mutation.SetOutputCreatedTokenTransactionID(id)
@@ -754,11 +646,6 @@ func (touo *TokenOutputUpdateOne) AddTokenPartialRevocationSecretShares(t ...*To
 	return touo.AddTokenPartialRevocationSecretShareIDs(ids...)
 }
 
-// SetTokenCreate sets the "token_create" edge to the TokenCreate entity.
-func (touo *TokenOutputUpdateOne) SetTokenCreate(t *TokenCreate) *TokenOutputUpdateOne {
-	return touo.SetTokenCreateID(t.ID)
-}
-
 // Mutation returns the TokenOutputMutation object of the builder.
 func (touo *TokenOutputUpdateOne) Mutation() *TokenOutputMutation {
 	return touo.mutation
@@ -795,12 +682,6 @@ func (touo *TokenOutputUpdateOne) RemoveTokenPartialRevocationSecretShares(t ...
 		ids[i] = t[i].ID
 	}
 	return touo.RemoveTokenPartialRevocationSecretShareIDs(ids...)
-}
-
-// ClearTokenCreate clears the "token_create" edge to the TokenCreate entity.
-func (touo *TokenOutputUpdateOne) ClearTokenCreate() *TokenOutputUpdateOne {
-	touo.mutation.ClearTokenCreate()
-	return touo
 }
 
 // Where appends a list predicates to the TokenOutputUpdate builder.
@@ -866,6 +747,9 @@ func (touo *TokenOutputUpdateOne) check() error {
 	}
 	if touo.mutation.RevocationKeyshareCleared() && len(touo.mutation.RevocationKeyshareIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "TokenOutput.revocation_keyshare"`)
+	}
+	if touo.mutation.TokenCreateCleared() && len(touo.mutation.TokenCreateIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "TokenOutput.token_create"`)
 	}
 	return nil
 }
@@ -946,12 +830,6 @@ func (touo *TokenOutputUpdateOne) sqlSave(ctx context.Context) (_node *TokenOutp
 	}
 	if touo.mutation.NetworkCleared() {
 		_spec.ClearField(tokenoutput.FieldNetwork, field.TypeEnum)
-	}
-	if value, ok := touo.mutation.TokenIdentifier(); ok {
-		_spec.SetField(tokenoutput.FieldTokenIdentifier, field.TypeBytes, value)
-	}
-	if touo.mutation.TokenIdentifierCleared() {
-		_spec.ClearField(tokenoutput.FieldTokenIdentifier, field.TypeBytes)
 	}
 	if touo.mutation.OutputCreatedTokenTransactionCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1049,35 +927,6 @@ func (touo *TokenOutputUpdateOne) sqlSave(ctx context.Context) (_node *TokenOutp
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(tokenpartialrevocationsecretshare.FieldID, field.TypeUUID),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if touo.mutation.TokenCreateCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   tokenoutput.TokenCreateTable,
-			Columns: []string{tokenoutput.TokenCreateColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tokencreate.FieldID, field.TypeUUID),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := touo.mutation.TokenCreateIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   tokenoutput.TokenCreateTable,
-			Columns: []string{tokenoutput.TokenCreateColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tokencreate.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

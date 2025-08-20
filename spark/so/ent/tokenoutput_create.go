@@ -169,14 +169,6 @@ func (toc *TokenOutputCreate) SetTokenCreateID(u uuid.UUID) *TokenOutputCreate {
 	return toc
 }
 
-// SetNillableTokenCreateID sets the "token_create_id" field if the given value is not nil.
-func (toc *TokenOutputCreate) SetNillableTokenCreateID(u *uuid.UUID) *TokenOutputCreate {
-	if u != nil {
-		toc.SetTokenCreateID(*u)
-	}
-	return toc
-}
-
 // SetID sets the "id" field.
 func (toc *TokenOutputCreate) SetID(u uuid.UUID) *TokenOutputCreate {
 	toc.mutation.SetID(u)
@@ -358,8 +350,17 @@ func (toc *TokenOutputCreate) check() error {
 			return &ValidationError{Name: "network", err: fmt.Errorf(`ent: validator failed for field "TokenOutput.network": %w`, err)}
 		}
 	}
+	if _, ok := toc.mutation.TokenIdentifier(); !ok {
+		return &ValidationError{Name: "token_identifier", err: errors.New(`ent: missing required field "TokenOutput.token_identifier"`)}
+	}
+	if _, ok := toc.mutation.TokenCreateID(); !ok {
+		return &ValidationError{Name: "token_create_id", err: errors.New(`ent: missing required field "TokenOutput.token_create_id"`)}
+	}
 	if len(toc.mutation.RevocationKeyshareIDs()) == 0 {
 		return &ValidationError{Name: "revocation_keyshare", err: errors.New(`ent: missing required edge "TokenOutput.revocation_keyshare"`)}
+	}
+	if len(toc.mutation.TokenCreateIDs()) == 0 {
+		return &ValidationError{Name: "token_create", err: errors.New(`ent: missing required edge "TokenOutput.token_create"`)}
 	}
 	return nil
 }
@@ -739,42 +740,6 @@ func (u *TokenOutputUpsert) ClearNetwork() *TokenOutputUpsert {
 	return u
 }
 
-// SetTokenIdentifier sets the "token_identifier" field.
-func (u *TokenOutputUpsert) SetTokenIdentifier(v []byte) *TokenOutputUpsert {
-	u.Set(tokenoutput.FieldTokenIdentifier, v)
-	return u
-}
-
-// UpdateTokenIdentifier sets the "token_identifier" field to the value that was provided on create.
-func (u *TokenOutputUpsert) UpdateTokenIdentifier() *TokenOutputUpsert {
-	u.SetExcluded(tokenoutput.FieldTokenIdentifier)
-	return u
-}
-
-// ClearTokenIdentifier clears the value of the "token_identifier" field.
-func (u *TokenOutputUpsert) ClearTokenIdentifier() *TokenOutputUpsert {
-	u.SetNull(tokenoutput.FieldTokenIdentifier)
-	return u
-}
-
-// SetTokenCreateID sets the "token_create_id" field.
-func (u *TokenOutputUpsert) SetTokenCreateID(v uuid.UUID) *TokenOutputUpsert {
-	u.Set(tokenoutput.FieldTokenCreateID, v)
-	return u
-}
-
-// UpdateTokenCreateID sets the "token_create_id" field to the value that was provided on create.
-func (u *TokenOutputUpsert) UpdateTokenCreateID() *TokenOutputUpsert {
-	u.SetExcluded(tokenoutput.FieldTokenCreateID)
-	return u
-}
-
-// ClearTokenCreateID clears the value of the "token_create_id" field.
-func (u *TokenOutputUpsert) ClearTokenCreateID() *TokenOutputUpsert {
-	u.SetNull(tokenoutput.FieldTokenCreateID)
-	return u
-}
-
 // UpdateNewValues updates the mutable fields using the new values that were set on create except the ID field.
 // Using this option is equivalent to using:
 //
@@ -815,6 +780,12 @@ func (u *TokenOutputUpsertOne) UpdateNewValues() *TokenOutputUpsertOne {
 		}
 		if _, exists := u.create.mutation.CreatedTransactionOutputVout(); exists {
 			s.SetIgnore(tokenoutput.FieldCreatedTransactionOutputVout)
+		}
+		if _, exists := u.create.mutation.TokenIdentifier(); exists {
+			s.SetIgnore(tokenoutput.FieldTokenIdentifier)
+		}
+		if _, exists := u.create.mutation.TokenCreateID(); exists {
+			s.SetIgnore(tokenoutput.FieldTokenCreateID)
 		}
 	}))
 	return u
@@ -1005,48 +976,6 @@ func (u *TokenOutputUpsertOne) UpdateNetwork() *TokenOutputUpsertOne {
 func (u *TokenOutputUpsertOne) ClearNetwork() *TokenOutputUpsertOne {
 	return u.Update(func(s *TokenOutputUpsert) {
 		s.ClearNetwork()
-	})
-}
-
-// SetTokenIdentifier sets the "token_identifier" field.
-func (u *TokenOutputUpsertOne) SetTokenIdentifier(v []byte) *TokenOutputUpsertOne {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.SetTokenIdentifier(v)
-	})
-}
-
-// UpdateTokenIdentifier sets the "token_identifier" field to the value that was provided on create.
-func (u *TokenOutputUpsertOne) UpdateTokenIdentifier() *TokenOutputUpsertOne {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.UpdateTokenIdentifier()
-	})
-}
-
-// ClearTokenIdentifier clears the value of the "token_identifier" field.
-func (u *TokenOutputUpsertOne) ClearTokenIdentifier() *TokenOutputUpsertOne {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.ClearTokenIdentifier()
-	})
-}
-
-// SetTokenCreateID sets the "token_create_id" field.
-func (u *TokenOutputUpsertOne) SetTokenCreateID(v uuid.UUID) *TokenOutputUpsertOne {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.SetTokenCreateID(v)
-	})
-}
-
-// UpdateTokenCreateID sets the "token_create_id" field to the value that was provided on create.
-func (u *TokenOutputUpsertOne) UpdateTokenCreateID() *TokenOutputUpsertOne {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.UpdateTokenCreateID()
-	})
-}
-
-// ClearTokenCreateID clears the value of the "token_create_id" field.
-func (u *TokenOutputUpsertOne) ClearTokenCreateID() *TokenOutputUpsertOne {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.ClearTokenCreateID()
 	})
 }
 
@@ -1257,6 +1186,12 @@ func (u *TokenOutputUpsertBulk) UpdateNewValues() *TokenOutputUpsertBulk {
 			if _, exists := b.mutation.CreatedTransactionOutputVout(); exists {
 				s.SetIgnore(tokenoutput.FieldCreatedTransactionOutputVout)
 			}
+			if _, exists := b.mutation.TokenIdentifier(); exists {
+				s.SetIgnore(tokenoutput.FieldTokenIdentifier)
+			}
+			if _, exists := b.mutation.TokenCreateID(); exists {
+				s.SetIgnore(tokenoutput.FieldTokenCreateID)
+			}
 		}
 	}))
 	return u
@@ -1447,48 +1382,6 @@ func (u *TokenOutputUpsertBulk) UpdateNetwork() *TokenOutputUpsertBulk {
 func (u *TokenOutputUpsertBulk) ClearNetwork() *TokenOutputUpsertBulk {
 	return u.Update(func(s *TokenOutputUpsert) {
 		s.ClearNetwork()
-	})
-}
-
-// SetTokenIdentifier sets the "token_identifier" field.
-func (u *TokenOutputUpsertBulk) SetTokenIdentifier(v []byte) *TokenOutputUpsertBulk {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.SetTokenIdentifier(v)
-	})
-}
-
-// UpdateTokenIdentifier sets the "token_identifier" field to the value that was provided on create.
-func (u *TokenOutputUpsertBulk) UpdateTokenIdentifier() *TokenOutputUpsertBulk {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.UpdateTokenIdentifier()
-	})
-}
-
-// ClearTokenIdentifier clears the value of the "token_identifier" field.
-func (u *TokenOutputUpsertBulk) ClearTokenIdentifier() *TokenOutputUpsertBulk {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.ClearTokenIdentifier()
-	})
-}
-
-// SetTokenCreateID sets the "token_create_id" field.
-func (u *TokenOutputUpsertBulk) SetTokenCreateID(v uuid.UUID) *TokenOutputUpsertBulk {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.SetTokenCreateID(v)
-	})
-}
-
-// UpdateTokenCreateID sets the "token_create_id" field to the value that was provided on create.
-func (u *TokenOutputUpsertBulk) UpdateTokenCreateID() *TokenOutputUpsertBulk {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.UpdateTokenCreateID()
-	})
-}
-
-// ClearTokenCreateID clears the value of the "token_create_id" field.
-func (u *TokenOutputUpsertBulk) ClearTokenCreateID() *TokenOutputUpsertBulk {
-	return u.Update(func(s *TokenOutputUpsert) {
-		s.ClearTokenCreateID()
 	})
 }
 

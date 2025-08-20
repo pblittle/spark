@@ -46,7 +46,7 @@ func setupInternalSignTokenTestHandlerPostgres(t *testing.T) (*InternalSignToken
 }
 
 // createTestSpentOutputWithShares creates a spent output with one partial share and returns it.
-func createTestSpentOutputWithShares(t *testing.T, ctx context.Context, tx *ent.Tx, handler *InternalSignTokenHandler, secretPriv *secp256k1.PrivateKey, shares []*secretsharing.SecretShare, operatorIDs []string) *ent.TokenOutput {
+func createTestSpentOutputWithShares(t *testing.T, ctx context.Context, tx *ent.Tx, handler *InternalSignTokenHandler, tokenCreateID uuid.UUID, secretPriv *secp256k1.PrivateKey, shares []*secretsharing.SecretShare, operatorIDs []string) *ent.TokenOutput {
 	t.Helper()
 
 	coordinatorShare := shares[0] // index 1
@@ -74,6 +74,7 @@ func createTestSpentOutputWithShares(t *testing.T, ctx context.Context, tx *ent.
 		SetCreatedTransactionOutputVout(0).
 		SetNetwork(st.NetworkRegtest).
 		SetTokenIdentifier([]byte("token_identifier")).
+		SetTokenCreateID(tokenCreateID).
 		SetSpentTransactionInputVout(0).
 		SaveX(ctx)
 
@@ -112,10 +113,22 @@ func TestRecoverFullRevocationSecretsAndFinalize_RequireThresholdOperators(t *te
 	shares, err := secretsharing.SplitSecret(secretInt, secp256k1.S256().N, 2, 3)
 	require.NoError(t, err)
 
-	output := createTestSpentOutputWithShares(t, ctx, tx, handler, priv, shares, ids)
+	tokenCreate := tx.TokenCreate.Create().
+		SetIssuerPublicKey(handler.config.IdentityPublicKey().Serialize()).
+		SetTokenName("test token").
+		SetTokenTicker("TTK").
+		SetDecimals(8).
+		SetMaxSupply([]byte{1}).
+		SetIsFreezable(true).
+		SetNetwork(st.NetworkRegtest).
+		SetTokenIdentifier([]byte("token_identifier")).
+		SetCreationEntityPublicKey(handler.config.IdentityPublicKey().Serialize()).
+		SaveX(ctx)
 
+	output := createTestSpentOutputWithShares(t, ctx, tx, handler, tokenCreate.ID, priv, shares, ids)
 	hash := bytes.Repeat([]byte{0x24}, 32)
 	tokenTx := tx.TokenTransaction.Create().
+		SetCreateID(tokenCreate.ID).
 		SetPartialTokenTransactionHash(hash).
 		SetFinalizedTokenTransactionHash(hash).
 		SetStatus(st.TokenTransactionStatusSigned).

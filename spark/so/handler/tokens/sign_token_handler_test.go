@@ -30,6 +30,7 @@ import (
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/ent/schema/schematype"
+	"github.com/lightsparkdev/spark/so/ent/tokencreate"
 	"github.com/lightsparkdev/spark/so/ent/tokentransaction"
 	"github.com/lightsparkdev/spark/so/utils"
 	sparktesting "github.com/lightsparkdev/spark/testing"
@@ -265,7 +266,7 @@ func setupDBCreateTokenTransactionInternalSignFailedScenario(t *testing.T, setup
 		Save(setup.ctx)
 	require.NoError(t, err)
 
-	dbTx, err := setup.sessionCtx.Client.TokenTransaction.Create().
+	_, err = setup.sessionCtx.Client.TokenTransaction.Create().
 		SetPartialTokenTransactionHash(partialTxHash).
 		SetFinalizedTokenTransactionHash(finalTxHash).
 		SetStatus(schematype.TokenTransactionStatusSigned).
@@ -275,8 +276,6 @@ func setupDBCreateTokenTransactionInternalSignFailedScenario(t *testing.T, setup
 		SetOperatorSignature(coordinatorSignature.Serialize()).
 		SetExpiryTime(tokenTxProto.ExpiryTime.AsTime()).
 		Save(setup.ctx)
-	require.NoError(t, err)
-	_, err = dbTx.Update().SetCreateID(tokenCreate.ID).Save(setup.ctx)
 	require.NoError(t, err)
 }
 
@@ -320,6 +319,27 @@ func setupTransferTestData(t *testing.T, setup *testSetupCommon) *transferTestDa
 	// Create keyshares for the token outputs (reuse for both out of convenience)
 	keyshare := createTestSigningKeyshare(t, setup.ctx, setup.sessionCtx.Client)
 
+	// Create or fetch a TokenCreate for the token outputs
+	tokenCreate, err := setup.sessionCtx.Client.TokenCreate.Query().
+		Where(tokencreate.TokenIdentifier(tokenIdentifier)).
+		Only(setup.ctx)
+	if ent.IsNotFound(err) {
+		tokenCreate, err = setup.sessionCtx.Client.TokenCreate.Create().
+			SetIssuerPublicKey(setup.pubKey.Serialize()).
+			SetTokenName(testTokenName).
+			SetTokenTicker(testTokenTicker).
+			SetDecimals(testTokenDecimals).
+			SetMaxSupply(testTokenMaxSupplyBytes).
+			SetIsFreezable(testTokenIsFreezable).
+			SetCreationEntityPublicKey(setup.coordinatorPubKey.Serialize()).
+			SetNetwork(common.SchemaNetwork(common.Regtest)).
+			SetTokenIdentifier(tokenIdentifier).
+			Save(setup.ctx)
+		require.NoError(t, err)
+	} else {
+		require.NoError(t, err)
+	}
+
 	// Create the previous token outputs that will be spent
 	prevTokenOutput1, err := setup.sessionCtx.Client.TokenOutput.Create().
 		SetID(uuid.New()).
@@ -332,6 +352,7 @@ func setupTransferTestData(t *testing.T, setup *testSetupCommon) *transferTestDa
 		SetWithdrawRelativeBlockLocktime(testWithdrawRelativeBlockLocktime).
 		SetRevocationKeyshare(keyshare).
 		SetTokenIdentifier(tokenIdentifier).
+		SetTokenCreateID(tokenCreate.ID).
 		SetNetwork(common.SchemaNetwork(common.Regtest)).
 		Save(setup.ctx)
 	require.NoError(t, err)
@@ -347,6 +368,7 @@ func setupTransferTestData(t *testing.T, setup *testSetupCommon) *transferTestDa
 		SetWithdrawRelativeBlockLocktime(testWithdrawRelativeBlockLocktime).
 		SetRevocationKeyshare(keyshare).
 		SetTokenIdentifier(tokenIdentifier).
+		SetTokenCreateID(tokenCreate.ID).
 		SetNetwork(common.SchemaNetwork(common.Regtest)).
 		Save(setup.ctx)
 	require.NoError(t, err)
@@ -445,6 +467,27 @@ func createTransferTokenTransactionProto(t *testing.T, setup *testSetupCommon, t
 func setupDBTransferTokenTransactionInternalSignFailedScenario(t *testing.T, setup *testSetupCommon, transferData *transferTestData, tokenTxProto *tokenpb.TokenTransaction, partialTxHash, finalTxHash []byte) {
 	coordinatorSignature := ecdsa.Sign(setup.coordinatorPrivKey.ToBTCEC(), finalTxHash)
 
+	// Create or fetch TokenCreate for new outputs
+	tokenCreate, err := setup.sessionCtx.Client.TokenCreate.Query().
+		Where(tokencreate.TokenIdentifier(transferData.tokenIdentifier)).
+		Only(setup.ctx)
+	if ent.IsNotFound(err) {
+		tokenCreate, err = setup.sessionCtx.Client.TokenCreate.Create().
+			SetIssuerPublicKey(setup.pubKey.Serialize()).
+			SetTokenName(testTokenName).
+			SetTokenTicker(testTokenTicker).
+			SetDecimals(testTokenDecimals).
+			SetMaxSupply(testTokenMaxSupplyBytes).
+			SetIsFreezable(testTokenIsFreezable).
+			SetCreationEntityPublicKey(setup.coordinatorPubKey.Serialize()).
+			SetNetwork(common.SchemaNetwork(common.Regtest)).
+			SetTokenIdentifier(transferData.tokenIdentifier).
+			Save(setup.ctx)
+		require.NoError(t, err)
+	} else {
+		require.NoError(t, err)
+	}
+
 	// Create the new token outputs for the transfer
 	dbTokenOutput1, err := setup.sessionCtx.Client.TokenOutput.Create().
 		SetID(uuid.MustParse(transferData.tokenOutputId1)).
@@ -457,6 +500,7 @@ func setupDBTransferTokenTransactionInternalSignFailedScenario(t *testing.T, set
 		SetWithdrawRelativeBlockLocktime(testWithdrawRelativeBlockLocktime).
 		SetRevocationKeyshare(transferData.keyshare).
 		SetTokenIdentifier(transferData.tokenIdentifier).
+		SetTokenCreateID(tokenCreate.ID).
 		SetNetwork(common.SchemaNetwork(common.Regtest)).
 		Save(setup.ctx)
 	require.NoError(t, err)
@@ -472,6 +516,7 @@ func setupDBTransferTokenTransactionInternalSignFailedScenario(t *testing.T, set
 		SetWithdrawRelativeBlockLocktime(testWithdrawRelativeBlockLocktime).
 		SetRevocationKeyshare(transferData.keyshare).
 		SetTokenIdentifier(transferData.tokenIdentifier).
+		SetTokenCreateID(tokenCreate.ID).
 		SetNetwork(common.SchemaNetwork(common.Regtest)).
 		Save(setup.ctx)
 	require.NoError(t, err)

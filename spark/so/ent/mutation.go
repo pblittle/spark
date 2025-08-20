@@ -13368,22 +13368,9 @@ func (m *TokenOutputMutation) OldTokenIdentifier(ctx context.Context) (v []byte,
 	return oldValue.TokenIdentifier, nil
 }
 
-// ClearTokenIdentifier clears the value of the "token_identifier" field.
-func (m *TokenOutputMutation) ClearTokenIdentifier() {
-	m.token_identifier = nil
-	m.clearedFields[tokenoutput.FieldTokenIdentifier] = struct{}{}
-}
-
-// TokenIdentifierCleared returns if the "token_identifier" field was cleared in this mutation.
-func (m *TokenOutputMutation) TokenIdentifierCleared() bool {
-	_, ok := m.clearedFields[tokenoutput.FieldTokenIdentifier]
-	return ok
-}
-
 // ResetTokenIdentifier resets all changes to the "token_identifier" field.
 func (m *TokenOutputMutation) ResetTokenIdentifier() {
 	m.token_identifier = nil
-	delete(m.clearedFields, tokenoutput.FieldTokenIdentifier)
 }
 
 // SetTokenCreateID sets the "token_create_id" field.
@@ -13417,22 +13404,9 @@ func (m *TokenOutputMutation) OldTokenCreateID(ctx context.Context) (v uuid.UUID
 	return oldValue.TokenCreateID, nil
 }
 
-// ClearTokenCreateID clears the value of the "token_create_id" field.
-func (m *TokenOutputMutation) ClearTokenCreateID() {
-	m.token_create = nil
-	m.clearedFields[tokenoutput.FieldTokenCreateID] = struct{}{}
-}
-
-// TokenCreateIDCleared returns if the "token_create_id" field was cleared in this mutation.
-func (m *TokenOutputMutation) TokenCreateIDCleared() bool {
-	_, ok := m.clearedFields[tokenoutput.FieldTokenCreateID]
-	return ok
-}
-
 // ResetTokenCreateID resets all changes to the "token_create_id" field.
 func (m *TokenOutputMutation) ResetTokenCreateID() {
 	m.token_create = nil
-	delete(m.clearedFields, tokenoutput.FieldTokenCreateID)
 }
 
 // SetRevocationKeyshareID sets the "revocation_keyshare" edge to the SigningKeyshare entity by id.
@@ -13614,7 +13588,7 @@ func (m *TokenOutputMutation) ClearTokenCreate() {
 
 // TokenCreateCleared reports if the "token_create" edge to the TokenCreate entity was cleared.
 func (m *TokenOutputMutation) TokenCreateCleared() bool {
-	return m.TokenCreateIDCleared() || m.clearedtoken_create
+	return m.clearedtoken_create
 }
 
 // TokenCreateIDs returns the "token_create" edge IDs in the mutation.
@@ -14048,12 +14022,6 @@ func (m *TokenOutputMutation) ClearedFields() []string {
 	if m.FieldCleared(tokenoutput.FieldNetwork) {
 		fields = append(fields, tokenoutput.FieldNetwork)
 	}
-	if m.FieldCleared(tokenoutput.FieldTokenIdentifier) {
-		fields = append(fields, tokenoutput.FieldTokenIdentifier)
-	}
-	if m.FieldCleared(tokenoutput.FieldTokenCreateID) {
-		fields = append(fields, tokenoutput.FieldTokenCreateID)
-	}
 	return fields
 }
 
@@ -14088,12 +14056,6 @@ func (m *TokenOutputMutation) ClearField(name string) error {
 		return nil
 	case tokenoutput.FieldNetwork:
 		m.ClearNetwork()
-		return nil
-	case tokenoutput.FieldTokenIdentifier:
-		m.ClearTokenIdentifier()
-		return nil
-	case tokenoutput.FieldTokenCreateID:
-		m.ClearTokenCreateID()
 		return nil
 	}
 	return fmt.Errorf("unknown TokenOutput nullable field %s", name)

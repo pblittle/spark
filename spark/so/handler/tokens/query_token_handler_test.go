@@ -97,6 +97,20 @@ func TestExpiredOutputBeforeFinalization(t *testing.T) {
 			Save(ctx)
 		require.NoError(t, err)
 
+		tokenIdentifier := randomBytes(32)
+		tokenCreate, err := tx.TokenCreate.Create().
+			SetIssuerPublicKey(randomBytes(33)).
+			SetTokenName("TestToken").
+			SetTokenTicker("TT").
+			SetDecimals(0).
+			SetMaxSupply(randomBytes(16)).
+			SetIsFreezable(true).
+			SetNetwork(st.NetworkRegtest).
+			SetTokenIdentifier(tokenIdentifier).
+			SetCreationEntityPublicKey(handler.config.IdentityPublicKey().Serialize()).
+			Save(ctx)
+		require.NoError(t, err)
+
 		mintTx, err := tx.TokenTransaction.Create().
 			SetPartialTokenTransactionHash(randomBytes(32)).
 			SetFinalizedTokenTransactionHash(randomBytes(32)).
@@ -114,6 +128,8 @@ func TestExpiredOutputBeforeFinalization(t *testing.T) {
 			SetTokenAmount(randomBytes(16)).
 			SetCreatedTransactionOutputVout(0).
 			SetRevocationKeyshareID(signKS1.ID).
+			SetTokenIdentifier(tokenIdentifier).
+			SetTokenCreateID(tokenCreate.ID).
 			SetOutputCreatedTokenTransactionID(mintTx.ID).
 			SetNetwork(st.NetworkRegtest).
 			Save(ctx)
@@ -147,6 +163,8 @@ func TestExpiredOutputBeforeFinalization(t *testing.T) {
 			SetTokenAmount(randomBytes(16)).
 			SetCreatedTransactionOutputVout(0).
 			SetRevocationKeyshareID(signKS2.ID).
+			SetTokenIdentifier(tokenIdentifier).
+			SetTokenCreateID(tokenCreate.ID).
 			SetOutputCreatedTokenTransactionID(transferTx.ID).
 			SetNetwork(st.NetworkRegtest).
 			Save(ctx)

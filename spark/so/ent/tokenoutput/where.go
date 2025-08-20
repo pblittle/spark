@@ -867,16 +867,6 @@ func TokenIdentifierLTE(v []byte) predicate.TokenOutput {
 	return predicate.TokenOutput(sql.FieldLTE(FieldTokenIdentifier, v))
 }
 
-// TokenIdentifierIsNil applies the IsNil predicate on the "token_identifier" field.
-func TokenIdentifierIsNil() predicate.TokenOutput {
-	return predicate.TokenOutput(sql.FieldIsNull(FieldTokenIdentifier))
-}
-
-// TokenIdentifierNotNil applies the NotNil predicate on the "token_identifier" field.
-func TokenIdentifierNotNil() predicate.TokenOutput {
-	return predicate.TokenOutput(sql.FieldNotNull(FieldTokenIdentifier))
-}
-
 // TokenCreateIDEQ applies the EQ predicate on the "token_create_id" field.
 func TokenCreateIDEQ(v uuid.UUID) predicate.TokenOutput {
 	return predicate.TokenOutput(sql.FieldEQ(FieldTokenCreateID, v))
@@ -895,16 +885,6 @@ func TokenCreateIDIn(vs ...uuid.UUID) predicate.TokenOutput {
 // TokenCreateIDNotIn applies the NotIn predicate on the "token_create_id" field.
 func TokenCreateIDNotIn(vs ...uuid.UUID) predicate.TokenOutput {
 	return predicate.TokenOutput(sql.FieldNotIn(FieldTokenCreateID, vs...))
-}
-
-// TokenCreateIDIsNil applies the IsNil predicate on the "token_create_id" field.
-func TokenCreateIDIsNil() predicate.TokenOutput {
-	return predicate.TokenOutput(sql.FieldIsNull(FieldTokenCreateID))
-}
-
-// TokenCreateIDNotNil applies the NotNil predicate on the "token_create_id" field.
-func TokenCreateIDNotNil() predicate.TokenOutput {
-	return predicate.TokenOutput(sql.FieldNotNull(FieldTokenCreateID))
 }
 
 // HasRevocationKeyshare applies the HasEdge predicate on the "revocation_keyshare" edge.

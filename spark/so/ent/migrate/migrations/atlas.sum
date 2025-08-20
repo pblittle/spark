@@ -1,4 +1,4 @@
-h1:Cpk+WcCWTrtVNLtWvdU7VjU5TKnhy52r0trPbmNfAzQ=
+h1:QTOcua8ANYqJ4J+BvCBKWga9KHKWyNHb1F4Ts/7xX3I=
 20250228224813_baseline.sql h1:9WqkxKWZU7tp4fFZCPiExVqT+q76qkZ74xM64j7aTzc=
 20250306203211_fix_atlas.sql h1:SdaYEBYWDFvvhIBx5VYOWBtfZMHiaoKxO4EEkxGxOhc=
 20250306211926_transfer_leaf_index.sql h1:JpwabFVlmvWwmtbbMU7IR+dix+8+z4xdfHzuflYA6Xg=
@@ -57,3 +57,4 @@ h1:Cpk+WcCWTrtVNLtWvdU7VjU5TKnhy52r0trPbmNfAzQ=
 20250806230726_signing_commitment.sql h1:S6OMVOWorceuQ05qIw559sihVrP6/kdA82XijSXmVOs=
 20250812174916_add_spark_invoice_table.sql h1:mYJPgtvcfK9R9OY7qPTbNCSIueCcscrWW0vNmo5tpYs=
 20250818153936_add_receiver_public_key_to_spark_invoice_table.sql h1:LzyhPic0XYKcKRGUo6ubCPN7K+rXYVKmwBNzopVKxxU=
+20250820215840_token_make_token_created_and_ids_required.sql h1:EOLc/BzX/yBCNh6y8WG5kI1dh7RFC7rNkj90rLyFAF8=
