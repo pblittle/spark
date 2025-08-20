@@ -39,6 +39,13 @@ describe("Stress test for token transfers", () => {
       options: WalletConfig.LOCAL,
     });
 
+    await issuerWallet.createToken({
+      tokenName: "TestToken",
+      tokenTicker: "TEST",
+      decimals: 0,
+      isFreezable: false,
+      maxSupply: 1_000_000n,
+    });
     await issuerWallet.mintTokens(TOKEN_AMOUNT);
     await sleep(1000);
     const tokenIdentifier = await issuerWallet.getIssuerTokenIdentifier();
@@ -124,6 +131,13 @@ describe("Stress test for token transfers", () => {
             options: WalletConfig.LOCAL,
           });
 
+          await issuer.wallet.createToken({
+            tokenName: "TestToken",
+            tokenTicker: "TEST",
+            decimals: 0,
+            isFreezable: false,
+            maxSupply: 1_000_000n,
+          });
           await issuer.wallet.mintTokens(TOKEN_AMOUNT);
           const userAddress = await user.wallet.getSparkAddress();
           const tokenIdentifier =
