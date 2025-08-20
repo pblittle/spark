@@ -2,7 +2,8 @@ package tree_test
 
 import (
 	"context"
-	"encoding/hex"
+	"github.com/lightsparkdev/spark/common/keys"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -17,7 +18,12 @@ import (
 	pb "github.com/lightsparkdev/spark/proto/spark_tree"
 )
 
-var userPubkey, _ = hex.DecodeString("0330d50fd2e26d274e15f3dcea34a8bb611a9d0f14d1a9b1211f3608b3b7cd56c7")
+var (
+	rng           = rand.NewChaCha8([32]byte{})
+	irrelevantKey = keys.MustGeneratePrivateKeyFromRand(rng)
+	userPubKey    = keys.MustGeneratePrivateKeyFromRand(rng).Public()
+	otherPubKey   = keys.MustGeneratePrivateKeyFromRand(rng).Public()
+)
 
 func TestGetLeafDenominationCounts_Integration(t *testing.T) {
 	if testing.Short() {
@@ -31,7 +37,7 @@ func TestGetLeafDenominationCounts_Integration(t *testing.T) {
 
 	client := pb.NewSparkTreeServiceClient(conn)
 
-	req := &pb.GetLeafDenominationCountsRequest{OwnerIdentityPublicKey: userPubkey}
+	req := &pb.GetLeafDenominationCountsRequest{OwnerIdentityPublicKey: userPubKey.Serialize()}
 	resp, err := client.GetLeafDenominationCounts(t.Context(), req)
 	if err != nil {
 		t.Fatalf("failed to get leaf denomination counts: %v", err)
@@ -51,7 +57,7 @@ func TestGetLeafDenominationCounts(t *testing.T) {
 			network: spark.Network_MAINNET,
 			nodes: []treeNodeOpts{
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         8,
 				},
@@ -63,12 +69,12 @@ func TestGetLeafDenominationCounts(t *testing.T) {
 			network: spark.Network_MAINNET,
 			nodes: []treeNodeOpts{
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         8,
 				},
 				{
-					ownerIDPubKey: []byte("other key"),
+					ownerIDPubKey: otherPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         8, // Not counted
 				},
@@ -80,12 +86,12 @@ func TestGetLeafDenominationCounts(t *testing.T) {
 			network: spark.Network_MAINNET,
 			nodes: []treeNodeOpts{
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         4,
 				},
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusCreating,
 					value:         4, // Not counted
 				},
@@ -97,7 +103,7 @@ func TestGetLeafDenominationCounts(t *testing.T) {
 			network: spark.Network_REGTEST, // Tree created with MAINNET
 			nodes: []treeNodeOpts{
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         4,
 				},
@@ -109,17 +115,17 @@ func TestGetLeafDenominationCounts(t *testing.T) {
 			network: spark.Network_MAINNET,
 			nodes: []treeNodeOpts{
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         4,
 				},
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         9, // Not a power of 2
 				},
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         7, // Not a power of 2
 				},
@@ -131,12 +137,12 @@ func TestGetLeafDenominationCounts(t *testing.T) {
 			network: spark.Network_MAINNET,
 			nodes: []treeNodeOpts{
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         4,
 				},
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         tree.DenominationMax + 1, // Too big
 				},
@@ -148,7 +154,7 @@ func TestGetLeafDenominationCounts(t *testing.T) {
 			network: spark.Network_MAINNET,
 			nodes: []treeNodeOpts{
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         tree.DenominationMax,
 				},
@@ -160,22 +166,22 @@ func TestGetLeafDenominationCounts(t *testing.T) {
 			network: spark.Network_MAINNET,
 			nodes: []treeNodeOpts{
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         4,
 				},
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         4,
 				},
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         8,
 				},
 				{
-					ownerIDPubKey: userPubkey,
+					ownerIDPubKey: userPubKey,
 					status:        st.TreeNodeStatusAvailable,
 					value:         32,
 				},
@@ -191,7 +197,7 @@ func TestGetLeafDenominationCounts(t *testing.T) {
 
 			seedTreeNode(t, ctx, st.NetworkMainnet, tc.nodes...)
 
-			req := &pb.GetLeafDenominationCountsRequest{OwnerIdentityPublicKey: userPubkey, Network: tc.network}
+			req := &pb.GetLeafDenominationCountsRequest{OwnerIdentityPublicKey: userPubKey.Serialize(), Network: tc.network}
 			resp, err := tree.GetLeafDenominationCounts(ctx, req)
 			if err != nil {
 				t.Fatalf("failed to get leaf denomination counts: %v", err)
@@ -204,7 +210,7 @@ func TestGetLeafDenominationCounts(t *testing.T) {
 }
 
 func TestGetLeafDenominationCounts_InvalidNetwork_Errors(t *testing.T) {
-	req := &pb.GetLeafDenominationCountsRequest{OwnerIdentityPublicKey: userPubkey, Network: spark.Network_UNSPECIFIED}
+	req := &pb.GetLeafDenominationCountsRequest{OwnerIdentityPublicKey: userPubKey.Serialize(), Network: spark.Network_UNSPECIFIED}
 	resp, err := tree.GetLeafDenominationCounts(t.Context(), req)
 	if err == nil {
 		t.Fatal("expecting error, got none")
@@ -218,13 +224,14 @@ func TestGetLeafDenominationCounts_InvalidNetwork_Errors(t *testing.T) {
 }
 
 type treeNodeOpts struct {
-	ownerIDPubKey []byte
+	ownerIDPubKey keys.Public
 	status        st.TreeNodeStatus
 	value         uint64
 }
 
 func seedTreeNode(t *testing.T, ctx context.Context, network st.Network, opts ...treeNodeOpts) []*ent.TreeNode {
 	t.Helper()
+
 	tx, err := ent.GetDbFromContext(ctx)
 	if err != nil {
 		t.Fatalf("failed to get or create current tx: %v", err)
@@ -233,7 +240,7 @@ func seedTreeNode(t *testing.T, ctx context.Context, network st.Network, opts ..
 	irrelevant := []byte{1, 2, 3, 4}
 
 	tr, err := tx.Tree.Create().
-		SetOwnerIdentityPubkey(opts[0].ownerIDPubKey).
+		SetOwnerIdentityPubkey(opts[0].ownerIDPubKey.Serialize()).
 		SetNetwork(network).
 		SetStatus(st.TreeStatusAvailable).
 		SetBaseTxid(irrelevant).
@@ -245,9 +252,9 @@ func seedTreeNode(t *testing.T, ctx context.Context, network st.Network, opts ..
 
 	ks, err := tx.SigningKeyshare.Create().
 		SetStatus(st.KeyshareStatusAvailable).
-		SetSecretShare(irrelevant).
+		SetSecretShare(irrelevantKey.Serialize()).
 		SetPublicShares(map[string][]uint8{}).
-		SetPublicKey(irrelevant).
+		SetPublicKey(irrelevantKey.Public().Serialize()).
 		SetMinSigners(2).
 		SetCoordinatorIndex(1).
 		Save(ctx)
@@ -258,9 +265,9 @@ func seedTreeNode(t *testing.T, ctx context.Context, network st.Network, opts ..
 	nodes := make([]*ent.TreeNode, len(opts))
 	for i, opt := range opts {
 		node, err := tx.TreeNode.Create().
-			SetOwnerIdentityPubkey(opt.ownerIDPubKey).
-			SetOwnerSigningPubkey(opt.ownerIDPubKey).
-			SetVerifyingPubkey(irrelevant).
+			SetOwnerIdentityPubkey(opt.ownerIDPubKey.Serialize()).
+			SetOwnerSigningPubkey(opt.ownerIDPubKey.Serialize()).
+			SetVerifyingPubkey(irrelevantKey.Public().Serialize()).
 			SetRawTx(irrelevant).
 			SetStatus(opt.status).
 			SetTree(tr).

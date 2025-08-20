@@ -2,6 +2,7 @@ package tree
 
 import (
 	"context"
+	"github.com/lightsparkdev/spark/common/keys"
 	"math/rand/v2"
 	"testing"
 
@@ -18,49 +19,50 @@ import (
 var seeded = rand.NewChaCha8([32]byte{0})
 
 func TestPolarityScorer_Score(t *testing.T) {
-	sspKey := []byte("ssp_key")
-	userKey := []byte("user_key")
+	sspKey := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
+	userKey := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
+	otherKey := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
 	leafID := seededUUID()
 
 	tests := []struct {
 		name        string
-		setupScores map[uuid.UUID]map[string]float32
+		setupScores map[uuid.UUID]map[keys.Public]float32
 		want        float32
 	}{
 		{
 			name: "leaf exists with both scores",
-			setupScores: map[uuid.UUID]map[string]float32{
+			setupScores: map[uuid.UUID]map[keys.Public]float32{
 				leafID: {
-					string(sspKey):  0.8,
-					string(userKey): 0.3,
+					sspKey:  0.8,
+					userKey: 0.3,
 				},
 			},
 			want: 0.5,
 		},
 		{
 			name: "leaf exists with only ssp score",
-			setupScores: map[uuid.UUID]map[string]float32{
-				leafID: {string(sspKey): 0.8},
+			setupScores: map[uuid.UUID]map[keys.Public]float32{
+				leafID: {sspKey: 0.8},
 			},
 			want: 0.8,
 		},
 		{
 			name: "leaf exists with only user score",
-			setupScores: map[uuid.UUID]map[string]float32{
-				leafID: {string(userKey): 0.3},
+			setupScores: map[uuid.UUID]map[keys.Public]float32{
+				leafID: {userKey: 0.3},
 			},
 			want: -0.3,
 		},
 		{
 			name: "leaf exists with neither score",
-			setupScores: map[uuid.UUID]map[string]float32{
-				leafID: {"other_key": 0.5},
+			setupScores: map[uuid.UUID]map[keys.Public]float32{
+				leafID: {otherKey: 0.5},
 			},
 			want: 0.0,
 		},
 		{
 			name:        "leaf does not exist",
-			setupScores: map[uuid.UUID]map[string]float32{},
+			setupScores: map[uuid.UUID]map[keys.Public]float32{},
 			want:        0.0,
 		},
 	}
@@ -74,7 +76,7 @@ func TestPolarityScorer_Score(t *testing.T) {
 			scorer.probPubKeyCanClaim = tc.setupScores
 
 			score := scorer.Score(leafID, sspKey, userKey)
-			assert.InEpsilon(t, tc.want, score, 0.01)
+			assert.InDelta(t, tc.want, score, 0.01)
 		})
 	}
 }
@@ -84,63 +86,69 @@ func TestPolarityScorer_UpdateLeaves(t *testing.T) {
 	defer dbCtx.Close()
 
 	dbTx, err := ent.GetDbFromContext(ctx)
-	if err != nil {
-		t.Fatalf("failed to get or create current tx: %v", err)
-	}
+	require.NoError(t, err)
 
 	scorer := NewPolarityScorer(dbTx.Client())
 
+	treeOwnerPubKey := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
 	tree := dbTx.Tree.Create().
-		SetOwnerIdentityPubkey([]byte("tree_owner")).
+		SetOwnerIdentityPubkey(treeOwnerPubKey.Serialize()).
 		SetStatus(st.TreeStatusAvailable).
 		SetNetwork(st.NetworkMainnet).
 		SetBaseTxid([]byte("base_txid")).
 		SetVout(0).
 		SaveX(ctx)
 
+	keyshareSecret := keys.MustGeneratePrivateKeyFromRand(seeded)
+	keysharePubKey := keyshareSecret.Public()
 	keyshare := dbTx.SigningKeyshare.Create().
 		SetStatus(st.KeyshareStatusAvailable).
-		SetSecretShare([]byte("secret")).
+		SetSecretShare(keyshareSecret.Serialize()).
 		SetPublicShares(map[string][]uint8{}).
-		SetPublicKey([]byte("public_key")).
+		SetPublicKey(keysharePubKey.Serialize()).
 		SetMinSigners(2).
 		SetCoordinatorIndex(1).
 		SaveX(ctx)
 
-	parentOwner := []byte("parent_owner")
+	parentOwner := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
+	verifyingPubKey := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
 	parentNode := dbTx.TreeNode.Create().
 		SetTree(tree).
 		SetStatus(st.TreeNodeStatusAvailable).
-		SetOwnerIdentityPubkey(parentOwner).
-		SetOwnerSigningPubkey(parentOwner).
+		SetOwnerIdentityPubkey(parentOwner.Serialize()).
+		SetOwnerSigningPubkey(parentOwner.Serialize()).
 		SetValue(1000).
-		SetVerifyingPubkey([]byte("verifying_key")).
+		SetVerifyingPubkey(verifyingPubKey.Serialize()).
 		SetSigningKeyshare(keyshare).
 		SetRawTx([]byte("raw_tx")).
 		SetVout(0).
 		SaveX(ctx)
 
 	// Create child nodes
+	owner1PubKey := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
+	verifyingPubKey1 := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
 	child1 := dbTx.TreeNode.Create().
 		SetTree(tree).
 		SetStatus(st.TreeNodeStatusAvailable).
-		SetOwnerIdentityPubkey([]byte("owner1")).
-		SetOwnerSigningPubkey([]byte("owner1")).
+		SetOwnerIdentityPubkey(owner1PubKey.Serialize()).
+		SetOwnerSigningPubkey(owner1PubKey.Serialize()).
 		SetValue(500).
-		SetVerifyingPubkey([]byte("verifying_key1")).
+		SetVerifyingPubkey(verifyingPubKey1.Serialize()).
 		SetSigningKeyshare(keyshare).
 		SetRawTx([]byte("raw_tx1")).
 		SetVout(0).
 		SetParent(parentNode).
 		SaveX(ctx)
 
+	owner2PubKey := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
+	verifyingPubKey2 := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
 	child2 := dbTx.TreeNode.Create().
 		SetTree(tree).
 		SetStatus(st.TreeNodeStatusAvailable).
-		SetOwnerIdentityPubkey([]byte("owner2")).
-		SetOwnerSigningPubkey([]byte("owner2")).
+		SetOwnerIdentityPubkey(owner2PubKey.Serialize()).
+		SetOwnerSigningPubkey(owner2PubKey.Serialize()).
 		SetValue(500).
-		SetVerifyingPubkey([]byte("verifying_key2")).
+		SetVerifyingPubkey(verifyingPubKey2.Serialize()).
 		SetSigningKeyshare(keyshare).
 		SetRawTx([]byte("raw_tx2")).
 		SetVout(1).
@@ -158,25 +166,29 @@ func TestPolarityScorer_UpdateLeaves(t *testing.T) {
 }
 
 func TestPolarityScorer_FetchPolarityScores(t *testing.T) {
+	pubKey1 := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
+	pubKey2 := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
+	pubKey3 := keys.MustGeneratePrivateKeyFromRand(seeded).Public()
+
 	tests := []struct {
 		name           string
 		request        *spark_tree.FetchPolarityScoreRequest
-		setupScores    map[uuid.UUID]map[string]float32
+		setupScores    map[uuid.UUID]map[keys.Public]float32
 		expectedCount  int
-		expectedScores map[string]float32 // key: leafID_pubkey
+		expectedScores map[keys.Public]float32 // key: leafID_pubkey
 	}{
 		{
 			name: "fetch all scores",
 			request: &spark_tree.FetchPolarityScoreRequest{
 				PublicKeys: [][]byte{},
 			},
-			setupScores: map[uuid.UUID]map[string]float32{
+			setupScores: map[uuid.UUID]map[keys.Public]float32{
 				seededUUID(): {
-					"pubkey1": 0.5,
-					"pubkey2": 0.3,
+					pubKey1: 0.5,
+					pubKey2: 0.3,
 				},
 				seededUUID(): {
-					"pubkey3": 0.7,
+					pubKey3: 0.7,
 				},
 			},
 			expectedCount: 3,
@@ -185,17 +197,17 @@ func TestPolarityScorer_FetchPolarityScores(t *testing.T) {
 			name: "fetch specific pubkeys",
 			request: &spark_tree.FetchPolarityScoreRequest{
 				PublicKeys: [][]byte{
-					[]byte("pubkey1"),
-					[]byte("pubkey3"),
+					pubKey1.Serialize(),
+					pubKey3.Serialize(),
 				},
 			},
-			setupScores: map[uuid.UUID]map[string]float32{
+			setupScores: map[uuid.UUID]map[keys.Public]float32{
 				seededUUID(): {
-					"pubkey1": 0.5,
-					"pubkey2": 0.3,
+					pubKey1: 0.5,
+					pubKey2: 0.3,
 				},
 				seededUUID(): {
-					"pubkey3": 0.7,
+					pubKey3: 0.7,
 				},
 			},
 			expectedCount: 2,
@@ -203,10 +215,10 @@ func TestPolarityScorer_FetchPolarityScores(t *testing.T) {
 		{
 			name: "no matching pubkeys",
 			request: &spark_tree.FetchPolarityScoreRequest{
-				PublicKeys: [][]byte{[]byte("nonexistent")},
+				PublicKeys: [][]byte{keys.MustGeneratePrivateKeyFromRand(seeded).Public().Serialize()},
 			},
-			setupScores: map[uuid.UUID]map[string]float32{
-				seededUUID(): {"pubkey1": 0.5},
+			setupScores: map[uuid.UUID]map[keys.Public]float32{
+				seededUUID(): {pubKey1: 0.5},
 			},
 			expectedCount: 0,
 		},

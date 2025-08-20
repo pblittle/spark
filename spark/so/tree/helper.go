@@ -2,18 +2,19 @@ package tree
 
 import (
 	"github.com/google/uuid"
+	"github.com/lightsparkdev/spark/common/keys"
 )
 
 // HelperNode is a helper struct for the polarity score computation.
 type HelperNode struct {
-	pubKey   string
+	pubKey   keys.Public
 	leafID   uuid.UUID
 	parent   *HelperNode
 	children []*HelperNode
 }
 
 // NewHelperNode creates a new HelperNode.
-func NewHelperNode(pubKey string, leafID uuid.UUID) *HelperNode {
+func NewHelperNode(pubKey keys.Public, leafID uuid.UUID) *HelperNode {
 	return &HelperNode{
 		pubKey:   pubKey,
 		leafID:   leafID,
@@ -31,11 +32,11 @@ func (h *HelperNode) IsLeaf() bool {
 }
 
 // Owners returns a mapping from pubkeys to the number of leaves that each owns.
-func (h *HelperNode) Owners() map[string]int {
+func (h *HelperNode) Owners() map[keys.Public]int {
 	if h.IsLeaf() {
-		return map[string]int{h.pubKey: 1}
+		return map[keys.Public]int{h.pubKey: 1}
 	}
-	owners := make(map[string]int)
+	owners := make(map[keys.Public]int)
 	for _, child := range h.children {
 		for owner, count := range child.Owners() {
 			owners[owner] += count
@@ -56,10 +57,10 @@ func (h *HelperNode) Leaves() []*HelperNode {
 }
 
 // Score returns a mapping from pubkeys to the ownership score.
-func (h *HelperNode) Score() map[string]float32 {
+func (h *HelperNode) Score() map[keys.Public]float32 {
 	depth := 0
 	node := h
-	scores := make(map[string]float32)
+	scores := make(map[keys.Public]float32)
 	multiplier := float32(1.0)
 	for node != nil && depth < PolarityScoreDepth {
 		owners := node.Owners()
