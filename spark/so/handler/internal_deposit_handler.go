@@ -26,6 +26,7 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/signingkeyshare"
 	"github.com/lightsparkdev/spark/so/ent/utxo"
 	"github.com/lightsparkdev/spark/so/ent/utxoswap"
+	"github.com/lightsparkdev/spark/so/errors"
 	"github.com/lightsparkdev/spark/so/helper"
 )
 
@@ -103,8 +104,12 @@ func (h *InternalDepositHandler) GenerateStaticDepositAddressProofs(ctx context.
 		Where(depositaddress.OwnerIdentityPubkeyEQ(req.OwnerIdentityPublicKey)).
 		WithSigningKeyshare().
 		Only(ctx)
-	if err != nil {
+	if err != nil && !ent.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get deposit address: %w", err)
+	}
+
+	if depositAddress == nil {
+		return nil, errors.NotFoundErrorf("no static deposit address found for keyshare %s, address %s and identity public key %s", keyshareID, req.Address, hex.EncodeToString(req.OwnerIdentityPublicKey))
 	}
 
 	logger.Info("Generating proofs of possession for static deposit address generated from keyshare", "keyshare_id", req.KeyshareId, "address", req.Address)

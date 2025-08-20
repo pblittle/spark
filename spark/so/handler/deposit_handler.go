@@ -32,6 +32,8 @@ import (
 	"github.com/lightsparkdev/spark/so/objects"
 	"github.com/lightsparkdev/spark/so/utils"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -134,7 +136,7 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 
 	combinedPublicKeyBytes, err := common.AddPublicKeys(keyshare.PublicKey, req.SigningPublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to add public keys for request %s: %w", logging.FormatProto("generate_deposit_address_request", req), err)
+		return nil, fmt.Errorf("failed to add public keys: %w", err)
 	}
 	combinedPublicKey, err := keys.ParsePublicKey(combinedPublicKeyBytes)
 	if err != nil {
@@ -147,7 +149,7 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 
 	db, err := ent.GetDbFromContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
+		return nil, fmt.Errorf("failed to get or create current tx: %w", err)
 	}
 
 	depositAddressMutator := db.DepositAddress.Create().
@@ -171,7 +173,7 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 
 	_, err = depositAddressMutator.Save(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to save deposit address for request %s: %w", logging.FormatProto("generate_deposit_address_request", req), err)
+		return nil, fmt.Errorf("failed to save deposit address: %w", err)
 	}
 
 	response, err := helper.ExecuteTaskWithAllOperators(ctx, config, &selection, func(ctx context.Context, operator *so.SigningOperator) ([]byte, error) {
@@ -190,7 +192,7 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 			IsStatic:               req.IsStatic,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to mark keyshare for deposit address for request %s: %w", logging.FormatProto("generate_deposit_address_request", req), err)
+			return nil, fmt.Errorf("failed to mark keyshare for deposit address: %w", err)
 		}
 		return response.AddressSignature, nil
 	})
@@ -200,7 +202,7 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 
 	verifyingKeyBytes, err := common.AddPublicKeys(keyshare.PublicKey, req.SigningPublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate proof of possession signatures for request %s: %w", logging.FormatProto("generate_deposit_address_request", req), err)
+		return nil, fmt.Errorf("failed to generate proof of possession signatures: %w", err)
 	}
 
 	msg := common.ProofOfPossessionMessageHashForDepositAddress(req.IdentityPublicKey, keyshare.PublicKey, []byte(depositAddress))
@@ -221,7 +223,29 @@ func (o *DepositHandler) GenerateDepositAddress(ctx context.Context, config *so.
 	}, nil
 }
 
-// GenerateStaticDepositAddress generates a static deposit address for a given identity and signing public key.
+// GenerateStaticDepositAddress generates or retrieves a static deposit address for a user's identity and signing public key.
+//
+// This method provides a deterministic way for users to obtain a permanent Bitcoin deposit address
+// that remains valid across multiple deposits. Unlike regular deposit addresses, static addresses
+// are reusable and tied to a specific identity-network combination.
+//
+// The method coordinates getting a static deposit address for a user in a distributed way:
+// 1. First checks if a valid static address already exists for the identity-network pair
+// 2. If found, verifies that all operators have the necessary cryptographic proofs of possession
+// 3. If not found, generates a new static address using distributed key generation
+// 4. Coordinates with all other operators to mark keyshares as used and generate proofs
+//
+// Parameters:
+//   - SigningPublicKey: User's 33-byte secp256k1 public key for address generation
+//   - IdentityPublicKey: User's 33-byte identity key for authentication
+//   - Network: Target Bitcoin network (mainnet, testnet, regtest)
+//
+// Returns:
+//   - Address: P2TR Bitcoin address string
+//   - VerifyingKey: Combined public key (user + operator keyshare)
+//   - DepositAddressProof: Cryptographic proofs including:
+//   - AddressSignatures: Map of operator ID -> signature proving address validity
+//   - ProofOfPossessionSignature: Proof that the operator possesses the key fragment
 func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, config *so.Config, req *pb.GenerateStaticDepositAddressRequest) (*pb.GenerateStaticDepositAddressResponse, error) {
 	ctx, span := tracer.Start(ctx, "DepositHandler.GenerateStaticDepositAddress")
 	defer span.End()
@@ -241,7 +265,7 @@ func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, confi
 	logger := logging.GetLoggerFromContext(ctx)
 	db, err := ent.GetDbFromContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
+		return nil, fmt.Errorf("failed to get or create current tx: %w", err)
 	}
 
 	// TODO(LIG-8000): remove when we have a way to support multiple static deposit addresses per (identity, network).
@@ -252,23 +276,58 @@ func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, confi
 		).
 		All(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query deposit addresses for request %s: %w", logging.FormatProto("generate_static_deposit_address_request", req), err)
+		return nil, fmt.Errorf("failed to query deposit addresses: %w", err)
 	}
 
-	// Find if there is already a static deposit address for this identity and network.
+	// Find if there is already a static deposit address for this identity and network that has proofs on all operators.
 	for _, depositAddress := range depositAddresses {
 		if utils.IsBitcoinAddressForNetwork(depositAddress.Address, network) {
-			return nil, fmt.Errorf("static deposit address already exists: %s", depositAddress.Address)
+			// Get local keyshare for the deposit address.
+			keyshare, err := depositAddress.QuerySigningKeyshare().Only(ctx)
+			if err != nil && ent.IsNotFound(err) {
+				logger.Error("static deposit address does not have a keyshare", "id", depositAddress.ID, "address", depositAddress.Address)
+				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("failed to get keyshare for static deposit address: %w", err)
+			}
+
+			addressSignatures, proofOfPossessionSignature, err := generateStaticDepositAddressProofs(ctx, config, keyshare, depositAddress)
+			if err != nil {
+				return nil, err
+			}
+			if addressSignatures == nil {
+				continue
+			}
+
+			// Generate verifying key.
+			verifyingKeyBytes, err := common.AddPublicKeys(keyshare.PublicKey, depositAddress.OwnerSigningPubkey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate proof of possession signatures: %w", err)
+			}
+
+			// Return the whole deposit address data.
+			logger.Info("Static deposit address already exists", "id", depositAddress.ID, "address", depositAddress.Address)
+			return &pb.GenerateStaticDepositAddressResponse{
+				DepositAddress: &pb.Address{
+					Address:      depositAddress.Address,
+					VerifyingKey: verifyingKeyBytes,
+					DepositAddressProof: &pb.DepositAddressProof{
+						AddressSignatures:          addressSignatures,
+						ProofOfPossessionSignature: proofOfPossessionSignature,
+					},
+				},
+			}, nil
 		}
 	}
 
 	logger.Info("Generating static deposit address for public key", "public_key", hex.EncodeToString(req.SigningPublicKey), "identity_public_key", hex.EncodeToString(req.IdentityPublicKey))
 
+	// Note that this method will COMMIT or ROLLBACK the DB transaction.
 	keyshares, err := ent.GetUnusedSigningKeyshares(ctx, config, 1)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get unused keyshares: %w", err)
 	}
-
 	if len(keyshares) == 0 {
 		return nil, fmt.Errorf("no keyshares available")
 	}
@@ -293,7 +352,7 @@ func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, confi
 
 	combinedPublicKeyBytes, err := common.AddPublicKeys(keyshare.PublicKey, req.SigningPublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to add public keys for request %s: %w", logging.FormatProto("generate_deposit_address_request", req), err)
+		return nil, fmt.Errorf("failed to add public keys: %w", err)
 	}
 	combinedPublicKey, err := keys.ParsePublicKey(combinedPublicKeyBytes)
 	if err != nil {
@@ -306,7 +365,7 @@ func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, confi
 
 	db, err = ent.GetDbFromContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get or create current tx for request: %w", err)
+		return nil, fmt.Errorf("failed to get or create current tx: %w", err)
 	}
 
 	depositAddressMutator := db.DepositAddress.Create().
@@ -318,12 +377,12 @@ func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, confi
 
 	_, err = depositAddressMutator.Save(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to save deposit address for request %s: %w", logging.FormatProto("generate_deposit_address_request", req), err)
+		return nil, fmt.Errorf("failed to save deposit address: %w", err)
 	}
 
 	isStatic := true
 
-	response, err := helper.ExecuteTaskWithAllOperators(ctx, config, &selection, func(ctx context.Context, operator *so.SigningOperator) ([]byte, error) {
+	addressSignatures, err := helper.ExecuteTaskWithAllOperators(ctx, config, &selection, func(ctx context.Context, operator *so.SigningOperator) ([]byte, error) {
 		conn, err := operator.NewOperatorGRPCConnection()
 		if err != nil {
 			return nil, err
@@ -339,7 +398,7 @@ func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, confi
 			IsStatic:               &isStatic,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to mark keyshare for deposit address for request %s: %w", logging.FormatProto("generate_deposit_address_request", req), err)
+			return nil, fmt.Errorf("failed to mark keyshare for deposit address: %w", err)
 		}
 		return response.AddressSignature, nil
 	})
@@ -349,7 +408,7 @@ func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, confi
 
 	verifyingKeyBytes, err := common.AddPublicKeys(keyshare.PublicKey, req.SigningPublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate proof of possession signatures for request %s: %w", logging.FormatProto("generate_deposit_address_request", req), err)
+		return nil, fmt.Errorf("failed to generate proof of possession signatures: %w", err)
 	}
 
 	msg := common.ProofOfPossessionMessageHashForDepositAddress(req.IdentityPublicKey, keyshare.PublicKey, []byte(depositAddress))
@@ -357,16 +416,85 @@ func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, confi
 	if err != nil {
 		return nil, err
 	}
+
+	internalHandler := NewInternalDepositHandler(config)
+	selfProofs, err := internalHandler.GenerateStaticDepositAddressProofs(ctx, &pbinternal.GenerateStaticDepositAddressProofsRequest{
+		KeyshareId:             keyshare.ID.String(),
+		Address:                depositAddress,
+		OwnerIdentityPublicKey: req.IdentityPublicKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	addressSignatures[config.Identifier] = selfProofs.AddressSignature
+
 	return &pb.GenerateStaticDepositAddressResponse{
 		DepositAddress: &pb.Address{
 			Address:      depositAddress,
 			VerifyingKey: verifyingKeyBytes,
 			DepositAddressProof: &pb.DepositAddressProof{
-				AddressSignatures:          response,
+				AddressSignatures:          addressSignatures,
 				ProofOfPossessionSignature: proofOfPossessionSignatures[0],
 			},
 		},
 	}, nil
+}
+
+func generateStaticDepositAddressProofs(ctx context.Context, config *so.Config, keyshare *ent.SigningKeyshare, depositAddress *ent.DepositAddress) (map[string][]byte, []byte, error) {
+	logger := logging.GetLoggerFromContext(ctx)
+
+	internalHandler := NewInternalDepositHandler(config)
+	selfProofs, err := internalHandler.GenerateStaticDepositAddressProofs(ctx, &pbinternal.GenerateStaticDepositAddressProofsRequest{
+		KeyshareId:             keyshare.ID.String(),
+		Address:                depositAddress.Address,
+		OwnerIdentityPublicKey: depositAddress.OwnerIdentityPubkey,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Get proofs from other operators.
+	selection := helper.OperatorSelection{Option: helper.OperatorSelectionOptionExcludeSelf}
+	responses, err := helper.ExecuteTaskWithAllOperators(ctx, config, &selection, func(ctx context.Context, operator *so.SigningOperator) (*pbinternal.GenerateStaticDepositAddressProofsResponse, error) {
+		conn, err := operator.NewOperatorGRPCConnection()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get operator grpc connection: %w", err)
+		}
+		defer conn.Close()
+
+		client := pbinternal.NewSparkInternalServiceClient(conn)
+		response, err := client.GenerateStaticDepositAddressProofs(ctx, &pbinternal.GenerateStaticDepositAddressProofsRequest{
+			KeyshareId:             keyshare.ID.String(),
+			Address:                depositAddress.Address,
+			OwnerIdentityPublicKey: depositAddress.OwnerIdentityPubkey,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate static deposit address proofs: %w", err)
+		}
+		return response, nil
+	})
+	// If internal error, return it.
+	if err != nil && status.Code(err) != codes.NotFound {
+		return nil, nil, fmt.Errorf("failed to generate static deposit address proofs: %w", err)
+	}
+	// If not found, continue with another address.
+	if err != nil && status.Code(err) == codes.NotFound {
+		logger.Error("static deposit address does not have proofs on some or all operators", "id", depositAddress.ID, "address", depositAddress.Address, "error", err)
+		return nil, nil, nil
+	}
+
+	addressSignatures := make(map[string][]byte)
+	for id, response := range responses {
+		addressSignatures[id] = response.AddressSignature
+	}
+	addressSignatures[config.Identifier] = selfProofs.AddressSignature
+
+	msg := common.ProofOfPossessionMessageHashForDepositAddress(depositAddress.OwnerIdentityPubkey, keyshare.PublicKey, []byte(depositAddress.Address))
+	proofOfPossessionSignatures, err := helper.GenerateProofOfPossessionSignatures(ctx, config, [][]byte{msg}, []*ent.SigningKeyshare{keyshare})
+	if err != nil {
+		return nil, nil, err
+	}
+	return addressSignatures, proofOfPossessionSignatures[0], nil
 }
 
 func (o *DepositHandler) StartTreeCreation(ctx context.Context, config *so.Config, req *pb.StartTreeCreationRequest) (*pb.StartTreeCreationResponse, error) {
