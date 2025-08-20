@@ -1,5 +1,13 @@
 # @buildonspark/issuer-sdk
 
+## 0.0.88
+
+### Patch Changes
+
+- -- return offset from queryTokenTransactions
+- Updated dependencies
+  - @buildonspark/spark-sdk@0.2.9
+
 ## 0.0.87
 
 ### Patch Changes

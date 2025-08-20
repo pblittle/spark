@@ -1,5 +1,11 @@
 # @buildonspark/spark-sdk
 
+## 0.2.9
+
+### Patch Changes
+
+- -- return offset from queryTokenTransactions
+
 ## 0.2.8
 
 ### Patch Changes
