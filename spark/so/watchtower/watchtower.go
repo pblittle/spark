@@ -159,7 +159,10 @@ func CheckExpiredTimeLocks(ctx context.Context, bitcoinClient *rpcclient.Client,
 		if nodeTx.TxIn[0].Sequence <= 0xFFFFFFFE {
 			// Check if parent is confirmed and timelock has expired
 			parent, err := node.QueryParent().Only(ctx)
-			if err != nil {
+			if ent.IsNotFound(err) {
+				// Exit gracefully if the node is a root node and has no parent
+				return nil
+			} else if err != nil {
 				return fmt.Errorf("watchtower failed to query parent for node %s: %w", node.ID.String(), err)
 			}
 			if parent.NodeConfirmationHeight > 0 {
