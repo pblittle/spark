@@ -1,5 +1,11 @@
 # @buildonspark/spark-sdk
 
+## 0.2.10
+
+### Patch Changes
+
+- -- Bug fix for queryNodes
+
 ## 0.2.9
 
 ### Patch Changes
