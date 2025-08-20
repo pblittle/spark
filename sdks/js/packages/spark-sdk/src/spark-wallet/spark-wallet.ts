@@ -1086,7 +1086,7 @@ export class SparkWallet extends EventEmitter {
 
     leavesToSwap.sort((a, b) => a.value - b.value);
 
-    const batches = chunkArray(leavesToSwap, 100);
+    const batches = chunkArray(leavesToSwap, 64);
 
     const results: TreeNode[] = [];
     for (const batch of batches) {
@@ -4647,7 +4647,7 @@ export class SparkWallet extends EventEmitter {
 
       /* If we received fewer nodes than requested, this was the last page. */
       const received = Object.keys(response.nodes ?? {}).length;
-      if (received < pageSize) {
+      if (received < pageSize || baseRequest.source?.$case === "nodeIds") {
         return {
           nodes: aggregatedNodes,
           offset: response.offset,
