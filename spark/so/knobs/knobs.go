@@ -12,16 +12,17 @@ import (
 )
 
 const (
-	KnobDatabaseStatementTimeout      = "spark.database.statement_timeout"
-	KnobRateLimitPeriod               = "spark.so.ratelimit.period"
-	KnobRateLimitLimit                = "spark.so.ratelimit.limit"
-	KnobRateLimitMethods              = "spark.so.ratelimit.methods"
-	KnobSoRollbackUtxoSwapUsingGossip = "spark.so.rollback_utxo_swap_using_gossip"
-	KnobSoTransferLimit               = "spark.so.transfer_limit"
-	KnobGrpcServerConnectionTimeout   = "spark.so.grpc.server.connection_timeout"
-	KnobGrpcServerKeepaliveTime       = "spark.so.grpc.server.keepalive_time"
-	KnobGrpcServerKeepaliveTimeout    = "spark.so.grpc.server.keepalive_timeout"
-	KnobGrpcServerUnaryHandlerTimeout = "spark.so.grpc.server.unary_handler_timeout"
+	KnobDatabaseStatementTimeout         = "spark.database.statement_timeout"
+	KnobRateLimitPeriod                  = "spark.so.ratelimit.period"
+	KnobRateLimitLimit                   = "spark.so.ratelimit.limit"
+	KnobRateLimitMethods                 = "spark.so.ratelimit.methods"
+	KnobSoRollbackUtxoSwapUsingGossip    = "spark.so.rollback_utxo_swap_using_gossip"
+	KnobSoTransferLimit                  = "spark.so.transfer_limit"
+	KnobGrpcServerConnectionTimeout      = "spark.so.grpc.server.connection_timeout"
+	KnobGrpcServerKeepaliveTime          = "spark.so.grpc.server.keepalive_time"
+	KnobGrpcServerKeepaliveTimeout       = "spark.so.grpc.server.keepalive_timeout"
+	KnobGrpcServerUnaryHandlerTimeout    = "spark.so.grpc.server.unary_handler_timeout"
+	KnobSoGenerateStaticDepositAddressV2 = "spark.so.generate_static_deposit_address_v2"
 )
 
 type Config struct {

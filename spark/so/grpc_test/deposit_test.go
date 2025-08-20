@@ -161,6 +161,42 @@ func TestGenerateStaticDepositAddress(t *testing.T) {
 	assert.Equal(t, resp.DepositAddress.Address, queryStaticDepositAddresses.DepositAddresses[0].DepositAddress)
 }
 
+func TestGenerateStaticDepositAddressDedicatedEndpoint(t *testing.T) {
+	config, err := sparktesting.TestWalletConfig()
+	require.NoError(t, err)
+
+	token, err := wallet.AuthenticateWithServer(t.Context(), config)
+	require.NoError(t, err)
+	ctx := wallet.ContextWithToken(t.Context(), token)
+
+	pubKeyBytes, err := hex.DecodeString("0330d50fd2e26d274e15f3dcea34a8bb611a9d0f14d1a9b1211f3608b3b7cd56c7")
+	require.NoError(t, err)
+	pubKey, err := keys.ParsePublicKey(pubKeyBytes)
+	require.NoError(t, err)
+	resp, err := wallet.GenerateStaticDepositAddressDedicatedEndpoint(ctx, config, pubKey)
+	require.NoError(t, err)
+
+	// Static deposit addresses should not be returned by QueryUnusedDepositAddresses
+	unusedDepositAddresses, err := wallet.QueryUnusedDepositAddresses(ctx, config)
+	require.NoError(t, err)
+	assert.Empty(t, unusedDepositAddresses.DepositAddresses)
+
+	queryStaticDepositAddresses, err := wallet.QueryStaticDepositAddresses(ctx, config)
+	require.NoError(t, err)
+	assert.Len(t, queryStaticDepositAddresses.DepositAddresses, 1)
+	assert.Equal(t, resp.DepositAddress.Address, queryStaticDepositAddresses.DepositAddresses[0].DepositAddress)
+
+	// Generating a new static deposit address should return an error
+	_, err = wallet.GenerateStaticDepositAddressDedicatedEndpoint(ctx, config, pubKey)
+	require.ErrorContains(t, err, fmt.Sprintf("static deposit address already exists: %s", resp.DepositAddress.Address))
+
+	// No new address should be created
+	queryStaticDepositAddresses, err = wallet.QueryStaticDepositAddresses(ctx, config)
+	require.NoError(t, err)
+	assert.Len(t, queryStaticDepositAddresses.DepositAddresses, 1)
+	assert.Equal(t, resp.DepositAddress.Address, queryStaticDepositAddresses.DepositAddresses[0].DepositAddress)
+}
+
 func TestStartDepositTreeCreationBasic(t *testing.T) {
 	config, err := sparktesting.TestWalletConfig()
 	require.NoError(t, err)

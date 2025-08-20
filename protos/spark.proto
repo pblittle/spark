@@ -10,6 +10,10 @@ import "common.proto";
 
 service SparkService {
     rpc generate_deposit_address(GenerateDepositAddressRequest) returns (GenerateDepositAddressResponse) {}
+
+    // Generates a new static deposit address of the user or returns the existing one for the specified network.
+    rpc generate_static_deposit_address(GenerateStaticDepositAddressRequest) returns (GenerateStaticDepositAddressResponse) {}
+
     rpc start_deposit_tree_creation(StartDepositTreeCreationRequest) returns (StartDepositTreeCreationResponse) {}
     // This is deprecated, please use start_deposit_tree_creation instead.
     rpc start_tree_creation(StartTreeCreationRequest) returns (StartTreeCreationResponse) {
@@ -193,6 +197,25 @@ message Address {
  * GenerateDepositAddressResponse is the response to the request to generate a deposit address.
  */
 message GenerateDepositAddressResponse {
+    Address deposit_address = 1;
+}
+
+/**
+ * GenerateStaticDepositAddressRequest is the request to generate a static deposit address.
+ */
+message GenerateStaticDepositAddressRequest {
+    // The signing public key of the user.
+    bytes signing_public_key = 1 [(validate.rules).bytes.len = 33];
+    // The identity public key of the user.
+    bytes identity_public_key = 2 [(validate.rules).bytes.len = 33];
+    // The network of the bitcoin network.
+    Network network = 3 [(validate.rules).enum = {not_in: [0]}];
+}
+
+/**
+ * GenerateStaticDepositAddressResponse is the response to the request to generate a static deposit address.
+ */
+message GenerateStaticDepositAddressResponse {
     Address deposit_address = 1;
 }
 

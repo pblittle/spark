@@ -39,6 +39,13 @@ func (s *SparkServer) GenerateDepositAddress(ctx context.Context, req *pb.Genera
 	return depositHandler.GenerateDepositAddress(ctx, s.config, req)
 }
 
+// GenerateStaticDepositAddress generates a static deposit address for the given public key.
+func (s *SparkServer) GenerateStaticDepositAddress(ctx context.Context, req *pb.GenerateStaticDepositAddressRequest) (*pb.GenerateStaticDepositAddressResponse, error) {
+	ctx, _ = logging.WithIdentityPubkey(ctx, req.IdentityPublicKey)
+	depositHandler := handler.NewDepositHandler(s.config)
+	return depositHandler.GenerateStaticDepositAddress(ctx, s.config, req)
+}
+
 // StartDepositTreeCreation verifies the on chain utxo, and then verifies and signs the offchain root and refund transactions.
 func (s *SparkServer) StartDepositTreeCreation(ctx context.Context, req *pb.StartDepositTreeCreationRequest) (*pb.StartDepositTreeCreationResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.IdentityPublicKey)

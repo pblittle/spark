@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	SparkService_GenerateDepositAddress_FullMethodName              = "/spark.SparkService/generate_deposit_address"
+	SparkService_GenerateStaticDepositAddress_FullMethodName        = "/spark.SparkService/generate_static_deposit_address"
 	SparkService_StartDepositTreeCreation_FullMethodName            = "/spark.SparkService/start_deposit_tree_creation"
 	SparkService_StartTreeCreation_FullMethodName                   = "/spark.SparkService/start_tree_creation"
 	SparkService_FinalizeNodeSignatures_FullMethodName              = "/spark.SparkService/finalize_node_signatures"
@@ -79,6 +80,8 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SparkServiceClient interface {
 	GenerateDepositAddress(ctx context.Context, in *GenerateDepositAddressRequest, opts ...grpc.CallOption) (*GenerateDepositAddressResponse, error)
+	// Generates a new static deposit address of the user or returns the existing one for the specified network.
+	GenerateStaticDepositAddress(ctx context.Context, in *GenerateStaticDepositAddressRequest, opts ...grpc.CallOption) (*GenerateStaticDepositAddressResponse, error)
 	StartDepositTreeCreation(ctx context.Context, in *StartDepositTreeCreationRequest, opts ...grpc.CallOption) (*StartDepositTreeCreationResponse, error)
 	// Deprecated: Do not use.
 	// This is deprecated, please use start_deposit_tree_creation instead.
@@ -166,6 +169,16 @@ func (c *sparkServiceClient) GenerateDepositAddress(ctx context.Context, in *Gen
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GenerateDepositAddressResponse)
 	err := c.cc.Invoke(ctx, SparkService_GenerateDepositAddress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sparkServiceClient) GenerateStaticDepositAddress(ctx context.Context, in *GenerateStaticDepositAddressRequest, opts ...grpc.CallOption) (*GenerateStaticDepositAddressResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GenerateStaticDepositAddressResponse)
+	err := c.cc.Invoke(ctx, SparkService_GenerateStaticDepositAddress_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -700,6 +713,8 @@ func (c *sparkServiceClient) QuerySparkInvoices(ctx context.Context, in *QuerySp
 // for forward compatibility.
 type SparkServiceServer interface {
 	GenerateDepositAddress(context.Context, *GenerateDepositAddressRequest) (*GenerateDepositAddressResponse, error)
+	// Generates a new static deposit address of the user or returns the existing one for the specified network.
+	GenerateStaticDepositAddress(context.Context, *GenerateStaticDepositAddressRequest) (*GenerateStaticDepositAddressResponse, error)
 	StartDepositTreeCreation(context.Context, *StartDepositTreeCreationRequest) (*StartDepositTreeCreationResponse, error)
 	// Deprecated: Do not use.
 	// This is deprecated, please use start_deposit_tree_creation instead.
@@ -785,6 +800,9 @@ type UnimplementedSparkServiceServer struct{}
 
 func (UnimplementedSparkServiceServer) GenerateDepositAddress(context.Context, *GenerateDepositAddressRequest) (*GenerateDepositAddressResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GenerateDepositAddress not implemented")
+}
+func (UnimplementedSparkServiceServer) GenerateStaticDepositAddress(context.Context, *GenerateStaticDepositAddressRequest) (*GenerateStaticDepositAddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenerateStaticDepositAddress not implemented")
 }
 func (UnimplementedSparkServiceServer) StartDepositTreeCreation(context.Context, *StartDepositTreeCreationRequest) (*StartDepositTreeCreationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartDepositTreeCreation not implemented")
@@ -974,6 +992,24 @@ func _SparkService_GenerateDepositAddress_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SparkServiceServer).GenerateDepositAddress(ctx, req.(*GenerateDepositAddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SparkService_GenerateStaticDepositAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GenerateStaticDepositAddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SparkServiceServer).GenerateStaticDepositAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SparkService_GenerateStaticDepositAddress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SparkServiceServer).GenerateStaticDepositAddress(ctx, req.(*GenerateStaticDepositAddressRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1899,6 +1935,10 @@ var SparkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "generate_deposit_address",
 			Handler:    _SparkService_GenerateDepositAddress_Handler,
+		},
+		{
+			MethodName: "generate_static_deposit_address",
+			Handler:    _SparkService_GenerateStaticDepositAddress_Handler,
 		},
 		{
 			MethodName: "start_deposit_tree_creation",
