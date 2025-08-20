@@ -113,19 +113,8 @@ func (h *InternalDepositHandler) GenerateStaticDepositAddressProofs(ctx context.
 	addrHash := sha256.Sum256([]byte(depositAddress.Address))
 	addressSignature := ecdsa.Sign(signingKey.ToBTCEC(), addrHash[:])
 
-	keyshare, err := depositAddress.Edges.SigningKeyshareOrErr()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get keyshare: %w", err)
-	}
-	msg := common.ProofOfPossessionMessageHashForDepositAddress(depositAddress.OwnerIdentityPubkey, keyshare.PublicKey, []byte(depositAddress.Address))
-	proofOfPossessionSignature, err := helper.GenerateProofOfPossessionSignatures(ctx, h.config, [][]byte{msg}, []*ent.SigningKeyshare{keyshare})
-	if err != nil {
-		return nil, err
-	}
-
 	return &pbinternal.GenerateStaticDepositAddressProofsResponse{
-		AddressSignature:    addressSignature.Serialize(),
-		PossessionSignature: proofOfPossessionSignature[0],
+		AddressSignature: addressSignature.Serialize(),
 	}, nil
 }
 

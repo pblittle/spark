@@ -6687,8 +6687,6 @@ func (m *GenerateStaticDepositAddressProofsResponse) validate(all bool) error {
 
 	// no validation rules for AddressSignature
 
-	// no validation rules for PossessionSignature
-
 	if len(errors) > 0 {
 		return GenerateStaticDepositAddressProofsResponseMultiError(errors)
 	}

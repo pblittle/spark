@@ -408,7 +408,5 @@ message GenerateStaticDepositAddressProofsRequest {
 
 message GenerateStaticDepositAddressProofsResponse {
     bytes address_signature = 1;
-    bytes possession_signature = 2;
-
 }
 

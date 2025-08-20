@@ -3071,11 +3071,10 @@ func (x *GenerateStaticDepositAddressProofsRequest) GetOwnerIdentityPublicKey() 
 }
 
 type GenerateStaticDepositAddressProofsResponse struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	AddressSignature    []byte                 `protobuf:"bytes,1,opt,name=address_signature,json=addressSignature,proto3" json:"address_signature,omitempty"`
-	PossessionSignature []byte                 `protobuf:"bytes,2,opt,name=possession_signature,json=possessionSignature,proto3" json:"possession_signature,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	AddressSignature []byte                 `protobuf:"bytes,1,opt,name=address_signature,json=addressSignature,proto3" json:"address_signature,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GenerateStaticDepositAddressProofsResponse) Reset() {
@@ -3111,13 +3110,6 @@ func (*GenerateStaticDepositAddressProofsResponse) Descriptor() ([]byte, []int) 
 func (x *GenerateStaticDepositAddressProofsResponse) GetAddressSignature() []byte {
 	if x != nil {
 		return x.AddressSignature
-	}
-	return nil
-}
-
-func (x *GenerateStaticDepositAddressProofsResponse) GetPossessionSignature() []byte {
-	if x != nil {
-		return x.PossessionSignature
 	}
 	return nil
 }
@@ -3374,10 +3366,9 @@ const file_spark_internal_proto_rawDesc = "" +
 	"\vkeyshare_id\x18\x01 \x01(\tR\n" +
 	"keyshareId\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x129\n" +
-	"\x19owner_identity_public_key\x18\x03 \x01(\fR\x16ownerIdentityPublicKey\"\x8c\x01\n" +
+	"\x19owner_identity_public_key\x18\x03 \x01(\fR\x16ownerIdentityPublicKey\"Y\n" +
 	"*GenerateStaticDepositAddressProofsResponse\x12+\n" +
-	"\x11address_signature\x18\x01 \x01(\fR\x10addressSignature\x121\n" +
-	"\x14possession_signature\x18\x02 \x01(\fR\x13possessionSignature*:\n" +
+	"\x11address_signature\x18\x01 \x01(\fR\x10addressSignature*:\n" +
 	"\x14SettleKeyTweakAction\x12\b\n" +
 	"\x04NONE\x10\x00\x12\n" +
 	"\n" +
