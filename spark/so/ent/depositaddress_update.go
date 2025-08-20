@@ -84,6 +84,30 @@ func (dau *DepositAddressUpdate) ClearConfirmationTxid() *DepositAddressUpdate {
 	return dau
 }
 
+// SetAddressSignatures sets the "address_signatures" field.
+func (dau *DepositAddressUpdate) SetAddressSignatures(m map[string][]uint8) *DepositAddressUpdate {
+	dau.mutation.SetAddressSignatures(m)
+	return dau
+}
+
+// ClearAddressSignatures clears the value of the "address_signatures" field.
+func (dau *DepositAddressUpdate) ClearAddressSignatures() *DepositAddressUpdate {
+	dau.mutation.ClearAddressSignatures()
+	return dau
+}
+
+// SetPossessionSignature sets the "possession_signature" field.
+func (dau *DepositAddressUpdate) SetPossessionSignature(b []byte) *DepositAddressUpdate {
+	dau.mutation.SetPossessionSignature(b)
+	return dau
+}
+
+// ClearPossessionSignature clears the value of the "possession_signature" field.
+func (dau *DepositAddressUpdate) ClearPossessionSignature() *DepositAddressUpdate {
+	dau.mutation.ClearPossessionSignature()
+	return dau
+}
+
 // SetNodeID sets the "node_id" field.
 func (dau *DepositAddressUpdate) SetNodeID(u uuid.UUID) *DepositAddressUpdate {
 	dau.mutation.SetNodeID(u)
@@ -269,6 +293,18 @@ func (dau *DepositAddressUpdate) sqlSave(ctx context.Context) (n int, err error)
 	if dau.mutation.ConfirmationTxidCleared() {
 		_spec.ClearField(depositaddress.FieldConfirmationTxid, field.TypeString)
 	}
+	if value, ok := dau.mutation.AddressSignatures(); ok {
+		_spec.SetField(depositaddress.FieldAddressSignatures, field.TypeJSON, value)
+	}
+	if dau.mutation.AddressSignaturesCleared() {
+		_spec.ClearField(depositaddress.FieldAddressSignatures, field.TypeJSON)
+	}
+	if value, ok := dau.mutation.PossessionSignature(); ok {
+		_spec.SetField(depositaddress.FieldPossessionSignature, field.TypeBytes, value)
+	}
+	if dau.mutation.PossessionSignatureCleared() {
+		_spec.ClearField(depositaddress.FieldPossessionSignature, field.TypeBytes)
+	}
 	if value, ok := dau.mutation.NodeID(); ok {
 		_spec.SetField(depositaddress.FieldNodeID, field.TypeUUID, value)
 	}
@@ -438,6 +474,30 @@ func (dauo *DepositAddressUpdateOne) SetNillableConfirmationTxid(s *string) *Dep
 // ClearConfirmationTxid clears the value of the "confirmation_txid" field.
 func (dauo *DepositAddressUpdateOne) ClearConfirmationTxid() *DepositAddressUpdateOne {
 	dauo.mutation.ClearConfirmationTxid()
+	return dauo
+}
+
+// SetAddressSignatures sets the "address_signatures" field.
+func (dauo *DepositAddressUpdateOne) SetAddressSignatures(m map[string][]uint8) *DepositAddressUpdateOne {
+	dauo.mutation.SetAddressSignatures(m)
+	return dauo
+}
+
+// ClearAddressSignatures clears the value of the "address_signatures" field.
+func (dauo *DepositAddressUpdateOne) ClearAddressSignatures() *DepositAddressUpdateOne {
+	dauo.mutation.ClearAddressSignatures()
+	return dauo
+}
+
+// SetPossessionSignature sets the "possession_signature" field.
+func (dauo *DepositAddressUpdateOne) SetPossessionSignature(b []byte) *DepositAddressUpdateOne {
+	dauo.mutation.SetPossessionSignature(b)
+	return dauo
+}
+
+// ClearPossessionSignature clears the value of the "possession_signature" field.
+func (dauo *DepositAddressUpdateOne) ClearPossessionSignature() *DepositAddressUpdateOne {
+	dauo.mutation.ClearPossessionSignature()
 	return dauo
 }
 
@@ -655,6 +715,18 @@ func (dauo *DepositAddressUpdateOne) sqlSave(ctx context.Context) (_node *Deposi
 	}
 	if dauo.mutation.ConfirmationTxidCleared() {
 		_spec.ClearField(depositaddress.FieldConfirmationTxid, field.TypeString)
+	}
+	if value, ok := dauo.mutation.AddressSignatures(); ok {
+		_spec.SetField(depositaddress.FieldAddressSignatures, field.TypeJSON, value)
+	}
+	if dauo.mutation.AddressSignaturesCleared() {
+		_spec.ClearField(depositaddress.FieldAddressSignatures, field.TypeJSON)
+	}
+	if value, ok := dauo.mutation.PossessionSignature(); ok {
+		_spec.SetField(depositaddress.FieldPossessionSignature, field.TypeBytes, value)
+	}
+	if dauo.mutation.PossessionSignatureCleared() {
+		_spec.ClearField(depositaddress.FieldPossessionSignature, field.TypeBytes)
 	}
 	if value, ok := dauo.mutation.NodeID(); ok {
 		_spec.SetField(depositaddress.FieldNodeID, field.TypeUUID, value)

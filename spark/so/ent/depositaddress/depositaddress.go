@@ -29,6 +29,10 @@ const (
 	FieldConfirmationHeight = "confirmation_height"
 	// FieldConfirmationTxid holds the string denoting the confirmation_txid field in the database.
 	FieldConfirmationTxid = "confirmation_txid"
+	// FieldAddressSignatures holds the string denoting the address_signatures field in the database.
+	FieldAddressSignatures = "address_signatures"
+	// FieldPossessionSignature holds the string denoting the possession_signature field in the database.
+	FieldPossessionSignature = "possession_signature"
 	// FieldNodeID holds the string denoting the node_id field in the database.
 	FieldNodeID = "node_id"
 	// FieldIsStatic holds the string denoting the is_static field in the database.
@@ -74,6 +78,8 @@ var Columns = []string{
 	FieldOwnerSigningPubkey,
 	FieldConfirmationHeight,
 	FieldConfirmationTxid,
+	FieldAddressSignatures,
+	FieldPossessionSignature,
 	FieldNodeID,
 	FieldIsStatic,
 }

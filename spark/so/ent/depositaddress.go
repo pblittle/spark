@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -23,19 +24,23 @@ type DepositAddress struct {
 	CreateTime time.Time `json:"create_time,omitempty"`
 	// UpdateTime holds the value of the "update_time" field.
 	UpdateTime time.Time `json:"update_time,omitempty"`
-	// Address holds the value of the "address" field.
+	// P2TR address string that pays to the combined public key of SOs and the owner's signing public key.
 	Address string `json:"address,omitempty"`
-	// OwnerIdentityPubkey holds the value of the "owner_identity_pubkey" field.
+	// Identity public key of the owner of the deposit address.
 	OwnerIdentityPubkey []byte `json:"owner_identity_pubkey,omitempty"`
-	// OwnerSigningPubkey holds the value of the "owner_signing_pubkey" field.
+	// Signing public key of the owner of the deposit address.
 	OwnerSigningPubkey []byte `json:"owner_signing_pubkey,omitempty"`
-	// ConfirmationHeight holds the value of the "confirmation_height" field.
+	// Height of the block that confirmed the deposit address.
 	ConfirmationHeight int64 `json:"confirmation_height,omitempty"`
-	// ConfirmationTxid holds the value of the "confirmation_txid" field.
+	// Transaction ID of the block that confirmed the deposit address.
 	ConfirmationTxid string `json:"confirmation_txid,omitempty"`
-	// NodeID holds the value of the "node_id" field.
+	// Address signatures of the deposit address. It is used prove that all SOs have generated the address.
+	AddressSignatures map[string][]uint8 `json:"address_signatures,omitempty"`
+	// Proof of keyshare possession signature for the deposit address. It is used to prove that the key used by the coordinator to generate the address is known by all SOs.
+	PossessionSignature []byte `json:"possession_signature,omitempty"`
+	// Node ID of the deposit address.
 	NodeID uuid.UUID `json:"node_id,omitempty"`
-	// IsStatic holds the value of the "is_static" field.
+	// Whether the deposit address is static.
 	IsStatic bool `json:"is_static,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the DepositAddressQuery when eager-loading is set.
@@ -91,7 +96,7 @@ func (*DepositAddress) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case depositaddress.FieldOwnerIdentityPubkey, depositaddress.FieldOwnerSigningPubkey:
+		case depositaddress.FieldOwnerIdentityPubkey, depositaddress.FieldOwnerSigningPubkey, depositaddress.FieldAddressSignatures, depositaddress.FieldPossessionSignature:
 			values[i] = new([]byte)
 		case depositaddress.FieldIsStatic:
 			values[i] = new(sql.NullBool)
@@ -167,6 +172,20 @@ func (da *DepositAddress) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field confirmation_txid", values[i])
 			} else if value.Valid {
 				da.ConfirmationTxid = value.String
+			}
+		case depositaddress.FieldAddressSignatures:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field address_signatures", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &da.AddressSignatures); err != nil {
+					return fmt.Errorf("unmarshal field address_signatures: %w", err)
+				}
+			}
+		case depositaddress.FieldPossessionSignature:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field possession_signature", values[i])
+			} else if value != nil {
+				da.PossessionSignature = *value
 			}
 		case depositaddress.FieldNodeID:
 			if value, ok := values[i].(*uuid.UUID); !ok {
@@ -258,6 +277,12 @@ func (da *DepositAddress) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("confirmation_txid=")
 	builder.WriteString(da.ConfirmationTxid)
+	builder.WriteString(", ")
+	builder.WriteString("address_signatures=")
+	builder.WriteString(fmt.Sprintf("%v", da.AddressSignatures))
+	builder.WriteString(", ")
+	builder.WriteString("possession_signature=")
+	builder.WriteString(fmt.Sprintf("%v", da.PossessionSignature))
 	builder.WriteString(", ")
 	builder.WriteString("node_id=")
 	builder.WriteString(fmt.Sprintf("%v", da.NodeID))

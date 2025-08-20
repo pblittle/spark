@@ -91,6 +91,11 @@ func ConfirmationTxid(v string) predicate.DepositAddress {
 	return predicate.DepositAddress(sql.FieldEQ(FieldConfirmationTxid, v))
 }
 
+// PossessionSignature applies equality check predicate on the "possession_signature" field. It's identical to PossessionSignatureEQ.
+func PossessionSignature(v []byte) predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldEQ(FieldPossessionSignature, v))
+}
+
 // NodeID applies equality check predicate on the "node_id" field. It's identical to NodeIDEQ.
 func NodeID(v uuid.UUID) predicate.DepositAddress {
 	return predicate.DepositAddress(sql.FieldEQ(FieldNodeID, v))
@@ -449,6 +454,66 @@ func ConfirmationTxidEqualFold(v string) predicate.DepositAddress {
 // ConfirmationTxidContainsFold applies the ContainsFold predicate on the "confirmation_txid" field.
 func ConfirmationTxidContainsFold(v string) predicate.DepositAddress {
 	return predicate.DepositAddress(sql.FieldContainsFold(FieldConfirmationTxid, v))
+}
+
+// AddressSignaturesIsNil applies the IsNil predicate on the "address_signatures" field.
+func AddressSignaturesIsNil() predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldIsNull(FieldAddressSignatures))
+}
+
+// AddressSignaturesNotNil applies the NotNil predicate on the "address_signatures" field.
+func AddressSignaturesNotNil() predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldNotNull(FieldAddressSignatures))
+}
+
+// PossessionSignatureEQ applies the EQ predicate on the "possession_signature" field.
+func PossessionSignatureEQ(v []byte) predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldEQ(FieldPossessionSignature, v))
+}
+
+// PossessionSignatureNEQ applies the NEQ predicate on the "possession_signature" field.
+func PossessionSignatureNEQ(v []byte) predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldNEQ(FieldPossessionSignature, v))
+}
+
+// PossessionSignatureIn applies the In predicate on the "possession_signature" field.
+func PossessionSignatureIn(vs ...[]byte) predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldIn(FieldPossessionSignature, vs...))
+}
+
+// PossessionSignatureNotIn applies the NotIn predicate on the "possession_signature" field.
+func PossessionSignatureNotIn(vs ...[]byte) predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldNotIn(FieldPossessionSignature, vs...))
+}
+
+// PossessionSignatureGT applies the GT predicate on the "possession_signature" field.
+func PossessionSignatureGT(v []byte) predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldGT(FieldPossessionSignature, v))
+}
+
+// PossessionSignatureGTE applies the GTE predicate on the "possession_signature" field.
+func PossessionSignatureGTE(v []byte) predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldGTE(FieldPossessionSignature, v))
+}
+
+// PossessionSignatureLT applies the LT predicate on the "possession_signature" field.
+func PossessionSignatureLT(v []byte) predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldLT(FieldPossessionSignature, v))
+}
+
+// PossessionSignatureLTE applies the LTE predicate on the "possession_signature" field.
+func PossessionSignatureLTE(v []byte) predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldLTE(FieldPossessionSignature, v))
+}
+
+// PossessionSignatureIsNil applies the IsNil predicate on the "possession_signature" field.
+func PossessionSignatureIsNil() predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldIsNull(FieldPossessionSignature))
+}
+
+// PossessionSignatureNotNil applies the NotNil predicate on the "possession_signature" field.
+func PossessionSignatureNotNil() predicate.DepositAddress {
+	return predicate.DepositAddress(sql.FieldNotNull(FieldPossessionSignature))
 }
 
 // NodeIDEQ applies the EQ predicate on the "node_id" field.

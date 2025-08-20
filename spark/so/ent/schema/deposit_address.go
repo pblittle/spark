@@ -33,13 +33,37 @@ func (DepositAddress) Indexes() []ent.Index {
 // Fields are the fields for the deposit addresses table.
 func (DepositAddress) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("address").NotEmpty().Immutable().Unique(),
-		field.Bytes("owner_identity_pubkey").NotEmpty().Immutable(),
-		field.Bytes("owner_signing_pubkey").NotEmpty().Immutable(),
-		field.Int64("confirmation_height").Optional(),
-		field.String("confirmation_txid").Optional(),
-		field.UUID("node_id", uuid.UUID{}).Optional(),
-		field.Bool("is_static").Default(false),
+		field.String("address").
+			NotEmpty().
+			Immutable().
+			Unique().
+			Comment("P2TR address string that pays to the combined public key of SOs and the owner's signing public key."),
+		field.Bytes("owner_identity_pubkey").
+			NotEmpty().
+			Immutable().
+			Comment("Identity public key of the owner of the deposit address."),
+		field.Bytes("owner_signing_pubkey").
+			NotEmpty().
+			Immutable().
+			Comment("Signing public key of the owner of the deposit address."),
+		field.Int64("confirmation_height").
+			Optional().
+			Comment("Height of the block that confirmed the deposit address."),
+		field.String("confirmation_txid").
+			Optional().
+			Comment("Transaction ID of the block that confirmed the deposit address."),
+		field.JSON("address_signatures", map[string][]byte{}).
+			Optional().
+			Comment("Address signatures of the deposit address. It is used prove that all SOs have generated the address."),
+		field.Bytes("possession_signature").
+			Optional().
+			Comment("Proof of keyshare possession signature for the deposit address. It is used to prove that the key used by the coordinator to generate the address is known by all SOs."),
+		field.UUID("node_id", uuid.UUID{}).
+			Optional().
+			Comment("Node ID of the deposit address."),
+		field.Bool("is_static").
+			Default(false).
+			Comment("Whether the deposit address is static."),
 	}
 }
 

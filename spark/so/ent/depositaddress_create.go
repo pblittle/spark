@@ -101,6 +101,18 @@ func (dac *DepositAddressCreate) SetNillableConfirmationTxid(s *string) *Deposit
 	return dac
 }
 
+// SetAddressSignatures sets the "address_signatures" field.
+func (dac *DepositAddressCreate) SetAddressSignatures(m map[string][]uint8) *DepositAddressCreate {
+	dac.mutation.SetAddressSignatures(m)
+	return dac
+}
+
+// SetPossessionSignature sets the "possession_signature" field.
+func (dac *DepositAddressCreate) SetPossessionSignature(b []byte) *DepositAddressCreate {
+	dac.mutation.SetPossessionSignature(b)
+	return dac
+}
+
 // SetNodeID sets the "node_id" field.
 func (dac *DepositAddressCreate) SetNodeID(u uuid.UUID) *DepositAddressCreate {
 	dac.mutation.SetNodeID(u)
@@ -339,6 +351,14 @@ func (dac *DepositAddressCreate) createSpec() (*DepositAddress, *sqlgraph.Create
 		_spec.SetField(depositaddress.FieldConfirmationTxid, field.TypeString, value)
 		_node.ConfirmationTxid = value
 	}
+	if value, ok := dac.mutation.AddressSignatures(); ok {
+		_spec.SetField(depositaddress.FieldAddressSignatures, field.TypeJSON, value)
+		_node.AddressSignatures = value
+	}
+	if value, ok := dac.mutation.PossessionSignature(); ok {
+		_spec.SetField(depositaddress.FieldPossessionSignature, field.TypeBytes, value)
+		_node.PossessionSignature = value
+	}
 	if value, ok := dac.mutation.NodeID(); ok {
 		_spec.SetField(depositaddress.FieldNodeID, field.TypeUUID, value)
 		_node.NodeID = value
@@ -502,6 +522,42 @@ func (u *DepositAddressUpsert) ClearConfirmationTxid() *DepositAddressUpsert {
 	return u
 }
 
+// SetAddressSignatures sets the "address_signatures" field.
+func (u *DepositAddressUpsert) SetAddressSignatures(v map[string][]uint8) *DepositAddressUpsert {
+	u.Set(depositaddress.FieldAddressSignatures, v)
+	return u
+}
+
+// UpdateAddressSignatures sets the "address_signatures" field to the value that was provided on create.
+func (u *DepositAddressUpsert) UpdateAddressSignatures() *DepositAddressUpsert {
+	u.SetExcluded(depositaddress.FieldAddressSignatures)
+	return u
+}
+
+// ClearAddressSignatures clears the value of the "address_signatures" field.
+func (u *DepositAddressUpsert) ClearAddressSignatures() *DepositAddressUpsert {
+	u.SetNull(depositaddress.FieldAddressSignatures)
+	return u
+}
+
+// SetPossessionSignature sets the "possession_signature" field.
+func (u *DepositAddressUpsert) SetPossessionSignature(v []byte) *DepositAddressUpsert {
+	u.Set(depositaddress.FieldPossessionSignature, v)
+	return u
+}
+
+// UpdatePossessionSignature sets the "possession_signature" field to the value that was provided on create.
+func (u *DepositAddressUpsert) UpdatePossessionSignature() *DepositAddressUpsert {
+	u.SetExcluded(depositaddress.FieldPossessionSignature)
+	return u
+}
+
+// ClearPossessionSignature clears the value of the "possession_signature" field.
+func (u *DepositAddressUpsert) ClearPossessionSignature() *DepositAddressUpsert {
+	u.SetNull(depositaddress.FieldPossessionSignature)
+	return u
+}
+
 // SetNodeID sets the "node_id" field.
 func (u *DepositAddressUpsert) SetNodeID(v uuid.UUID) *DepositAddressUpsert {
 	u.Set(depositaddress.FieldNodeID, v)
@@ -652,6 +708,48 @@ func (u *DepositAddressUpsertOne) UpdateConfirmationTxid() *DepositAddressUpsert
 func (u *DepositAddressUpsertOne) ClearConfirmationTxid() *DepositAddressUpsertOne {
 	return u.Update(func(s *DepositAddressUpsert) {
 		s.ClearConfirmationTxid()
+	})
+}
+
+// SetAddressSignatures sets the "address_signatures" field.
+func (u *DepositAddressUpsertOne) SetAddressSignatures(v map[string][]uint8) *DepositAddressUpsertOne {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.SetAddressSignatures(v)
+	})
+}
+
+// UpdateAddressSignatures sets the "address_signatures" field to the value that was provided on create.
+func (u *DepositAddressUpsertOne) UpdateAddressSignatures() *DepositAddressUpsertOne {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.UpdateAddressSignatures()
+	})
+}
+
+// ClearAddressSignatures clears the value of the "address_signatures" field.
+func (u *DepositAddressUpsertOne) ClearAddressSignatures() *DepositAddressUpsertOne {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.ClearAddressSignatures()
+	})
+}
+
+// SetPossessionSignature sets the "possession_signature" field.
+func (u *DepositAddressUpsertOne) SetPossessionSignature(v []byte) *DepositAddressUpsertOne {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.SetPossessionSignature(v)
+	})
+}
+
+// UpdatePossessionSignature sets the "possession_signature" field to the value that was provided on create.
+func (u *DepositAddressUpsertOne) UpdatePossessionSignature() *DepositAddressUpsertOne {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.UpdatePossessionSignature()
+	})
+}
+
+// ClearPossessionSignature clears the value of the "possession_signature" field.
+func (u *DepositAddressUpsertOne) ClearPossessionSignature() *DepositAddressUpsertOne {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.ClearPossessionSignature()
 	})
 }
 
@@ -977,6 +1075,48 @@ func (u *DepositAddressUpsertBulk) UpdateConfirmationTxid() *DepositAddressUpser
 func (u *DepositAddressUpsertBulk) ClearConfirmationTxid() *DepositAddressUpsertBulk {
 	return u.Update(func(s *DepositAddressUpsert) {
 		s.ClearConfirmationTxid()
+	})
+}
+
+// SetAddressSignatures sets the "address_signatures" field.
+func (u *DepositAddressUpsertBulk) SetAddressSignatures(v map[string][]uint8) *DepositAddressUpsertBulk {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.SetAddressSignatures(v)
+	})
+}
+
+// UpdateAddressSignatures sets the "address_signatures" field to the value that was provided on create.
+func (u *DepositAddressUpsertBulk) UpdateAddressSignatures() *DepositAddressUpsertBulk {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.UpdateAddressSignatures()
+	})
+}
+
+// ClearAddressSignatures clears the value of the "address_signatures" field.
+func (u *DepositAddressUpsertBulk) ClearAddressSignatures() *DepositAddressUpsertBulk {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.ClearAddressSignatures()
+	})
+}
+
+// SetPossessionSignature sets the "possession_signature" field.
+func (u *DepositAddressUpsertBulk) SetPossessionSignature(v []byte) *DepositAddressUpsertBulk {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.SetPossessionSignature(v)
+	})
+}
+
+// UpdatePossessionSignature sets the "possession_signature" field to the value that was provided on create.
+func (u *DepositAddressUpsertBulk) UpdatePossessionSignature() *DepositAddressUpsertBulk {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.UpdatePossessionSignature()
+	})
+}
+
+// ClearPossessionSignature clears the value of the "possession_signature" field.
+func (u *DepositAddressUpsertBulk) ClearPossessionSignature() *DepositAddressUpsertBulk {
+	return u.Update(func(s *DepositAddressUpsert) {
+		s.ClearPossessionSignature()
 	})
 }
 

@@ -63,6 +63,8 @@ var (
 		{Name: "owner_signing_pubkey", Type: field.TypeBytes},
 		{Name: "confirmation_height", Type: field.TypeInt64, Nullable: true},
 		{Name: "confirmation_txid", Type: field.TypeString, Nullable: true},
+		{Name: "address_signatures", Type: field.TypeJSON, Nullable: true},
+		{Name: "possession_signature", Type: field.TypeBytes, Nullable: true},
 		{Name: "node_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "is_static", Type: field.TypeBool, Default: false},
 		{Name: "deposit_address_signing_keyshare", Type: field.TypeUUID},
@@ -75,7 +77,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "deposit_addresses_signing_keyshares_signing_keyshare",
-				Columns:    []*schema.Column{DepositAddressesColumns[10]},
+				Columns:    []*schema.Column{DepositAddressesColumns[12]},
 				RefColumns: []*schema.Column{SigningKeysharesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -99,7 +101,7 @@ var (
 			{
 				Name:    "depositaddress_deposit_address_signing_keyshare",
 				Unique:  false,
-				Columns: []*schema.Column{DepositAddressesColumns[10]},
+				Columns: []*schema.Column{DepositAddressesColumns[12]},
 			},
 		},
 	}
