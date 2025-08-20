@@ -347,7 +347,7 @@ describe.each(walletTypes)("swap", ({ name, Signer, createTree }) => {
       }
 
       const senderTransferTweakKey =
-        await aliceTransferService.sendTransferTweakKey(
+        await aliceTransferService.deliverTransferPackage(
           aliceTransfer,
           aliceLeavesToTransfer,
           aliceRefundSignatureMap,
@@ -386,7 +386,7 @@ describe.each(walletTypes)("swap", ({ name, Signer, createTree }) => {
       );
 
       const senderTransferTweakKey2 =
-        await bobTransferService.sendTransferTweakKey(
+        await bobTransferService.deliverTransferPackage(
           bobTransfer,
           receiverLeavesToTransfer,
           newReceiverRefundSignatureMap,

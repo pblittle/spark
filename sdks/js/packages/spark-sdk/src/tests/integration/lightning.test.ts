@@ -216,7 +216,7 @@ describe.each(walletTypes)(
 
       expect(senderTransfer).toBeDefined();
 
-      const transfer = await sspTransferService.sendTransferTweakKey(
+      const transfer = await sspTransferService.deliverTransferPackage(
         senderTransfer!,
         leaves,
         new Map(),
@@ -409,7 +409,7 @@ describe.each(walletTypes)(
 
       expect(response.transfer).toBeDefined();
 
-      const transfer = await transferService.sendTransferTweakKey(
+      const transfer = await transferService.deliverTransferPackage(
         response.transfer!,
         leaves,
         new Map(),

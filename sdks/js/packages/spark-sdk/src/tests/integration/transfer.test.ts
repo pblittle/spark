@@ -95,10 +95,11 @@ describe.each(walletTypes)(
         newKeyDerivation: newLeafDerivationPath,
       };
 
-      const senderTransfer = await senderTransferService.sendTransfer(
-        [transferNode],
-        hexToBytes(receiverPubkey),
-      );
+      const senderTransfer =
+        await senderTransferService.sendTransferWithKeyTweaks(
+          [transferNode],
+          hexToBytes(receiverPubkey),
+        );
 
       const pendingTransfer = await receiverWallet.queryPendingTransfers();
 
@@ -213,10 +214,11 @@ describe.each(walletTypes)(
 
       const leavesToTransfer = [transferNode];
 
-      const senderTransfer = await senderTransferService.sendTransfer(
-        leavesToTransfer,
-        hexToBytes(receiverPubkey),
-      );
+      const senderTransfer =
+        await senderTransferService.sendTransferWithKeyTweaks(
+          leavesToTransfer,
+          hexToBytes(receiverPubkey),
+        );
 
       // Receiver queries pending transfer
       const pendingTransfer = await receiverWallet.queryPendingTransfers();
@@ -382,10 +384,11 @@ describe.each(walletTypes)(
         senderConfigService.getCoordinatorAddress(),
       );
 
-      const newSenderTransfer = await senderTransferService.sendTransfer(
-        [transferNode],
-        hexToBytes(receiverPubkey),
-      );
+      const newSenderTransfer =
+        await senderTransferService.sendTransferWithKeyTweaks(
+          [transferNode],
+          hexToBytes(receiverPubkey),
+        );
 
       const pendingTransfer = await receiverWallet.queryPendingTransfers();
       expect(pendingTransfer.transfers.length).toBe(1);
@@ -512,10 +515,11 @@ describe.each(walletTypes)(
           newKeyDerivation: newLeafDerivationPath,
         };
 
-        const senderTransfer = await senderTransferService.sendTransfer(
-          [transferNode],
-          hexToBytes(receiverPubkey),
-        );
+        const senderTransfer =
+          await senderTransferService.sendTransferWithKeyTweaks(
+            [transferNode],
+            hexToBytes(receiverPubkey),
+          );
 
         const pendingTransfer = await receiverWallet.queryPendingTransfers();
 
