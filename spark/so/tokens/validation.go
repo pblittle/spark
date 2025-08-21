@@ -3,6 +3,7 @@ package tokens
 import (
 	"context"
 	"fmt"
+	"github.com/lightsparkdev/spark/common/keys"
 	"math/big"
 
 	"github.com/lightsparkdev/spark/common/logging"
@@ -25,15 +26,23 @@ func ValidateMintDoesNotExceedMaxSupply(ctx context.Context, tokenTransaction *t
 
 	// Extract token identification from proto transaction
 	var tokenIdentifier []byte
-	var issuerPublicKey []byte
+	var issuerPublicKey keys.Public
 
 	if tokenTransaction.GetMintInput() != nil {
 		tokenIdentifier = tokenTransaction.GetMintInput().GetTokenIdentifier()
-		issuerPublicKey = tokenTransaction.GetMintInput().GetIssuerPublicKey()
+		mintPublicKey, err := keys.ParsePublicKey(tokenTransaction.GetMintInput().GetIssuerPublicKey())
+		if err != nil {
+			return fmt.Errorf("failed to get issuer public key: %w", err)
+		}
+		issuerPublicKey = mintPublicKey
 	} else if len(tokenTransaction.GetTokenOutputs()) > 0 {
 		output := tokenTransaction.GetTokenOutputs()[0]
 		tokenIdentifier = output.GetTokenIdentifier()
-		issuerPublicKey = output.GetTokenPublicKey()
+		tokenPublicKey, err := keys.ParsePublicKey(output.GetTokenPublicKey())
+		if err != nil {
+			return fmt.Errorf("failed to get token public key: %w", err)
+		}
+		issuerPublicKey = tokenPublicKey
 	}
 
 	err := validateMintAgainstMaxSupplyCore(ctx, mintAmount, tokenIdentifier, issuerPublicKey)
@@ -52,24 +61,23 @@ func ValidateMintDoesNotExceedMaxSupplyEnt(ctx context.Context, tokenTransaction
 		mintAmount.Add(mintAmount, amount)
 	}
 
-	var tokenIdentifier []byte
-	var issuerPublicKey []byte
-	if tokenTransaction.Edges.Mint != nil {
-		tokenIdentifier = tokenTransaction.Edges.Mint.TokenIdentifier
-		issuerPublicKey = tokenTransaction.Edges.Mint.IssuerPublicKey
-	} else {
-		return fmt.Errorf("can not verify max supply for mint transaction because no mint input was found")
-	}
+	if tokenTransaction.Edges.Mint == nil {
+		return fmt.Errorf("cannot verify max supply for mint transaction because no mint input was found")
 
-	err := validateMintAgainstMaxSupplyCore(ctx, mintAmount, tokenIdentifier, issuerPublicKey)
+	}
+	tokenIdentifier := tokenTransaction.Edges.Mint.TokenIdentifier
+	issuerPublicKey, err := keys.ParsePublicKey(tokenTransaction.Edges.Mint.IssuerPublicKey)
 	if err != nil {
+		return fmt.Errorf("failed to get issuer public key: %w", err)
+	}
+	if err := validateMintAgainstMaxSupplyCore(ctx, mintAmount, tokenIdentifier, issuerPublicKey); err != nil {
 		return FormatErrorWithTransactionEnt(err.Error(), tokenTransaction, err)
 	}
 	return nil
 }
 
 // validateMintAgainstMaxSupplyCore contains the core validation logic that both proto and Ent versions can use.
-func validateMintAgainstMaxSupplyCore(ctx context.Context, mintAmount *big.Int, tokenIdentifier []byte, issuerPublicKey []byte) error {
+func validateMintAgainstMaxSupplyCore(ctx context.Context, mintAmount *big.Int, tokenIdentifier []byte, issuerPublicKey keys.Public) error {
 	logger := logging.GetLoggerFromContext(ctx)
 	db, err := ent.GetDbFromContext(ctx)
 	if err != nil {
@@ -83,9 +91,9 @@ func validateMintAgainstMaxSupplyCore(ctx context.Context, mintAmount *big.Int, 
 	if tokenIdentifier != nil {
 		tokenCreate, err = db.TokenCreate.Query().Where(tokencreate.TokenIdentifierEQ(tokenIdentifier)).First(ctx)
 		identifierInfo = fmt.Sprintf("token identifier: %x", tokenIdentifier)
-	} else if issuerPublicKey != nil {
-		tokenCreate, err = db.TokenCreate.Query().Where(tokencreate.IssuerPublicKeyEQ(issuerPublicKey)).First(ctx)
-		identifierInfo = fmt.Sprintf("issuer public key: %x", issuerPublicKey)
+	} else if !issuerPublicKey.IsZero() {
+		tokenCreate, err = db.TokenCreate.Query().Where(tokencreate.IssuerPublicKeyEQ(issuerPublicKey.Serialize())).First(ctx)
+		identifierInfo = fmt.Sprintf("issuer public key: %v", issuerPublicKey)
 	} else {
 		return fmt.Errorf("no token identifier or issuer public key provided")
 	}
@@ -132,9 +140,9 @@ func calculateCurrentSupplyByTokenIdentifier(ctx context.Context, tokenIdentifie
 }
 
 // calculateCurrentSupplyByIssuerKey calculates the current minted supply for a token by issuer public key.
-func calculateCurrentSupplyByIssuerKey(ctx context.Context, issuerPublicKey []byte) (*big.Int, error) {
+func calculateCurrentSupplyByIssuerKey(ctx context.Context, issuerPublicKey keys.Public) (*big.Int, error) {
 	return calculateCurrentSupply(ctx, func(q *ent.TokenOutputQuery) *ent.TokenOutputQuery {
-		return q.Where(tokenoutput.TokenPublicKeyEQ(issuerPublicKey))
+		return q.Where(tokenoutput.TokenPublicKeyEQ(issuerPublicKey.Serialize()))
 	})
 }
 
