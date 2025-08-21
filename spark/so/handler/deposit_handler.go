@@ -1506,12 +1506,21 @@ func (o *DepositHandler) GetUtxosForAddress(ctx context.Context, req *pb.GetUtxo
 		if req.Limit > 100 || req.Limit <= 0 {
 			req.Limit = 100
 		}
-		utxos, err := depositAddress.QueryUtxo().
+		query := depositAddress.QueryUtxo().
 			Where(utxo.BlockHeightLTE(currentBlockHeight.Height - int64(threshold))).
 			Offset(int(req.Offset)).
 			Limit(int(req.Limit)).
-			Order(utxo.ByBlockHeight(sql.OrderDesc())).
-			All(ctx)
+			Order(utxo.ByBlockHeight(sql.OrderDesc()))
+		if req.ExcludeClaimed {
+			query = query.Where(func(s *sql.Selector) {
+				// Exclude UTXOs that have non-cancelled UTXO swaps
+				subquery := sql.Select(utxoswap.UtxoColumn).
+					From(sql.Table(utxoswap.Table)).
+					Where(sql.NEQ(utxoswap.FieldStatus, string(st.UtxoSwapStatusCancelled)))
+				s.Where(sql.NotIn(s.C(utxo.FieldID), subquery))
+			})
+		}
+		utxos, err := query.All(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get utxo: %w", err)
 		}

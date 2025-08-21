@@ -1354,6 +1354,7 @@ message GetUtxosForAddressRequest {
     uint64 offset = 2;
     uint64 limit = 3;
     Network network = 4;
+    bool exclude_claimed = 5;
 }
 
 message GetUtxosForAddressResponse {

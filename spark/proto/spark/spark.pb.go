@@ -9756,13 +9756,14 @@ func (x *QueryNodesByValueResponse) GetOffset() int64 {
 }
 
 type GetUtxosForAddressRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Address       string                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
-	Offset        uint64                 `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
-	Limit         uint64                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
-	Network       Network                `protobuf:"varint,4,opt,name=network,proto3,enum=spark.Network" json:"network,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Address        string                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	Offset         uint64                 `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
+	Limit          uint64                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	Network        Network                `protobuf:"varint,4,opt,name=network,proto3,enum=spark.Network" json:"network,omitempty"`
+	ExcludeClaimed bool                   `protobuf:"varint,5,opt,name=exclude_claimed,json=excludeClaimed,proto3" json:"exclude_claimed,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetUtxosForAddressRequest) Reset() {
@@ -9821,6 +9822,13 @@ func (x *GetUtxosForAddressRequest) GetNetwork() Network {
 		return x.Network
 	}
 	return Network_UNSPECIFIED
+}
+
+func (x *GetUtxosForAddressRequest) GetExcludeClaimed() bool {
+	if x != nil {
+		return x.ExcludeClaimed
+	}
+	return false
 }
 
 type GetUtxosForAddressResponse struct {
@@ -10768,12 +10776,13 @@ const file_spark_proto_rawDesc = "" +
 	"\n" +
 	"NodesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12%\n" +
-	"\x05value\x18\x02 \x01(\v2\x0f.spark.TreeNodeR\x05value:\x028\x01\"\x8d\x01\n" +
+	"\x05value\x18\x02 \x01(\v2\x0f.spark.TreeNodeR\x05value:\x028\x01\"\xb6\x01\n" +
 	"\x19GetUtxosForAddressRequest\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x04R\x06offset\x12\x14\n" +
 	"\x05limit\x18\x03 \x01(\x04R\x05limit\x12(\n" +
-	"\anetwork\x18\x04 \x01(\x0e2\x0e.spark.NetworkR\anetwork\"W\n" +
+	"\anetwork\x18\x04 \x01(\x0e2\x0e.spark.NetworkR\anetwork\x12'\n" +
+	"\x0fexclude_claimed\x18\x05 \x01(\bR\x0eexcludeClaimed\"W\n" +
 	"\x1aGetUtxosForAddressResponse\x12!\n" +
 	"\x05utxos\x18\x01 \x03(\v2\v.spark.UTXOR\x05utxos\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x04R\x06offset\"c\n" +

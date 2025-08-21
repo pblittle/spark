@@ -21392,6 +21392,8 @@ func (m *GetUtxosForAddressRequest) validate(all bool) error {
 
 	// no validation rules for Network
 
+	// no validation rules for ExcludeClaimed
+
 	if len(errors) > 0 {
 		return GetUtxosForAddressRequestMultiError(errors)
 	}

@@ -3,11 +3,13 @@ package handler
 import (
 	"encoding/hex"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightsparkdev/spark/common"
+	"github.com/lightsparkdev/spark/common/keys"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/db"
@@ -816,5 +818,115 @@ func TestGetUtxosFromAddress(t *testing.T) {
 		assert.True(t, txids2["61646472657373325f747869645f32"])  // "address2_txid_2" in hex
 		assert.False(t, txids2["61646472657373315f747869645f31"]) // "address1_txid_1" in hex - should not be present
 		assert.False(t, txids2["61646472657373315f747869645f32"]) // "address1_txid_2" in hex - should not be present
+	})
+
+	t.Run("UTXOs with UTXO swaps - verify correct filtering", func(t *testing.T) {
+		rng := rand.NewChaCha8([32]byte{})
+
+		// Create static deposit address
+		staticAddress := "bcrt1p52zf7gf7pvhvpsje2z0uzcr8nhdd79lund68qaea54kprnxcsdqqt2jzeb"
+		depositAddress, err := tx.DepositAddress.Create().
+			SetAddress(staticAddress).
+			SetOwnerIdentityPubkey(testIdentityPubKey).
+			SetOwnerSigningPubkey(testSigningPubKey).
+			SetSigningKeyshare(signingKeyshare).
+			SetIsStatic(true).
+			Save(ctx)
+		require.NoError(t, err)
+
+		// Create UTXOs for this address with sufficient confirmations
+		// UTXO 1: Will have an active UTXO swap (should be excluded)
+		utxo1, err := tx.Utxo.Create().
+			SetNetwork(st.NetworkRegtest).
+			SetTxid([]byte("swap_test_txid_1")).
+			SetVout(0).
+			SetBlockHeight(100).
+			SetAmount(1000).
+			SetPkScript([]byte("swap_test_script_1")).
+			SetDepositAddress(depositAddress).
+			Save(ctx)
+		require.NoError(t, err)
+
+		// UTXO 2: Will have a cancelled UTXO swap (should be included)
+		utxo2, err := tx.Utxo.Create().
+			SetNetwork(st.NetworkRegtest).
+			SetTxid([]byte("swap_test_txid_2")).
+			SetVout(1).
+			SetBlockHeight(101).
+			SetAmount(2000).
+			SetPkScript([]byte("swap_test_script_2")).
+			SetDepositAddress(depositAddress).
+			Save(ctx)
+		require.NoError(t, err)
+
+		// UTXO 3: No UTXO swap (should be included)
+		_, err = tx.Utxo.Create().
+			SetNetwork(st.NetworkRegtest).
+			SetTxid([]byte("swap_test_txid_3")).
+			SetVout(2).
+			SetBlockHeight(102).
+			SetAmount(3000).
+			SetPkScript([]byte("swap_test_script_3")).
+			SetDepositAddress(depositAddress).
+			Save(ctx)
+		require.NoError(t, err)
+
+		// Create active UTXO swap for utxo1 (this should exclude utxo1 from results)
+		_, err = tx.UtxoSwap.Create().
+			SetStatus(st.UtxoSwapStatusCreated). // Active status
+			SetRequestType(st.UtxoSwapRequestTypeFixedAmount).
+			SetCoordinatorIdentityPublicKey(keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize()).
+			SetUtxo(utxo1).
+			Save(ctx)
+		require.NoError(t, err)
+
+		// Create cancelled UTXO swap for utxo2 (this should NOT exclude utxo2 from results)
+		_, err = tx.UtxoSwap.Create().
+			SetStatus(st.UtxoSwapStatusCancelled). // Cancelled status
+			SetRequestType(st.UtxoSwapRequestTypeFixedAmount).
+			SetCoordinatorIdentityPublicKey(keys.MustGeneratePrivateKeyFromRand(rng).Public().Serialize()).
+			SetUtxo(utxo2).
+			Save(ctx)
+		require.NoError(t, err)
+
+		// Test GetUtxosForAddress - should return only UTXOs without active swaps
+		req := &pb.GetUtxosForAddressRequest{
+			Address:        staticAddress,
+			Network:        pb.Network_REGTEST,
+			Offset:         0,
+			Limit:          10,
+			ExcludeClaimed: true,
+		}
+
+		response, err := handler.GetUtxosForAddress(ctx, req)
+		require.NoError(t, err)
+		require.Len(t, response.Utxos, 2) // Should return utxo2 (cancelled swap) and utxo3 (no swap)
+
+		// Verify the correct UTXOs are returned
+		txids := make(map[string]bool)
+		for _, utxo := range response.Utxos {
+			txids[hex.EncodeToString(utxo.Txid)] = true
+			assert.Equal(t, pb.Network_REGTEST, utxo.Network)
+		}
+
+		// Should include utxo2 (cancelled swap) and utxo3 (no swap)
+		assert.Contains(t, txids, hex.EncodeToString([]byte("swap_test_txid_2")))
+		assert.Contains(t, txids, hex.EncodeToString([]byte("swap_test_txid_3")))
+
+		// Should NOT include utxo1 (active swap)
+		assert.NotContains(t, txids, hex.EncodeToString([]byte("swap_test_txid_1")))
+
+		// Not specifying exclude claimed should return all UTXOs
+		req = &pb.GetUtxosForAddressRequest{
+			Address:        staticAddress,
+			Network:        pb.Network_REGTEST,
+			Offset:         0,
+			Limit:          10,
+			ExcludeClaimed: false,
+		}
+
+		response, err = handler.GetUtxosForAddress(ctx, req)
+		require.NoError(t, err)
+		require.Len(t, response.Utxos, 3)
 	})
 }
