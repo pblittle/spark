@@ -13,13 +13,12 @@ import (
 	"time"
 
 	"github.com/lightsparkdev/spark/common/keys"
+	sparktesting "github.com/lightsparkdev/spark/testing"
 
 	"github.com/lightsparkdev/spark/common"
 	"github.com/lightsparkdev/spark/common/logging"
-	pbmock "github.com/lightsparkdev/spark/proto/mock"
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so/utils"
-	"github.com/lightsparkdev/spark/testing"
 	"github.com/lightsparkdev/spark/testing/wallet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1172,9 +1171,7 @@ func TestTokenMintTransactionSigning(t *testing.T) {
 // - testDoubleStartSignFirst: whether to sign the first transaction when testing double start with different transactions
 // - testDoubleSign: whether to test double signing
 // - testSignExpired: whether to test signing with an expired transaction
-// - testPartialSignExpiredAndRecover: whether to test partial signing with an expired transaction and recovery
 // - testSignDifferentTx: whether to test signing with a different transaction than was started
-// - testPartialFinalizeExpireAndRecover: whether to test partial finalize with an expired transaction and recovery
 // - testInvalidSigningOperatorPublicKey: whether to test signing with an invalid operator public key
 // - expectedSigningError: whether an error is expected during any of the signing operations
 // - expectedStartError: whether an error is expected during the start operation
@@ -1190,9 +1187,7 @@ func testTransferTransactionSigningScenarios(t *testing.T, config *wallet.TestWa
 	testDoubleStartSignFirst bool,
 	testDoubleSign bool,
 	testSignExpired bool,
-	testPartialSignExpiredAndRecover bool,
 	testSignDifferentTx bool,
-	testPartialFinalizeExpireAndRecover bool,
 	testInvalidSigningOperatorPublicKey bool,
 	expectedSigningError bool,
 	expectedStartError bool,
@@ -1326,7 +1321,7 @@ func testTransferTransactionSigningScenarios(t *testing.T, config *wallet.TestWa
 
 	// If testing double signing, first sign with half the operators
 	var halfSignOperatorSignatures wallet.OperatorSignatures
-	if testDoubleSign || testPartialSignExpiredAndRecover {
+	if testDoubleSign {
 		operatorKeys := splitOperatorIdentityPublicKeys(config)
 		_, halfSignOperatorSignatures, err = wallet.SignTokenTransaction(
 			t.Context(),
@@ -1340,20 +1335,10 @@ func testTransferTransactionSigningScenarios(t *testing.T, config *wallet.TestWa
 		require.NoError(t, err, "unexpected error during transfer half signing")
 	}
 
-	if testSignExpired || testPartialSignExpiredAndRecover {
+	if testSignExpired {
 		// Wait for the transaction to expire (MinikubeTokenTransactionExpiryTimeSecs seconds)
 		t.Logf("Waiting for %d seconds for transaction to expire...", MinikubeTokenTransactionExpiryTimeSecs)
 		time.Sleep(time.Duration(MinikubeTokenTransactionExpiryTimeSecs) * time.Second)
-	}
-
-	if testPartialSignExpiredAndRecover {
-		triggerTaskOnAllOperators(t, config, "cancel_or_finalize_expired_token_transactions")
-		// Restart the transfer transaction now that the previous one has been cancelled.
-		transferStartResp, _, transferFinalTxHash, err = wallet.StartTokenTransaction(
-			t.Context(), config, transferTokenTransaction, startingOwnerPrivateKeys, startSignatureIndexOrder,
-		)
-		require.NoError(t, err, "failed to restart after expired token transaction")
-		txToSign = transferStartResp.FinalTokenTransaction
 	}
 
 	// Complete the transaction signing with either the original or different transaction
@@ -1385,40 +1370,15 @@ func testTransferTransactionSigningScenarios(t *testing.T, config *wallet.TestWa
 		}
 	}
 
-	if testPartialFinalizeExpireAndRecover {
-		operatorKeys := splitOperatorIdentityPublicKeys(config)
-		err = wallet.FinalizeTokenTransaction(
-			t.Context(),
-			config,
-			transferStartResp.FinalTokenTransaction,
-			operatorKeys.firstHalf,
-			signResponseTransferKeyshares,
-			[]keys.Public{revPubKey1, revPubKey2},
-		)
-		require.NoError(t, err, "unexpected error during transfer half finalize")
+	err = wallet.FinalizeTokenTransaction(
+		t.Context(),
+		config,
+		transferStartResp.FinalTokenTransaction,
+		nil, // Default to contact all operators
+		signResponseTransferKeyshares,
+		[]keys.Public{revPubKey1, revPubKey2},
+	)
 
-		// Wait for the transaction to reach its expiry time, then immediately trigger the cleanup task.
-		time.Sleep(time.Duration(MinikubeTokenTransactionExpiryTimeSecs) * time.Second)
-		triggerTaskOnAllOperators(t, config, "cancel_or_finalize_expired_token_transactions")
-
-		// Verify the outputs exist and have the correct amount
-		ownerIdentityPubKey, err := keys.ParsePublicKey(transferStartResp.FinalTokenTransaction.TokenOutputs[0].OwnerPublicKey)
-		require.NoError(t, err)
-		tokenOutputsResponse, err := wallet.QueryTokenOutputs(t.Context(), config, []keys.Public{ownerIdentityPubKey}, []keys.Public{config.IdentityPublicKey()})
-		require.NoError(t, err, "failed to query token outputs")
-		require.Len(t, tokenOutputsResponse.OutputsWithPreviousTransactionData, 1, "expected 1 output after transaction")
-		require.Equal(t, uint64ToBigInt(TestTransferOutput1Amount), bytesToBigInt(tokenOutputsResponse.OutputsWithPreviousTransactionData[0].Output.TokenAmount), "expected correct amount after transaction")
-
-	} else {
-		err = wallet.FinalizeTokenTransaction(
-			t.Context(),
-			config,
-			transferStartResp.FinalTokenTransaction,
-			nil, // Default to contact all operators
-			signResponseTransferKeyshares,
-			[]keys.Public{revPubKey1, revPubKey2},
-		)
-	}
 	require.NoError(t, err, "failed to finalize the transfer transaction")
 	log.Printf("transfer transaction finalized: %s", logging.FormatProto("token_transaction", transferStartResp.FinalTokenTransaction))
 }
@@ -1437,9 +1397,7 @@ func TestTokenTransferTransactionSigning(t *testing.T) {
 		doubleStartDifferentTx          bool
 		doubleSign                      bool
 		expiredSign                     bool
-		partialSignExpireAndRecover     bool
 		signDifferentTx                 bool
-		partialFinalizeExpireAndRecover bool
 		signingOwnerPrivateKeysModifier func([]keys.Private) []keys.Private
 		signingOwnerSignatureIndexOrder []uint32
 		invalidSigningOperatorPublicKey bool
@@ -1517,14 +1475,6 @@ func TestTokenTransferTransactionSigning(t *testing.T) {
 			name:                 "sign transfer should fail with expired transaction",
 			expiredSign:          true,
 			expectedSigningError: true,
-		},
-		{
-			name:                        "transfer should succeed with partially signed outputs recovered via expiry",
-			partialSignExpireAndRecover: true,
-		},
-		{
-			name:                            "transfer should succeed with partially finalized outputs finalized after expiry",
-			partialFinalizeExpireAndRecover: true,
 		},
 		{
 			name: "sign transfer should fail with duplicate operator specific owner signing private keys",
@@ -1624,9 +1574,7 @@ func TestTokenTransferTransactionSigning(t *testing.T) {
 				tc.doubleStartSignFirst,
 				tc.doubleSign,
 				tc.expiredSign,
-				tc.partialSignExpireAndRecover,
 				tc.signDifferentTx,
-				tc.partialFinalizeExpireAndRecover,
 				tc.invalidSigningOperatorPublicKey,
 				tc.expectedSigningError,
 				tc.expectedStartError)
@@ -2057,16 +2005,4 @@ func testCreateNativeSparkTokenWithParams(t *testing.T, config *wallet.TestWalle
 	}
 	log.Printf("token create transaction finalized: %s", logging.FormatProto("token_transaction", createTokenTransaction))
 	return nil
-}
-
-// triggerTaskOnAllOperators triggers the specified scheduled task immediately on all signing operators via the mock service.
-func triggerTaskOnAllOperators(t *testing.T, config *wallet.TestWalletConfig, taskName string) {
-	for _, operator := range config.SigningOperators {
-		conn, err := operator.NewOperatorGRPCConnection()
-		require.NoError(t, err)
-		mockClient := pbmock.NewMockServiceClient(conn)
-		_, err = mockClient.TriggerTask(t.Context(), &pbmock.TriggerTaskRequest{TaskName: taskName})
-		require.NoError(t, err)
-		conn.Close()
-	}
 }

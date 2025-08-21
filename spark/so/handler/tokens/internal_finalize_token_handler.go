@@ -4,15 +4,15 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"github.com/lightsparkdev/spark/common/keys"
 	"slices"
 	"strings"
+
+	"github.com/lightsparkdev/spark/common/keys"
 
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
-	"github.com/lightsparkdev/spark/so/helper"
 	"github.com/lightsparkdev/spark/so/protoconverter"
 	"github.com/lightsparkdev/spark/so/tokens"
 	"github.com/lightsparkdev/spark/so/utils"
@@ -125,158 +125,6 @@ func (h *InternalFinalizeTokenHandler) FinalizeTokenTransactionInternal(
 	}
 
 	return &emptypb.Empty{}, nil
-}
-
-func (h *InternalFinalizeTokenHandler) CancelOrFinalizeExpiredTokenTransaction(
-	ctx context.Context,
-	config *so.Config,
-	lockedTokenTransaction *ent.TokenTransaction,
-) error {
-	ctx, span := tracer.Start(ctx, "InternalFinalizeTokenHandler.CancelOrFinalizeExpiredTokenTransaction", getTokenTransactionAttributesFromEnt(lockedTokenTransaction, config))
-	defer span.End()
-	// Verify that the transaction is in a cancellable state locally
-	if lockedTokenTransaction.Status != st.TokenTransactionStatusSigned &&
-		lockedTokenTransaction.Status != st.TokenTransactionStatusStarted {
-		return tokens.FormatErrorWithTransactionEnt(
-			fmt.Sprintf(tokens.ErrInvalidTransactionStatus,
-				lockedTokenTransaction.Status, fmt.Sprintf("%s or %s", st.TokenTransactionStatusStarted, st.TokenTransactionStatusSigned)),
-			lockedTokenTransaction, nil)
-	}
-
-	// Verify with the other SOs that the transaction is in a cancellable state.
-	// Each SO verifies that:
-	// 1. No SO has moved the transaction to a 'Finalized' state.
-	// 2. (# of SOs) - threshold have not progressed the transaction to a 'Signed' state.
-	allSelection := helper.OperatorSelection{Option: helper.OperatorSelectionOptionAll}
-	responses, err := helper.ExecuteTaskWithAllOperators(ctx, config, &allSelection, func(ctx context.Context, operator *so.SigningOperator) (any, error) {
-		var internalResp *pb.QueryTokenTransactionsResponse
-		var err error
-
-		if operator.Identifier == h.config.Identifier {
-			queryTokenHandler := NewQueryTokenHandler(config)
-			internalResp, err = queryTokenHandler.QueryTokenTransactions(ctx, &pb.QueryTokenTransactionsRequest{
-				TokenTransactionHashes: [][]byte{lockedTokenTransaction.FinalizedTokenTransactionHash},
-			})
-			if err != nil {
-				return nil, tokens.FormatErrorWithTransactionEnt(
-					fmt.Sprintf(tokens.ErrFailedToQueryOperatorForCancel, operator.Identifier),
-					lockedTokenTransaction, err)
-			}
-		} else {
-			conn, err := operator.NewOperatorGRPCConnection()
-			if err != nil {
-				return nil, tokens.FormatErrorWithTransactionEnt(
-					fmt.Sprintf(tokens.ErrFailedToConnectToOperatorForCancel, operator.Identifier),
-					lockedTokenTransaction, err)
-			}
-			defer conn.Close()
-
-			client := pb.NewSparkServiceClient(conn)
-			internalResp, err = client.QueryTokenTransactions(ctx, &pb.QueryTokenTransactionsRequest{
-				TokenTransactionHashes: [][]byte{lockedTokenTransaction.FinalizedTokenTransactionHash},
-			})
-			if err != nil {
-				return nil, tokens.FormatErrorWithTransactionEnt(
-					fmt.Sprintf(tokens.ErrFailedToQueryOperatorForCancel, operator.Identifier),
-					lockedTokenTransaction, err)
-			}
-		}
-
-		return internalResp, err
-	})
-	if err != nil {
-		return tokens.FormatErrorWithTransactionEnt(tokens.ErrFailedToExecuteWithAllOperators, lockedTokenTransaction, err)
-	}
-
-	// Check if any operator has finalized the transaction
-	signedCount := 0
-	for _, resp := range responses {
-		queryResp, ok := resp.(*pb.QueryTokenTransactionsResponse)
-		if !ok || queryResp == nil {
-			return tokens.FormatErrorWithTransactionEnt("invalid response from operator", lockedTokenTransaction, nil)
-		}
-
-		for _, txWithStatus := range queryResp.TokenTransactionsWithStatus {
-			// If the transaction has been finalized by a different operator, it indicates that threshold operators have signed.
-			// This could occur if a wallet attempted to finalized but did not successfully complete the request with all SOs.
-			// In this case, finalize the transaction with the revocation secrets provided by the operator that finalized the transaction.
-			if txWithStatus.Status == pb.TokenTransactionStatus_TOKEN_TRANSACTION_FINALIZED {
-				revocationSecrets := make([]*pb.RevocationSecretWithIndex, len(lockedTokenTransaction.Edges.SpentOutput))
-				revocationSecretMap := make(map[string]*pb.SpentTokenOutputMetadata)
-				if txWithStatus.ConfirmationMetadata == nil {
-					return tokens.FormatErrorWithTransactionEnt("missing confirmation metadata", lockedTokenTransaction, nil)
-				}
-				if len(txWithStatus.ConfirmationMetadata.SpentTokenOutputsMetadata) != len(lockedTokenTransaction.Edges.SpentOutput) {
-					return tokens.FormatErrorWithTransactionEnt("confirmation metadata does not match number of spent outputs", lockedTokenTransaction, nil)
-				}
-
-				for _, metadata := range txWithStatus.ConfirmationMetadata.SpentTokenOutputsMetadata {
-					revocationSecretMap[metadata.OutputId] = metadata
-				}
-
-				tokenTransactionProto, err := lockedTokenTransaction.MarshalProto(config)
-				if err != nil {
-					return tokens.FormatErrorWithTransactionEnt("failed to marshal token transaction", lockedTokenTransaction, err)
-				}
-
-				tokenTransactionProtoV0, err := protoconverter.SparkTokenTransactionFromTokenProto(tokenTransactionProto)
-				if err != nil {
-					return tokens.FormatErrorWithTransactionEnt("failed to marshal token transaction into v0", lockedTokenTransaction, err)
-				}
-
-				// Match received revocation secrets to their input index saved in the TokenOutput entity using output_id.
-				for i, output := range lockedTokenTransaction.Edges.SpentOutput {
-					metadata, exists := revocationSecretMap[output.ID.String()]
-					if !exists {
-						return tokens.FormatErrorWithTransactionEnt(
-							fmt.Sprintf("missing revocation secret for output %s", output.ID.String()),
-							lockedTokenTransaction, nil)
-					}
-					revocationSecrets[i] = &pb.RevocationSecretWithIndex{
-						InputIndex:       uint32(output.SpentTransactionInputVout),
-						RevocationSecret: metadata.RevocationSecret,
-					}
-				}
-				finalizeReq := &pb.FinalizeTokenTransactionRequest{
-					FinalTokenTransaction: tokenTransactionProtoV0,
-					RevocationSecrets:     revocationSecrets,
-					IdentityPublicKey:     nil,
-				}
-
-				_, err = h.FinalizeTokenTransactionInternal(ctx, finalizeReq)
-				if err != nil {
-					return tokens.FormatErrorWithTransactionEnt("failed to finalize transaction", lockedTokenTransaction, err)
-				}
-
-				return tokens.FormatErrorWithTransactionEnt("transaction has already been finalized by at least one operator, cannot cancel", lockedTokenTransaction, nil)
-			}
-			if txWithStatus.Status == pb.TokenTransactionStatus_TOKEN_TRANSACTION_SIGNED ||
-				// Check for this just in case. Its unlikely, but it is theoretically possible for a race condition where
-				// the transaction is signed by the final operator needed for threshold just as the transaction is cancelled by a
-				// different operator. In this event, the operators that didn't cancel yet should not cancel to avoid a fully
-				// signed transaction being cancelled in all SOs.
-				// if a revocation secret is provided (which proves that all SOs have signed)
-				txWithStatus.Status == pb.TokenTransactionStatus_TOKEN_TRANSACTION_SIGNED_CANCELLED {
-				signedCount++
-			}
-		}
-	}
-
-	// Check if too many operators have already signed
-	operatorCount := len(config.GetSigningOperatorList())
-	if signedCount == operatorCount {
-		return tokens.FormatErrorWithTransactionEnt(
-			fmt.Sprintf("transaction has been signed by %d operators, which exceeds the cancellation threshold of %d",
-				signedCount, operatorCount),
-			lockedTokenTransaction, nil)
-	}
-
-	err = ent.UpdateCancelledTransaction(ctx, lockedTokenTransaction)
-	if err != nil {
-		return tokens.FormatErrorWithTransactionEnt(fmt.Sprintf(tokens.ErrFailedToUpdateOutputs, "canceling"), lockedTokenTransaction, err)
-	}
-
-	return nil
 }
 
 func (h *InternalFinalizeTokenHandler) FinalizeCoordinatedTokenTransactionInternal(
