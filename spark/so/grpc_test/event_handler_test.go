@@ -69,7 +69,7 @@ func TestEventHandlerTransferNotification(t *testing.T) {
 		}
 		leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
 
-		_, err = wallet.SendTransfer(
+		_, err = wallet.SendTransferWithKeyTweaks(
 			t.Context(),
 			senderConfig,
 			leavesToTransfer[:],
@@ -218,7 +218,7 @@ func TestMultipleSubscriptions(t *testing.T) {
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
 
-	_, err = wallet.SendTransfer(
+	_, err = wallet.SendTransferWithKeyTweaks(
 		t.Context(),
 		senderConfig,
 		leavesToTransfer[:],

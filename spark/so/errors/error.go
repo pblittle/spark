@@ -120,3 +120,7 @@ func WrapGRPCErrorWithMessage(originalGRPCError error, message string) error {
 
 	return newGRPCError(codes.Internal, fmt.Errorf("%s: %w", message, originalGRPCError))
 }
+
+func UnimplementedErrorf(format string, args ...any) error {
+	return newGRPCError(codes.Unimplemented, fmt.Errorf(format, args...))
+}

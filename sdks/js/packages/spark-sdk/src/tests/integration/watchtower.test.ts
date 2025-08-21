@@ -96,7 +96,7 @@ describe.each(walletTypes)("Node compatibility tests", ({ name, Signer }) => {
     };
 
     // Send transfer from old wallet to new wallet
-    const oldToNewTransfer = await oldTransferService.sendTransfer(
+    const oldToNewTransfer = await oldTransferService.sendTransferWithKeyTweaks(
       [oldToNewTransferNode],
       hexToBytes(newWalletPubkey),
     );
@@ -161,7 +161,7 @@ describe.each(walletTypes)("Node compatibility tests", ({ name, Signer }) => {
     };
 
     // Send transfer from new wallet to old wallet
-    const newToOldTransfer = await newTransferService.sendTransfer(
+    const newToOldTransfer = await newTransferService.sendTransferWithKeyTweaks(
       [newToOldTransferNode],
       hexToBytes(oldWalletPubkey),
     );

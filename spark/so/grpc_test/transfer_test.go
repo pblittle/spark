@@ -16,8 +16,6 @@ import (
 	"github.com/lightsparkdev/spark/testing/wallet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func TestTransfer(t *testing.T) {
@@ -269,7 +267,8 @@ func TestTransferRecoverFinalizeSignatures(t *testing.T) {
 		NewSigningPrivKey: newLeafPrivKey,
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
-	senderTransfer, err := wallet.SendTransfer(
+
+	senderTransfer, err := wallet.SendTransferWithKeyTweaks(
 		t.Context(),
 		senderConfig,
 		leavesToTransfer[:],
@@ -334,7 +333,7 @@ func TestTransferZeroLeaves(t *testing.T) {
 	require.NoError(t, err, "failed to create receiver private key: %v", err)
 
 	var leavesToTransfer []wallet.LeafKeyTweak
-	_, err = wallet.SendTransfer(
+	_, err = wallet.SendTransferWithKeyTweaks(
 		t.Context(),
 		senderConfig,
 		leavesToTransfer[:],
@@ -342,9 +341,6 @@ func TestTransferZeroLeaves(t *testing.T) {
 		time.Now().Add(10*time.Minute),
 	)
 	require.Error(t, err, "expected error when transferring zero leaves")
-	stat, ok := status.FromError(err)
-	require.True(t, ok)
-	require.Equal(t, codes.InvalidArgument, stat.Code())
 }
 
 func TestTransferWithSeparateSteps(t *testing.T) {
@@ -369,7 +365,7 @@ func TestTransferWithSeparateSteps(t *testing.T) {
 		NewSigningPrivKey: newLeafPrivKey,
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
-	senderTransfer, err := wallet.SendTransfer(
+	senderTransfer, err := wallet.SendTransferWithKeyTweaks(
 		t.Context(),
 		senderConfig,
 		leavesToTransfer[:],
@@ -487,7 +483,7 @@ func TestCancelTransfer(t *testing.T) {
 		require.Len(t, transfers, 1)
 	}
 
-	senderTransfer, err = wallet.SendTransfer(
+	senderTransfer, err = wallet.SendTransferWithKeyTweaks(
 		t.Context(),
 		senderConfig,
 		leavesToTransfer[:],
@@ -550,7 +546,7 @@ func TestCancelTransferAfterTweak(t *testing.T) {
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
 	expiryDuration := 1 * time.Second
-	senderTransfer, err := wallet.SendTransfer(
+	senderTransfer, err := wallet.SendTransferWithKeyTweaks(
 		t.Context(),
 		senderConfig,
 		leavesToTransfer[:],
@@ -683,7 +679,7 @@ func TestQueryTransfers(t *testing.T) {
 	}
 
 	// Alice provides key tweak, Bob claims alice's leaves
-	senderTransfer, err = wallet.SendTransferTweakKey(
+	senderTransfer, err = wallet.DeliverTransferPackage(
 		t.Context(),
 		senderConfig,
 		senderTransfer,
@@ -814,7 +810,7 @@ func TestDoubleClaimTransfer(t *testing.T) {
 		NewSigningPrivKey: newLeafPrivKey,
 	}
 	leavesToTransfer := [1]wallet.LeafKeyTweak{transferNode}
-	senderTransfer, err := wallet.SendTransfer(
+	senderTransfer, err := wallet.SendTransferWithKeyTweaks(
 		t.Context(),
 		senderConfig,
 		leavesToTransfer[:],

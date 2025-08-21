@@ -854,6 +854,14 @@ func TestStartDepositTreeCreationUnconfirmed(t *testing.T) {
 
 	_, err = wallet.SendTransfer(t.Context(), config, leavesToTransfer, receiverPrivKey.Public(), time.Now().Add(10*time.Minute))
 	require.ErrorContains(t, err, "failed to start transfer")
+	_, err = wallet.SendTransferWithKeyTweaks(
+		t.Context(),
+		config,
+		leavesToTransfer[:],
+		receiverPrivKey.Public(),
+		time.Now().Add(10*time.Minute),
+	)
+	assert.ErrorContains(t, err, "failed to start transfer")
 }
 
 func TestStartDepositTreeCreationIdempotency(t *testing.T) {
