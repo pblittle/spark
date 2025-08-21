@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -725,7 +727,11 @@ func handleBlock(
 				}
 
 				eventRouter := events.GetDefaultRouter()
-				err = eventRouter.NotifyUser(treeNode.OwnerIdentityPubkey, &pb.SubscribeToEventsResponse{
+				ownerIdentityPubKey, err := keys.ParsePublicKey(treeNode.OwnerIdentityPubkey)
+				if err != nil {
+					return fmt.Errorf("unable to parse tree node's owner identity public key: %w", err)
+				}
+				err = eventRouter.NotifyUser(ownerIdentityPubKey, &pb.SubscribeToEventsResponse{
 					Event: &pb.SubscribeToEventsResponse_Deposit{
 						Deposit: &pb.DepositEvent{
 							Deposit: treeNodeProto,
@@ -733,7 +739,7 @@ func handleBlock(
 					},
 				})
 				if err != nil {
-					logger.Error("Failed to notify user of deposit event", "error", err, "identity_public_key", logging.Pubkey{Pubkey: treeNode.OwnerIdentityPubkey})
+					logger.Error("Failed to notify user of deposit event", "error", err, "identity_public_key", ownerIdentityPubKey)
 				}
 			} else {
 				_, err = dbTx.TreeNode.UpdateOne(treeNode).

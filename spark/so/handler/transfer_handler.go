@@ -1182,7 +1182,11 @@ func (h *TransferHandler) FinalizeTransfer(ctx context.Context, req *pb.Finalize
 		return nil, fmt.Errorf("unable to marshal transfer: %w", err)
 	}
 	eventRouter := events.GetDefaultRouter()
-	err = eventRouter.NotifyUser(transfer.ReceiverIdentityPubkey, &pb.SubscribeToEventsResponse{
+	receiverIDPubKey, err := keys.ParsePublicKey(transfer.ReceiverIdentityPubkey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse receiver identity public key: %w", err)
+	}
+	err = eventRouter.NotifyUser(receiverIDPubKey, &pb.SubscribeToEventsResponse{
 		Event: &pb.SubscribeToEventsResponse_Transfer{
 			Transfer: &pb.TransferEvent{
 				Transfer: transferProto,
@@ -2435,8 +2439,12 @@ func (h *TransferHandler) ResumeSendTransfer(ctx context.Context, transfer *ent.
 			return fmt.Errorf("unable to marshal transfer %s: %w", transfer.ID.String(), err)
 		}
 
+		receiverIDPubKey, err := keys.ParsePublicKey(transfer.ReceiverIdentityPubkey)
+		if err != nil {
+			return fmt.Errorf("unable to parse receiver identity public key: %w", err)
+		}
 		eventRouter := events.GetDefaultRouter()
-		err = eventRouter.NotifyUser(transfer.ReceiverIdentityPubkey, &pb.SubscribeToEventsResponse{
+		err = eventRouter.NotifyUser(receiverIDPubKey, &pb.SubscribeToEventsResponse{
 			Event: &pb.SubscribeToEventsResponse_Transfer{
 				Transfer: &pb.TransferEvent{
 					Transfer: transferProto,

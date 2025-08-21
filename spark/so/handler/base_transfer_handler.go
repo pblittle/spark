@@ -938,8 +938,12 @@ func (h *BaseTransferHandler) commitSenderKeyTweaks(ctx context.Context, transfe
 			logger.Error("unable to marshal transfer", "error", err, "transfer_id", transfer.ID)
 		}
 
+		receiverIDPubKey, err := keys.ParsePublicKey(transfer.ReceiverIdentityPubkey)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse receiver identity public key: %w", err)
+		}
 		eventRouter := events.GetDefaultRouter()
-		err = eventRouter.NotifyUser(transfer.ReceiverIdentityPubkey, &pb.SubscribeToEventsResponse{
+		err = eventRouter.NotifyUser(receiverIDPubKey, &pb.SubscribeToEventsResponse{
 			Event: &pb.SubscribeToEventsResponse_Transfer{
 				Transfer: &pb.TransferEvent{
 					Transfer: transferProto,

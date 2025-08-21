@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/big"
 
 	"entgo.io/ent/schema/field"
@@ -177,6 +178,11 @@ func (p *Public) UnmarshalJSON(data []byte) error {
 	}
 	p.key = key.key
 	return nil
+}
+
+// LogValue makes Public loggable with [slog].
+func (p Public) LogValue() slog.Value {
+	return slog.AnyValue(p.String())
 }
 
 type key interface {

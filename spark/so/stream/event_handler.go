@@ -1,9 +1,10 @@
 package events
 
 import (
-	"encoding/hex"
 	"fmt"
 	"sync"
+
+	"github.com/lightsparkdev/spark/common/keys"
 
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"google.golang.org/grpc/codes"
@@ -35,24 +36,22 @@ func NewEventRouter() *EventRouter {
 	}
 }
 
-func (s *EventRouter) RegisterStream(identityPublicKey []byte, stream pb.SparkService_SubscribeToEventsServer) error {
-	identityPublicKeyHex := hex.EncodeToString(identityPublicKey)
-
-	mutex, _ := s.mutexes.LoadOrStore(identityPublicKeyHex, &sync.Mutex{})
+func (s *EventRouter) RegisterStream(identityPublicKey keys.Public, stream pb.SparkService_SubscribeToEventsServer) error {
+	mutex, _ := s.mutexes.LoadOrStore(identityPublicKey, &sync.Mutex{})
 	mutex.(*sync.Mutex).Lock()
 	defer mutex.(*sync.Mutex).Unlock()
 
-	s.streams.Store(identityPublicKeyHex, stream)
+	s.streams.Store(identityPublicKey, stream)
 	go func() {
 		<-stream.Context().Done()
-		if mutex, ok := s.mutexes.Load(identityPublicKeyHex); ok {
+		if mutex, ok := s.mutexes.Load(identityPublicKey); ok {
 			mutex.(*sync.Mutex).Lock()
 			defer mutex.(*sync.Mutex).Unlock()
 
-			if current, ok := s.streams.Load(identityPublicKeyHex); ok {
+			if current, ok := s.streams.Load(identityPublicKey); ok {
 				if current.(pb.SparkService_SubscribeToEventsServer) == stream {
-					s.streams.Delete(identityPublicKeyHex)
-					s.mutexes.Delete(identityPublicKeyHex)
+					s.streams.Delete(identityPublicKey)
+					s.mutexes.Delete(identityPublicKey)
 				}
 			}
 		}
@@ -61,20 +60,18 @@ func (s *EventRouter) RegisterStream(identityPublicKey []byte, stream pb.SparkSe
 	return nil
 }
 
-func (s *EventRouter) NotifyUser(identityPublicKey []byte, message *pb.SubscribeToEventsResponse) error {
-	identityPublicKeyHex := hex.EncodeToString(identityPublicKey)
-
-	mutex, _ := s.mutexes.Load(identityPublicKeyHex)
-	if mutex == nil {
+func (s *EventRouter) NotifyUser(identityPublicKey keys.Public, message *pb.SubscribeToEventsResponse) error {
+	mutex, ok := s.mutexes.Load(identityPublicKey)
+	if !ok || mutex == nil {
 		return nil
 	}
 	mutex.(*sync.Mutex).Lock()
 	defer mutex.(*sync.Mutex).Unlock()
 
-	if currentStream, ok := s.streams.Load(identityPublicKeyHex); ok {
+	if currentStream, ok := s.streams.Load(identityPublicKey); ok {
 		if err := currentStream.(pb.SparkService_SubscribeToEventsServer).Send(message); err != nil {
-			s.streams.Delete(identityPublicKeyHex)
-			s.mutexes.Delete(identityPublicKeyHex)
+			s.streams.Delete(identityPublicKey)
+			s.mutexes.Delete(identityPublicKey)
 
 			if !isStreamClosedError(err) {
 				network := "unknown"
@@ -92,7 +89,7 @@ func (s *EventRouter) NotifyUser(identityPublicKey []byte, message *pb.Subscribe
 	return nil
 }
 
-func SubscribeToEvents(identityPublicKey []byte, st pb.SparkService_SubscribeToEventsServer) error {
+func SubscribeToEvents(identityPublicKey keys.Public, st pb.SparkService_SubscribeToEventsServer) error {
 	streamRouter := GetDefaultRouter()
 	if err := streamRouter.RegisterStream(identityPublicKey, st); err != nil {
 		return err

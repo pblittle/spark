@@ -2,9 +2,12 @@ package events
 
 import (
 	"context"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/lightsparkdev/spark/common/keys"
 
 	pb "github.com/lightsparkdev/spark/proto/spark"
 	"github.com/stretchr/testify/require"
@@ -61,7 +64,8 @@ func (m *MockStream) SetTrailer(_ metadata.MD) {}
 
 func TestEventRouterConcurrency(t *testing.T) {
 	router := NewEventRouter()
-	identityKey := []byte("testkey")
+	rng := rand.NewChaCha8([32]byte{})
+	identityKey := keys.MustGeneratePrivateKeyFromRand(rng).Public()
 
 	const numGoroutines = 100
 	var wg sync.WaitGroup
@@ -116,7 +120,8 @@ func TestEventRouterConcurrency(t *testing.T) {
 
 func TestEventRouterLastStreamWins(t *testing.T) {
 	router := NewEventRouter()
-	identityKey := []byte("testkey")
+	rng := rand.NewChaCha8([32]byte{})
+	identityKey := keys.MustGeneratePrivateKeyFromRand(rng).Public()
 
 	stream1 := NewMockStream(t)
 	stream2 := NewMockStream(t)

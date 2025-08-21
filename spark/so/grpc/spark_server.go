@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lightsparkdev/spark/common/keys"
+
 	"github.com/lightsparkdev/spark/so/protoconverter"
 
 	"github.com/lightsparkdev/spark/so/handler/tokens"
@@ -53,7 +55,8 @@ func (s *SparkServer) StartDepositTreeCreation(ctx context.Context, req *pb.Star
 	return depositHandler.StartDepositTreeCreation(ctx, s.config, req)
 }
 
-// This is deprecated, please use StartDepsitTreeCreation instead.
+// StartTreeCreation is deprecated.
+// Deprecated: Use StartDepositTreeCreation instead
 func (s *SparkServer) StartTreeCreation(ctx context.Context, req *pb.StartTreeCreationRequest) (*pb.StartTreeCreationResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.IdentityPublicKey)
 	depositHandler := handler.NewDepositHandler(s.config)
@@ -66,7 +69,7 @@ func (s *SparkServer) FinalizeNodeSignatures(ctx context.Context, req *pb.Finali
 	return finalizeSignatureHandler.FinalizeNodeSignatures(ctx, req)
 }
 
-// FinalizeNodeSignatures verifies the node signatures and updates the node.
+// FinalizeNodeSignaturesV2 verifies the node signatures and updates the node.
 func (s *SparkServer) FinalizeNodeSignaturesV2(ctx context.Context, req *pb.FinalizeNodeSignaturesRequest) (*pb.FinalizeNodeSignaturesResponse, error) {
 	finalizeSignatureHandler := handler.NewFinalizeSignatureHandler(s.config)
 	return finalizeSignatureHandler.FinalizeNodeSignaturesV2(ctx, req)
@@ -79,7 +82,7 @@ func (s *SparkServer) StartTransfer(ctx context.Context, req *pb.StartTransferRe
 	return transferHander.StartTransfer(ctx, req)
 }
 
-// StartTransfer initiates a transfer from sender.
+// StartTransferV2 initiates a transfer from sender.
 func (s *SparkServer) StartTransferV2(ctx context.Context, req *pb.StartTransferRequest) (*pb.StartTransferResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.OwnerIdentityPublicKey)
 	transferHander := handler.NewTransferHandler(s.config)
@@ -119,7 +122,7 @@ func (s *SparkServer) ClaimTransferTweakKeys(ctx context.Context, req *pb.ClaimT
 	return emptyResponse, transferHander.ClaimTransferTweakKeys(ctx, req)
 }
 
-// ClaimTransferSignRefunds signs new refund transactions as part of the transfer.
+// ClaimTransferSignRefundsV2 signs new refund transactions as part of the transfer.
 func (s *SparkServer) ClaimTransferSignRefundsV2(ctx context.Context, req *pb.ClaimTransferSignRefundsRequest) (*pb.ClaimTransferSignRefundsResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.OwnerIdentityPublicKey)
 	transferHander := handler.NewTransferHandler(s.config)
@@ -159,7 +162,7 @@ func (s *SparkServer) InitiatePreimageSwap(ctx context.Context, req *pb.Initiate
 	return lightningHandler.InitiatePreimageSwap(ctx, req)
 }
 
-// InitiatePreimageSwap initiates a preimage swap for the given payment hash.
+// InitiatePreimageSwapV2 initiates a preimage swap for the given payment hash.
 func (s *SparkServer) InitiatePreimageSwapV2(ctx context.Context, req *pb.InitiatePreimageSwapRequest) (*pb.InitiatePreimageSwapResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.Transfer.OwnerIdentityPublicKey)
 	lightningHandler := handler.NewLightningHandler(s.config)
@@ -177,7 +180,7 @@ func (s *SparkServer) CooperativeExit(ctx context.Context, req *pb.CooperativeEx
 	return coopExitHandler.CooperativeExit(ctx, req)
 }
 
-// Same as above, but enforces use of direct transactions for unilateral exits
+// CooperativeExitV2 is the same as CooperativeExit, but enforces use of direct transactions for unilateral exits
 func (s *SparkServer) CooperativeExitV2(ctx context.Context, req *pb.CooperativeExitRequest) (*pb.CooperativeExitResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.Transfer.OwnerIdentityPublicKey)
 	coopExitHandler := handler.NewCooperativeExitHandler(s.config)
@@ -194,7 +197,7 @@ func (s *SparkServer) StartLeafSwap(ctx context.Context, req *pb.StartTransferRe
 	return transferHander.StartLeafSwap(ctx, req)
 }
 
-// StartLeafSwap initiates a swap of leaves between two users.
+// StartLeafSwapV2 initiates a swap of leaves between two users.
 func (s *SparkServer) StartLeafSwapV2(ctx context.Context, req *pb.StartTransferRequest) (*pb.StartTransferResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.OwnerIdentityPublicKey)
 	transferHander := handler.NewTransferHandler(s.config)
@@ -217,7 +220,7 @@ func (s *SparkServer) CounterLeafSwap(ctx context.Context, req *pb.CounterLeafSw
 	return transferHander.CounterLeafSwap(ctx, req)
 }
 
-// CounterLeafSwap starts the reverse side of a swap of leaves between two users.
+// CounterLeafSwapV2 starts the reverse side of a swap of leaves between two users.
 func (s *SparkServer) CounterLeafSwapV2(ctx context.Context, req *pb.CounterLeafSwapRequest) (*pb.CounterLeafSwapResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.Transfer.OwnerIdentityPublicKey)
 	transferHander := handler.NewTransferHandler(s.config)
@@ -231,11 +234,11 @@ func (s *SparkServer) RefreshTimelock(ctx context.Context, req *pb.RefreshTimelo
 	return timelockHandler.RefreshTimelock(ctx, req)
 }
 
-// Same as above, but requires direct TX to be included
+// RefreshTimelockV2 is the same as RefreshTimelock, but requires the direct TX to be included.
 func (s *SparkServer) RefreshTimelockV2(ctx context.Context, req *pb.RefreshTimelockRequest) (*pb.RefreshTimelockResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.OwnerIdentityPublicKey)
-	handler := handler.NewRefreshTimelockHandler(s.config)
-	return handler.RefreshTimelockV2(ctx, req)
+	leafHandler := handler.NewRefreshTimelockHandler(s.config)
+	return leafHandler.RefreshTimelockV2(ctx, req)
 }
 
 func (s *SparkServer) ExtendLeaf(ctx context.Context, req *pb.ExtendLeafRequest) (*pb.ExtendLeafResponse, error) {
@@ -246,8 +249,8 @@ func (s *SparkServer) ExtendLeaf(ctx context.Context, req *pb.ExtendLeafRequest)
 
 func (s *SparkServer) ExtendLeafV2(ctx context.Context, req *pb.ExtendLeafRequest) (*pb.ExtendLeafResponse, error) {
 	ctx, _ = logging.WithIdentityPubkey(ctx, req.OwnerIdentityPublicKey)
-	handler := handler.NewExtendLeafHandler(s.config)
-	return handler.ExtendLeafV2(ctx, req)
+	leafHandler := handler.NewExtendLeafHandler(s.config)
+	return leafHandler.ExtendLeafV2(ctx, req)
 }
 
 // GetSigningOperatorList gets the list of signing operators.
@@ -372,10 +375,14 @@ func (s *SparkServer) QueryBalance(ctx context.Context, req *pb.QueryBalanceRequ
 }
 
 func (s *SparkServer) SubscribeToEvents(req *pb.SubscribeToEventsRequest, st pb.SparkService_SubscribeToEventsServer) error {
-	return events.SubscribeToEvents(req.IdentityPublicKey, st)
+	idPubKey, err := keys.ParsePublicKey(req.IdentityPublicKey)
+	if err != nil {
+		return fmt.Errorf("invalid identity public key: %w", err)
+	}
+	return events.SubscribeToEvents(idPubKey, st)
 }
 
-// Swap Spark tree node in exchange for an UTXO
+// InitiateUtxoSwap swaps a Spark tree node in exchange for a UTXO.
 func (s *SparkServer) InitiateUtxoSwap(ctx context.Context, req *pb.InitiateUtxoSwapRequest) (*pb.InitiateUtxoSwapResponse, error) {
 	depositHandler := handler.NewDepositHandler(s.config)
 	return depositHandler.InitiateUtxoSwap(ctx, s.config, req)
