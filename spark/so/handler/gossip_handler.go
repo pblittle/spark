@@ -10,7 +10,10 @@ import (
 	pbinternal "github.com/lightsparkdev/spark/proto/spark_internal"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/ent"
+	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
+	"github.com/lightsparkdev/spark/so/ent/tree"
 	enttree "github.com/lightsparkdev/spark/so/ent/tree"
+	"github.com/lightsparkdev/spark/so/ent/treenode"
 )
 
 type GossipHandler struct {
@@ -52,6 +55,9 @@ func (h *GossipHandler) HandleGossipMessage(ctx context.Context, gossipMessage *
 	case *pbgossip.GossipMessage_RollbackUtxoSwap:
 		rollbackUtxoSwap := gossipMessage.GetRollbackUtxoSwap()
 		h.handleRollbackUtxoSwapGossipMessage(ctx, rollbackUtxoSwap)
+	case *pbgossip.GossipMessage_DepositCleanup:
+		depositCleanup := gossipMessage.GetDepositCleanup()
+		h.handleDepositCleanupGossipMessage(ctx, depositCleanup)
 	default:
 		return fmt.Errorf("unsupported gossip message type: %T", gossipMessage.Message)
 	}
@@ -123,6 +129,81 @@ func (h *GossipHandler) handleMarkTreesExited(ctx context.Context, req *pbgossip
 	if err != nil {
 		logger.Error("failed to mark trees exited", "error", err, "tree_ids", req.TreeIds)
 	}
+}
+
+func (h *GossipHandler) handleDepositCleanupGossipMessage(ctx context.Context, req *pbgossip.GossipMessageDepositCleanup) {
+	logger := logging.GetLoggerFromContext(ctx)
+	logger.Info("Handling deposit cleanup gossip message", "tree_id", req.TreeId)
+
+	db, err := ent.GetDbFromContext(ctx)
+	if err != nil {
+		logger.Error("Failed to get or create current tx for request", "error", err)
+		return
+	}
+
+	// Parse tree ID
+	treeID, err := uuid.Parse(req.TreeId)
+	if err != nil {
+		logger.Error("Failed to parse tree ID", "error", err, "tree_id", req.TreeId)
+		return
+	}
+
+	// a) Query all tree nodes under this tree
+	treeNodes, err := db.TreeNode.Query().
+		Where(treenode.HasTreeWith(tree.IDEQ(treeID))).
+		All(ctx)
+	if err != nil {
+		logger.Error("Failed to query tree nodes", "error", err, "tree_id", req.TreeId)
+		return
+	}
+
+	// b) Get the count of all tree nodes excluding those that have been extended
+	nonSplitLockedCount := 0
+	for _, node := range treeNodes {
+		if node.Status != st.TreeNodeStatusSplitted && node.Status != st.TreeNodeStatusSplitLocked {
+			nonSplitLockedCount++
+		}
+	}
+
+	// c) Throw an error if this count > 1
+	if nonSplitLockedCount > 1 {
+		logger.Error("Expected at most 1 tree node excluding extended leaves",
+			"count", nonSplitLockedCount, "tree_id", req.TreeId)
+		return
+	}
+
+	// d) Delete all tree nodes associated with the tree
+	for _, node := range treeNodes {
+		err = db.TreeNode.DeleteOne(node).Exec(ctx)
+		if err != nil {
+			logger.Error("Failed to delete tree node", "error", err, "node_id", node.ID.String())
+			return
+		}
+		logger.Info("Successfully deleted tree node for deposit cleanup", "node_id", node.ID.String())
+	}
+
+	// Query the tree
+	tree, err := db.Tree.Get(ctx, treeID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			logger.Warn("Tree not found for deposit cleanup", "tree_id", req.TreeId)
+		} else {
+			logger.Error("Failed to query tree", "error", err, "tree_id", req.TreeId)
+			return
+		}
+	}
+
+	// Delete the tree if it exists
+	if tree != nil {
+		err = db.Tree.DeleteOne(tree).Exec(ctx)
+		if err != nil {
+			logger.Error("Failed to delete tree", "error", err, "tree_id", req.TreeId)
+			return
+		}
+		logger.Info("Successfully deleted tree for deposit cleanup", "tree_id", req.TreeId)
+	}
+
+	logger.Info("Completed deposit cleanup processing", "tree_id", req.TreeId)
 }
 
 func (h *GossipHandler) handleFinalizeTreeCreationGossipMessage(ctx context.Context, finalizeNodeSignatures *pbgossip.GossipMessageFinalizeTreeCreation, forCoordinator bool) {

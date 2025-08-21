@@ -25,6 +25,7 @@ message GossipMessage {
         GossipMessageFinalizeRefreshTimelock finalize_refresh_timelock = 9;
         GossipMessageFinalizeExtendLeaf finalize_extend_leaf = 10;
         GossipMessageRollbackUtxoSwap rollback_utxo_swap = 11;
+        GossipMessageDepositCleanup deposit_cleanup = 12;
     }
 }
 
@@ -80,4 +81,8 @@ message GossipMessageRollbackUtxoSwap {
     bytes signature = 2;
     // Identity key of the Coordinator
     bytes coordinator_public_key = 3;
+}
+
+message GossipMessageDepositCleanup {
+    string tree_id = 1;
 }

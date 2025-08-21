@@ -40,6 +40,7 @@ type GossipMessage struct {
 	//	*GossipMessage_FinalizeRefreshTimelock
 	//	*GossipMessage_FinalizeExtendLeaf
 	//	*GossipMessage_RollbackUtxoSwap
+	//	*GossipMessage_DepositCleanup
 	Message       isGossipMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -170,6 +171,15 @@ func (x *GossipMessage) GetRollbackUtxoSwap() *GossipMessageRollbackUtxoSwap {
 	return nil
 }
 
+func (x *GossipMessage) GetDepositCleanup() *GossipMessageDepositCleanup {
+	if x != nil {
+		if x, ok := x.Message.(*GossipMessage_DepositCleanup); ok {
+			return x.DepositCleanup
+		}
+	}
+	return nil
+}
+
 type isGossipMessage_Message interface {
 	isGossipMessage_Message()
 }
@@ -210,6 +220,10 @@ type GossipMessage_RollbackUtxoSwap struct {
 	RollbackUtxoSwap *GossipMessageRollbackUtxoSwap `protobuf:"bytes,11,opt,name=rollback_utxo_swap,json=rollbackUtxoSwap,proto3,oneof"`
 }
 
+type GossipMessage_DepositCleanup struct {
+	DepositCleanup *GossipMessageDepositCleanup `protobuf:"bytes,12,opt,name=deposit_cleanup,json=depositCleanup,proto3,oneof"`
+}
+
 func (*GossipMessage_CancelTransfer) isGossipMessage_Message() {}
 
 func (*GossipMessage_SettleSenderKeyTweak) isGossipMessage_Message() {}
@@ -227,6 +241,8 @@ func (*GossipMessage_FinalizeRefreshTimelock) isGossipMessage_Message() {}
 func (*GossipMessage_FinalizeExtendLeaf) isGossipMessage_Message() {}
 
 func (*GossipMessage_RollbackUtxoSwap) isGossipMessage_Message() {}
+
+func (*GossipMessage_DepositCleanup) isGossipMessage_Message() {}
 
 type GossipMessageCancelTransfer struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -683,11 +699,55 @@ func (x *GossipMessageRollbackUtxoSwap) GetCoordinatorPublicKey() []byte {
 	return nil
 }
 
+type GossipMessageDepositCleanup struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TreeId        string                 `protobuf:"bytes,1,opt,name=tree_id,json=treeId,proto3" json:"tree_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GossipMessageDepositCleanup) Reset() {
+	*x = GossipMessageDepositCleanup{}
+	mi := &file_gossip_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GossipMessageDepositCleanup) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GossipMessageDepositCleanup) ProtoMessage() {}
+
+func (x *GossipMessageDepositCleanup) ProtoReflect() protoreflect.Message {
+	mi := &file_gossip_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GossipMessageDepositCleanup.ProtoReflect.Descriptor instead.
+func (*GossipMessageDepositCleanup) Descriptor() ([]byte, []int) {
+	return file_gossip_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GossipMessageDepositCleanup) GetTreeId() string {
+	if x != nil {
+		return x.TreeId
+	}
+	return ""
+}
+
 var File_gossip_proto protoreflect.FileDescriptor
 
 const file_gossip_proto_rawDesc = "" +
 	"\n" +
-	"\fgossip.proto\x12\x06gossip\x1a\vspark.proto\x1a\fcommon.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x14spark_internal.proto\x1a\x1bgoogle/protobuf/empty.proto\"\xf6\x06\n" +
+	"\fgossip.proto\x12\x06gossip\x1a\vspark.proto\x1a\fcommon.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x14spark_internal.proto\x1a\x1bgoogle/protobuf/empty.proto\"\xc6\a\n" +
 	"\rGossipMessage\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12N\n" +
@@ -700,7 +760,8 @@ const file_gossip_proto_rawDesc = "" +
 	"\x19finalize_refresh_timelock\x18\t \x01(\v2,.gossip.GossipMessageFinalizeRefreshTimelockH\x00R\x17finalizeRefreshTimelock\x12[\n" +
 	"\x14finalize_extend_leaf\x18\n" +
 	" \x01(\v2'.gossip.GossipMessageFinalizeExtendLeafH\x00R\x12finalizeExtendLeaf\x12U\n" +
-	"\x12rollback_utxo_swap\x18\v \x01(\v2%.gossip.GossipMessageRollbackUtxoSwapH\x00R\x10rollbackUtxoSwapB\t\n" +
+	"\x12rollback_utxo_swap\x18\v \x01(\v2%.gossip.GossipMessageRollbackUtxoSwapH\x00R\x10rollbackUtxoSwap\x12N\n" +
+	"\x0fdeposit_cleanup\x18\f \x01(\v2#.gossip.GossipMessageDepositCleanupH\x00R\x0edepositCleanupB\t\n" +
 	"\amessageJ\x04\b\x03\x10\x04\">\n" +
 	"\x1bGossipMessageCancelTransfer\x12\x1f\n" +
 	"\vtransfer_id\x18\x01 \x01(\tR\n" +
@@ -732,7 +793,9 @@ const file_gossip_proto_rawDesc = "" +
 	"\x1dGossipMessageRollbackUtxoSwap\x12/\n" +
 	"\ron_chain_utxo\x18\x01 \x01(\v2\v.spark.UTXOR\vonChainUtxo\x12\x1c\n" +
 	"\tsignature\x18\x02 \x01(\fR\tsignature\x124\n" +
-	"\x16coordinator_public_key\x18\x03 \x01(\fR\x14coordinatorPublicKey2H\n" +
+	"\x16coordinator_public_key\x18\x03 \x01(\fR\x14coordinatorPublicKey\"6\n" +
+	"\x1bGossipMessageDepositCleanup\x12\x17\n" +
+	"\atree_id\x18\x01 \x01(\tR\x06treeId2H\n" +
 	"\rGossipService\x127\n" +
 	"\x06gossip\x12\x15.gossip.GossipMessage\x1a\x16.google.protobuf.EmptyB-Z+github.com/lightsparkdev/spark/proto/gossipb\x06proto3"
 
@@ -748,7 +811,7 @@ func file_gossip_proto_rawDescGZIP() []byte {
 	return file_gossip_proto_rawDescData
 }
 
-var file_gossip_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_gossip_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_gossip_proto_goTypes = []any{
 	(*GossipMessage)(nil),                        // 0: gossip.GossipMessage
 	(*GossipMessageCancelTransfer)(nil),          // 1: gossip.GossipMessageCancelTransfer
@@ -760,13 +823,14 @@ var file_gossip_proto_goTypes = []any{
 	(*GossipMessageFinalizeRefreshTimelock)(nil), // 7: gossip.GossipMessageFinalizeRefreshTimelock
 	(*GossipMessageFinalizeExtendLeaf)(nil),      // 8: gossip.GossipMessageFinalizeExtendLeaf
 	(*GossipMessageRollbackUtxoSwap)(nil),        // 9: gossip.GossipMessageRollbackUtxoSwap
-	nil,                                          // 10: gossip.GossipMessageSettleSenderKeyTweak.SenderKeyTweakProofsEntry
-	(*spark_internal.TreeNode)(nil),              // 11: spark_internal.TreeNode
-	(spark.Network)(0),                           // 12: spark.Network
-	(*timestamppb.Timestamp)(nil),                // 13: google.protobuf.Timestamp
-	(*spark.UTXO)(nil),                           // 14: spark.UTXO
-	(*spark.SecretProof)(nil),                    // 15: spark.SecretProof
-	(*emptypb.Empty)(nil),                        // 16: google.protobuf.Empty
+	(*GossipMessageDepositCleanup)(nil),          // 10: gossip.GossipMessageDepositCleanup
+	nil,                                          // 11: gossip.GossipMessageSettleSenderKeyTweak.SenderKeyTweakProofsEntry
+	(*spark_internal.TreeNode)(nil),              // 12: spark_internal.TreeNode
+	(spark.Network)(0),                           // 13: spark.Network
+	(*timestamppb.Timestamp)(nil),                // 14: google.protobuf.Timestamp
+	(*spark.UTXO)(nil),                           // 15: spark.UTXO
+	(*spark.SecretProof)(nil),                    // 16: spark.SecretProof
+	(*emptypb.Empty)(nil),                        // 17: google.protobuf.Empty
 }
 var file_gossip_proto_depIdxs = []int32{
 	1,  // 0: gossip.GossipMessage.cancel_transfer:type_name -> gossip.GossipMessageCancelTransfer
@@ -778,22 +842,23 @@ var file_gossip_proto_depIdxs = []int32{
 	7,  // 6: gossip.GossipMessage.finalize_refresh_timelock:type_name -> gossip.GossipMessageFinalizeRefreshTimelock
 	8,  // 7: gossip.GossipMessage.finalize_extend_leaf:type_name -> gossip.GossipMessageFinalizeExtendLeaf
 	9,  // 8: gossip.GossipMessage.rollback_utxo_swap:type_name -> gossip.GossipMessageRollbackUtxoSwap
-	10, // 9: gossip.GossipMessageSettleSenderKeyTweak.sender_key_tweak_proofs:type_name -> gossip.GossipMessageSettleSenderKeyTweak.SenderKeyTweakProofsEntry
-	11, // 10: gossip.GossipMessageFinalizeTreeCreation.internal_nodes:type_name -> spark_internal.TreeNode
-	12, // 11: gossip.GossipMessageFinalizeTreeCreation.proto_network:type_name -> spark.Network
-	11, // 12: gossip.GossipMessageFinalizeTransfer.internal_nodes:type_name -> spark_internal.TreeNode
-	13, // 13: gossip.GossipMessageFinalizeTransfer.completion_timestamp:type_name -> google.protobuf.Timestamp
-	11, // 14: gossip.GossipMessageFinalizeRefreshTimelock.internal_nodes:type_name -> spark_internal.TreeNode
-	11, // 15: gossip.GossipMessageFinalizeExtendLeaf.internal_nodes:type_name -> spark_internal.TreeNode
-	14, // 16: gossip.GossipMessageRollbackUtxoSwap.on_chain_utxo:type_name -> spark.UTXO
-	15, // 17: gossip.GossipMessageSettleSenderKeyTweak.SenderKeyTweakProofsEntry.value:type_name -> spark.SecretProof
-	0,  // 18: gossip.GossipService.gossip:input_type -> gossip.GossipMessage
-	16, // 19: gossip.GossipService.gossip:output_type -> google.protobuf.Empty
-	19, // [19:20] is the sub-list for method output_type
-	18, // [18:19] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	10, // 9: gossip.GossipMessage.deposit_cleanup:type_name -> gossip.GossipMessageDepositCleanup
+	11, // 10: gossip.GossipMessageSettleSenderKeyTweak.sender_key_tweak_proofs:type_name -> gossip.GossipMessageSettleSenderKeyTweak.SenderKeyTweakProofsEntry
+	12, // 11: gossip.GossipMessageFinalizeTreeCreation.internal_nodes:type_name -> spark_internal.TreeNode
+	13, // 12: gossip.GossipMessageFinalizeTreeCreation.proto_network:type_name -> spark.Network
+	12, // 13: gossip.GossipMessageFinalizeTransfer.internal_nodes:type_name -> spark_internal.TreeNode
+	14, // 14: gossip.GossipMessageFinalizeTransfer.completion_timestamp:type_name -> google.protobuf.Timestamp
+	12, // 15: gossip.GossipMessageFinalizeRefreshTimelock.internal_nodes:type_name -> spark_internal.TreeNode
+	12, // 16: gossip.GossipMessageFinalizeExtendLeaf.internal_nodes:type_name -> spark_internal.TreeNode
+	15, // 17: gossip.GossipMessageRollbackUtxoSwap.on_chain_utxo:type_name -> spark.UTXO
+	16, // 18: gossip.GossipMessageSettleSenderKeyTweak.SenderKeyTweakProofsEntry.value:type_name -> spark.SecretProof
+	0,  // 19: gossip.GossipService.gossip:input_type -> gossip.GossipMessage
+	17, // 20: gossip.GossipService.gossip:output_type -> google.protobuf.Empty
+	20, // [20:21] is the sub-list for method output_type
+	19, // [19:20] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_gossip_proto_init() }
@@ -811,6 +876,7 @@ func file_gossip_proto_init() {
 		(*GossipMessage_FinalizeRefreshTimelock)(nil),
 		(*GossipMessage_FinalizeExtendLeaf)(nil),
 		(*GossipMessage_RollbackUtxoSwap)(nil),
+		(*GossipMessage_DepositCleanup)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -818,7 +884,7 @@ func file_gossip_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gossip_proto_rawDesc), len(file_gossip_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

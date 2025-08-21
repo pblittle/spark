@@ -433,6 +433,47 @@ func (m *GossipMessage) validate(all bool) error {
 			}
 		}
 
+	case *GossipMessage_DepositCleanup:
+		if v == nil {
+			err := GossipMessageValidationError{
+				field:  "Message",
+				reason: "oneof value cannot be a typed-nil",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+		if all {
+			switch v := interface{}(m.GetDepositCleanup()).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, GossipMessageValidationError{
+						field:  "DepositCleanup",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, GossipMessageValidationError{
+						field:  "DepositCleanup",
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(m.GetDepositCleanup()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return GossipMessageValidationError{
+					field:  "DepositCleanup",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
 	default:
 		_ = v // ensures v is used
 	}
@@ -1701,3 +1742,108 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = GossipMessageRollbackUtxoSwapValidationError{}
+
+// Validate checks the field values on GossipMessageDepositCleanup with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *GossipMessageDepositCleanup) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on GossipMessageDepositCleanup with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// GossipMessageDepositCleanupMultiError, or nil if none found.
+func (m *GossipMessageDepositCleanup) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *GossipMessageDepositCleanup) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for TreeId
+
+	if len(errors) > 0 {
+		return GossipMessageDepositCleanupMultiError(errors)
+	}
+
+	return nil
+}
+
+// GossipMessageDepositCleanupMultiError is an error wrapping multiple
+// validation errors returned by GossipMessageDepositCleanup.ValidateAll() if
+// the designated constraints aren't met.
+type GossipMessageDepositCleanupMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m GossipMessageDepositCleanupMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m GossipMessageDepositCleanupMultiError) AllErrors() []error { return m }
+
+// GossipMessageDepositCleanupValidationError is the validation error returned
+// by GossipMessageDepositCleanup.Validate if the designated constraints
+// aren't met.
+type GossipMessageDepositCleanupValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e GossipMessageDepositCleanupValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e GossipMessageDepositCleanupValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e GossipMessageDepositCleanupValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e GossipMessageDepositCleanupValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e GossipMessageDepositCleanupValidationError) ErrorName() string {
+	return "GossipMessageDepositCleanupValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e GossipMessageDepositCleanupValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sGossipMessageDepositCleanup.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = GossipMessageDepositCleanupValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = GossipMessageDepositCleanupValidationError{}
