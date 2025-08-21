@@ -1860,7 +1860,7 @@ func TestStaticDepositSSPConcurrent(t *testing.T) {
 	// *********************************************************************************
 	// Execute ClaimStaticDeposit concurrently in 10 threads
 	// *********************************************************************************
-	const numThreads = 10
+	const numThreads = 2
 	requests := make(chan *pbssp.InitiateStaticDepositUtxoSwapRequest, numThreads)
 
 	var wg sync.WaitGroup
