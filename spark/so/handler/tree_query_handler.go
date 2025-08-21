@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lightsparkdev/spark/common"
 	pb "github.com/lightsparkdev/spark/proto/spark"
+	pbinternal "github.com/lightsparkdev/spark/proto/spark_internal"
 	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/ent"
 	"github.com/lightsparkdev/spark/so/ent/depositaddress"
@@ -15,7 +16,10 @@ import (
 	"github.com/lightsparkdev/spark/so/ent/tree"
 	"github.com/lightsparkdev/spark/so/ent/treenode"
 	enttreenode "github.com/lightsparkdev/spark/so/ent/treenode"
+	"github.com/lightsparkdev/spark/so/helper"
 	"github.com/lightsparkdev/spark/so/utils"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // TreeQueryHandler handles queries related to tree nodes.
@@ -306,11 +310,14 @@ func (h *TreeQueryHandler) QueryStaticDepositAddresses(ctx context.Context, req 
 	staticDepositAddresses := make([]*pb.DepositAddressQueryResult, 0)
 	for _, depositAddress := range depositAddresses {
 		if utils.IsBitcoinAddressForNetwork(depositAddress.Address, network) {
-			queryResult, err := DepositAddressToQueryResult(depositAddress)
+			queryResult, err := h.depositAddressToQueryResult(ctx, depositAddress)
 			if err != nil {
 				return nil, err
 			}
-			staticDepositAddresses = append(staticDepositAddresses, queryResult)
+			// If the query result is nil, it means that the proofs of possession can not be obtained for some SOs.
+			if queryResult != nil {
+				staticDepositAddresses = append(staticDepositAddresses, queryResult)
+			}
 		}
 	}
 
@@ -319,17 +326,81 @@ func (h *TreeQueryHandler) QueryStaticDepositAddresses(ctx context.Context, req 
 	}, nil
 }
 
-func DepositAddressToQueryResult(depositAddress *ent.DepositAddress) (*pb.DepositAddressQueryResult, error) {
+func (h *TreeQueryHandler) depositAddressToQueryResult(ctx context.Context, depositAddress *ent.DepositAddress) (*pb.DepositAddressQueryResult, error) {
 	nodeIDStr := depositAddress.NodeID.String()
 	verifyingPublicKey, err := common.AddPublicKeys(depositAddress.OwnerSigningPubkey, depositAddress.Edges.SigningKeyshare.PublicKey)
 	if err != nil {
 		return nil, err
 	}
+
+	// Get local keyshare for the deposit address.
+	keyshare, err := depositAddress.Edges.SigningKeyshareOrErr()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get keyshare for static deposit address: %w", err)
+	}
+
+	// Get proofs from self.
+	internalHandler := NewInternalDepositHandler(h.config)
+	selfProofs, err := internalHandler.GenerateStaticDepositAddressProofs(ctx, &pbinternal.GenerateStaticDepositAddressProofsRequest{
+		KeyshareId:             keyshare.ID.String(),
+		Address:                depositAddress.Address,
+		OwnerIdentityPublicKey: depositAddress.OwnerIdentityPubkey,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Get proofs from other operators.
+	selection := helper.OperatorSelection{Option: helper.OperatorSelectionOptionExcludeSelf}
+	responses, err := helper.ExecuteTaskWithAllOperators(ctx, h.config, &selection, func(ctx context.Context, operator *so.SigningOperator) (*pbinternal.GenerateStaticDepositAddressProofsResponse, error) {
+		conn, err := operator.NewOperatorGRPCConnection()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get operator grpc connection: %w", err)
+		}
+		defer conn.Close()
+
+		client := pbinternal.NewSparkInternalServiceClient(conn)
+		response, err := client.GenerateStaticDepositAddressProofs(ctx, &pbinternal.GenerateStaticDepositAddressProofsRequest{
+			KeyshareId:             keyshare.ID.String(),
+			Address:                depositAddress.Address,
+			OwnerIdentityPublicKey: depositAddress.OwnerIdentityPubkey,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate static deposit address proofs: %w", err)
+		}
+		return response, nil
+	})
+	// If internal error, return it.
+	if err != nil && status.Code(err) != codes.NotFound {
+		return nil, fmt.Errorf("failed to generate static deposit address proofs: %w", err)
+	}
+	// If not found, continue with another address.
+	if err != nil && status.Code(err) == codes.NotFound {
+		return nil, nil
+	}
+
+	// Collect proofs from all operators.
+	addressSignatures := make(map[string][]byte)
+	for id, response := range responses {
+		addressSignatures[id] = response.AddressSignature
+	}
+	addressSignatures[h.config.Identifier] = selfProofs.AddressSignature
+
+	msg := common.ProofOfPossessionMessageHashForDepositAddress(depositAddress.OwnerIdentityPubkey, keyshare.PublicKey, []byte(depositAddress.Address))
+	proofOfPossessionSignatures, err := helper.GenerateProofOfPossessionSignatures(ctx, h.config, [][]byte{msg}, []*ent.SigningKeyshare{keyshare})
+	if err != nil {
+		return nil, err
+	}
+
 	return &pb.DepositAddressQueryResult{
 		DepositAddress:       depositAddress.Address,
 		UserSigningPublicKey: depositAddress.OwnerSigningPubkey,
 		VerifyingPublicKey:   verifyingPublicKey,
 		LeafId:               &nodeIDStr,
+		ProofOfPossession: &pb.DepositAddressProof{
+			AddressSignatures:          addressSignatures,
+			ProofOfPossessionSignature: proofOfPossessionSignatures[0],
+		},
 	}, nil
 }
 

@@ -1188,6 +1188,7 @@ message DepositAddressQueryResult {
     bytes user_signing_public_key = 2;
     bytes verifying_public_key = 3;
     optional string leaf_id = 4 [(validate.rules).string.uuid = true];
+    optional DepositAddressProof proof_of_possession = 5;
 }
 
 message QueryUnusedDepositAddressesResponse {

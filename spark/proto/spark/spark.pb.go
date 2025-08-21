@@ -8343,6 +8343,7 @@ type DepositAddressQueryResult struct {
 	UserSigningPublicKey []byte                 `protobuf:"bytes,2,opt,name=user_signing_public_key,json=userSigningPublicKey,proto3" json:"user_signing_public_key,omitempty"`
 	VerifyingPublicKey   []byte                 `protobuf:"bytes,3,opt,name=verifying_public_key,json=verifyingPublicKey,proto3" json:"verifying_public_key,omitempty"`
 	LeafId               *string                `protobuf:"bytes,4,opt,name=leaf_id,json=leafId,proto3,oneof" json:"leaf_id,omitempty"`
+	ProofOfPossession    *DepositAddressProof   `protobuf:"bytes,5,opt,name=proof_of_possession,json=proofOfPossession,proto3,oneof" json:"proof_of_possession,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -8403,6 +8404,13 @@ func (x *DepositAddressQueryResult) GetLeafId() string {
 		return *x.LeafId
 	}
 	return ""
+}
+
+func (x *DepositAddressQueryResult) GetProofOfPossession() *DepositAddressProof {
+	if x != nil {
+		return x.ProofOfPossession
+	}
+	return nil
 }
 
 type QueryUnusedDepositAddressesResponse struct {
@@ -10664,14 +10672,16 @@ const file_spark_proto_rawDesc = "" +
 	"\x05limit\x18\x04 \x01(\x03R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x05 \x01(\x03R\x06offset\x12,\n" +
 	"\x0fdeposit_address\x18\x06 \x01(\tH\x00R\x0edepositAddress\x88\x01\x01B\x12\n" +
-	"\x10_deposit_address\"\xe1\x01\n" +
+	"\x10_deposit_address\"\xca\x02\n" +
 	"\x19DepositAddressQueryResult\x12'\n" +
 	"\x0fdeposit_address\x18\x01 \x01(\tR\x0edepositAddress\x125\n" +
 	"\x17user_signing_public_key\x18\x02 \x01(\fR\x14userSigningPublicKey\x120\n" +
 	"\x14verifying_public_key\x18\x03 \x01(\fR\x12verifyingPublicKey\x12&\n" +
-	"\aleaf_id\x18\x04 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01H\x00R\x06leafId\x88\x01\x01B\n" +
+	"\aleaf_id\x18\x04 \x01(\tB\b\xfaB\x05r\x03\xb0\x01\x01H\x00R\x06leafId\x88\x01\x01\x12O\n" +
+	"\x13proof_of_possession\x18\x05 \x01(\v2\x1a.spark.DepositAddressProofH\x01R\x11proofOfPossession\x88\x01\x01B\n" +
 	"\n" +
-	"\b_leaf_id\"\x8c\x01\n" +
+	"\b_leaf_idB\x16\n" +
+	"\x14_proof_of_possession\"\x8c\x01\n" +
 	"#QueryUnusedDepositAddressesResponse\x12M\n" +
 	"\x11deposit_addresses\x18\x01 \x03(\v2 .spark.DepositAddressQueryResultR\x10depositAddresses\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x03R\x06offset\"t\n" +
@@ -11273,153 +11283,154 @@ var file_spark_proto_depIdxs = []int32{
 	75,  // 178: spark.CancelTransferResponse.transfer:type_name -> spark.Transfer
 	0,   // 179: spark.QueryUnusedDepositAddressesRequest.network:type_name -> spark.Network
 	0,   // 180: spark.QueryStaticDepositAddressesRequest.network:type_name -> spark.Network
-	126, // 181: spark.QueryUnusedDepositAddressesResponse.deposit_addresses:type_name -> spark.DepositAddressQueryResult
-	126, // 182: spark.QueryStaticDepositAddressesResponse.deposit_addresses:type_name -> spark.DepositAddressQueryResult
-	0,   // 183: spark.QueryBalanceRequest.network:type_name -> spark.Network
-	166, // 184: spark.QueryBalanceResponse.node_balances:type_name -> spark.QueryBalanceResponse.NodeBalancesEntry
-	132, // 185: spark.SparkAddress.spark_invoice_fields:type_name -> spark.SparkInvoiceFields
-	134, // 186: spark.SparkInvoiceFields.tokens_payment:type_name -> spark.TokensPayment
-	133, // 187: spark.SparkInvoiceFields.sats_payment:type_name -> spark.SatsPayment
-	170, // 188: spark.SparkInvoiceFields.expiry_time:type_name -> google.protobuf.Timestamp
-	19,  // 189: spark.InitiateStaticDepositUtxoRefundRequest.on_chain_utxo:type_name -> spark.UTXO
-	21,  // 190: spark.InitiateStaticDepositUtxoRefundRequest.refund_tx_signing_job:type_name -> spark.SigningJob
-	23,  // 191: spark.InitiateStaticDepositUtxoRefundResponse.refund_tx_signing_result:type_name -> spark.SigningResult
-	126, // 192: spark.InitiateStaticDepositUtxoRefundResponse.deposit_address:type_name -> spark.DepositAddressQueryResult
-	19,  // 193: spark.InitiateUtxoSwapRequest.on_chain_utxo:type_name -> spark.UTXO
-	5,   // 194: spark.InitiateUtxoSwapRequest.request_type:type_name -> spark.UtxoSwapRequestType
-	67,  // 195: spark.InitiateUtxoSwapRequest.transfer:type_name -> spark.StartTransferRequest
-	21,  // 196: spark.InitiateUtxoSwapRequest.spend_tx_signing_job:type_name -> spark.SigningJob
-	23,  // 197: spark.InitiateUtxoSwapResponse.spend_tx_signing_result:type_name -> spark.SigningResult
-	75,  // 198: spark.InitiateUtxoSwapResponse.transfer:type_name -> spark.Transfer
-	126, // 199: spark.InitiateUtxoSwapResponse.deposit_address:type_name -> spark.DepositAddressQueryResult
-	169, // 200: spark.ExitingTree.user_signing_commitment:type_name -> common.SigningCommitment
-	23,  // 201: spark.ExitSingleNodeTreeSigningResult.signing_result:type_name -> spark.SigningResult
-	139, // 202: spark.ExitSingleNodeTreesRequest.exiting_trees:type_name -> spark.ExitingTree
-	141, // 203: spark.ExitSingleNodeTreesRequest.previous_outputs:type_name -> spark.BitcoinTransactionOutput
-	140, // 204: spark.ExitSingleNodeTreesResponse.signing_results:type_name -> spark.ExitSingleNodeTreeSigningResult
-	167, // 205: spark.QueryNodesDistributionResponse.node_distribution:type_name -> spark.QueryNodesDistributionResponse.NodeDistributionEntry
-	168, // 206: spark.QueryNodesByValueResponse.nodes:type_name -> spark.QueryNodesByValueResponse.NodesEntry
-	0,   // 207: spark.GetUtxosForAddressRequest.network:type_name -> spark.Network
-	19,  // 208: spark.GetUtxosForAddressResponse.utxos:type_name -> spark.UTXO
-	153, // 209: spark.QuerySparkInvoicesResponse.invoice_statuses:type_name -> spark.InvoiceResponse
-	6,   // 210: spark.InvoiceResponse.status:type_name -> spark.InvoiceStatus
-	169, // 211: spark.SigningResult.SigningNonceCommitmentsEntry.value:type_name -> common.SigningCommitment
-	169, // 212: spark.RequestedSigningCommitments.SigningNonceCommitmentsEntry.value:type_name -> common.SigningCommitment
-	169, // 213: spark.SigningCommitments.SigningCommitmentsEntry.value:type_name -> common.SigningCommitment
-	112, // 214: spark.GetSigningOperatorListResponse.SigningOperatorsEntry.value:type_name -> spark.SigningOperatorInfo
-	58,  // 215: spark.QueryNodesResponse.NodesEntry.value:type_name -> spark.TreeNode
-	58,  // 216: spark.QueryNodesByValueResponse.NodesEntry.value:type_name -> spark.TreeNode
-	14,  // 217: spark.SparkService.generate_deposit_address:input_type -> spark.GenerateDepositAddressRequest
-	17,  // 218: spark.SparkService.generate_static_deposit_address:input_type -> spark.GenerateStaticDepositAddressRequest
-	28,  // 219: spark.SparkService.start_deposit_tree_creation:input_type -> spark.StartDepositTreeCreationRequest
-	26,  // 220: spark.SparkService.start_tree_creation:input_type -> spark.StartTreeCreationRequest
-	59,  // 221: spark.SparkService.finalize_node_signatures:input_type -> spark.FinalizeNodeSignaturesRequest
-	67,  // 222: spark.SparkService.start_transfer:input_type -> spark.StartTransferRequest
-	72,  // 223: spark.SparkService.finalize_transfer:input_type -> spark.FinalizeTransferRequest
-	73,  // 224: spark.SparkService.finalize_transfer_with_transfer_package:input_type -> spark.FinalizeTransferWithTransferPackageRequest
-	122, // 225: spark.SparkService.cancel_transfer:input_type -> spark.CancelTransferRequest
-	77,  // 226: spark.SparkService.query_pending_transfers:input_type -> spark.TransferFilter
-	77,  // 227: spark.SparkService.query_all_transfers:input_type -> spark.TransferFilter
-	80,  // 228: spark.SparkService.claim_transfer_tweak_keys:input_type -> spark.ClaimTransferTweakKeysRequest
-	81,  // 229: spark.SparkService.claim_transfer_sign_refunds:input_type -> spark.ClaimTransferSignRefundsRequest
-	83,  // 230: spark.SparkService.store_preimage_share:input_type -> spark.StorePreimageShareRequest
-	85,  // 231: spark.SparkService.get_signing_commitments:input_type -> spark.GetSigningCommitmentsRequest
-	94,  // 232: spark.SparkService.cooperative_exit:input_type -> spark.CooperativeExitRequest
-	91,  // 233: spark.SparkService.initiate_preimage_swap:input_type -> spark.InitiatePreimageSwapRequest
-	116, // 234: spark.SparkService.provide_preimage:input_type -> spark.ProvidePreimageRequest
-	67,  // 235: spark.SparkService.start_leaf_swap:input_type -> spark.StartTransferRequest
-	96,  // 236: spark.SparkService.leaf_swap:input_type -> spark.CounterLeafSwapRequest
-	96,  // 237: spark.SparkService.counter_leaf_swap:input_type -> spark.CounterLeafSwapRequest
-	98,  // 238: spark.SparkService.refresh_timelock:input_type -> spark.RefreshTimelockRequest
-	101, // 239: spark.SparkService.extend_leaf:input_type -> spark.ExtendLeafRequest
-	172, // 240: spark.SparkService.get_signing_operator_list:input_type -> google.protobuf.Empty
-	120, // 241: spark.SparkService.query_nodes:input_type -> spark.QueryNodesRequest
-	145, // 242: spark.SparkService.query_nodes_distribution:input_type -> spark.QueryNodesDistributionRequest
-	147, // 243: spark.SparkService.query_nodes_by_value:input_type -> spark.QueryNodesByValueRequest
-	129, // 244: spark.SparkService.query_balance:input_type -> spark.QueryBalanceRequest
-	114, // 245: spark.SparkService.query_user_signed_refunds:input_type -> spark.QueryUserSignedRefundsRequest
-	41,  // 246: spark.SparkService.start_token_transaction:input_type -> spark.StartTokenTransactionRequest
-	45,  // 247: spark.SparkService.sign_token_transaction:input_type -> spark.SignTokenTransactionRequest
-	49,  // 248: spark.SparkService.finalize_token_transaction:input_type -> spark.FinalizeTokenTransactionRequest
-	51,  // 249: spark.SparkService.freeze_tokens:input_type -> spark.FreezeTokensRequest
-	53,  // 250: spark.SparkService.query_token_outputs:input_type -> spark.QueryTokenOutputsRequest
-	54,  // 251: spark.SparkService.query_token_transactions:input_type -> spark.QueryTokenTransactionsRequest
-	118, // 252: spark.SparkService.return_lightning_payment:input_type -> spark.ReturnLightningPaymentRequest
-	124, // 253: spark.SparkService.query_unused_deposit_addresses:input_type -> spark.QueryUnusedDepositAddressesRequest
-	125, // 254: spark.SparkService.query_static_deposit_addresses:input_type -> spark.QueryStaticDepositAddressesRequest
-	8,   // 255: spark.SparkService.subscribe_to_events:input_type -> spark.SubscribeToEventsRequest
-	135, // 256: spark.SparkService.initiate_static_deposit_utxo_refund:input_type -> spark.InitiateStaticDepositUtxoRefundRequest
-	137, // 257: spark.SparkService.initiate_utxo_swap:input_type -> spark.InitiateUtxoSwapRequest
-	142, // 258: spark.SparkService.exit_single_node_trees:input_type -> spark.ExitSingleNodeTreesRequest
-	94,  // 259: spark.SparkService.cooperative_exit_v2:input_type -> spark.CooperativeExitRequest
-	101, // 260: spark.SparkService.extend_leaf_v2:input_type -> spark.ExtendLeafRequest
-	81,  // 261: spark.SparkService.claim_transfer_sign_refunds_v2:input_type -> spark.ClaimTransferSignRefundsRequest
-	59,  // 262: spark.SparkService.finalize_node_signatures_v2:input_type -> spark.FinalizeNodeSignaturesRequest
-	91,  // 263: spark.SparkService.initiate_preimage_swap_v2:input_type -> spark.InitiatePreimageSwapRequest
-	67,  // 264: spark.SparkService.start_leaf_swap_v2:input_type -> spark.StartTransferRequest
-	96,  // 265: spark.SparkService.counter_leaf_swap_v2:input_type -> spark.CounterLeafSwapRequest
-	67,  // 266: spark.SparkService.start_transfer_v2:input_type -> spark.StartTransferRequest
-	98,  // 267: spark.SparkService.refresh_timelock_v2:input_type -> spark.RefreshTimelockRequest
-	149, // 268: spark.SparkService.get_utxos_for_address:input_type -> spark.GetUtxosForAddressRequest
-	151, // 269: spark.SparkService.query_spark_invoices:input_type -> spark.QuerySparkInvoicesRequest
-	16,  // 270: spark.SparkService.generate_deposit_address:output_type -> spark.GenerateDepositAddressResponse
-	18,  // 271: spark.SparkService.generate_static_deposit_address:output_type -> spark.GenerateStaticDepositAddressResponse
-	29,  // 272: spark.SparkService.start_deposit_tree_creation:output_type -> spark.StartDepositTreeCreationResponse
-	27,  // 273: spark.SparkService.start_tree_creation:output_type -> spark.StartTreeCreationResponse
-	60,  // 274: spark.SparkService.finalize_node_signatures:output_type -> spark.FinalizeNodeSignaturesResponse
-	68,  // 275: spark.SparkService.start_transfer:output_type -> spark.StartTransferResponse
-	74,  // 276: spark.SparkService.finalize_transfer:output_type -> spark.FinalizeTransferResponse
-	74,  // 277: spark.SparkService.finalize_transfer_with_transfer_package:output_type -> spark.FinalizeTransferResponse
-	123, // 278: spark.SparkService.cancel_transfer:output_type -> spark.CancelTransferResponse
-	78,  // 279: spark.SparkService.query_pending_transfers:output_type -> spark.QueryTransfersResponse
-	78,  // 280: spark.SparkService.query_all_transfers:output_type -> spark.QueryTransfersResponse
-	172, // 281: spark.SparkService.claim_transfer_tweak_keys:output_type -> google.protobuf.Empty
-	82,  // 282: spark.SparkService.claim_transfer_sign_refunds:output_type -> spark.ClaimTransferSignRefundsResponse
-	172, // 283: spark.SparkService.store_preimage_share:output_type -> google.protobuf.Empty
-	86,  // 284: spark.SparkService.get_signing_commitments:output_type -> spark.GetSigningCommitmentsResponse
-	95,  // 285: spark.SparkService.cooperative_exit:output_type -> spark.CooperativeExitResponse
-	92,  // 286: spark.SparkService.initiate_preimage_swap:output_type -> spark.InitiatePreimageSwapResponse
-	117, // 287: spark.SparkService.provide_preimage:output_type -> spark.ProvidePreimageResponse
-	68,  // 288: spark.SparkService.start_leaf_swap:output_type -> spark.StartTransferResponse
-	97,  // 289: spark.SparkService.leaf_swap:output_type -> spark.CounterLeafSwapResponse
-	97,  // 290: spark.SparkService.counter_leaf_swap:output_type -> spark.CounterLeafSwapResponse
-	100, // 291: spark.SparkService.refresh_timelock:output_type -> spark.RefreshTimelockResponse
-	103, // 292: spark.SparkService.extend_leaf:output_type -> spark.ExtendLeafResponse
-	113, // 293: spark.SparkService.get_signing_operator_list:output_type -> spark.GetSigningOperatorListResponse
-	121, // 294: spark.SparkService.query_nodes:output_type -> spark.QueryNodesResponse
-	146, // 295: spark.SparkService.query_nodes_distribution:output_type -> spark.QueryNodesDistributionResponse
-	148, // 296: spark.SparkService.query_nodes_by_value:output_type -> spark.QueryNodesByValueResponse
-	130, // 297: spark.SparkService.query_balance:output_type -> spark.QueryBalanceResponse
-	115, // 298: spark.SparkService.query_user_signed_refunds:output_type -> spark.QueryUserSignedRefundsResponse
-	42,  // 299: spark.SparkService.start_token_transaction:output_type -> spark.StartTokenTransactionResponse
-	47,  // 300: spark.SparkService.sign_token_transaction:output_type -> spark.SignTokenTransactionResponse
-	172, // 301: spark.SparkService.finalize_token_transaction:output_type -> google.protobuf.Empty
-	52,  // 302: spark.SparkService.freeze_tokens:output_type -> spark.FreezeTokensResponse
-	57,  // 303: spark.SparkService.query_token_outputs:output_type -> spark.QueryTokenOutputsResponse
-	55,  // 304: spark.SparkService.query_token_transactions:output_type -> spark.QueryTokenTransactionsResponse
-	172, // 305: spark.SparkService.return_lightning_payment:output_type -> google.protobuf.Empty
-	127, // 306: spark.SparkService.query_unused_deposit_addresses:output_type -> spark.QueryUnusedDepositAddressesResponse
-	128, // 307: spark.SparkService.query_static_deposit_addresses:output_type -> spark.QueryStaticDepositAddressesResponse
-	9,   // 308: spark.SparkService.subscribe_to_events:output_type -> spark.SubscribeToEventsResponse
-	136, // 309: spark.SparkService.initiate_static_deposit_utxo_refund:output_type -> spark.InitiateStaticDepositUtxoRefundResponse
-	138, // 310: spark.SparkService.initiate_utxo_swap:output_type -> spark.InitiateUtxoSwapResponse
-	143, // 311: spark.SparkService.exit_single_node_trees:output_type -> spark.ExitSingleNodeTreesResponse
-	95,  // 312: spark.SparkService.cooperative_exit_v2:output_type -> spark.CooperativeExitResponse
-	103, // 313: spark.SparkService.extend_leaf_v2:output_type -> spark.ExtendLeafResponse
-	82,  // 314: spark.SparkService.claim_transfer_sign_refunds_v2:output_type -> spark.ClaimTransferSignRefundsResponse
-	60,  // 315: spark.SparkService.finalize_node_signatures_v2:output_type -> spark.FinalizeNodeSignaturesResponse
-	92,  // 316: spark.SparkService.initiate_preimage_swap_v2:output_type -> spark.InitiatePreimageSwapResponse
-	68,  // 317: spark.SparkService.start_leaf_swap_v2:output_type -> spark.StartTransferResponse
-	97,  // 318: spark.SparkService.counter_leaf_swap_v2:output_type -> spark.CounterLeafSwapResponse
-	68,  // 319: spark.SparkService.start_transfer_v2:output_type -> spark.StartTransferResponse
-	100, // 320: spark.SparkService.refresh_timelock_v2:output_type -> spark.RefreshTimelockResponse
-	150, // 321: spark.SparkService.get_utxos_for_address:output_type -> spark.GetUtxosForAddressResponse
-	152, // 322: spark.SparkService.query_spark_invoices:output_type -> spark.QuerySparkInvoicesResponse
-	270, // [270:323] is the sub-list for method output_type
-	217, // [217:270] is the sub-list for method input_type
-	217, // [217:217] is the sub-list for extension type_name
-	217, // [217:217] is the sub-list for extension extendee
-	0,   // [0:217] is the sub-list for field type_name
+	13,  // 181: spark.DepositAddressQueryResult.proof_of_possession:type_name -> spark.DepositAddressProof
+	126, // 182: spark.QueryUnusedDepositAddressesResponse.deposit_addresses:type_name -> spark.DepositAddressQueryResult
+	126, // 183: spark.QueryStaticDepositAddressesResponse.deposit_addresses:type_name -> spark.DepositAddressQueryResult
+	0,   // 184: spark.QueryBalanceRequest.network:type_name -> spark.Network
+	166, // 185: spark.QueryBalanceResponse.node_balances:type_name -> spark.QueryBalanceResponse.NodeBalancesEntry
+	132, // 186: spark.SparkAddress.spark_invoice_fields:type_name -> spark.SparkInvoiceFields
+	134, // 187: spark.SparkInvoiceFields.tokens_payment:type_name -> spark.TokensPayment
+	133, // 188: spark.SparkInvoiceFields.sats_payment:type_name -> spark.SatsPayment
+	170, // 189: spark.SparkInvoiceFields.expiry_time:type_name -> google.protobuf.Timestamp
+	19,  // 190: spark.InitiateStaticDepositUtxoRefundRequest.on_chain_utxo:type_name -> spark.UTXO
+	21,  // 191: spark.InitiateStaticDepositUtxoRefundRequest.refund_tx_signing_job:type_name -> spark.SigningJob
+	23,  // 192: spark.InitiateStaticDepositUtxoRefundResponse.refund_tx_signing_result:type_name -> spark.SigningResult
+	126, // 193: spark.InitiateStaticDepositUtxoRefundResponse.deposit_address:type_name -> spark.DepositAddressQueryResult
+	19,  // 194: spark.InitiateUtxoSwapRequest.on_chain_utxo:type_name -> spark.UTXO
+	5,   // 195: spark.InitiateUtxoSwapRequest.request_type:type_name -> spark.UtxoSwapRequestType
+	67,  // 196: spark.InitiateUtxoSwapRequest.transfer:type_name -> spark.StartTransferRequest
+	21,  // 197: spark.InitiateUtxoSwapRequest.spend_tx_signing_job:type_name -> spark.SigningJob
+	23,  // 198: spark.InitiateUtxoSwapResponse.spend_tx_signing_result:type_name -> spark.SigningResult
+	75,  // 199: spark.InitiateUtxoSwapResponse.transfer:type_name -> spark.Transfer
+	126, // 200: spark.InitiateUtxoSwapResponse.deposit_address:type_name -> spark.DepositAddressQueryResult
+	169, // 201: spark.ExitingTree.user_signing_commitment:type_name -> common.SigningCommitment
+	23,  // 202: spark.ExitSingleNodeTreeSigningResult.signing_result:type_name -> spark.SigningResult
+	139, // 203: spark.ExitSingleNodeTreesRequest.exiting_trees:type_name -> spark.ExitingTree
+	141, // 204: spark.ExitSingleNodeTreesRequest.previous_outputs:type_name -> spark.BitcoinTransactionOutput
+	140, // 205: spark.ExitSingleNodeTreesResponse.signing_results:type_name -> spark.ExitSingleNodeTreeSigningResult
+	167, // 206: spark.QueryNodesDistributionResponse.node_distribution:type_name -> spark.QueryNodesDistributionResponse.NodeDistributionEntry
+	168, // 207: spark.QueryNodesByValueResponse.nodes:type_name -> spark.QueryNodesByValueResponse.NodesEntry
+	0,   // 208: spark.GetUtxosForAddressRequest.network:type_name -> spark.Network
+	19,  // 209: spark.GetUtxosForAddressResponse.utxos:type_name -> spark.UTXO
+	153, // 210: spark.QuerySparkInvoicesResponse.invoice_statuses:type_name -> spark.InvoiceResponse
+	6,   // 211: spark.InvoiceResponse.status:type_name -> spark.InvoiceStatus
+	169, // 212: spark.SigningResult.SigningNonceCommitmentsEntry.value:type_name -> common.SigningCommitment
+	169, // 213: spark.RequestedSigningCommitments.SigningNonceCommitmentsEntry.value:type_name -> common.SigningCommitment
+	169, // 214: spark.SigningCommitments.SigningCommitmentsEntry.value:type_name -> common.SigningCommitment
+	112, // 215: spark.GetSigningOperatorListResponse.SigningOperatorsEntry.value:type_name -> spark.SigningOperatorInfo
+	58,  // 216: spark.QueryNodesResponse.NodesEntry.value:type_name -> spark.TreeNode
+	58,  // 217: spark.QueryNodesByValueResponse.NodesEntry.value:type_name -> spark.TreeNode
+	14,  // 218: spark.SparkService.generate_deposit_address:input_type -> spark.GenerateDepositAddressRequest
+	17,  // 219: spark.SparkService.generate_static_deposit_address:input_type -> spark.GenerateStaticDepositAddressRequest
+	28,  // 220: spark.SparkService.start_deposit_tree_creation:input_type -> spark.StartDepositTreeCreationRequest
+	26,  // 221: spark.SparkService.start_tree_creation:input_type -> spark.StartTreeCreationRequest
+	59,  // 222: spark.SparkService.finalize_node_signatures:input_type -> spark.FinalizeNodeSignaturesRequest
+	67,  // 223: spark.SparkService.start_transfer:input_type -> spark.StartTransferRequest
+	72,  // 224: spark.SparkService.finalize_transfer:input_type -> spark.FinalizeTransferRequest
+	73,  // 225: spark.SparkService.finalize_transfer_with_transfer_package:input_type -> spark.FinalizeTransferWithTransferPackageRequest
+	122, // 226: spark.SparkService.cancel_transfer:input_type -> spark.CancelTransferRequest
+	77,  // 227: spark.SparkService.query_pending_transfers:input_type -> spark.TransferFilter
+	77,  // 228: spark.SparkService.query_all_transfers:input_type -> spark.TransferFilter
+	80,  // 229: spark.SparkService.claim_transfer_tweak_keys:input_type -> spark.ClaimTransferTweakKeysRequest
+	81,  // 230: spark.SparkService.claim_transfer_sign_refunds:input_type -> spark.ClaimTransferSignRefundsRequest
+	83,  // 231: spark.SparkService.store_preimage_share:input_type -> spark.StorePreimageShareRequest
+	85,  // 232: spark.SparkService.get_signing_commitments:input_type -> spark.GetSigningCommitmentsRequest
+	94,  // 233: spark.SparkService.cooperative_exit:input_type -> spark.CooperativeExitRequest
+	91,  // 234: spark.SparkService.initiate_preimage_swap:input_type -> spark.InitiatePreimageSwapRequest
+	116, // 235: spark.SparkService.provide_preimage:input_type -> spark.ProvidePreimageRequest
+	67,  // 236: spark.SparkService.start_leaf_swap:input_type -> spark.StartTransferRequest
+	96,  // 237: spark.SparkService.leaf_swap:input_type -> spark.CounterLeafSwapRequest
+	96,  // 238: spark.SparkService.counter_leaf_swap:input_type -> spark.CounterLeafSwapRequest
+	98,  // 239: spark.SparkService.refresh_timelock:input_type -> spark.RefreshTimelockRequest
+	101, // 240: spark.SparkService.extend_leaf:input_type -> spark.ExtendLeafRequest
+	172, // 241: spark.SparkService.get_signing_operator_list:input_type -> google.protobuf.Empty
+	120, // 242: spark.SparkService.query_nodes:input_type -> spark.QueryNodesRequest
+	145, // 243: spark.SparkService.query_nodes_distribution:input_type -> spark.QueryNodesDistributionRequest
+	147, // 244: spark.SparkService.query_nodes_by_value:input_type -> spark.QueryNodesByValueRequest
+	129, // 245: spark.SparkService.query_balance:input_type -> spark.QueryBalanceRequest
+	114, // 246: spark.SparkService.query_user_signed_refunds:input_type -> spark.QueryUserSignedRefundsRequest
+	41,  // 247: spark.SparkService.start_token_transaction:input_type -> spark.StartTokenTransactionRequest
+	45,  // 248: spark.SparkService.sign_token_transaction:input_type -> spark.SignTokenTransactionRequest
+	49,  // 249: spark.SparkService.finalize_token_transaction:input_type -> spark.FinalizeTokenTransactionRequest
+	51,  // 250: spark.SparkService.freeze_tokens:input_type -> spark.FreezeTokensRequest
+	53,  // 251: spark.SparkService.query_token_outputs:input_type -> spark.QueryTokenOutputsRequest
+	54,  // 252: spark.SparkService.query_token_transactions:input_type -> spark.QueryTokenTransactionsRequest
+	118, // 253: spark.SparkService.return_lightning_payment:input_type -> spark.ReturnLightningPaymentRequest
+	124, // 254: spark.SparkService.query_unused_deposit_addresses:input_type -> spark.QueryUnusedDepositAddressesRequest
+	125, // 255: spark.SparkService.query_static_deposit_addresses:input_type -> spark.QueryStaticDepositAddressesRequest
+	8,   // 256: spark.SparkService.subscribe_to_events:input_type -> spark.SubscribeToEventsRequest
+	135, // 257: spark.SparkService.initiate_static_deposit_utxo_refund:input_type -> spark.InitiateStaticDepositUtxoRefundRequest
+	137, // 258: spark.SparkService.initiate_utxo_swap:input_type -> spark.InitiateUtxoSwapRequest
+	142, // 259: spark.SparkService.exit_single_node_trees:input_type -> spark.ExitSingleNodeTreesRequest
+	94,  // 260: spark.SparkService.cooperative_exit_v2:input_type -> spark.CooperativeExitRequest
+	101, // 261: spark.SparkService.extend_leaf_v2:input_type -> spark.ExtendLeafRequest
+	81,  // 262: spark.SparkService.claim_transfer_sign_refunds_v2:input_type -> spark.ClaimTransferSignRefundsRequest
+	59,  // 263: spark.SparkService.finalize_node_signatures_v2:input_type -> spark.FinalizeNodeSignaturesRequest
+	91,  // 264: spark.SparkService.initiate_preimage_swap_v2:input_type -> spark.InitiatePreimageSwapRequest
+	67,  // 265: spark.SparkService.start_leaf_swap_v2:input_type -> spark.StartTransferRequest
+	96,  // 266: spark.SparkService.counter_leaf_swap_v2:input_type -> spark.CounterLeafSwapRequest
+	67,  // 267: spark.SparkService.start_transfer_v2:input_type -> spark.StartTransferRequest
+	98,  // 268: spark.SparkService.refresh_timelock_v2:input_type -> spark.RefreshTimelockRequest
+	149, // 269: spark.SparkService.get_utxos_for_address:input_type -> spark.GetUtxosForAddressRequest
+	151, // 270: spark.SparkService.query_spark_invoices:input_type -> spark.QuerySparkInvoicesRequest
+	16,  // 271: spark.SparkService.generate_deposit_address:output_type -> spark.GenerateDepositAddressResponse
+	18,  // 272: spark.SparkService.generate_static_deposit_address:output_type -> spark.GenerateStaticDepositAddressResponse
+	29,  // 273: spark.SparkService.start_deposit_tree_creation:output_type -> spark.StartDepositTreeCreationResponse
+	27,  // 274: spark.SparkService.start_tree_creation:output_type -> spark.StartTreeCreationResponse
+	60,  // 275: spark.SparkService.finalize_node_signatures:output_type -> spark.FinalizeNodeSignaturesResponse
+	68,  // 276: spark.SparkService.start_transfer:output_type -> spark.StartTransferResponse
+	74,  // 277: spark.SparkService.finalize_transfer:output_type -> spark.FinalizeTransferResponse
+	74,  // 278: spark.SparkService.finalize_transfer_with_transfer_package:output_type -> spark.FinalizeTransferResponse
+	123, // 279: spark.SparkService.cancel_transfer:output_type -> spark.CancelTransferResponse
+	78,  // 280: spark.SparkService.query_pending_transfers:output_type -> spark.QueryTransfersResponse
+	78,  // 281: spark.SparkService.query_all_transfers:output_type -> spark.QueryTransfersResponse
+	172, // 282: spark.SparkService.claim_transfer_tweak_keys:output_type -> google.protobuf.Empty
+	82,  // 283: spark.SparkService.claim_transfer_sign_refunds:output_type -> spark.ClaimTransferSignRefundsResponse
+	172, // 284: spark.SparkService.store_preimage_share:output_type -> google.protobuf.Empty
+	86,  // 285: spark.SparkService.get_signing_commitments:output_type -> spark.GetSigningCommitmentsResponse
+	95,  // 286: spark.SparkService.cooperative_exit:output_type -> spark.CooperativeExitResponse
+	92,  // 287: spark.SparkService.initiate_preimage_swap:output_type -> spark.InitiatePreimageSwapResponse
+	117, // 288: spark.SparkService.provide_preimage:output_type -> spark.ProvidePreimageResponse
+	68,  // 289: spark.SparkService.start_leaf_swap:output_type -> spark.StartTransferResponse
+	97,  // 290: spark.SparkService.leaf_swap:output_type -> spark.CounterLeafSwapResponse
+	97,  // 291: spark.SparkService.counter_leaf_swap:output_type -> spark.CounterLeafSwapResponse
+	100, // 292: spark.SparkService.refresh_timelock:output_type -> spark.RefreshTimelockResponse
+	103, // 293: spark.SparkService.extend_leaf:output_type -> spark.ExtendLeafResponse
+	113, // 294: spark.SparkService.get_signing_operator_list:output_type -> spark.GetSigningOperatorListResponse
+	121, // 295: spark.SparkService.query_nodes:output_type -> spark.QueryNodesResponse
+	146, // 296: spark.SparkService.query_nodes_distribution:output_type -> spark.QueryNodesDistributionResponse
+	148, // 297: spark.SparkService.query_nodes_by_value:output_type -> spark.QueryNodesByValueResponse
+	130, // 298: spark.SparkService.query_balance:output_type -> spark.QueryBalanceResponse
+	115, // 299: spark.SparkService.query_user_signed_refunds:output_type -> spark.QueryUserSignedRefundsResponse
+	42,  // 300: spark.SparkService.start_token_transaction:output_type -> spark.StartTokenTransactionResponse
+	47,  // 301: spark.SparkService.sign_token_transaction:output_type -> spark.SignTokenTransactionResponse
+	172, // 302: spark.SparkService.finalize_token_transaction:output_type -> google.protobuf.Empty
+	52,  // 303: spark.SparkService.freeze_tokens:output_type -> spark.FreezeTokensResponse
+	57,  // 304: spark.SparkService.query_token_outputs:output_type -> spark.QueryTokenOutputsResponse
+	55,  // 305: spark.SparkService.query_token_transactions:output_type -> spark.QueryTokenTransactionsResponse
+	172, // 306: spark.SparkService.return_lightning_payment:output_type -> google.protobuf.Empty
+	127, // 307: spark.SparkService.query_unused_deposit_addresses:output_type -> spark.QueryUnusedDepositAddressesResponse
+	128, // 308: spark.SparkService.query_static_deposit_addresses:output_type -> spark.QueryStaticDepositAddressesResponse
+	9,   // 309: spark.SparkService.subscribe_to_events:output_type -> spark.SubscribeToEventsResponse
+	136, // 310: spark.SparkService.initiate_static_deposit_utxo_refund:output_type -> spark.InitiateStaticDepositUtxoRefundResponse
+	138, // 311: spark.SparkService.initiate_utxo_swap:output_type -> spark.InitiateUtxoSwapResponse
+	143, // 312: spark.SparkService.exit_single_node_trees:output_type -> spark.ExitSingleNodeTreesResponse
+	95,  // 313: spark.SparkService.cooperative_exit_v2:output_type -> spark.CooperativeExitResponse
+	103, // 314: spark.SparkService.extend_leaf_v2:output_type -> spark.ExtendLeafResponse
+	82,  // 315: spark.SparkService.claim_transfer_sign_refunds_v2:output_type -> spark.ClaimTransferSignRefundsResponse
+	60,  // 316: spark.SparkService.finalize_node_signatures_v2:output_type -> spark.FinalizeNodeSignaturesResponse
+	92,  // 317: spark.SparkService.initiate_preimage_swap_v2:output_type -> spark.InitiatePreimageSwapResponse
+	68,  // 318: spark.SparkService.start_leaf_swap_v2:output_type -> spark.StartTransferResponse
+	97,  // 319: spark.SparkService.counter_leaf_swap_v2:output_type -> spark.CounterLeafSwapResponse
+	68,  // 320: spark.SparkService.start_transfer_v2:output_type -> spark.StartTransferResponse
+	100, // 321: spark.SparkService.refresh_timelock_v2:output_type -> spark.RefreshTimelockResponse
+	150, // 322: spark.SparkService.get_utxos_for_address:output_type -> spark.GetUtxosForAddressResponse
+	152, // 323: spark.SparkService.query_spark_invoices:output_type -> spark.QuerySparkInvoicesResponse
+	271, // [271:324] is the sub-list for method output_type
+	218, // [218:271] is the sub-list for method input_type
+	218, // [218:218] is the sub-list for extension type_name
+	218, // [218:218] is the sub-list for extension extendee
+	0,   // [0:218] is the sub-list for field type_name
 }
 
 func init() { file_spark_proto_init() }

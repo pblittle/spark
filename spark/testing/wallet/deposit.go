@@ -211,6 +211,7 @@ func QueryUnusedDepositAddresses(
 func QueryStaticDepositAddresses(
 	ctx context.Context,
 	config *TestWalletConfig,
+	signingPubKey keys.Public,
 ) (*pb.QueryStaticDepositAddressesResponse, error) {
 	sparkConn, err := config.NewCoordinatorGRPCConnection()
 	if err != nil {
@@ -222,10 +223,23 @@ func QueryStaticDepositAddresses(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get proto network: %w", err)
 	}
-	return sparkClient.QueryStaticDepositAddresses(ctx, &pb.QueryStaticDepositAddressesRequest{
+	addresses, err := sparkClient.QueryStaticDepositAddresses(ctx, &pb.QueryStaticDepositAddressesRequest{
 		IdentityPublicKey: config.IdentityPublicKey().Serialize(),
 		Network:           network,
 	})
+	if err != nil {
+		return nil, err
+	}
+	for _, address := range addresses.DepositAddresses {
+		if err := validateDepositAddress(config, &pb.Address{
+			Address:             address.DepositAddress,
+			VerifyingKey:        address.VerifyingPublicKey,
+			DepositAddressProof: address.ProofOfPossession,
+		}, signingPubKey); err != nil {
+			return nil, err
+		}
+	}
+	return addresses, nil
 }
 
 // CreateTreeRoot creates a tree root for a given deposit transaction.

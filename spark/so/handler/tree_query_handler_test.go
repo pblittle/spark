@@ -4,12 +4,9 @@ import (
 	"testing"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	pb "github.com/lightsparkdev/spark/proto/spark"
-	"github.com/lightsparkdev/spark/so"
 	"github.com/lightsparkdev/spark/so/db"
 	"github.com/lightsparkdev/spark/so/ent"
 	st "github.com/lightsparkdev/spark/so/ent/schema/schematype"
-	sparktesting "github.com/lightsparkdev/spark/testing"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 )
@@ -80,45 +77,4 @@ func TestQueryStaticDepositAddresses(t *testing.T) {
 		SetIsStatic(true).
 		Save(ctx)
 	require.NoError(t, err)
-
-	t.Run("can query specific static deposit address", func(t *testing.T) {
-		config := &so.Config{
-			BitcoindConfigs: map[string]so.BitcoindConfig{
-				"regtest": {
-					DepositConfirmationThreshold: 1,
-				},
-			},
-			FrostGRPCConnectionFactory: &sparktesting.TestGRPCConnectionFactory{},
-		}
-
-		depositAddress := "bcrt1qfpk6cxxfr49wtvzxd72ahe2xtu7gj6vx7m0ksy"
-		queryHandler := NewTreeQueryHandler(config)
-		queryResult, err := queryHandler.QueryStaticDepositAddresses(ctx, &pb.QueryStaticDepositAddressesRequest{
-			IdentityPublicKey: []byte("test_identity_pubkey"),
-			DepositAddress:    &depositAddress,
-			Network:           pb.Network_REGTEST,
-		})
-		require.NoError(t, err)
-		require.Len(t, queryResult.DepositAddresses, 1)
-		require.Equal(t, depositAddress, queryResult.DepositAddresses[0].DepositAddress)
-	})
-
-	t.Run("can query all static deposit addresses", func(t *testing.T) {
-		config := &so.Config{
-			BitcoindConfigs: map[string]so.BitcoindConfig{
-				"regtest": {
-					DepositConfirmationThreshold: 1,
-				},
-			},
-			FrostGRPCConnectionFactory: &sparktesting.TestGRPCConnectionFactory{},
-		}
-
-		queryHandler := NewTreeQueryHandler(config)
-		queryResult, err := queryHandler.QueryStaticDepositAddresses(ctx, &pb.QueryStaticDepositAddressesRequest{
-			IdentityPublicKey: []byte("test_identity_pubkey"),
-			Network:           pb.Network_REGTEST,
-		})
-		require.NoError(t, err)
-		require.Len(t, queryResult.DepositAddresses, 2)
-	})
 }

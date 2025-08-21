@@ -353,7 +353,7 @@ func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, confi
 	}
 
 	msg := common.ProofOfPossessionMessageHashForDepositAddress(req.IdentityPublicKey, keyshare.PublicKey, []byte(depositAddress))
-	proofOfPossessionSignature, err := helper.GenerateProofOfPossessionSignatures(ctx, config, [][]byte{msg}, []*ent.SigningKeyshare{keyshare})
+	proofOfPossessionSignatures, err := helper.GenerateProofOfPossessionSignatures(ctx, config, [][]byte{msg}, []*ent.SigningKeyshare{keyshare})
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +363,7 @@ func (o *DepositHandler) GenerateStaticDepositAddress(ctx context.Context, confi
 			VerifyingKey: verifyingKeyBytes,
 			DepositAddressProof: &pb.DepositAddressProof{
 				AddressSignatures:          response,
-				ProofOfPossessionSignature: proofOfPossessionSignature[0],
+				ProofOfPossessionSignature: proofOfPossessionSignatures[0],
 			},
 		},
 	}, nil

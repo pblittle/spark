@@ -146,7 +146,7 @@ func TestGenerateStaticDepositAddress(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, unusedDepositAddresses.DepositAddresses)
 
-	queryStaticDepositAddresses, err := wallet.QueryStaticDepositAddresses(ctx, config)
+	queryStaticDepositAddresses, err := wallet.QueryStaticDepositAddresses(ctx, config, pubKey)
 	require.NoError(t, err)
 	assert.Len(t, queryStaticDepositAddresses.DepositAddresses, 1)
 	assert.Equal(t, resp.DepositAddress.Address, queryStaticDepositAddresses.DepositAddresses[0].DepositAddress)
@@ -156,7 +156,7 @@ func TestGenerateStaticDepositAddress(t *testing.T) {
 	require.ErrorContains(t, err, fmt.Sprintf("static deposit address already exists: %s", resp.DepositAddress.Address))
 
 	// No new address should be created
-	queryStaticDepositAddresses, err = wallet.QueryStaticDepositAddresses(ctx, config)
+	queryStaticDepositAddresses, err = wallet.QueryStaticDepositAddresses(ctx, config, pubKey)
 	require.NoError(t, err)
 	assert.Len(t, queryStaticDepositAddresses.DepositAddresses, 1)
 	assert.Equal(t, resp.DepositAddress.Address, queryStaticDepositAddresses.DepositAddresses[0].DepositAddress)
@@ -182,7 +182,7 @@ func TestGenerateStaticDepositAddressDedicatedEndpoint(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, unusedDepositAddresses.DepositAddresses)
 
-	queryStaticDepositAddresses, err := wallet.QueryStaticDepositAddresses(ctx, config)
+	queryStaticDepositAddresses, err := wallet.QueryStaticDepositAddresses(ctx, config, pubKey)
 	require.NoError(t, err)
 	assert.Len(t, queryStaticDepositAddresses.DepositAddresses, 1)
 	assert.Equal(t, resp.DepositAddress.Address, queryStaticDepositAddresses.DepositAddresses[0].DepositAddress)
@@ -192,7 +192,7 @@ func TestGenerateStaticDepositAddressDedicatedEndpoint(t *testing.T) {
 	require.ErrorContains(t, err, fmt.Sprintf("static deposit address already exists: %s", resp.DepositAddress.Address))
 
 	// No new address should be created
-	queryStaticDepositAddresses, err = wallet.QueryStaticDepositAddresses(ctx, config)
+	queryStaticDepositAddresses, err = wallet.QueryStaticDepositAddresses(ctx, config, pubKey)
 	require.NoError(t, err)
 	assert.Len(t, queryStaticDepositAddresses.DepositAddresses, 1)
 	assert.Equal(t, resp.DepositAddress.Address, queryStaticDepositAddresses.DepositAddresses[0].DepositAddress)
