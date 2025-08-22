@@ -174,6 +174,21 @@ func getAncestorChain(ctx context.Context, db *ent.Tx, node *ent.TreeNode, nodeM
 		return nil
 	}
 
+	// skip root node to temporarily disable unilateral exit.
+	_, err = parent.QueryParent().Only(ctx)
+	if err != nil {
+		if !ent.IsNotFound(err) {
+			return err
+		}
+		tree, err := node.QueryTree().Only(ctx)
+		if err != nil {
+			return err
+		}
+		if tree.Network == st.NetworkMainnet {
+			return nil
+		}
+	}
+
 	// Parent exists, continue search
 	nodeMap[parent.ID.String()], err = parent.MarshalSparkProto(ctx)
 	if err != nil {
