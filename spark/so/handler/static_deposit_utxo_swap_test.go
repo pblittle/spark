@@ -1,6 +1,3 @@
-//go:build gripmock
-// +build gripmock
-
 package handler
 
 import (
@@ -12,6 +9,7 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/lightsparkdev/spark/common/keys"
 	"github.com/lightsparkdev/spark/so/db"
+	testutil "github.com/lightsparkdev/spark/testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,9 +28,8 @@ func createValidTaprootSignature(t *testing.T, ownerIdentityPrivKey keys.Private
 }
 
 func TestInitiateStaticDepositUtxoSwap_ErrorWithNonOwnedTransferLeaves(t *testing.T) {
-	defer func() {
-		_ = gripmock.Clear()
-	}()
+	testutil.RequireGripMock(t)
+	defer func() { _ = gripmock.Clear() }()
 
 	swapSuccessStub := map[string]any{
 		"UtxoDepositAddress": "bc1ptest_static_deposit_address_for_testing",
@@ -49,8 +46,7 @@ func TestInitiateStaticDepositUtxoSwap_ErrorWithNonOwnedTransferLeaves(t *testin
 	err = gripmock.AddStub("spark_internal.SparkInternalService", "rollback_utxo_swap", nil, nil)
 	require.NoError(t, err)
 
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
-	defer sessionCtx.Close()
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	handler := NewStaticDepositHandler(cfg)
@@ -78,9 +74,8 @@ func TestInitiateStaticDepositUtxoSwap_ErrorWithNonOwnedTransferLeaves(t *testin
 }
 
 func TestInitiateStaticDepositUtxoSwap_ErrorIfUtxoNotToStaticDepositAddress(t *testing.T) {
-	defer func() {
-		_ = gripmock.Clear()
-	}()
+	testutil.RequireGripMock(t)
+	defer func() { _ = gripmock.Clear() }()
 
 	swapSuccessStub := map[string]any{
 		"UtxoDepositAddress": "bc1ptest_static_deposit_address_for_testing",
@@ -97,9 +92,7 @@ func TestInitiateStaticDepositUtxoSwap_ErrorIfUtxoNotToStaticDepositAddress(t *t
 	err = gripmock.AddStub("spark_internal.SparkInternalService", "rollback_utxo_swap", nil, nil)
 	require.NoError(t, err)
 
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
-	defer sessionCtx.Close()
-
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	handler := NewStaticDepositHandler(cfg)
 
@@ -130,8 +123,7 @@ func TestInitiateStaticDepositUtxoSwap_ErrorIfUtxoNotToStaticDepositAddress(t *t
 }
 
 func TestInitiateStaticDepositUtxoSwap_UtxoNotConfirmed(t *testing.T) {
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
-	defer sessionCtx.Close()
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	cfg.BitcoindConfigs["regtest"] = so.BitcoindConfig{
@@ -166,8 +158,7 @@ func TestInitiateStaticDepositUtxoSwap_UtxoNotConfirmed(t *testing.T) {
 }
 
 func TestInitiateStaticDepositUtxoSwap_ErrorIfUtxoSwapAlreadyInProgress(t *testing.T) {
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
-	defer sessionCtx.Close()
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	handler := NewStaticDepositHandler(cfg)
@@ -198,8 +189,7 @@ func TestInitiateStaticDepositUtxoSwap_ErrorIfUtxoSwapAlreadyInProgress(t *testi
 }
 
 func TestInitiateStaticDepositUtxoSwap_ErrorIfUtxoSwapAlreadyCompleted(t *testing.T) {
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
-	defer sessionCtx.Close()
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	handler := NewStaticDepositHandler(cfg)
@@ -230,6 +220,7 @@ func TestInitiateStaticDepositUtxoSwap_ErrorIfUtxoSwapAlreadyCompleted(t *testin
 }
 
 func TestInitiateStaticDepositUtxoSwap_CanCreateWithPreviousFailedRefund(t *testing.T) {
+	testutil.RequireGripMock(t)
 	defer func() { _ = gripmock.Clear() }()
 	swapSuccessStub := map[string]any{
 		"UtxoDepositAddress": "bc1ptest_static_deposit_address_for_testing",
@@ -251,8 +242,7 @@ func TestInitiateStaticDepositUtxoSwap_CanCreateWithPreviousFailedRefund(t *test
 	ownerIdentityPubKey := ownerIdentityPrivKey.Public()
 	ownerSigningPubKey := keys.MustGeneratePrivateKeyFromRand(rng).Public()
 
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
-	defer sessionCtx.Close()
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	handler := NewStaticDepositHandler(cfg)
@@ -314,9 +304,8 @@ func TestInitiateStaticDepositUtxoSwap_CanCreateWithPreviousFailedRefund(t *test
 }
 
 func TestInitiateStaticDepositUtxoSwap_CanCreateWithPreviousFailedClaim(t *testing.T) {
-	defer func() {
-		_ = gripmock.Clear()
-	}()
+	testutil.RequireGripMock(t)
+	defer func() { _ = gripmock.Clear() }()
 
 	swapSuccessStub := map[string]any{
 		"UtxoDepositAddress": "bc1ptest_static_deposit_address_for_testing",
@@ -342,8 +331,7 @@ func TestInitiateStaticDepositUtxoSwap_CanCreateWithPreviousFailedClaim(t *testi
 	err = gripmock.AddStub("spark_internal.SparkInternalService", "utxo_swap_completed", nil, nil)
 	require.NoError(t, err)
 
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
-	defer sessionCtx.Close()
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	handler := NewStaticDepositHandler(cfg)
@@ -403,9 +391,8 @@ func TestInitiateStaticDepositUtxoSwap_CanCreateWithPreviousFailedClaim(t *testi
 }
 
 func TestInitiateStaticDepositUtxoSwap_TransferFailureCancelsUtxoSwap(t *testing.T) {
-	defer func() {
-		_ = gripmock.Clear()
-	}()
+	testutil.RequireGripMock(t)
+	defer func() { _ = gripmock.Clear() }()
 
 	swapSuccessStub := map[string]any{
 		"UtxoDepositAddress": "bc1ptest_static_deposit_address_for_testing",
@@ -430,8 +417,7 @@ func TestInitiateStaticDepositUtxoSwap_TransferFailureCancelsUtxoSwap(t *testing
 	err = gripmock.AddStub("spark_internal.SparkInternalService", "rollback_utxo_swap", nil, nil)
 	require.NoError(t, err)
 
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
-	defer sessionCtx.Close()
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	handler := NewStaticDepositHandler(cfg)
@@ -469,9 +455,8 @@ func TestInitiateStaticDepositUtxoSwap_TransferFailureCancelsUtxoSwap(t *testing
 }
 
 func TestInitiateStaticDepositUtxoSwap_ErrorIfWrongVerificationKey(t *testing.T) {
-	defer func() {
-		_ = gripmock.Clear()
-	}()
+	testutil.RequireGripMock(t)
+	defer func() { _ = gripmock.Clear() }()
 
 	swapSuccessStub := map[string]any{
 		"UtxoDepositAddress": "bc1ptest_static_deposit_address_for_testing",
@@ -491,7 +476,7 @@ func TestInitiateStaticDepositUtxoSwap_ErrorIfWrongVerificationKey(t *testing.T)
 	err = gripmock.AddStub("spark_internal.SparkInternalService", "rollback_utxo_swap", nil, nil)
 	require.NoError(t, err)
 
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	handler := NewStaticDepositHandler(cfg)
 

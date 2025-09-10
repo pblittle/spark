@@ -1,6 +1,3 @@
-//go:build gripmock
-// +build gripmock
-
 package handler
 
 import (
@@ -39,9 +36,7 @@ var testTransferID = uuid.Must(uuid.Parse("550e8400-e29b-41d4-a716-446655440000"
 
 func createOldBitcoinTxBytes(t *testing.T, receiverPubKey keys.Public) []byte {
 	p2trScript, err := common.P2TRScriptFromPubKey(receiverPubKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// sequence = 10275 = 0x2823 (little-endian: 23 28 00 00)
 	scriptLen := fmt.Sprintf("%02x", len(p2trScript))
@@ -324,22 +319,19 @@ func createMockStaticDepositUtxoSwapRequest(
 }
 
 func TestCreateStaticDepositUtxoRefundWithRollback_OneUnsuccessfulCreate(t *testing.T) {
-	defer func() {
-		_ = gripmock.Clear()
-	}()
+	testutil.RequireGripMock(t)
+	defer func() { _ = gripmock.Clear() }()
 
 	// Get all active server ports
 	ports := gripmock.GetActivePorts()
 	require.NotEmpty(t, ports, "Expected at least one gripmock server to be running")
 
-	// Setup failure stub on first server only
-	failureStub := map[string]any{
-		"error": "Failed to create utxo swap",
-	}
+	// Set up failure stub on first server only
+	failureStub := map[string]any{"error": "Failed to create utxo swap"}
 	err := gripmock.AddStubToPort(ports[0], "spark_internal.SparkInternalService", "create_static_deposit_utxo_refund", nil, failureStub)
 	require.NoError(t, err)
 
-	// Setup success stubs on all other servers
+	// Set up success stubs on all other servers
 	successStub := map[string]any{
 		"UtxoDepositAddress": "bc1ptest_static_deposit_address_for_testing",
 	}
@@ -357,8 +349,7 @@ func TestCreateStaticDepositUtxoRefundWithRollback_OneUnsuccessfulCreate(t *test
 	err = gripmock.AddStub("spark_internal.SparkInternalService", "frost_round2", nil, frostRound2StubOutput)
 	require.NoError(t, err)
 
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
-
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	handler := NewStaticDepositHandler(cfg)
 
@@ -419,11 +410,11 @@ func TestCreateStaticDepositUtxoRefundWithRollback_OneUnsuccessfulCreate(t *test
 }
 
 func TestCreateStaticDepositUtxoRefundWithRollback_RollbackMarksUtxoSwapAsCancelled(t *testing.T) {
+	testutil.RequireGripMock(t)
 	err := gripmock.AddStub("spark_internal.SparkInternalService", "rollback_utxo_swap", nil, nil)
 	require.NoError(t, err)
 
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
-	defer sessionCtx.Close()
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 
 	rng := rand.NewChaCha8([32]byte{})
@@ -467,17 +458,16 @@ func TestCreateStaticDepositUtxoRefundWithRollback_RollbackMarksUtxoSwapAsCancel
 }
 
 func TestInitiateStaticDepositUtxoSwap_InvalidUserSignature(t *testing.T) {
-	defer func() {
-		_ = gripmock.Clear()
-	}()
+	testutil.RequireGripMock(t)
+	defer func() { _ = gripmock.Clear() }()
 
 	rng := rand.NewChaCha8([32]byte{})
 	ownerIdentityPrivKey := keys.MustGeneratePrivateKeyFromRand(rng)
 	ownerIdentityPubKey := ownerIdentityPrivKey.Public()
 	ownerSigningPubKey := keys.MustGeneratePrivateKeyFromRand(rng).Public()
 	wrongPrivKey := keys.MustGeneratePrivateKeyFromRand(rng) // Wrong private key for creating invalid signature
-	ctx, sessionCtx := db.SetUpPostgresTestContext(t)
 
+	ctx, sessionCtx := db.ConnectToTestPostgres(t)
 	cfg := setUpTestConfigWithRegtestNoAuthz(t)
 	handler := NewStaticDepositHandler(cfg)
 
