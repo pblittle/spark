@@ -114,8 +114,7 @@ func createTestBlockHeight(t *testing.T, ctx context.Context, client *ent.Client
 }
 
 func setUpTestConfigWithRegtestNoAuthz(t *testing.T) *so.Config {
-	cfg, err := testutil.TestConfig()
-	require.NoError(t, err)
+	cfg := testutil.TestConfig(t)
 
 	// Add regtest support and disable authz for tests
 	cfg.SupportedNetworks = []common.Network{common.Regtest}
